@@ -5,12 +5,16 @@ project(Sunroom VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 6.10 REQUIRED COMPONENTS Quick QuickControls2)
+find_package(Qt6 6.11 REQUIRED COMPONENTS Quick QuickControls2)
 
-qt_standard_project_setup(REQUIRES 6.10)
+qt_standard_project_setup(REQUIRES 6.11)
 
 qt_add_executable(sunroom
         src/main.cpp
+        src/PresentationOutputState.cpp
+        src/PresentationOutputState.h
+        src/PresentationWindow.cpp
+        src/PresentationWindow.h
 )
 
 set_source_files_properties(src/Main.qml PROPERTIES
@@ -20,6 +24,9 @@ set_source_files_properties(src/Main.qml PROPERTIES
 qt_add_qml_module(sunroom
         URI Sunroom
         VERSION 1.0
+        SOURCES
+        src/WindowsDisplayMonitor.cpp
+        src/WindowsDisplayMonitor.h
         QML_FILES
         src/Main.qml
 )
@@ -30,6 +37,11 @@ target_link_libraries(sunroom
         Qt6::QuickControls2
 )
 
+target_include_directories(sunroom
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+)
+
 set_target_properties(sunroom PROPERTIES
         MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
         MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
@@ -38,6 +50,15 @@ set_target_properties(sunroom PROPERTIES
 )
 
 if (WIN32)
+    target_link_libraries(sunroom PRIVATE
+            CoreMessaging
+            RuntimeObject
+            WindowsApp
+            d3d11
+            d3dcompiler
+            dxgi
+    )
+
     add_custom_command(TARGET sunroom POST_BUILD
             COMMAND Qt6::windeployqt
             --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/src"

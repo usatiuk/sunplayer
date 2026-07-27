@@ -1,15 +1,22 @@
 # IDE and local tooling
 .idea/
+.vscode/
+.vs/
 .qtcreator/
 .codex/
 .agents/
 *.user
 *.user.*
 *.autosave
+*.suo
+CMakeUserPresets.json
 
 # CMake build directories and generated files
 build/
+out/
+_build/
 cmake-build-*/
+build-*/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
@@ -33,6 +40,12 @@ Makefile
 *_autogen/
 .qmlcache/
 .qmlls.ini
+
+# OS metadata and logs
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.log
 
 # Local reference project
 /untitled/
