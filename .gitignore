@@ -1,0 +1,38 @@
+# IDE and local tooling
+.idea/
+.qtcreator/
+.codex/
+.agents/
+*.user
+*.user.*
+*.autosave
+
+# CMake build directories and generated files
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+compile_commands.json
+Makefile
+*.ninja
+.ninja_deps
+.ninja_log
+
+# Compiled artifacts
+*.dll
+*.exe
+*.exp
+*.ilk
+*.lib
+*.obj
+*.o
+*.pdb
+*_autogen/
+.qmlcache/
+.qmlls.ini
+
+# Local reference project
+/untitled/
