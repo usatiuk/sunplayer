@@ -254,6 +254,8 @@ one opaque, canvas-sized texture with the contract recorded in
 [ADR 0003](../../decisions/0003-display-targeted-video-surface.md):
 
 * RGBA16F linear sRGB/BT.709 D65 with extended floating-point values.
+  Transfer-source capability is enabled only by capture consumers such as the
+  GPU integration test.
 * Canonical top-left sampling coordinates.
 * RGB `1.0` means the recorded SDR/reference-white luminance.
 * Color processing and tone mapping for the effective display target are
@@ -362,9 +364,18 @@ the responsibility-qualified path so dependencies remain visible.
 
 The configured Debug target builds successfully with Qt 6.11.1 and MSVC after
 initializing the Visual Studio developer environment. Pure presentation-target
-policy and rendered-surface validity/reuse rules have automated coverage. No
-real GPU capture, renderer image test, or recorded runtime validation matrix
-exists yet.
+policy and rendered-surface validity/reuse rules have automated coverage. A
+headless real D3D11 QRhi test renders the production diagnostic producer into
+RGBA16F, composes it with the production final pass, reads back both boundaries,
+and checks analytic extended values, orientation, placement, SDR encoding,
+non-unity extended-linear scaling, post-submission surface reuse, and
+premultiplied UI blending. A renderer image corpus, cross-backend capture, and
+recorded runtime display matrix do not exist yet.
+
+The built GUI has also completed an automated four-second startup liveness
+smoke with the configured Qt runtime. It created the normal application path
+and remained alive until the harness terminated it. This is useful crash
+coverage, not a visual assertion.
 
 The project-wide testing approach is defined in
 [../../TESTING.md](../../TESTING.md), with active graphics-related bootstrap

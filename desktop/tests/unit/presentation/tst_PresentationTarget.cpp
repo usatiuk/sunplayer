@@ -9,6 +9,16 @@
 class PresentationTargetTest final : public QObject {
     Q_OBJECT
 
+public:
+    static void initMain() {
+#ifdef Q_OS_WIN
+        SetErrorMode(
+            SEM_FAILCRITICALERRORS
+            | SEM_NOGPFAULTERRORBOX
+            | SEM_NOOPENFILEERRORBOX);
+#endif
+    }
+
 private slots:
     void calculation_data();
     void calculation();
@@ -224,16 +234,5 @@ void PresentationTargetTest::calculation() {
     QCOMPARE(actual.sdrScale, expected.sdrScale);
 }
 
-int main(int argc, char *argv[]) {
-#ifdef Q_OS_WIN
-    SetErrorMode(
-        SEM_FAILCRITICALERRORS
-        | SEM_NOGPFAULTERRORBOX
-        | SEM_NOOPENFILEERRORBOX);
-#endif
-
-    PresentationTargetTest test;
-    return QTest::qExec(&test, argc, argv);
-}
-
+QTEST_APPLESS_MAIN(PresentationTargetTest)
 #include "tst_PresentationTarget.moc"

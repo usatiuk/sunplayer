@@ -44,7 +44,9 @@ presentation device. A completed surface records:
 Reuse requires an exact match of that state. Swapchain identity is
 intentionally absent, so an equivalent swapchain recreation does not discard a
 valid surface. Device, display-target, content, or destination-size changes
-invalidate it.
+invalidate it. A recorded render becomes completed and reusable only after the
+owning QRhi frame ends successfully; failed frame submission discards the
+pending state.
 
 FFmpeg will normalize effective source metadata and libplacebo will perform
 source decoding, chroma reconstruction, transfer and gamut conversion, tone

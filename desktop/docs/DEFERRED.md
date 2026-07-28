@@ -37,10 +37,12 @@ this maintenance cost.
 
 ### Runtime HDR validation and graphics tests
 
-The Debug target builds, but the project has no recorded cross-display runtime
-matrix, renderer image tests, deterministic device-loss test, or automated
-validation of HDR/SDR output. Presentation behavior must not be treated as
-portable or colorimetrically verified until those tests exist.
+The Debug target builds and a headless D3D11 test captures the RGBA16F producer
+surface plus SDR and extended-linear offscreen composition, but the project has
+no recorded cross-display runtime matrix, extended-linear swapchain capture,
+renderer image corpus, deterministic device-loss test, or automated physical
+HDR validation. Presentation behavior must not be treated as portable or
+colorimetrically verified until those tests exist.
 
 ### Flattened translucent Qt Quick content
 

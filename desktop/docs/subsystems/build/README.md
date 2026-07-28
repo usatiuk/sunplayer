@@ -86,7 +86,8 @@ define:
 
 CTest and Qt Test are configured only under `BUILD_TESTING`, keeping test-only
 dependencies out of production-only configurations. Separate test executables
-cover presentation-target policy and rendered-video surface validity/reuse.
+cover presentation-target policy, rendered-video surface validity/reuse, and a
+real D3D11 QRhi producer/compositor capture.
 
 On Windows, each test target stages its transitive runtime DLLs beside the test
 executable with CMake's `TARGET_RUNTIME_DLLS` support. This is a build-tree test
@@ -106,7 +107,9 @@ See [../testing/PLAN.md](../testing/PLAN.md).
 
 The `sunroom` Debug target builds successfully in the current configured
 Windows/MSVC/Ninja environment after initializing the Visual Studio developer
-environment.
+environment. A build-tree GUI startup liveness smoke also passes when the
+configured Qt runtime directory is present on `PATH`; the harness terminates
+the process after four seconds without user interaction.
 
 No clean configure, Release build, install-tree launch, deployment audit, or
 cross-platform build is recorded yet. These remain coverage gaps rather than

@@ -35,12 +35,18 @@ static_assert(offsetof(DiagnosticVideoParameters, canonicalYFlip) == 16);
 
 class DiagnosticVideoProducer final {
 public:
+    enum class CaptureMode {
+        Disabled,
+        Enabled,
+    };
+
     enum class ResourceResult {
         Ready,
         DeviceLost,
     };
 
-    explicit DiagnosticVideoProducer(QRhi &rhi);
+    explicit DiagnosticVideoProducer(
+        QRhi &rhi, CaptureMode captureMode = CaptureMode::Disabled);
     ~DiagnosticVideoProducer();
 
     DiagnosticVideoProducer(const DiagnosticVideoProducer &) = delete;
@@ -53,6 +59,8 @@ public:
     void render(QRhiCommandBuffer &commandBuffer,
                 const DiagnosticVideoParameters &parameters,
                 const RenderedVideoSurfaceState &completedState);
+    void commitPendingRender();
+    void discardPendingRender();
 
     QRhiTexture &texture() const;
     const std::optional<RenderedVideoSurfaceState> &completedState() const;
@@ -62,11 +70,13 @@ private:
     ResourceResult resizeTexture(const QSize &pixelSize);
 
     QRhi &m_rhi;
+    CaptureMode m_captureMode;
     std::unique_ptr<QRhiTexture> m_texture;
-    std::unique_ptr<QRhiTextureRenderTarget> m_renderTarget;
     std::unique_ptr<QRhiRenderPassDescriptor> m_renderPassDescriptor;
+    std::unique_ptr<QRhiTextureRenderTarget> m_renderTarget;
     std::unique_ptr<QRhiBuffer> m_uniformBuffer;
     std::unique_ptr<QRhiShaderResourceBindings> m_bindings;
     std::unique_ptr<QRhiGraphicsPipeline> m_pipeline;
     std::optional<RenderedVideoSurfaceState> m_completedState;
+    std::optional<RenderedVideoSurfaceState> m_pendingState;
 };

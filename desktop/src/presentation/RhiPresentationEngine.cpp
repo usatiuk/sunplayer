@@ -285,6 +285,10 @@ void RhiPresentationEngine::renderFrame() {
         parameters);
 
     result = m_rhi->endFrame(m_swapChain.get());
+    if (result == QRhi::FrameOpSuccess)
+        m_videoProducer->commitPendingRender();
+    else
+        m_videoProducer->discardPendingRender();
     if (result == QRhi::FrameOpDeviceLost) {
         handleDeviceLoss("presenting a frame");
         return;

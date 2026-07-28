@@ -2,9 +2,10 @@
 
 ## Status
 
-Sunroom has CTest/Qt Test targets for pure presentation-target policy and
-rendered-video surface validity/reuse. It does not yet have a fixture corpus,
-render captures, or automated application scenarios. The accepted testing
+Sunroom has CTest/Qt Test targets for pure presentation-target policy,
+rendered-video surface validity/reuse, and a real headless D3D11 QRhi
+producer/compositor capture. It does not yet have a media fixture corpus,
+golden-image suite, or automated application scenarios. The accepted testing
 direction is defined in
 [../../TESTING.md](../../TESTING.md), and active bootstrap work is tracked in
 [PLAN.md](PLAN.md).
@@ -52,6 +53,15 @@ Qt Quick Test may be added for isolated QML behavior when the player UI exists.
 OpenEXR/OpenImageIO, a local process-control channel, and dedicated scenario
 syntax remain candidates to adopt when a concrete test needs them.
 
+Pure policy tests use Qt Test's `QTEST_APPLESS_MAIN`. The QRhi integration test
+uses `QTEST_GUILESS_MAIN`, not generic `QTEST_MAIN`: linking Qt GUI for QRhi
+would make the generic macro instantiate `QGuiApplication` and load the GUI
+platform stack, while the offscreen test needs only `QCoreApplication`
+lifetime. Qt Test's public static `initMain()` hook applies the Windows
+noninteractive error mode before application construction. Correct build-local
+DLL staging remains necessary because loader failures occur before test code
+can run.
+
 ## Test seams
 
 Use narrow controlled seams only around nondeterministic or physical edges.
@@ -74,7 +84,8 @@ Current verified coverage:
 | --- | --- |
 | Configured Windows Debug build | Builds successfully |
 | Focused automated tests | Presentation-target policy and rendered-video surface lifecycle tests pass |
-| Real QRhi capture | Not implemented |
+| Real QRhi capture | D3D11 producer RGBA16F plus final SDR and extended-linear composition readbacks pass |
+| Built application startup | Automated four-second GUI/device/swapchain liveness smoke passed; not yet a registered scenario |
 | Recorded SDR/HDR runtime matrix | Not implemented |
 | Media pipeline scenarios | Blocked on media pipeline implementation |
 | Physical output measurement | Deferred |
@@ -84,4 +95,5 @@ until it is implemented or deliberately removed from scope.
 
 Focused tests are grouped by responsibility under
 `tests/unit/presentation/`. Future GPU integration and actual-application
-scenarios should use sibling trees only when their first concrete tests arrive.
+scenarios use sibling trees when their first concrete tests arrive; the first
+GPU boundary test is under `tests/integration/presentation/`.

@@ -26,8 +26,8 @@ to run.
   * [x] Windows HDR luminance precedence over QRhi data.
   * [x] Unknown luminance and SDR-white fallback.
   * [x] Current, potential, and effective headroom.
-* [ ] Add a documented CTest label convention when the second execution class
-  appears; do not invent a large taxonomy for one test.
+* [x] Label focused deterministic tests `unit` and the first real graphics test
+  `gpu;windows`; add further labels only with new execution classes.
 * [ ] Record the first guided Windows presentation matrix with OS, GPU, driver,
   display, mode, diagnostics, and result.
 
@@ -54,9 +54,9 @@ Implement alongside graphics milestone 1:
 * [x] Test that producer-content changes invalidate the completed surface.
 * [x] Test that swapchain-only recreation preserves a surface when its explicit
   contract permits reuse.
-* [ ] Add an analytically known pattern with independently calculated expected
+* [x] Add an analytically known pattern with independently calculated expected
   values.
-* [ ] Add a real D3D11 QRhi integration test:
+* [x] Add a real D3D11 QRhi integration test:
 
   ```text
   pattern producer
@@ -66,10 +66,10 @@ Implement alongside graphics milestone 1:
   → raw readback
   ```
 
-* [ ] Compare selected values or regions with declared tolerances.
-* [ ] Report backend and floating-point readback capability.
-* [ ] Keep the GPU test separately selectable until its runner coverage and
-  stability justify making it blocking.
+* [x] Compare selected values or regions with declared tolerances.
+* [x] Report backend and floating-point readback capability.
+* [x] Label the GPU test separately so dedicated runs can select it while it
+  remains part of the current supported Windows default suite.
 
 ## Milestone 2: libplacebo and first-frame coverage
 

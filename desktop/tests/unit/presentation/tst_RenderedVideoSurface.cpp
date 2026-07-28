@@ -35,6 +35,16 @@ RenderedVideoSurfaceState canonicalState() {
 class RenderedVideoSurfaceTest final : public QObject {
     Q_OBJECT
 
+public:
+    static void initMain() {
+#ifdef Q_OS_WIN
+        SetErrorMode(
+            SEM_FAILCRITICALERRORS
+            | SEM_NOGPFAULTERRORBOX
+            | SEM_NOOPENFILEERRORBOX);
+#endif
+    }
+
 private slots:
     void canonicalDescriptionIsValid();
     void descriptionRequiresCompleteSemantics();
@@ -182,16 +192,5 @@ void RenderedVideoSurfaceTest::swapchainOnlyRecreationPreservesReuse() {
         afterSwapchainRecreation));
 }
 
-int main(int argc, char *argv[]) {
-#ifdef Q_OS_WIN
-    SetErrorMode(
-        SEM_FAILCRITICALERRORS
-        | SEM_NOGPFAULTERRORBOX
-        | SEM_NOOPENFILEERRORBOX);
-#endif
-
-    RenderedVideoSurfaceTest test;
-    return QTest::qExec(&test, argc, argv);
-}
-
+QTEST_APPLESS_MAIN(RenderedVideoSurfaceTest)
 #include "tst_RenderedVideoSurface.moc"

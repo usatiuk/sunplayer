@@ -5,6 +5,8 @@
 #include <rhi/qshader.h>
 #include <rhi/qrhi.h>
 
+#include <utility>
+
 namespace {
 QShader loadShader(const QString &path) {
     QFile file(path);
@@ -17,7 +19,9 @@ QShader loadShader(const QString &path) {
 }
 }
 
-DiagnosticVideoProducer::DiagnosticVideoProducer(QRhi &rhi) : m_rhi(rhi) {}
+DiagnosticVideoProducer::DiagnosticVideoProducer(
+        QRhi &rhi, CaptureMode captureMode)
+    : m_rhi(rhi), m_captureMode(captureMode) {}
 DiagnosticVideoProducer::~DiagnosticVideoProducer() = default;
 
 DiagnosticVideoProducer::ResourceResult
@@ -49,6 +53,7 @@ void DiagnosticVideoProducer::render(
     Q_ASSERT(m_uniformBuffer);
     Q_ASSERT(m_bindings);
     Q_ASSERT(m_pipeline);
+    Q_ASSERT(!m_pendingState);
 
     QRhiResourceUpdateBatch *updates = m_rhi.nextResourceUpdateBatch();
     updates->updateDynamicBuffer(
@@ -66,7 +71,18 @@ void DiagnosticVideoProducer::render(
     commandBuffer.draw(3);
     commandBuffer.endPass();
 
-    m_completedState = completedState;
+    m_pendingState = completedState;
+}
+
+void DiagnosticVideoProducer::commitPendingRender() {
+    if (!m_pendingState)
+        return;
+    m_completedState = std::move(m_pendingState);
+    m_pendingState.reset();
+}
+
+void DiagnosticVideoProducer::discardPendingRender() {
+    m_pendingState.reset();
 }
 
 QRhiTexture &DiagnosticVideoProducer::texture() const {
@@ -89,13 +105,17 @@ DiagnosticVideoProducer::createResources(const QSize &pixelSize) {
     Q_ASSERT(!m_bindings);
     Q_ASSERT(!m_pipeline);
 
+    QRhiTexture::Flags textureFlags = QRhiTexture::RenderTarget;
+    if (m_captureMode == CaptureMode::Enabled)
+        textureFlags |= QRhiTexture::UsedAsTransferSource;
     if (!m_rhi.isTextureFormatSupported(
-            QRhiTexture::RGBA16F, QRhiTexture::RenderTarget)) {
-        qFatal("The active QRhi backend cannot render to RGBA16F textures");
+            QRhiTexture::RGBA16F, textureFlags)) {
+        qFatal(
+            "The active QRhi backend cannot create the requested RGBA16F diagnostic surface");
     }
 
     m_texture.reset(m_rhi.newTexture(
-        QRhiTexture::RGBA16F, pixelSize, 1, QRhiTexture::RenderTarget));
+        QRhiTexture::RGBA16F, pixelSize, 1, textureFlags));
     m_texture->setName(QByteArrayLiteral("Sunroom diagnostic video surface"));
     if (!m_texture->create()) {
         if (m_rhi.isDeviceLost())
@@ -170,6 +190,7 @@ DiagnosticVideoProducer::resizeTexture(const QSize &pixelSize) {
     Q_ASSERT(m_texture->pixelSize() != pixelSize);
 
     m_completedState.reset();
+    m_pendingState.reset();
     m_texture->setPixelSize(pixelSize);
     if (!m_texture->create()) {
         if (m_rhi.isDeviceLost())

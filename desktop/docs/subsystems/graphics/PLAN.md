@@ -28,7 +28,8 @@ The current prototype establishes:
 * [ ] Recorded manual runtime validation across the supported Windows display
   scenarios.
 * [x] Automated presentation-policy and video-surface-state tests.
-* [ ] Automated GPU image tests.
+* [x] Analytic D3D11 producer/compositor readback smoke test.
+* [ ] Renderer image corpus and cross-backend GPU tests.
 
 ## Milestone 1: explicit video surface and narrow compositor
 
@@ -68,7 +69,8 @@ introducing FFmpeg or libplacebo yet.
 The implementation and pure-state coverage are complete. Build and CTest
 verification pass. Visual equivalence in SDR and extended-linear modes remains
 part of the recorded manual Windows presentation matrix; the application was
-not launched as part of non-interactive automation.
+also launched successfully in an automated four-second startup liveness smoke,
+but that does not assert visual or color correctness.
 
 ## Milestone 2: libplacebo renderer
 

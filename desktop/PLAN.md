@@ -83,12 +83,13 @@ not yet a media player:
 FFmpeg, libplacebo, libass, decoded video, audio, playback, file opening,
 subtitles, and persistence are not integrated. CTest/Qt Test coverage exists
 for pure presentation-target policy and rendered-video surface
-validity/invalidation; GPU and application scenarios do not yet exist.
+validity/invalidation and a real D3D11 offscreen producer/compositor capture.
+Whole-application scenarios do not yet exist.
 
 The next implementation milestone is replacing the temporary pattern producer
 with a persistent libplacebo renderer for a known software-backed image. A
 single FFmpeg-decoded frame follows. Testing continues alongside that work with
-a real QRhi readback smoke test and libplacebo integration capture.
+libplacebo integration capture and the first deterministic frame scenario.
 
 ## Subsystems
 
@@ -238,7 +239,7 @@ Documentation: `docs/subsystems/diagnostics/`
 * [x] CTest and Qt Test structure
 * [x] Presentation-target policy tests
 * [x] Rendered-surface description and invalidation tests
-* [ ] Real QRhi compositor capture smoke test
+* [x] Real D3D11 QRhi compositor capture smoke test
 * [ ] Deterministic first-frame and playback scenarios
 * [ ] Playback and seeking tests
 * [ ] Color-metadata normalization tests

@@ -55,3 +55,67 @@ add_test(
         NAME rendered-video-surface
         COMMAND sunroom_rendered_video_surface_tests
 )
+
+set_tests_properties(
+        presentation-target
+        rendered-video-surface
+        PROPERTIES LABELS "unit"
+)
+
+if (WIN32)
+    qt_add_executable(sunroom_qrhi_compositor_tests
+            integration/presentation/tst_QrhiCompositor.cpp
+            ../src/presentation/DiagnosticVideoProducer.cpp
+            ../src/presentation/DiagnosticVideoProducer.h
+            ../src/presentation/HdrCompositor.cpp
+            ../src/presentation/HdrCompositor.h
+            ../src/presentation/RenderedVideoSurface.cpp
+            ../src/presentation/RenderedVideoSurface.h
+    )
+
+    target_include_directories(sunroom_qrhi_compositor_tests
+            PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+    )
+
+    target_link_libraries(sunroom_qrhi_compositor_tests
+            PRIVATE
+            Qt6::GuiPrivate
+            Qt6::Test
+    )
+
+    qt_add_shaders(
+            sunroom_qrhi_compositor_tests
+            "sunroom_qrhi_compositor_test_shaders"
+            PRECOMPILE
+            OPTIMIZED
+            PREFIX
+            /shaders
+            BASE
+            ../src/presentation/shaders
+            FILES
+            ../src/presentation/shaders/fullscreen.vert
+            ../src/presentation/shaders/diagnostic_video.frag
+            ../src/presentation/shaders/compositor.frag
+    )
+
+    add_custom_command(
+            TARGET sunroom_qrhi_compositor_tests
+            POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_RUNTIME_DLLS:sunroom_qrhi_compositor_tests>
+                    $<TARGET_FILE_DIR:sunroom_qrhi_compositor_tests>
+            COMMAND_EXPAND_LISTS
+    )
+
+    add_test(
+            NAME qrhi-compositor
+            COMMAND sunroom_qrhi_compositor_tests
+    )
+    set_tests_properties(
+            qrhi-compositor
+            PROPERTIES
+            LABELS "gpu;windows"
+            TIMEOUT 30
+    )
+endif ()
