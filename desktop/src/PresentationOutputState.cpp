@@ -1,17 +1,12 @@
 #include "PresentationOutputState.h"
 
-#include <algorithm>
-#include <cmath>
+#include <utility>
 
 #include <QGuiApplication>
 #include <QScreen>
 #include <QWindow>
 
 #include "DisplayStateProvider.h"
-
-namespace {
-constexpr float scRgbReferenceWhiteNits = 80.0f;
-}
 
 PresentationOutputState::PresentationOutputState(QObject *parent)
     : QObject(parent) {
@@ -43,78 +38,41 @@ bool PresentationOutputState::displayHdrEnabled() const {
     return m_state.valid && m_state.hdrActive;
 }
 bool PresentationOutputState::extendedLinearActive() const {
-    return m_backendState.extendedLinearActive;
+    return presentationTarget().extendedLinearActive;
 }
 bool PresentationOutputState::sceneReferred() const {
-    return extendedLinearActive() && m_backendState.sceneReferred;
+    return presentationTarget().sceneReferred;
 }
 bool PresentationOutputState::sdrWhiteKnown() const {
-    return extendedLinearActive()
-        && ((m_state.valid && m_state.hdrActive
-                && m_state.sdrWhiteNits > 0.0f)
-            || m_backendState.sdrWhiteKnown);
+    return presentationTarget().sdrWhiteKnown;
 }
 bool PresentationOutputState::luminanceKnown() const {
-    return extendedLinearActive()
-        && ((m_state.valid && m_state.hdrActive
-                && m_state.maxLuminanceNits > 0.0f)
-            || m_backendState.luminanceKnown);
+    return presentationTarget().luminanceKnown;
 }
 float PresentationOutputState::sdrWhiteNits() const {
-    if (!extendedLinearActive())
-        return 0.0f;
-    if (m_state.valid && m_state.hdrActive && m_state.sdrWhiteNits > 0.0f)
-        return m_state.sdrWhiteNits;
-    return m_backendState.sdrWhiteKnown
-        ? m_backendState.sdrWhiteNits : 0.0f;
+    return presentationTarget().sdrWhiteNits;
 }
 float PresentationOutputState::minLuminanceNits() const {
-    if (!extendedLinearActive())
-        return 0.0f;
-    if (m_state.valid && m_state.hdrActive
-            && m_state.maxLuminanceNits > 0.0f) {
-        return m_state.minLuminanceNits;
-    }
-    return m_backendState.luminanceKnown
-        ? m_backendState.minLuminanceNits : 0.0f;
+    return presentationTarget().minLuminanceNits;
 }
 float PresentationOutputState::maxLuminanceNits() const {
-    if (!extendedLinearActive())
-        return 0.0f;
-    if (m_state.valid && m_state.hdrActive
-            && m_state.maxLuminanceNits > 0.0f) {
-        return m_state.maxLuminanceNits;
-    }
-    return m_backendState.luminanceKnown
-        ? m_backendState.maxLuminanceNits : 0.0f;
+    return presentationTarget().maxLuminanceNits;
 }
 float PresentationOutputState::currentHeadroom() const {
-    if (!extendedLinearActive())
-        return 1.0f;
-    if (maxLuminanceNits() > 0.0f)
-        return std::max(
-            1.0f, maxLuminanceNits() / scRgbReferenceWhiteNits);
-    return std::max(1.0f, m_backendState.currentHeadroom);
+    return presentationTarget().currentHeadroom;
 }
 float PresentationOutputState::potentialHeadroom() const {
-    return extendedLinearActive()
-        ? std::max(currentHeadroom(), m_backendState.potentialHeadroom)
-        : 1.0f;
+    return presentationTarget().potentialHeadroom;
 }
 float PresentationOutputState::effectiveTargetHeadroom() const {
-    const float scale = sdrScale();
-    Q_ASSERT(std::isfinite(scale) && scale > 0.0f);
-    return std::max(1.0f, currentHeadroom() / scale);
+    return presentationTarget().effectiveTargetHeadroom;
 }
 float PresentationOutputState::sdrScale() const {
-    return sceneReferred()
-        ? effectiveSdrWhiteNits() / scRgbReferenceWhiteNits
-        : 1.0f;
+    return presentationTarget().sdrScale;
 }
 
-float PresentationOutputState::effectiveSdrWhiteNits() const {
-    const float queried = sdrWhiteNits();
-    return queried > 0.0f ? queried : scRgbReferenceWhiteNits;
+PresentationTarget PresentationOutputState::presentationTarget() const {
+    return calculatePresentationTarget(m_state, m_backendState);
 }
 
 void PresentationOutputState::reprobePresentation() {

@@ -58,11 +58,42 @@ Audio, subtitles, playback scheduling, display observation, and source buffering
 
 Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 
+## Current implementation status
+
+As of 2026-07-28, the repository contains a Windows presentation foundation,
+not yet a media player:
+
+* A single custom `QWindow` owns an application-created D3D11 QRhi and
+  swapchain.
+* Qt Quick renders through `QQuickRenderControl` into an application-owned
+  RGBA16F texture.
+* A final QRhi pass combines that UI with a procedural HDR diagnostic pattern
+  and presents extended-linear sRGB/scRGB when available, with an SDR fallback.
+* Qt screen state, QRhi swapchain HDR information, and Windows Advanced Color
+  telemetry feed a shared presentation snapshot and diagnostic UI.
+* Rendering is demand-driven outside explicit animation, and the graphics
+  foundation handles resize, output changes, surface destruction, swapchain
+  invalidation, and bounded device recovery.
+* The configured Windows Debug target builds successfully with Qt 6.11.1 and
+  MSVC.
+
+FFmpeg, libplacebo, libass, real video surfaces, audio, playback, file opening,
+subtitles, and persistence are not integrated. Initial CTest/Qt Test coverage
+exists for pure presentation-target policy; GPU and application scenarios do
+not yet exist.
+
+The next implementation milestone is an explicitly described offscreen video
+surface sampled by a narrow final compositor. The procedural pattern will first
+move through that boundary; libplacebo and a single FFmpeg-decoded frame follow.
+Testing starts alongside that work with presentation-policy tests,
+surface-generation tests, and a real QRhi readback smoke test.
+
 ## Subsystems
 
 ### 1. Application shell
 
-* [ ] Application and window lifecycle
+* [x] Basic application and presentation-window lifecycle for the current
+  Windows diagnostic shell
 * [ ] Settings and persistence
 * [ ] File-open, drag-and-drop, and platform file associations
 * [ ] Top-level error and logging integration
@@ -108,18 +139,21 @@ Documentation: `docs/subsystems/playback/`
 
 ### 5. Graphics and display integration
 
-* [ ] Shared graphics-device ownership model
-* [ ] QRhi integration
-* [ ] Qt Quick rendering integration
-* [ ] Final video, subtitle, and UI compositor
-* [ ] HDR, EDR, and SDR swapchain presentation
-* [ ] Shared display-state model
-* [ ] Multiple-display and window-movement handling
-* [ ] Dynamic display-property notifications
-* [ ] Windows display adapter
+* [x] One-device ownership model for the current presentation domain
+* [x] Windows D3D11 QRhi integration
+* [x] Redirected Qt Quick rendering integration
+* [ ] Final video, subtitle, and UI compositor (UI and diagnostic pattern
+  composition exists)
+* [x] Windows extended-linear HDR and SDR swapchain presentation
+* [ ] macOS EDR and SDR swapchain presentation
+* [ ] Linux HDR and SDR swapchain presentation
+* [x] Shared presentation and display-state model
+* [x] Windows multiple-display and window-movement observation
+* [x] Windows dynamic display-property notifications
+* [x] Windows display adapter
 * [ ] macOS display adapter
 * [ ] Linux display adapter
-* [ ] Graphics-device loss and recreation
+* [x] Graphics-device loss and recreation
 
 Documentation: `docs/subsystems/graphics/`
 
@@ -198,7 +232,12 @@ Documentation: `docs/subsystems/diagnostics/`
 
 ### 11. Testing
 
-* [ ] Core unit-test structure
+* [x] Testing principles and staged subsystem plan
+* [x] CTest and Qt Test structure
+* [x] Presentation-target policy tests
+* [ ] Rendered-surface generation and invalidation tests
+* [ ] Real QRhi compositor capture smoke test
+* [ ] Deterministic first-frame and playback scenarios
 * [ ] Playback and seeking tests
 * [ ] Color-metadata normalization tests
 * [ ] Renderer image tests
@@ -207,8 +246,9 @@ Documentation: `docs/subsystems/diagnostics/`
 * [ ] Display-change and multi-monitor tests
 * [ ] Unreliable-source and cancellation tests
 * [ ] Cross-platform performance and power measurements
+* [ ] Physical HDR and A/V output verification
 
-Documentation: `docs/subsystems/testing/`
+Documentation: `docs/TESTING.md` and `docs/subsystems/testing/`
 
 ### 12. Build and packaging
 
@@ -230,15 +270,29 @@ PLAN.md
 docs/
     ARCHITECTURE_NOTES.md
     DEFERRED.md
+    TESTING.md
 
     decisions/
         README.md
+        0001-application-owned-qrhi-composition.md
+        0002-extended-linear-srgb-presentation.md
 
     research/
         README.md
+        2026-07-28-testing-tools-and-boundaries.md
 
     subsystems/
-        <subsystem>/
+        application/
+            README.md
+
+        build/
+            README.md
+
+        graphics/
+            README.md
+            PLAN.md
+
+        testing/
             README.md
             PLAN.md
 ```
@@ -249,6 +303,8 @@ Subsystem folders and subsystem plans should be created when enough concrete arc
 
 * `PLAN.md` tracks high-level scope and progress.
 * `docs/ARCHITECTURE_NOTES.md` contains broad technical context and possibilities.
+* `docs/TESTING.md` defines project-wide testing principles, boundaries, and
+  coverage tiers.
 * Subsystem `README.md` files describe the current accepted architecture.
 * Subsystem `PLAN.md` files track detailed active work where useful.
 * `docs/decisions/` records significant architectural decisions.

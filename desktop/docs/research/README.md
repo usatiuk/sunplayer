@@ -1,0 +1,22 @@
+# Research notes
+
+Research notes preserve evidence, experiments, API findings, alternatives, and
+unresolved questions. They inform implementation and decisions but are not
+automatically current project truth.
+
+Use a descriptive dated filename such as
+`2026-07-28-libplacebo-d3d11-interop.md`. A useful note states:
+
+* The question and why it matters.
+* Versions, platforms, and assumptions.
+* Primary sources or reproducible experiments.
+* Findings and uncertainties.
+* Consequences for the current plan.
+* Any resulting decision record.
+
+When later evidence supersedes a note, retain the historical result and link to
+the newer note or decision rather than silently rewriting the investigation.
+
+## Index
+
+* [2026-07-28: Testing tools and boundaries](2026-07-28-testing-tools-and-boundaries.md)

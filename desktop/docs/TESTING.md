@@ -1,0 +1,488 @@
+# Testing strategy
+
+## Status and intent
+
+This document defines Sunroom's testing direction. It is an architectural
+guide, not a requirement to build every layer before the corresponding player
+feature exists.
+
+Sunroom integrates timing, concurrency, color metadata, native GPU resources,
+operating-system display state, and physical output. A large suite of tests
+against mocked collaborators could be fast while proving little about those
+boundaries. The default regression test should therefore exercise the highest
+practical public boundary with real dependencies and representative data.
+
+The practical boundary changes as the player grows. Today the repository is a
+Windows QRhi presentation prototype, so useful tests begin with display-target
+policy, resource-generation contracts, and real QRhi composition. Once FFmpeg,
+libplacebo, libass, scheduling, and audio exist, deterministic whole-pipeline
+scenarios should become the bulk of behavioral coverage.
+
+The central principle is:
+
+> Optimize for meaningful behaviors that can be reproduced, not the number of
+> tests or conformance to a fixed test pyramid.
+
+## Coverage shape
+
+Sunroom aims for complementary layers rather than a prescribed ratio:
+
+```text
+          Guided or automated physical display lab
+        Real operating-system, GPU, device, and monitor tests
+      Actual application scenarios through a private control channel
+    Deterministic subsystem and whole-pipeline scenarios with real libraries
+  Focused tests for dense, deterministic policy, state, math, and concurrency
+```
+
+Higher layers prove more of the deployed system but cost more and can have
+noisier failure signals. Lower layers remain valuable where they provide a
+stronger oracle, faster exploration, or deterministic coverage of many state
+combinations.
+
+Use the highest boundary that:
+
+* Exercises the behavior that can realistically fail.
+* Produces a deterministic and diagnostically useful result.
+* Has acceptable execution cost for its intended cadence.
+
+A real dependency is preferred when testing its integration contract. It is
+not automatically useful when unrelated hardware or timing noise obscures the
+assertion.
+
+## General rules
+
+* Use real FFmpeg, libplacebo, libass, queues, scheduling, and QRhi composition
+  when the scenario is intended to validate their integration.
+* Replace only the edge that needs control: for example the monotonic clock,
+  physical audio sink, display provider, unreliable byte source, or physical
+  monitor.
+* Wait for explicit completion or state transitions. Do not make correctness
+  depend on a fixed sleep.
+* Assert what the player did through public state, structured diagnostics,
+  captured output, and externally visible behavior.
+* Keep queues, retries, timeouts, and resource pools bounded and observable so
+  their invariants can be asserted.
+* Record the exact backend, device, dependency versions, fixture identity, and
+  relevant capability state for environment-dependent results.
+* Treat a missing hardware capability as reported missing coverage, not a
+  silent pass.
+* Automated tests must not display modal application, loader, crash-reporting,
+  or operating-system dialogs. Configure runtime dependencies and platform
+  error handling so failures are captured by the runner and terminate with a
+  useful nonzero result.
+* Add a reproducible regression for a significant bug when practical. When it
+  is not practical yet, document the coverage gap and the manual reproduction.
+
+## Framework and tooling direction
+
+### Adopt first
+
+Use CTest as the common test registry and runner. CMake's `include(CTest)`
+provides the `BUILD_TESTING` option, and test targets should only add their
+dependencies when that option is enabled.
+
+Use Qt Test for the initial C++ tests. It is already aligned with the Qt event
+model and provides data-driven tests, signal observation, GUI event simulation,
+and benchmarking without another test framework. `QSignalSpy` can wait for
+observable Qt completion signals where a direct synchronous assertion is not
+appropriate.
+
+Sources:
+
+* [Qt Test overview and CTest integration](https://doc.qt.io/qt-6/qtest-overview.html)
+* [QSignalSpy](https://doc.qt.io/qt-6/qsignalspy.html)
+* [CMake CTest module](https://cmake.org/cmake/help/latest/module/CTest.html)
+
+### Add when a concrete need appears
+
+Qt Quick Test is suitable for isolated QML models and components. It does not
+replace tests of Sunroom's redirected Quick rendering, custom input forwarding,
+or actual presentation path.
+
+A future private application-control channel can use
+`QLocalServer`/`QLocalSocket`, which map to named pipes on Windows and local
+domain sockets on Unix. That is a plausible implementation, not yet an
+interface decision. Build it when several whole-application scenarios need the
+same orchestration rather than designing a protocol ahead of the player.
+
+OpenEXR is a strong candidate for floating-point reference images because it
+stores half- or full-float HDR channels and colorimetric metadata.
+OpenImageIO's comparison tools are a candidate for standard error statistics,
+thresholds, and difference images. Adopt them only when a real renderer corpus
+justifies the dependency; an initial analytic QRhi smoke test may compare raw
+readback values directly.
+
+Sources:
+
+* [Qt Quick Test](https://doc.qt.io/qt-6/qtquicktest-index.html)
+* [QLocalServer](https://doc.qt.io/qt-6/qlocalserver.html) and
+  [QLocalSocket](https://doc.qt.io/qt-6/qlocalsocket.html)
+* [OpenEXR technical introduction](https://openexr.com/en/latest/TechnicalIntroduction.html)
+* [OpenImageIO image comparison](https://openimageio.readthedocs.io/en/stable/imagebufalgo.html#image-comparison-and-statistics)
+
+Do not select a scenario syntax, YAML library, property-testing framework,
+native UI automation tool, or image-corpus dependency until a concrete scenario
+shows that it improves clarity or coverage.
+
+## Design for controllability and observation
+
+Testability should be designed into subsystem boundaries without turning the
+application into a test harness.
+
+### Completion and state events
+
+Long-running operations should have observable state transitions or completion
+events. Likely examples include:
+
+```text
+source-opened
+tracks-discovered
+decoder-selected
+frame-decoded
+frame-rendered
+frame-presented
+seek-completed
+buffering-started
+buffering-ended
+display-state-changed
+device-recovered
+error
+```
+
+Names and payloads should be defined with the owning subsystem. The important
+contract is that tests can wait for the real operation rather than infer
+completion from elapsed wall time.
+
+Events that can be invalidated by seek, reopen, device recreation, or display
+change should include the relevant session, seek, device, frame, or display
+generation.
+
+### Structured diagnostics
+
+User-facing diagnostics and test observation should come from the same
+structured source where practical. As subsystems arrive, a snapshot should be
+able to describe:
+
+* Source, container, selected streams, and normalized timestamps.
+* Effective color metadata and which source supplied each override.
+* Decoder, hardware device, and decoded-frame storage.
+* Graphics adapter, QRhi backend, libplacebo backend, and render-target
+  description.
+* Display target supplied to libplacebo and its revision.
+* Known CPU and GPU copies and explicit fallback reasons.
+* Queue depths, buffering state, clock position, and active generations.
+* Presented, repeated, stale, and dropped frames.
+* Audio underruns, device changes, and recovery state.
+
+Fields should be added with the implementation that can report them accurately.
+Unknown must be distinct from zero or none.
+
+### Controlled edges
+
+Narrow replaceable interfaces are appropriate for:
+
+* Monotonic time and timer advancement.
+* The audio device callback and presentation estimate.
+* Platform display-state observation.
+* Source reads, stalls, disconnections, and cancellation.
+* Fault injection for allocation, decoder initialization, and device recovery.
+
+These seams control nondeterminism. They should not replace FFmpeg,
+libplacebo, libass, the real queue implementation, or the real compositor in a
+test whose purpose is to validate those components.
+
+### Future application-control channel
+
+Once multiple actual-application scenarios exist, the test runner should be
+able to launch the real binary with an isolated profile and opt-in local
+control endpoint, conceptually:
+
+```text
+sunroom --isolated-profile=<temporary-directory>
+        --test-control=<unique-local-name>
+```
+
+The channel should:
+
+* Exist only when explicitly enabled.
+* Be local to the machine and restricted to the current user where supported.
+* Use framed, versioned, machine-readable messages.
+* Drive user-level commands rather than private implementation calls.
+* Stream structured events and diagnostics.
+* Support clean termination and bounded timeouts.
+* Avoid becoming a supported public remote-control API accidentally.
+
+Early tests can call public subsystem APIs in-process. The out-of-process
+channel is justified when it removes duplicated orchestration and proves
+startup, shutdown, and application wiring that in-process tests cannot.
+
+## Focused deterministic tests
+
+Use focused tests where the oracle is stronger than an end-to-end result:
+
+* Timestamp and time-base arithmetic.
+* Clock anchoring and drift policy.
+* Seek-generation invalidation.
+* Bounded-queue cancellation and backpressure.
+* Color-metadata precedence.
+* Display-target and SDR-white calculations.
+* Render-surface device/display-generation validity.
+* Subtitle coordinate and avoidance geometry.
+* Track-selection policy.
+* Error and recovery state transitions.
+* Cache interval merging and invalidation.
+
+Avoid tests that merely assert one implementation object called another
+implementation object's method.
+
+## Deterministic pipeline scenarios
+
+As features become available, these should exercise the real implementation
+through a controlled outer boundary:
+
+```text
+pinned media fixture
+→ actual source and FFmpeg demux/decode
+→ actual queues and scheduler
+→ actual libplacebo and libass
+→ actual QRhi compositor
+→ offscreen or controlled presentation target
+```
+
+Use a controlled clock or audio sink only when the scenario needs deterministic
+advancement. A scenario should describe behavior such as opening, selecting,
+playing, seeking, changing display state, capturing output, and checking
+diagnostics rather than internal method sequences.
+
+The first pipeline scenarios should grow with implementation milestones:
+
+1. Procedural producer to explicit video surface to final QRhi compositor.
+2. libplacebo-rendered known software frame to final composition.
+3. First FFmpeg-decoded frame from a pinned local container.
+4. Pause and display-target change with rerender.
+5. Deterministic short playback, then seek-generation invalidation.
+6. Audio-backed playback and A/V synchronization.
+
+## Media fixture corpus
+
+The corpus should be small, purpose-built, pinned, and expanded alongside
+features rather than assembled speculatively.
+
+Each fixture should include:
+
+* A stable filename and cryptographic hash.
+* License and provenance.
+* The generating script and pinned tool versions when generated.
+* Expected stream, timing, color, audio, and subtitle properties.
+* The behaviors and coverage tags it exists to exercise.
+
+Tests should consume pinned binary fixtures. Regeneration should be an explicit
+maintenance operation so upgrading the local FFmpeg executable cannot silently
+change test inputs.
+
+Initial additions should be narrowly tied to milestones:
+
+* An analytically known linear color pattern for the video-surface boundary.
+* One small SDR container for first-frame integration.
+* One small HDR10 container with explicit mastering and content-light
+  metadata.
+* Timeline, subtitle, audio, corruption, dynamic-HDR, and unusual-format
+  fixtures only as those features arrive.
+
+FFmpeg FATE is valuable validation for the exact FFmpeg dependency build, but
+it tests FFmpeg rather than Sunroom's integration. The same distinction applies
+to libplacebo's upstream suite.
+
+Sources:
+
+* [FFmpeg Automated Testing Environment](https://ffmpeg.org/fate.html)
+* [libplacebo upstream testing](https://github.com/haasn/libplacebo#testing)
+
+## Render-output tests
+
+The planned renderer provides two useful capture boundaries:
+
+```text
+FFmpeg → libplacebo → [display-targeted video capture]
+                              ↓
+                    QRhi final compositor
+                              ↓
+                       [composition capture]
+                              ↓
+                          swapchain
+```
+
+Video capture tests source metadata mapping, target description, tone mapping,
+gamut mapping, scaling, native-frame import, and lifetime. Composition capture
+adds geometry, letterboxing, subtitle/UI placement and luminance, alpha
+composition, and application-owned output conversion.
+
+QRhi supports asynchronous raw texture readback through
+`QRhiResourceUpdateBatch::readBackTexture()`. Capture textures must be created
+with `UsedAsTransferSource`; multisample targets cannot be read back directly.
+Floating-point readback support must be capability-checked, especially on
+OpenGL-class backends.
+
+Sources:
+
+* [QRhi texture readback](https://doc.qt.io/qt-6/qrhiresourceupdatebatch.html)
+* [Qt's redirected QRhi example](https://doc.qt.io/qt-6/qtquick-rendercontrol-rendercontrol-rhi-example.html)
+
+Every captured image needs an explicit contract:
+
+* Pixel/channel format and byte layout.
+* Primaries and white point.
+* Transfer function.
+* Reference-white and luminance scale.
+* Scene- versus display-referred meaning.
+* Alpha convention.
+* Orientation and valid image region.
+* Backend and render parameters.
+* NaN and infinity policy.
+
+Prefer independent analytic expectations for constructed patterns. For
+goldens, compare with declared absolute and relative tolerances, mean and
+maximum error, and the number of pixels exceeding meaningful limits. Add
+percentile or perceptual metrics only when their color-space assumptions match
+the capture contract.
+
+Do not reduce HDR output to an 8-bit screenshot as the correctness oracle.
+Exact equality is appropriate only when the producer and format make it a
+stable promise.
+
+## Real GPU and operating-system tests
+
+Run representative pipeline scenarios on actual supported graphics
+configurations. A redirected offscreen target proves real QRhi, shader, and
+resource behavior, but it cannot prove swapchain creation, the desktop
+compositor, native display events, or physical output.
+
+Dedicated runs should enable the available graphics diagnostics:
+
+* D3D11 debug layer and information queue.
+* Vulkan standard validation.
+* Vulkan synchronization validation.
+* Vulkan GPU-assisted validation.
+* Metal API and shader validation.
+* AddressSanitizer and UndefinedBehaviorSanitizer where supported.
+* ThreadSanitizer where it produces useful results with the dependency stack.
+
+Standard, synchronization, and GPU-assisted Vulkan validation are distinct
+capabilities and should be reported separately.
+
+Sources:
+
+* [Qt graphics debug-layer configuration](https://doc.qt.io/qt-6/qquickgraphicsconfiguration.html)
+* [Khronos validation tooling](https://docs.vulkan.org/guide/latest/development_tools.html)
+
+Native display tests eventually include moving a real window between unlike
+displays, HDR toggles, SDR-white changes, brightness and profile changes,
+hotplug, sleep/wake, mode changes, fullscreen transitions, and paused-frame
+rerendering.
+
+Simulation proves shared policy. It does not prove that a platform adapter
+observes the real operating-system event or that the monitor emits the expected
+light.
+
+## Physical-output verification
+
+Software capture cannot prove the final operating-system compositor, cable,
+display, or acoustic output.
+
+Begin with a guided, recorded manual matrix on available SDR and HDR displays.
+Record operating system, GPU, driver, monitor, connection, display mode,
+application diagnostics, test pattern, and result.
+
+A later physical lab may add:
+
+* At least one SDR and one HDR-capable display.
+* Displays with materially different HDR behavior.
+* Supported Windows, macOS, and Linux hosts.
+* A colorimeter or spectroradiometer.
+* Photodiode and audio-loopback equipment for end-to-end A/V sync.
+* Repeatable ambient conditions.
+
+Automate instruments only after the software capture contract and platform
+pipelines are stable enough to make measurements actionable.
+
+## Reliability and fault scenarios
+
+Fault injection should exercise the real application and real cancellation,
+queue, and recovery code. Controlled source edges may delay, short-read, stall,
+disconnect, reject seeks, corrupt selected ranges, or resume.
+
+Assertions should cover:
+
+* UI responsiveness.
+* Bounded cancellation and shutdown.
+* Correct buffering transitions.
+* Abandonment of old generations.
+* Bounded queues and resource pools.
+* No stale presentation after seek or reconnect.
+* Explicit fallback and recovery reasons.
+
+HTTP or in-memory byte-source faults do not prove behavior when a mounted SMB
+or NFS filesystem blocks in the kernel. Real mounted-storage failure tests
+belong on dedicated hosts when that source model is implemented.
+
+Other later scenarios include audio removal, decoder rejection, surface-pool
+exhaustion, allocation failure, graphics-device recreation, malformed
+metadata, and close during open or seek.
+
+## Performance and power
+
+Record behavior, not only frames per second:
+
+* Decoder and GPU backend.
+* Known CPU/GPU copies.
+* Decode, render, and presentation time.
+* Frame-present jitter and drops.
+* Audio underruns.
+* CPU time and wakeups.
+* Memory and texture-pool size.
+* Renders per decoded or presented frame.
+* Activity while paused, hidden, or minimized.
+* Adapter selection and available platform energy metrics.
+
+Shared CI should enforce only robust invariants such as bounded memory, no
+unchanged paused rendering, no unexpected CPU frame transfer, and absence of
+catastrophic timing regressions. Fine performance and power comparisons belong
+on stable dedicated machines and should use that machine's historical
+distribution.
+
+## Default cadence
+
+Cadence is based on cost and signal quality and may change as infrastructure
+matures.
+
+| Cadence | Default coverage |
+| --- | --- |
+| Every change | Supported builds; focused deterministic tests; available deterministic pipeline scenarios; software fallbacks; documentation/status checks |
+| Scheduled or dedicated GPU hosts | Real GPU backends; hardware decode/import; graphics validation; larger corpus; seek/playback stress; source failures; packaged smoke tests |
+| Physical lab | Actual HDR/EDR presentation; monitor changes; measurement; A/V output sync; power; driver/GPU matrix |
+| Before release | Supported-platform matrix; long playback; suspend/resume; device and display changes; clean package install; configuration migration; exploratory real-media viewing |
+
+A hardware test skipped because a runner lacks the capability must publish that
+gap. It must not silently appear green.
+
+## Tests to reject or redesign
+
+Be suspicious of tests that:
+
+* Mock FFmpeg to claim FFmpeg integration coverage.
+* Mock libplacebo to claim video-rendering coverage.
+* Sleep for a fixed duration and hope an operation completed.
+* Assert private method-call sequences.
+* Prove only that the application did not crash.
+* Compare HDR correctness through an 8-bit screenshot.
+* Require exact decoded pixels across unrelated hardware paths without a
+  contract that promises them.
+* Use a simulated display and claim native multi-monitor HDR support.
+* Use an in-memory byte source and claim mounted-filesystem hangs are contained.
+* Enforce fine performance thresholds on a noisy shared runner.
+* Silently skip missing hardware, validation, or fixture coverage.
+
+These are review heuristics, not automatic rejection rules. A narrow fake or
+smoke assertion can still be useful when its claim and limitations are stated
+accurately.

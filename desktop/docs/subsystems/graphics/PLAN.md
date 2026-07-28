@@ -1,0 +1,154 @@
+# Graphics and display subsystem plan
+
+## Objective
+
+Turn the current Windows HDR presentation playground into the shared
+presentation boundary for decoded video, while preserving explicit color
+contracts, one-device composition, demand-driven rendering, and observable
+fallback behavior.
+
+The immediate milestone is not playback. It is a real offscreen video surface
+sampled by the final compositor.
+
+## Completed foundation
+
+The current prototype establishes:
+
+* [x] Application-owned D3D11 QRhi and visible swapchain.
+* [x] Qt Quick redirected into an application-owned RGBA16F texture.
+* [x] Final fullscreen QRhi composition pass.
+* [x] Extended-linear sRGB/scRGB presentation with SDR fallback.
+* [x] Combined QRhi, Qt screen, and Windows Advanced Color state.
+* [x] Window movement and display-mode invalidation.
+* [x] Demand-driven render scheduling with explicit animation.
+* [x] Resize, surface destruction, swapchain invalidation, and bounded
+  device-loss recovery.
+* [x] Basic presentation diagnostics and manual reprobe.
+* [x] Procedural HDR pattern for presentation testing.
+* [ ] Recorded manual runtime validation across the supported Windows display
+  scenarios.
+* [ ] Automated graphics-state or image tests.
+
+## Milestone 1: explicit video surface and narrow compositor
+
+Move the diagnostic pattern through the future video boundary without
+introducing FFmpeg or libplacebo yet.
+
+### Work
+
+* [ ] Define the minimal display-targeted surface description alongside its
+  first producer and consumer.
+* [ ] Create an offscreen RGBA16F video render target on the engine QRhi.
+* [ ] Render the existing diagnostic pattern into that target.
+* [ ] Bind the video and Qt Quick textures in the final compositor.
+* [ ] Reduce the final compositor to layer geometry, alpha composition, and
+  swapchain encoding.
+* [ ] Remove source tone mapping and pattern generation from the final shader.
+* [ ] Track graphics-device and display revisions needed to invalidate a
+  rendered surface.
+* [ ] Preserve valid texture ownership through resize, swapchain recreation,
+  and device recreation.
+* [ ] Report the active video-surface format and producer in diagnostics.
+* [ ] Add focused tests for surface-description and invalidation logic where
+  it can be kept independent of QRhi.
+
+### Acceptance
+
+* The playground looks and behaves the same in SDR and extended-linear output.
+* The final compositor no longer interprets source HDR metadata or tone maps
+  source content.
+* The diagnostic surface has one explicit, documented color and luminance
+  contract.
+* Swapchain-only recreation does not unnecessarily recreate display-independent
+  resources.
+* Display-dependent surfaces are rerendered after a target display change.
+* Device loss cannot leave a surface from the old QRhi generation bound.
+
+## Milestone 2: libplacebo renderer
+
+Replace the temporary producer with a persistent libplacebo renderer.
+
+### Work
+
+* [ ] Add versioned libplacebo dependency and feature discovery.
+* [ ] Select and validate the Windows GPU integration compatible with the
+  application-owned D3D11 QRhi.
+* [ ] Keep native backend types behind a graphics/import boundary.
+* [ ] Create persistent libplacebo log, GPU, and renderer objects.
+* [ ] Render a known software-backed test image into the video surface.
+* [ ] Map the display target, SDR white, peak, primaries, and transfer
+  characteristics explicitly.
+* [ ] Reuse the renderer across size, source, and display changes.
+* [ ] Expose backend, render target, copy, fallback, and timing diagnostics.
+* [ ] Record image-test fixtures for SDR, HDR-to-HDR, and HDR-to-SDR behavior.
+
+### Acceptance
+
+* libplacebo, not the final compositor, performs video color processing.
+* A known input produces repeatable output in SDR and extended-linear modes.
+* The normal test path does not perform an accidental GPU-to-CPU round trip.
+* Unsupported native interop produces an explicit software-upload fallback.
+
+The exact libplacebo/D3D11 interop approach must be verified against the
+selected library version before its interface is committed.
+
+## Milestone 3: first decoded video frame
+
+Feed one FFmpeg-decoded software frame through libplacebo and keep it displayed
+without a playback clock.
+
+### Work
+
+* [ ] Accept a local file selected by the application shell.
+* [ ] Open and probe it through FFmpeg.
+* [ ] Select the default video stream and decode the first displayable frame.
+* [ ] Normalize timestamps and effective frame color metadata.
+* [ ] Map or upload the `AVFrame` through the libplacebo boundary.
+* [ ] Preserve the decoded frame so display changes can rerender it.
+* [ ] Surface loading and decode errors without terminating the UI.
+* [ ] Display source pixel format, dimensions, color metadata, decode path,
+  render path, and copies in diagnostics.
+
+### Acceptance
+
+* A supported local SDR or HDR file displays its first frame.
+* The UI remains responsive while the file is opened and decoded.
+* Moving the paused frame to another display rerenders it for the new target.
+* Unsupported media produces a clear error and leaves the presentation shell
+  usable.
+
+Playback queues, continuous scheduling, seeking, audio, and hardware decoding
+remain later playback/media milestones.
+
+## Cross-platform follow-up
+
+The shared interfaces should be exercised on another QRhi backend only after
+the video-surface boundary has a concrete Windows producer and consumer.
+
+* [ ] Factor D3D11 selection out of shared startup and presentation code.
+* [ ] Add backend selection through a narrow graphics-host factory.
+* [ ] Implement macOS Metal/EDR presentation and display observation.
+* [ ] Implement Linux Vulkan presentation and available compositor/display
+  observation.
+* [ ] Validate backend-neutral orientation, texture, synchronization, and
+  device-generation contracts.
+* [ ] Measure native import feasibility and costs before promising zero-copy
+  behavior on each platform.
+
+## Validation matrix
+
+For each implemented milestone, validate at least:
+
+| Scenario | Expected behavior |
+| --- | --- |
+| SDR output | Correct sRGB encoding and no HDR headroom claims |
+| HDR output | Extended-linear presentation and correct SDR-white placement |
+| HDR disabled on capable display | State and swapchain settle without mismatched encoding |
+| Move between unlike displays | Swapchain is recreated and display-targeted content rerenders |
+| DPI or window resize | UI and video geometry remain aligned |
+| Animation disabled | No continuous presentation loop |
+| Swapchain out of date | Resize/retry without stale render-pass resources |
+| Device loss | Old-generation resources are destroyed before bounded recovery |
+
+Performance, power, and copy-path measurement become required once decoded
+frames and libplacebo exist.

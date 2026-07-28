@@ -6,26 +6,11 @@
 #include <QPointer>
 
 #include "DisplayState.h"
+#include "PresentationTarget.h"
 
 class QScreen;
 class QWindow;
 class DisplayStateProvider;
-
-struct PresentationBackendState {
-    bool operator==(const PresentationBackendState &) const = default;
-
-    QString graphicsApi = QStringLiteral("Unavailable");
-    QString swapChainFormat = QStringLiteral("Unavailable");
-    bool extendedLinearActive = false;
-    bool sceneReferred = false;
-    bool sdrWhiteKnown = false;
-    bool luminanceKnown = false;
-    float sdrWhiteNits = 80.0f;
-    float minLuminanceNits = 0.0f;
-    float maxLuminanceNits = 0.0f;
-    float currentHeadroom = 1.0f;
-    float potentialHeadroom = 1.0f;
-};
 
 class PresentationOutputState final : public QObject {
     Q_OBJECT
@@ -84,7 +69,7 @@ private:
     void attachScreen(QScreen *screen);
     void updateMetrics();
     void applyDisplayState(const DisplayState &state);
-    float effectiveSdrWhiteNits() const;
+    PresentationTarget presentationTarget() const;
 
     QPointer<QWindow> m_window;
     QPointer<QScreen> m_screen;

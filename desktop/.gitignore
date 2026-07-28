@@ -1,2 +1,8 @@
 # Local agent instructions
 /AGENTS.override.md
+
+# Source documentation whose names overlap repository-wide build-output rules
+!/docs/subsystems/build/
+!/docs/subsystems/build/**
+!/docs/subsystems/testing/
+!/docs/subsystems/testing/**

@@ -5,6 +5,8 @@ project(Sunroom VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+include(CTest)
+
 find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS
         GuiPrivate
         Quick
@@ -23,6 +25,8 @@ qt_add_executable(sunroom
         src/HdrCompositor.h
         src/PresentationOutputState.cpp
         src/PresentationOutputState.h
+        src/PresentationTarget.cpp
+        src/PresentationTarget.h
         src/PresentationSettings.cpp
         src/PresentationSettings.h
         src/PresentationWindow.cpp
@@ -82,6 +86,11 @@ if (WIN32)
             WindowsApp
     )
 
+endif ()
+
+if (BUILD_TESTING)
+    find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS Test)
+    add_subdirectory(tests)
 endif ()
 
 include(GNUInstallDirs)
