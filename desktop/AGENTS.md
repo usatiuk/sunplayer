@@ -64,10 +64,24 @@ For substantial implementation work, normally:
 2. Investigate meaningful unknowns before committing to a design. When research, API verification, or codebase auditing can be separated cleanly, delegate bounded questions to one or more subagents and synthesize the results before implementation.
 3. Create or update a short working plan. Keep it synchronized when discoveries change the approach or scope.
 4. Implement the smallest coherent vertical slice that proves the relevant boundaries and behavior.
-5. Validate in proportion to risk, including important failure and fallback paths.
-6. Synchronize subsystem documentation, project progress, decisions, research findings, and deferred work as applicable.
+5. Validate in proportion to risk, including important failure and fallback paths, and synchronize the relevant documentation.
+6. For a substantial or high-risk slice, use the project-local
+   `$ship-change` skill when available before treating the work as complete.
+7. Rerun affected validation after review fixes. When a task includes a commit, commit only after material findings are resolved, rejected with evidence, or explicitly deferred.
 
 This flow is not ceremony or a hard gate. Trivial edits may not benefit from delegation or a written multi-step plan, while substantial documentation, audits, and test design can benefit when they contain separable questions or meaningful unknowns. Tightly coupled work may still be clearer when handled by one agent. Skip, combine, or reorder steps when that produces a clearer and safer result, and always use your own best judgement.
+
+## Shipping substantial changes
+
+The project-local `$ship-change` skill defines the reusable
+research–plan–implement–validate–review–rethink loop. Apply it proportionally:
+trivial edits normally need only self-review and targeted validation, while
+cross-subsystem, lifecycle, concurrency, platform, media, or color-pipeline
+changes benefit from independent review.
+
+`AGENTS.md` remains authoritative for project principles, documentation,
+testing, and local instructions. Review completion is not blanket
+authorization to commit, push, deploy, or publish.
 
 ## Testing discipline
 
@@ -78,10 +92,15 @@ This flow is not ceremony or a hard gate. Trivial edits may not benefit from del
 * Add a regression scenario for significant bug fixes when practical. Otherwise document why automation is not yet possible and what coverage remains missing.
 * Keep verification strategy and known coverage gaps current in subsystem documentation and `docs/TESTING.md`.
 
-## Reviews
+## Review checklist
 
 For substantial changes, verify that:
 
+* Intended behavior, important invariants, ownership, and failure paths are
+  correct and observable.
+* Module boundaries remain narrow and the implementation is no more complex
+  than the problem requires.
+* Tests exercise meaningful behavior at the strongest practical boundary.
 * Documentation and progress tracking remain current.
 * New architectural decisions have been recorded where appropriate.
 * Platform-specific logic has not unnecessarily leaked into shared modules.
