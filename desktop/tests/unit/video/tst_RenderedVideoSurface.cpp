@@ -2,7 +2,8 @@
 
 #include <QtTest>
 
-#include "presentation/RenderedVideoSurface.h"
+#include "video/RenderedVideoSurface.h"
+#include "video/VideoTargetInterop.h"
 
 #ifdef Q_OS_WIN
 #include <qt_windows.h>
@@ -54,6 +55,9 @@ private slots:
     void lifecycleAndContentChangesInvalidate();
     void semanticChangesInvalidate();
     void swapchainOnlyRecreationPreservesReuse();
+    void unavailableTargetDiagnosticsRequireReason();
+    void directTargetDiagnosticsRequireNoCopies();
+    void fallbackDiagnosticsRequireObservableCostsAndReason();
 };
 
 void RenderedVideoSurfaceTest::canonicalDescriptionIsValid() {
@@ -190,6 +194,60 @@ void RenderedVideoSurfaceTest::swapchainOnlyRecreationPreservesReuse() {
     // A swapchain identity is deliberately not part of the surface key.
     QVERIFY(beforeSwapchainRecreation.isReusableFor(
         afterSwapchainRecreation));
+}
+
+void RenderedVideoSurfaceTest::
+unavailableTargetDiagnosticsRequireReason() {
+    VideoTargetInteropDiagnostics diagnostics;
+    diagnostics.synchronizationMode = QStringLiteral("Not active");
+    QVERIFY(!diagnostics.isValid());
+    diagnostics.fallbackReason =
+        QStringLiteral("Target not provisioned");
+    QVERIFY(diagnostics.isValid());
+    QCOMPARE(
+        videoOutputPathName(diagnostics.outputPath),
+        QStringLiteral("Unavailable"));
+}
+
+void RenderedVideoSurfaceTest::directTargetDiagnosticsRequireNoCopies() {
+    VideoTargetInteropDiagnostics diagnostics;
+    diagnostics.outputPath = VideoOutputPath::DirectRenderTarget;
+    diagnostics.synchronizationMode =
+        QStringLiteral("QRhi command-buffer ordering");
+    QVERIFY(diagnostics.isValid());
+    QCOMPARE(
+        videoOutputPathName(diagnostics.outputPath),
+        QStringLiteral("Direct render target"));
+
+    diagnostics.knownGpuCopiesPerRender = 1;
+    QVERIFY(!diagnostics.isValid());
+    diagnostics.knownGpuCopiesPerRender = 0;
+    diagnostics.fallbackReason = QStringLiteral("Unexpected");
+    QVERIFY(!diagnostics.isValid());
+}
+
+void RenderedVideoSurfaceTest::
+fallbackDiagnosticsRequireObservableCostsAndReason() {
+    VideoTargetInteropDiagnostics diagnostics;
+    diagnostics.outputPath = VideoOutputPath::SameDeviceGpuCopy;
+    diagnostics.synchronizationMode =
+        QStringLiteral("Backend fence");
+    QVERIFY(!diagnostics.isValid());
+    diagnostics.knownGpuCopiesPerRender = 1;
+    QVERIFY(!diagnostics.isValid());
+    diagnostics.fallbackReason =
+        QStringLiteral("Direct target format unavailable");
+    QVERIFY(diagnostics.isValid());
+
+    diagnostics.outputPath = VideoOutputPath::CpuRoundTrip;
+    diagnostics.knownGpuCopiesPerRender = 0;
+    diagnostics.knownCpuTransfersPerRender = 1;
+    QVERIFY(!diagnostics.isValid());
+    diagnostics.knownCpuTransfersPerRender = 2;
+    QVERIFY(diagnostics.isValid());
+    QCOMPARE(
+        videoOutputPathName(diagnostics.outputPath),
+        QStringLiteral("CPU round trip"));
 }
 
 QTEST_APPLESS_MAIN(RenderedVideoSurfaceTest)

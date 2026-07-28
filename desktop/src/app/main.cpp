@@ -1,12 +1,13 @@
 #include <QGuiApplication>
 #include <QPalette>
-#include <QQuickWindow>
+
 #include "app/PresentationWindow.h"
+#include "graphics/GraphicsBackendFactory.h"
 
 int main(int argc, char *argv[]) {
     QGuiApplication app(argc, argv);
 
-    QQuickWindow::setGraphicsApi(QSGRendererInterface::Direct3D11);
+    GraphicsBackendFactory::configureQtQuick();
 
     QPalette palette;
     palette.setColor(QPalette::Window, QColor(QStringLiteral("#111318")));

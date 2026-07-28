@@ -17,10 +17,10 @@ cross-platform target:
 | Area | Current state |
 | --- | --- |
 | Operating system | Windows |
-| QRhi backend | D3D11 |
+| Graphics domain | Factory-selected D3D11 implementation owning QRhi and device generation |
 | Presentation | Extended-linear sRGB/scRGB when supported, otherwise SDR |
 | Qt Quick | Redirected into an application-owned full-window RGBA16F texture |
-| Video | Procedural producer → canvas-sized display-targeted RGBA16F surface |
+| Video | Shared producer → direct QRhi target → canvas-sized display-targeted RGBA16F surface |
 | Display telemetry | Qt screen metrics, QRhi swapchain HDR information, and Windows Advanced Color |
 | Rendering cadence | Demand-driven, continuous only while the pattern or UI animates |
 
@@ -33,9 +33,10 @@ tracked in [PLAN.md](PLAN.md). Known limitations are also collected in
 The subsystem currently owns:
 
 * Native presentation-window lifecycle.
-* QRhi device and swapchain ownership.
+* Factory-selected QRhi device-domain and presentation swapchain ownership.
 * Redirected Qt Quick rendering.
-* The rendered-video surface contract and temporary diagnostic producer.
+* The rendered-video surface, producer, and target-interop contracts plus the
+  temporary diagnostic implementation.
 * Final GPU composition and swapchain encoding.
 * Display selection and HDR/SDR presentation-state observation.
 * Render invalidation, resizing, surface loss, and bounded device recovery.
@@ -58,7 +59,8 @@ PresentationWindow
     │ window, surface, input, and UpdateRequest events
     ▼
 RhiPresentationEngine
-    ├── application-owned D3D11 QRhi
+    ├── GraphicsDeviceDomain
+    │       └── D3D11 backend → application-owned QRhi
     ├── QRhi swapchain
     ├── QuickUiLayer
     │       └── QQuickRenderControl → full-window RGBA16F texture
@@ -66,8 +68,10 @@ RhiPresentationEngine
     │       ├── QScreen metrics
     │       ├── QRhiSwapChainHdrInfo
     │       └── WindowsDisplayStateProvider
-    ├── DiagnosticVideoProducer
-    │       └── pattern + diagnostic tone map → RGBA16F video surface
+    ├── DiagnosticVideoSource
+    │       └── content state + cadence → DiagnosticVideoProducer
+    │               └── pattern + diagnostic tone map
+    │                       → QrhiVideoTarget → RGBA16F video surface
     └── HdrCompositor
             ├── display-targeted video surface
             ├── redirected Qt Quick texture
@@ -82,21 +86,29 @@ thread or playback thread yet.
 | Component | Current role |
 | --- | --- |
 | `PresentationWindow` | Owns presentation-facing state, forwards supported input to the redirected Quick window, and translates native window events into engine invalidation or teardown. |
-| `RhiPresentationEngine` | Owns the QRhi device, swapchain, render-pass lifecycle, frame scheduling, output verification, and device recovery. |
+| `GraphicsBackendFactory` | Selects Qt Quick API, window surface type, and graphics-device implementation without exposing native types to application or presentation code. |
+| `GraphicsDeviceDomain` | Owns QRhi, device generation, backend/adapter diagnostics, and the native implementation's teardown. |
+| `RhiPresentationEngine` | Owns the swapchain, render-pass lifecycle, frame scheduling, output verification, and device recovery around a graphics domain. |
 | `QuickUiLayer` | Creates a `QQuickRenderControl` scene on the engine's QRhi and renders it into a transparent RGBA16F texture. |
-| `DiagnosticVideoProducer` | Owns the temporary pattern pipeline and canvas-sized RGBA16F render target. It represents the future libplacebo producer side of the video-surface boundary. |
+| `RenderedVideoSource` | Device-independent content revision, cadence, invalidation, and producer-factory contract used by the engine. |
+| `DiagnosticVideoSource` | Owns procedural-pattern controls, animation phase and cadence, and diagnostic producer creation. |
+| `RenderedVideoProducer` | Source-independent lifecycle, render, completion, and composition-texture contract used by the engine. |
+| `VideoTargetInterop` | Owns the renderer-to-compositor texture boundary and reports output path, synchronization, copies, transfers, and fallback reason. |
+| `DiagnosticVideoProducer` | Implements the producer contract with the temporary pattern pipeline and direct `QrhiVideoTarget`. |
 | `RenderedVideoSurfaceState` | Pure description and device/display/content reuse key for a completed display-targeted surface. It does not own a native texture. |
 | `HdrCompositor` | Places the already processed video surface, converts and blends the flattened UI layer, applies presentation scaling, and encodes the swapchain. It has no source peak, transfer, metadata, or tone-mapping inputs. |
 | `PresentationOutputState` | Combines screen metrics, operating-system display state, and the successfully created swapchain's properties into one QML-facing presentation snapshot. |
 | `DisplayStateProvider` | Narrow platform adapter for dynamic display color information. The Windows implementation uses WinRT; other platforms currently return an invalid snapshot. |
-| `PresentationSettings` | Holds transient controls for the diagnostic HDR pattern. It is not the eventual persistent player-settings model. |
+| `PresentationSettings` | Holds target-peak policy and the transient diagnostic canvas rectangle. It is not the eventual persistent player-settings model. |
 
 ## Ownership and execution model
 
-`RhiPresentationEngine` owns one QRhi for one `PresentationWindow`. Qt Quick
-adopts that device with `QQuickGraphicsDevice::fromRhi()`. The redirected Quick
-scene, final compositor, and visible swapchain therefore use the same native
-D3D11 device selected by QRhi.
+`RhiPresentationEngine` owns one factory-selected `GraphicsDeviceDomain` for
+one `PresentationWindow`. The domain owns QRhi and its monotonic device
+generation. Qt Quick adopts that QRhi with
+`QQuickGraphicsDevice::fromRhi()`. The redirected Quick scene, diagnostic
+producer, final compositor, and visible swapchain therefore use the same native
+D3D11 device.
 
 The engine owns the final presentation loop rather than injecting rendering
 into a Qt-owned onscreen scene graph. Qt Quick renders through
@@ -110,12 +122,13 @@ The current destruction order is an invariant:
 2. Destroy the diagnostic producer and its surface resources.
 3. Disconnect and destroy `QuickUiLayer`, allowing it to invalidate its scene
    and release QRhi resources.
-4. Destroy the QRhi device.
+4. Destroy the graphics-device domain and therefore the QRhi device.
 
 The Quick render target and diagnostic video producer intentionally survive
-swapchain-only recreation. The canvas texture wrapper is resized in place when
-its integer pixel size changes; both layers are destroyed when the QRhi device
-is rebuilt.
+swapchain-only recreation. Resizing the video target changes its composition
+texture revision, which forces the compositor to bind the current native
+texture before sampling it. Both layers are destroyed when the QRhi device is
+rebuilt.
 
 ## Frame lifecycle
 
@@ -128,15 +141,17 @@ For a visible, non-empty window, one engine frame proceeds as follows:
 5. Render the Quick scene if it is dirty. `QQuickRenderControl` uses its own
    offscreen QRhi frame, which completes before the visible frame begins.
 6. Align the logical canvas to an integer physical-pixel rectangle and ensure
-   the diagnostic RGBA16F video target matches it.
+   the video producer's RGBA16F target matches it, rebinding the compositor if
+   the composition texture revision changed.
 7. Begin the swapchain frame, retrying an out-of-date swapchain after an
    explicit resize.
-8. Rerender the diagnostic surface when its device, display, content, or size
-   state changed.
-9. Sample the video and UI textures in the final swapchain pass.
-10. End and present the frame.
-11. Request another frame only if the pattern is animated or Qt Quick remains
-   dirty.
+8. Ask the active video source whether its device-independent content state
+   advanced.
+9. Rerender the video surface when its device, display, content, or size state
+   changed, then prepare the target for composition.
+10. Sample the video and UI textures in the final swapchain pass.
+11. End the frame and either commit or discard the pending video result.
+12. Request another frame only if the active source or Qt Quick wants one.
 
 An outstanding `QWindow::requestUpdate()` is represented by `m_framePending`.
 Synchronous invalidation during rendering is coalesced into a later request
@@ -152,7 +167,7 @@ A frame is requested when:
 
 * The Qt Quick scene requests rendering or changes.
 * The window size or device-pixel ratio changes.
-* Diagnostic presentation settings change.
+* Presentation policy or the active source changes.
 * Display state or successfully created backend state changes.
 * The window moves and its settled output needs verification.
 * A swapchain or device recovery attempt is due.
@@ -220,15 +235,14 @@ the operating system performs the final mapping to the physical display.
 
 The current backend is fixed to D3D11:
 
-* `main.cpp` selects Qt Quick's D3D11 graphics API.
-* `PresentationWindow` requests a Direct3D surface.
-* `RhiPresentationEngine` creates `QRhi::D3D11` on Windows and terminates on
-  other platforms.
+* `GraphicsBackendFactory` selects Qt Quick D3D11 and the Direct3D window
+  surface.
+* Its D3D11 implementation creates the QRhi inside `GraphicsDeviceDomain`.
+* Application, presentation, and video code consume the shared factory/domain
+  contracts without D3D11 types.
+* Other platform implementations remain unavailable.
 
-This is current implementation status, not the accepted final ownership seam.
-The next foundation slice introduces a factory-selected graphics-device domain
-and explicit target interop before libplacebo is added. The decision and
-fallback policy are recorded in
+The decision and fallback policy are recorded in
 [ADR 0004](../../decisions/0004-cross-platform-graphics-domain-and-video-interop.md);
 video-rendering responsibilities are described in
 [../video-rendering/README.md](../video-rendering/README.md).
@@ -256,9 +270,10 @@ available.
 
 ### Rendered-video surface
 
-`DiagnosticVideoProducer` currently generates the grayscale, color-spectrum,
-and stepped ramps and applies their optional diagnostic tone mapper. It writes
-one opaque, canvas-sized texture with the contract recorded in
+`DiagnosticVideoSource` owns the procedural pattern state, revision, and
+animation cadence. Its `DiagnosticVideoProducer` generates the grayscale,
+color-spectrum, and stepped ramps and applies their optional diagnostic tone
+mapper. It writes one opaque, canvas-sized texture with the contract recorded in
 [ADR 0003](../../decisions/0003-display-targeted-video-surface.md):
 
 * RGBA16F linear sRGB/BT.709 D65 with extended floating-point values.
@@ -318,14 +333,17 @@ The current QML playground displays:
 * SDR white and UI scale.
 * Absolute luminance range or current/potential headroom.
 * Whether HDR or only extended-linear presentation is active.
+* Active graphics adapter.
 * Active video-surface producer and color/format summary.
+* Video output-target path, synchronization mode, known GPU copies and CPU
+  transfers per video render, and fallback reason.
 
 It also exposes a manual reprobe and controls for source peak, target peak,
 tone mapping, and pattern animation. These controls validate presentation
 behavior; they are not the planned player settings surface.
 
-Backend adapter identity, copy paths, render timings, device-loss history, and
-video import diagnostics do not exist yet.
+Render timings, device-loss history, and decoded-frame import diagnostics do
+not exist yet.
 
 ## Accepted invariants
 
@@ -351,11 +369,12 @@ The current implementation establishes these project rules:
 * Platform-specific display observation stays behind
   `DisplayStateProvider`.
 
-ADR 0004 adds these accepted invariants for the next graphics ownership slice;
-they are not implemented yet:
+ADR 0004 adds these now-implemented ownership invariants:
 
-* A factory-selected graphics domain owns the native device, QRhi, video-target
-  interop, generation, diagnostics, and deterministic teardown.
+* A factory-selected graphics domain owns the native device, QRhi, generation,
+  diagnostics, target selection, and deterministic device teardown.
+* The active video producer owns the target instance returned by the domain;
+  the target owns its composition-visible resources and submission state.
 * Qt Quick, the final compositor, and video rendering share that graphics
   domain when the backend supports direct interop.
 
@@ -366,30 +385,34 @@ into its own directory:
 
 ```text
 src/
-    app/            startup, native window, diagnostic settings, and QML
+    app/            startup, native window, presentation settings, and QML
+    graphics/       graphics factory, device-domain contract, and backends
+        backends/
     platform/       operating-system display observation
     presentation/   output policy, QRhi orchestration, layers, and compositor
-        backends/   native graphics-device and target interop implementations
         shaders/
+    video/          rendered surfaces, producers, and target interop
 ```
 
-The `backends/` directory is the accepted destination when the graphics-domain
-seam is implemented; it does not exist yet. Future media, playback, audio,
-subtitle, and diagnostics directories should be added when those subsystems
-have concrete code. Cross-directory includes use the responsibility-qualified
-path so dependencies remain visible.
+Future media, playback, audio, subtitle, and diagnostics directories should be
+added when those subsystems have concrete code. Cross-directory includes use
+the responsibility-qualified path so dependencies remain visible.
 
 ## Verification
 
 The configured Debug target builds successfully with Qt 6.11.1 and MSVC after
-initializing the Visual Studio developer environment. Pure presentation-target
-policy and rendered-surface validity/reuse rules have automated coverage. A
-headless real D3D11 QRhi test renders the production diagnostic producer into
-RGBA16F, composes it with the production final pass, reads back both boundaries,
-and checks analytic extended values, orientation, placement, SDR encoding,
-non-unity extended-linear scaling, post-submission surface reuse, and
-premultiplied UI blending. A renderer image corpus, cross-backend capture, and
-recorded runtime display matrix do not exist yet.
+initializing the Visual Studio developer environment. Pure presentation-target,
+rendered-surface reuse, and target-diagnostic policy have automated coverage. A
+headless real D3D11 QRhi test creates the production graphics domain, drives
+the diagnostic producer through the shared interface, renders into RGBA16F,
+composes with the production final pass, and reads back both boundaries. It
+checks analytic extended values, orientation, placement, SDR encoding,
+non-unity extended-linear scaling, post-submission surface reuse, accepted
+submissions with committed and discarded rendered states, target
+resize/revision-driven compositor rebinding, premultiplied UI blending, and the
+direct zero-copy target report.
+A renderer image corpus, cross-backend capture, and recorded runtime display
+matrix do not exist yet.
 
 The built GUI has also completed an automated four-second startup liveness
 smoke with the configured Qt runtime. It created the normal application path

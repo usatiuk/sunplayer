@@ -3,8 +3,11 @@
 ## Status
 
 Sunroom currently has an explicit rendered-video surface contract and a
-procedural QRhi diagnostic producer. libplacebo, decoded-frame import, and
-platform video-target interop are not implemented.
+procedural QRhi diagnostic source and producer behind shared lifecycle
+contracts. The graphics domain factory-selects the current direct QRhi target,
+which reports provisioning state, synchronization, texture revision, and its
+zero-copy path. libplacebo, decoded-frame import, native libplacebo target
+interop, and real fallback paths are not implemented.
 
 The broad investigation in
 [../../ARCHITECTURE_NOTES.md](../../ARCHITECTURE_NOTES.md) is non-binding
@@ -26,14 +29,22 @@ shared QRhi compositor
 
 The known seams are established with their first implementations:
 
-* The graphics-device domain owns QRhi, libplacebo GPU state, native backend
-  state, device generation, synchronization, capabilities, diagnostics, and
-  teardown order.
-* The rendered-video producer owns invalidation and completion semantics.
-* The libplacebo target bridge makes one render target available to libplacebo
-  and QRhi without exposing native types.
-* The frame importer maps software and platform hardware frames into
-  libplacebo input planes while retaining their lifetime.
+* The graphics-device domain owns QRhi, native backend state, device
+  generation, backend/adapter diagnostics, and teardown order. It will also
+  own libplacebo GPU state and report relevant capabilities once that
+  dependency is integrated.
+* The rendered-video source owns source-specific state, content revision,
+  cadence, update requests, and device-recreatable producer creation.
+* The rendered-video producer owns invalidation, submission reporting, and
+  rendered-state commit/discard semantics without exposing source-specific
+  controls to the presentation engine.
+* The target lifecycle covers provisioning, result-bearing producer access,
+  preparation for composition, submission acceptance/abort, the composition
+  texture and its revision, and path diagnostics. The graphics domain selects
+  the implementation and the producer owns the returned target.
+* The future frame importer will map software and platform hardware frames into
+  libplacebo input planes while retaining their lifetime; that seam is not yet
+  implemented.
 
 These are purpose-specific boundaries, not another general graphics API.
 
@@ -72,25 +83,30 @@ metadata policy, renderer policy, subtitles, and the compositor remain shared.
 
 ## Implementation sequence
 
-1. Extract the graphics-device domain and rendered-video producer contract;
-   route the current diagnostic producer through them without behavior change.
-2. Define the libplacebo target-interop contract, output-path diagnostics, and
-   lifecycle rules.
-3. Add a pinned libplacebo dependency and the Windows D3D11 shared-target
-   implementation.
-4. Render known SDR and HDR/extended-value software images and capture both the
+1. [x] Extract the graphics-device domain, rendered-video producer, and
+   source lifecycle; route the diagnostic path through them.
+2. [x] Expose output path, synchronization, copy/transfer, and fallback
+   diagnostics through the current UI for the direct QRhi target.
+3. [ ] Add a pinned libplacebo dependency, its renderer-facing target access
+   contract, and the Windows D3D11 direct/copy/fallback implementations.
+4. [ ] Render known SDR and HDR/extended-value software images and capture both the
    video surface and final composition.
-5. Add the Vulkan implementation and exercise it on Linux.
-6. Validate MoltenVK presentation on macOS before choosing shared Vulkan or a
+5. [ ] Add the Vulkan implementation and exercise it on Linux.
+6. [ ] Validate MoltenVK presentation on macOS before choosing shared Vulkan or a
    Metal interop backend.
-7. Add FFmpeg software and hardware frame importers through the established
+7. [ ] Add FFmpeg software and hardware frame importers through the established
    input seam.
 
 ## Verification
 
-Shared policy receives focused state tests. Each native backend requires a real
-GPU integration test using the production libplacebo renderer and QRhi
-compositor. Cross-backend output comparisons use declared tolerances.
+Target diagnostic schema has focused state tests. The real D3D11 integration
+test creates the factory-selected graphics domain, drives the diagnostic source
+and producer through shared interfaces, captures the direct QRhi target and
+composition, verifies zero-copy diagnostics, exercises successful and
+discarded render-state promotion after accepted submissions, and
+reprovisions/resizes the texture through an explicit revision and compositor
+rebind. Each future native libplacebo backend requires equivalent real-GPU
+coverage. Cross-backend output comparisons use declared tolerances.
 
 Physical display correctness, macOS EDR viability, Vulkan synchronization, and
 hardware-decoder zero-copy behavior remain platform-lab requirements rather

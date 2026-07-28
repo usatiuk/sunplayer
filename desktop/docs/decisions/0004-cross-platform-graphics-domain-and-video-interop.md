@@ -94,8 +94,8 @@ Benefits:
 
 Costs:
 
-* The first libplacebo slice includes interfaces and factories that have only
-  one executable backend initially.
+* The foundation includes interfaces and factories that initially have only
+  one executable backend and one direct QRhi target implementation.
 * Vulkan and macOS synchronization still require platform validation.
 * QRhi native interop uses private Qt APIs and must remain version-pinned and
   isolated.
@@ -125,8 +125,8 @@ bridge between them.
 
 ## Not decided here
 
-* Exact class names and whether the graphics domain is per window or shared by
-  compatible windows.
+* Whether future compatible windows share a graphics domain; the current
+  single window owns one domain.
 * The final Vulkan queue and semaphore strategy.
 * Whether shared MoltenVK presentation satisfies macOS EDR and energy goals.
 * Hardware-decoder input import details for each platform.

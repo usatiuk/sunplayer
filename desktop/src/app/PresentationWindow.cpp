@@ -9,17 +9,20 @@
 #include <QWheelEvent>
 
 #include "app/PresentationSettings.h"
+#include "graphics/GraphicsBackendFactory.h"
 #include "presentation/PresentationOutputState.h"
 #include "presentation/RhiPresentationEngine.h"
+#include "video/DiagnosticVideoSource.h"
 
 PresentationWindow::PresentationWindow() {
-    setSurfaceType(QSurface::Direct3DSurface);
+    setSurfaceType(GraphicsBackendFactory::windowSurfaceType());
     setTitle(tr("Sunroom — RHI / HDR"));
 
     m_outputState = std::make_unique<PresentationOutputState>();
     m_settings = std::make_unique<PresentationSettings>();
+    m_videoSource = std::make_unique<DiagnosticVideoSource>();
     m_engine = std::make_unique<RhiPresentationEngine>(
-        *this, *m_outputState, *m_settings);
+        *this, *m_outputState, *m_settings, *m_videoSource);
 
     setMinimumSize({760, 560});
     resize(1100, 760);

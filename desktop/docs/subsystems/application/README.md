@@ -27,7 +27,8 @@ does not live in the application window or QML page.
 `main.cpp` currently:
 
 1. Creates `QGuiApplication`.
-2. Selects D3D11 as the Qt Quick graphics API.
+2. Asks `GraphicsBackendFactory` to configure Qt Quick for the selected
+   backend; the current factory selects D3D11.
 3. Installs one dark application palette used by the diagnostic interface.
 4. Constructs and shows one `PresentationWindow`.
 5. Enters the Qt event loop.
@@ -37,20 +38,21 @@ settings store, or application service container.
 
 ## Window ownership
 
-`PresentationWindow` is the current composition root. It owns, in declaration
-and destruction order:
+`PresentationWindow` is the current composition root. It declares ownership in
+this order, so destruction occurs in reverse:
 
 * `PresentationOutputState`.
 * `PresentationSettings`.
+* `DiagnosticVideoSource`.
 * `RhiPresentationEngine`.
 
 The graphics engine is created before display observation attaches to the
 native window because attachment may create the platform window and deliver
 synchronous events.
 
-The window requests a Direct3D surface, starts at 1100 × 760 logical pixels,
-has a 760 × 560 minimum, and currently uses the diagnostic title
-`Sunroom — RHI / HDR`.
+The window requests the factory-selected surface type, currently Direct3D,
+starts at 1100 × 760 logical pixels, has a 760 × 560 minimum, and currently
+uses the diagnostic title `Sunroom — RHI / HDR`.
 
 This direct ownership is intentionally simple for one window. Application-wide
 services should only be introduced when a concrete subsystem needs shared
@@ -74,19 +76,21 @@ methods, accessibility, drag-and-drop, and file-open events remain deferred.
 
 ## State and settings
 
-`PresentationSettings` contains transient diagnostic controls:
+`PresentationSettings` contains presentation-facing controls:
 
-* Procedural pattern peak.
 * Automatic or manual target peak.
-* Diagnostic tone mapping.
-* Pattern animation.
 * QML-computed diagnostic canvas rectangle, pending replacement by the shared
   active video-viewport contract.
 
-These values are not persisted and should not be grown into the final player
-settings indiscriminately. Player preferences, current playback session state,
-and short-lived diagnostic controls have different lifetimes and should remain
-separate when they arrive.
+`DiagnosticVideoSource` separately owns the procedural pattern peak, diagnostic
+tone-mapping switch, animation state and cadence, and content revision. It
+creates a new producer whenever the graphics device is recreated, keeping
+source-specific state out of the presentation engine.
+
+None of these values are persisted. They should not be grown into the final
+player settings indiscriminately: player preferences, playback-session state,
+presentation policy, and short-lived diagnostic controls have different
+lifetimes.
 
 ## Errors and recovery
 
@@ -106,8 +110,10 @@ vertical slices rather than as an empty global framework.
 
 ## Verification
 
-Current automated coverage is absent. Application-shell verification currently
-consists only of a successful configured build.
+Application-shell behavior does not yet have a registered scenario. The built
+application has completed an automated four-second hidden startup liveness
+smoke without user interaction; this verifies startup and graphics
+initialization, not UI behavior or visual correctness.
 
 When features arrive, use:
 

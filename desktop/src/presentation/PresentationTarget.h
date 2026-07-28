@@ -9,9 +9,14 @@ struct PresentationBackendState {
     bool operator==(const PresentationBackendState &) const = default;
 
     QString graphicsApi = QStringLiteral("Unavailable");
+    QString graphicsAdapter = QStringLiteral("Unavailable");
     QString swapChainFormat = QStringLiteral("Unavailable");
     QString videoSurfaceFormat = QStringLiteral("Unavailable");
     QString videoSurfaceProducer = QStringLiteral("Unavailable");
+    QString videoOutputPath = QStringLiteral("Unavailable");
+    QString videoSynchronization = QStringLiteral("Unavailable");
+    QString videoCopySummary = QStringLiteral("Unavailable");
+    QString videoFallbackReason;
     bool extendedLinearActive = false;
     bool sceneReferred = false;
     bool sdrWhiteKnown = false;

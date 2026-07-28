@@ -7,9 +7,10 @@ presentation boundary for decoded video, while preserving explicit color
 contracts, one-device composition, demand-driven rendering, and observable
 fallback behavior.
 
-The immediate implementation milestone establishes the known device, producer,
-and target-interop seams around the diagnostic producer. A libplacebo producer
-for the explicit offscreen video surface follows and still precedes playback.
+The device, producer, and target-interop seams now wrap the diagnostic
+producer. The immediate UI milestone extracts the retained HDR Lab and generic
+viewport; a libplacebo producer for the explicit offscreen video surface then
+follows and still precedes playback.
 
 ## Completed foundation
 
@@ -81,28 +82,40 @@ code.
 
 ### Work
 
-* [ ] Extract a factory-selected graphics-device domain from direct D3D11
+* [x] Extract a factory-selected graphics-device domain from direct D3D11
   startup and ownership.
-* [ ] Define the rendered-video producer lifecycle, invalidation, successful
+* [x] Define the rendered-video producer lifecycle, invalidation, successful
   completion, and composition-texture contract.
-* [ ] Route the diagnostic producer through that contract without changing its
+* [x] Route the diagnostic producer through that contract without changing its
   output.
-* [ ] Define backend target interop for direct sharing, same-device GPU copy,
-  and explicit CPU fallback.
-* [ ] Define backend capability and copy/fallback diagnostics.
-* [ ] Keep D3D11, Vulkan, Metal, IOSurface, queue, semaphore, and decoder-native
+* [x] Define result-bearing target provisioning, producer access, composition
+  preparation, submission acceptance/abort, and texture-revision contracts.
+* [x] Implement the direct QRhi target and output-path diagnostic schema.
+* [ ] Implement native libplacebo target selection with direct sharing,
+  same-device GPU copy, and explicit CPU fallback.
+* [x] Keep D3D11, Vulkan, Metal, IOSurface, queue, semaphore, and decoder-native
   types inside backend implementations.
-* [ ] Preserve deterministic teardown and device-generation invalidation.
+* [x] Preserve deterministic teardown and device-generation invalidation.
 
 ### Acceptance
 
 * The current diagnostic output and demand-driven behavior remain unchanged.
 * The presentation engine depends on shared contracts rather than constructing
   the D3D11 implementation directly.
-* Backend selection, capabilities, synchronization mode, copies, and fallback
-  reasons are queryable without native types.
-* Tests cover producer completion, failure, invalidation, and backend
-  capability policy at the strongest practical boundary.
+* Backend selection, synchronization mode, known copies/transfers, and fallback
+  reasons are queryable without native types for each implemented target.
+* Tests cover accepted submissions with committed and discarded rendered
+  states, invalidation, target resizing, and backend target state at the
+  strongest practical boundary.
+
+The shared source/producer lifecycle and direct QRhi target portion is
+implemented. The full Windows build, three CTest targets, real D3D11 capture,
+and hidden startup smoke pass. The test drives the diagnostic source and
+producer through shared interfaces, verifies direct-target diagnostics with no
+copies, exercises committed and discarded render states after accepted
+submissions, resizes the native texture, observes its revision, rebinds the
+compositor, and captures the resized result. Native libplacebo interop and
+actual fallback selection remain part of milestone 3.
 
 ## Milestone 3: libplacebo renderer
 

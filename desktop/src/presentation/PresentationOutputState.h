@@ -17,10 +17,20 @@ class PresentationOutputState final : public QObject {
 
     Q_PROPERTY(QString screenName READ screenName NOTIFY stateChanged)
     Q_PROPERTY(QString graphicsApi READ graphicsApi NOTIFY stateChanged)
+    Q_PROPERTY(QString graphicsAdapter READ graphicsAdapter
+               NOTIFY stateChanged)
     Q_PROPERTY(QString swapChainFormat READ swapChainFormat NOTIFY stateChanged)
     Q_PROPERTY(QString videoSurfaceFormat READ videoSurfaceFormat
                NOTIFY stateChanged)
     Q_PROPERTY(QString videoSurfaceProducer READ videoSurfaceProducer
+               NOTIFY stateChanged)
+    Q_PROPERTY(QString videoOutputPath READ videoOutputPath
+               NOTIFY stateChanged)
+    Q_PROPERTY(QString videoSynchronization READ videoSynchronization
+               NOTIFY stateChanged)
+    Q_PROPERTY(QString videoCopySummary READ videoCopySummary
+               NOTIFY stateChanged)
+    Q_PROPERTY(QString videoFallbackReason READ videoFallbackReason
                NOTIFY stateChanged)
     Q_PROPERTY(qreal devicePixelRatio READ devicePixelRatio NOTIFY stateChanged)
     Q_PROPERTY(qreal refreshRate READ refreshRate NOTIFY stateChanged)
@@ -46,9 +56,14 @@ public:
 
     QString screenName() const;
     QString graphicsApi() const;
+    QString graphicsAdapter() const;
     QString swapChainFormat() const;
     QString videoSurfaceFormat() const;
     QString videoSurfaceProducer() const;
+    QString videoOutputPath() const;
+    QString videoSynchronization() const;
+    QString videoCopySummary() const;
+    QString videoFallbackReason() const;
     qreal devicePixelRatio() const;
     qreal refreshRate() const;
     bool displayHdrEnabled() const;

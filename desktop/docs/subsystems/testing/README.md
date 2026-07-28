@@ -70,7 +70,8 @@ Early likely seams are:
 * A pure presentation-target calculation separated from Qt/WinRT observation.
 * Injectable `DisplayStateProvider` snapshots.
 * Explicit graphics-device and display revisions on rendered surfaces.
-* A test-only offscreen QRhi target with supported raw readback.
+* Production source/producer/target contracts with readback enabled only for
+  the real offscreen GPU test.
 
 Later seams include a monotonic clock, audio sink, source-fault adapter, and
 test-control endpoint. They should arrive with the subsystem behavior they
@@ -83,8 +84,8 @@ Current verified coverage:
 | Boundary | State |
 | --- | --- |
 | Configured Windows Debug build | Builds successfully |
-| Focused automated tests | Presentation-target policy and rendered-video surface lifecycle tests pass |
-| Real QRhi capture | D3D11 producer RGBA16F plus final SDR and extended-linear composition readbacks pass |
+| Focused automated tests | Presentation-target policy, rendered-video surface lifecycle, and target-path diagnostic policy tests pass |
+| Real QRhi capture | Factory-selected D3D11 domain, shared source/producer contracts, direct RGBA16F target, resize/revision rebinding, and final SDR/extended-linear composition readbacks pass |
 | Built application startup | Automated four-second GUI/device/swapchain liveness smoke passed; not yet a registered scenario |
 | Recorded SDR/HDR runtime matrix | Not implemented |
 | Media pipeline scenarios | Blocked on media pipeline implementation |
@@ -93,7 +94,7 @@ Current verified coverage:
 Missing coverage must remain visible in this table or the active testing plan
 until it is implemented or deliberately removed from scope.
 
-Focused tests are grouped by responsibility under
-`tests/unit/presentation/`. Future GPU integration and actual-application
-scenarios use sibling trees when their first concrete tests arrive; the first
-GPU boundary test is under `tests/integration/presentation/`.
+Focused tests are grouped by responsibility under `tests/unit/presentation/`
+and `tests/unit/video/`. Future actual-application scenarios use sibling trees
+when their first concrete tests arrive; the first GPU boundary test is under
+`tests/integration/presentation/`.

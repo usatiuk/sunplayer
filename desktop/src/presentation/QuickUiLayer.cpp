@@ -15,6 +15,7 @@
 
 #include "app/PresentationSettings.h"
 #include "presentation/PresentationOutputState.h"
+#include "video/RenderedVideoSource.h"
 
 namespace {
 class RenderControl final : public QQuickRenderControl {
@@ -36,12 +37,14 @@ QuickUiLayer::QuickUiLayer(QWindow &renderWindow,
                            QRhi &rhi,
                            PresentationOutputState &outputState,
                            PresentationSettings &settings,
+                           RenderedVideoSource &videoSource,
                            QObject *parent)
     : QObject(parent),
       m_renderWindow(renderWindow),
       m_rhi(rhi),
       m_outputState(outputState),
-      m_settings(settings) {
+      m_settings(settings),
+      m_videoSource(videoSource) {
 }
 
 QuickUiLayer::~QuickUiLayer() {
@@ -78,6 +81,8 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
         QStringLiteral("outputState"), &m_outputState);
     m_qmlEngine->rootContext()->setContextProperty(
         QStringLiteral("presentationSettings"), &m_settings);
+    m_qmlEngine->rootContext()->setContextProperty(
+        QStringLiteral("videoSource"), &m_videoSource);
 
     QQmlComponent component(m_qmlEngine.get());
     component.loadFromModule(QStringLiteral("Sunroom"), QStringLiteral("Main"));

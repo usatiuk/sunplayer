@@ -8,12 +8,13 @@ are documented; move them into a subsystem plan when they become active work.
 
 ### Windows-only presentation backend
 
-The application currently forces Qt Quick and QRhi to D3D11, requests a
-Direct3D window surface, and terminates during graphics initialization on
-non-Windows platforms. macOS Metal/EDR and Linux Vulkan/compositor presentation
-adapters remain unimplemented.
+The factory-selected implementation currently configures Qt Quick and QRhi for
+D3D11 and requests a Direct3D window surface. No non-Windows factory
+implementation exists, so startup terminates on those platforms. macOS
+Metal/EDR and Linux Vulkan/compositor presentation adapters remain
+unimplemented.
 
-Track under the cross-platform section of
+Track under the backend-realization section of
 `docs/subsystems/graphics/PLAN.md`.
 
 ### No libplacebo or decoded-video producer
@@ -25,7 +26,7 @@ FFmpeg source metadata normalization and a persistent libplacebo producer are
 still required for SDR, HDR10/PQ, HLG, dynamic HDR, and differing source color
 spaces.
 
-Track under graphics milestones 1–3.
+Track under graphics milestones 3–4.
 
 ### Qt private API compatibility
 

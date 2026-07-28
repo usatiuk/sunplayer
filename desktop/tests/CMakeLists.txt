@@ -6,9 +6,11 @@ qt_add_executable(sunroom_presentation_target_tests
 )
 
 qt_add_executable(sunroom_rendered_video_surface_tests
-        unit/presentation/tst_RenderedVideoSurface.cpp
-        ../src/presentation/RenderedVideoSurface.cpp
-        ../src/presentation/RenderedVideoSurface.h
+        unit/video/tst_RenderedVideoSurface.cpp
+        ../src/video/RenderedVideoSurface.cpp
+        ../src/video/RenderedVideoSurface.h
+        ../src/video/VideoTargetInterop.cpp
+        ../src/video/VideoTargetInterop.h
 )
 
 target_include_directories(sunroom_presentation_target_tests
@@ -65,12 +67,26 @@ set_tests_properties(
 if (WIN32)
     qt_add_executable(sunroom_qrhi_compositor_tests
             integration/presentation/tst_QrhiCompositor.cpp
-            ../src/presentation/DiagnosticVideoProducer.cpp
-            ../src/presentation/DiagnosticVideoProducer.h
+            ../src/graphics/GraphicsBackendFactory.cpp
+            ../src/graphics/GraphicsBackendFactory.h
+            ../src/graphics/GraphicsDeviceDomain.cpp
+            ../src/graphics/GraphicsDeviceDomain.h
+            ../src/graphics/backends/D3D11GraphicsDeviceDomain.cpp
+            ../src/graphics/backends/D3D11GraphicsDeviceDomain.h
             ../src/presentation/HdrCompositor.cpp
             ../src/presentation/HdrCompositor.h
-            ../src/presentation/RenderedVideoSurface.cpp
-            ../src/presentation/RenderedVideoSurface.h
+            ../src/video/DiagnosticVideoProducer.cpp
+            ../src/video/DiagnosticVideoProducer.h
+            ../src/video/DiagnosticVideoSource.cpp
+            ../src/video/DiagnosticVideoSource.h
+            ../src/video/QrhiVideoTarget.cpp
+            ../src/video/QrhiVideoTarget.h
+            ../src/video/RenderedVideoProducer.h
+            ../src/video/RenderedVideoSurface.cpp
+            ../src/video/RenderedVideoSurface.h
+            ../src/video/RenderedVideoSource.h
+            ../src/video/VideoTargetInterop.cpp
+            ../src/video/VideoTargetInterop.h
     )
 
     target_include_directories(sunroom_qrhi_compositor_tests
@@ -81,6 +97,7 @@ if (WIN32)
     target_link_libraries(sunroom_qrhi_compositor_tests
             PRIVATE
             Qt6::GuiPrivate
+            Qt6::Quick
             Qt6::Test
     )
 

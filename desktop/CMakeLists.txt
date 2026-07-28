@@ -22,11 +22,13 @@ qt_add_executable(sunroom
         src/app/PresentationSettings.h
         src/app/PresentationWindow.cpp
         src/app/PresentationWindow.h
+        src/graphics/GraphicsBackendFactory.cpp
+        src/graphics/GraphicsBackendFactory.h
+        src/graphics/GraphicsDeviceDomain.cpp
+        src/graphics/GraphicsDeviceDomain.h
         src/platform/DisplayState.h
         src/platform/DisplayStateProvider.cpp
         src/platform/DisplayStateProvider.h
-        src/presentation/DiagnosticVideoProducer.cpp
-        src/presentation/DiagnosticVideoProducer.h
         src/presentation/HdrCompositor.cpp
         src/presentation/HdrCompositor.h
         src/presentation/PresentationOutputState.cpp
@@ -35,10 +37,20 @@ qt_add_executable(sunroom
         src/presentation/PresentationTarget.h
         src/presentation/QuickUiLayer.cpp
         src/presentation/QuickUiLayer.h
-        src/presentation/RenderedVideoSurface.cpp
-        src/presentation/RenderedVideoSurface.h
         src/presentation/RhiPresentationEngine.cpp
         src/presentation/RhiPresentationEngine.h
+        src/video/DiagnosticVideoProducer.cpp
+        src/video/DiagnosticVideoProducer.h
+        src/video/DiagnosticVideoSource.cpp
+        src/video/DiagnosticVideoSource.h
+        src/video/QrhiVideoTarget.cpp
+        src/video/QrhiVideoTarget.h
+        src/video/RenderedVideoProducer.h
+        src/video/RenderedVideoSurface.cpp
+        src/video/RenderedVideoSurface.h
+        src/video/RenderedVideoSource.h
+        src/video/VideoTargetInterop.cpp
+        src/video/VideoTargetInterop.h
 )
 
 set_source_files_properties(src/app/Main.qml PROPERTIES
@@ -85,6 +97,11 @@ set_target_properties(sunroom PROPERTIES
 )
 
 if (WIN32)
+    target_sources(sunroom PRIVATE
+            src/graphics/backends/D3D11GraphicsDeviceDomain.cpp
+            src/graphics/backends/D3D11GraphicsDeviceDomain.h
+    )
+
     target_link_libraries(sunroom PRIVATE
             CoreMessaging
             RuntimeObject

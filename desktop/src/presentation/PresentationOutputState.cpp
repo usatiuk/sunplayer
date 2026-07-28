@@ -31,12 +31,27 @@ void PresentationOutputState::attach(QWindow &window) {
 
 QString PresentationOutputState::screenName() const { return m_screenName; }
 QString PresentationOutputState::graphicsApi() const { return m_backendState.graphicsApi; }
+QString PresentationOutputState::graphicsAdapter() const {
+    return m_backendState.graphicsAdapter;
+}
 QString PresentationOutputState::swapChainFormat() const { return m_backendState.swapChainFormat; }
 QString PresentationOutputState::videoSurfaceFormat() const {
     return m_backendState.videoSurfaceFormat;
 }
 QString PresentationOutputState::videoSurfaceProducer() const {
     return m_backendState.videoSurfaceProducer;
+}
+QString PresentationOutputState::videoOutputPath() const {
+    return m_backendState.videoOutputPath;
+}
+QString PresentationOutputState::videoSynchronization() const {
+    return m_backendState.videoSynchronization;
+}
+QString PresentationOutputState::videoCopySummary() const {
+    return m_backendState.videoCopySummary;
+}
+QString PresentationOutputState::videoFallbackReason() const {
+    return m_backendState.videoFallbackReason;
 }
 qreal PresentationOutputState::devicePixelRatio() const { return m_dpr; }
 qreal PresentationOutputState::refreshRate() const { return m_refreshRate; }

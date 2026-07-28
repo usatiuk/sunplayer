@@ -26,5 +26,6 @@ protected:
 private:
     std::unique_ptr<class PresentationOutputState> m_outputState;
     std::unique_ptr<class PresentationSettings> m_settings;
+    std::unique_ptr<class DiagnosticVideoSource> m_videoSource;
     std::unique_ptr<class RhiPresentationEngine> m_engine;
 };

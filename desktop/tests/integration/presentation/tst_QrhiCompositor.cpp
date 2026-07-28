@@ -9,9 +9,12 @@
 #include <QtCore/qfloat16.h>
 #include <rhi/qrhi.h>
 
-#include "presentation/DiagnosticVideoProducer.h"
+#include "graphics/GraphicsBackendFactory.h"
+#include "graphics/GraphicsDeviceDomain.h"
 #include "presentation/HdrCompositor.h"
-#include "presentation/RenderedVideoSurface.h"
+#include "video/DiagnosticVideoSource.h"
+#include "video/RenderedVideoProducer.h"
+#include "video/RenderedVideoSurface.h"
 
 #ifdef Q_OS_WIN
 #include <qt_windows.h>
@@ -108,9 +111,9 @@ float smoothStep(float value) {
     return value * value * (3.0f - 2.0f * value);
 }
 
-float expectedRamp(int x) {
+float expectedRamp(int x, int width = videoSize.width()) {
     const float u =
-        (static_cast<float>(x) + 0.5f) / videoSize.width();
+        (static_cast<float>(x) + 0.5f) / width;
     return 0.02f + (sourcePeak - 0.02f) * smoothStep(u);
 }
 
@@ -175,10 +178,13 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
 #ifndef Q_OS_WIN
     QSKIP("The current supported QRhi integration test is Windows D3D11");
 #else
-    QRhiD3D11InitParams initParameters;
-    std::unique_ptr<QRhi> rhi(
-        QRhi::create(QRhi::D3D11, &initParameters));
-    QVERIFY2(rhi, "Could not create the D3D11 QRhi");
+    std::unique_ptr<GraphicsDeviceDomain> graphicsDevice =
+        GraphicsBackendFactory::createDeviceDomain();
+    QVERIFY2(graphicsDevice, "Could not create the D3D11 graphics domain");
+    QRhi *const rhi = &graphicsDevice->rhi();
+    QVERIFY(graphicsDevice->generation() != 0);
+    QCOMPARE(graphicsDevice->backend(), GraphicsBackend::D3D11);
+    QVERIFY(graphicsDevice->diagnostics().isValid());
     const bool floatCaptureSupported = rhi->isTextureFormatSupported(
         QRhiTexture::RGBA16F,
         QRhiTexture::RenderTarget | QRhiTexture::UsedAsTransferSource);
@@ -189,13 +195,34 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
         << (floatCaptureSupported ? "accepted" : "unavailable");
     QVERIFY(floatCaptureSupported);
 
-    DiagnosticVideoProducer producer(
-        *rhi, DiagnosticVideoProducer::CaptureMode::Enabled);
+    DiagnosticVideoSource source(VideoTargetReadback::Enabled);
+    source.setSourcePeakHeadroom(sourcePeak);
+    source.setToneMappingEnabled(false);
+    source.setAnimatePattern(false);
+    std::unique_ptr<RenderedVideoProducer> producer =
+        source.createProducer(*graphicsDevice);
+    QVERIFY(producer);
+    const RenderedVideoProducerDiagnostics unprovisionedDiagnostics =
+        producer->diagnostics();
+    QVERIFY(unprovisionedDiagnostics.isValid());
+    QCOMPARE(
+        unprovisionedDiagnostics.target.outputPath,
+        VideoOutputPath::Unavailable);
+    QVERIFY(!unprovisionedDiagnostics.target.fallbackReason.isEmpty());
     const RenderedVideoSurfaceState requestedState = surfaceState();
     QCOMPARE(
-        producer.ensureSurface(requestedState),
-        DiagnosticVideoProducer::ResourceResult::Ready);
-    QVERIFY(producer.needsRender(requestedState));
+        producer->ensureSurface(requestedState),
+        VideoOperationResult::Ready);
+    QVERIFY(producer->needsRender(requestedState));
+    const RenderedVideoProducerDiagnostics producerDiagnostics =
+        producer->diagnostics();
+    QVERIFY(producerDiagnostics.isValid());
+    QCOMPARE(
+        producerDiagnostics.target.outputPath,
+        VideoOutputPath::DirectRenderTarget);
+    QCOMPARE(producerDiagnostics.target.knownGpuCopiesPerRender, 0U);
+    QCOMPARE(producerDiagnostics.target.knownCpuTransfersPerRender, 0U);
+    QVERIFY(producerDiagnostics.target.fallbackReason.isEmpty());
 
     std::unique_ptr<QRhiTexture> uiTexture(rhi->newTexture(
         QRhiTexture::RGBA8, {1, 1}, 1));
@@ -239,12 +266,16 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     HdrCompositor compositor(*rhi);
     QCOMPARE(
         compositor.initialize(
-            *outputRenderPass, producer.texture(), *uiTexture),
+            *outputRenderPass,
+            producer->textureForComposition(),
+            *uiTexture),
         HdrCompositor::ResourceResult::Ready);
     HdrCompositor linearOutputCompositor(*rhi);
     QCOMPARE(
         linearOutputCompositor.initialize(
-            *linearOutputRenderPass, producer.texture(), *uiTexture),
+            *linearOutputRenderPass,
+            producer->textureForComposition(),
+            *uiTexture),
         HdrCompositor::ResourceResult::Ready);
 
     HdrCompositorParameters compositorParameters;
@@ -264,16 +295,6 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     compositorParameters.ndcYUp = rhi->isYUpInNDC() ? 1.0f : 0.0f;
     compositorParameters.linearOutput = 0.0f;
 
-    DiagnosticVideoParameters producerParameters;
-    producerParameters.sourcePeak = sourcePeak;
-    producerParameters.targetPeak = sourcePeak;
-    producerParameters.phase = 0.0f;
-    producerParameters.toneMappingEnabled = 0.0f;
-    producerParameters.canonicalYFlip =
-        rhi->isYUpInNDC() != rhi->isYUpInFramebuffer()
-        ? 1.0f
-        : 0.0f;
-
     QRhiCommandBuffer *commandBuffer = nullptr;
     QCOMPARE(
         rhi->beginOffscreenFrame(&commandBuffer),
@@ -288,9 +309,13 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
             0, 0, QRhiTextureSubresourceUploadDescription(transparentUi))));
     commandBuffer->resourceUpdate(updates);
 
-    producer.render(
-        *commandBuffer, producerParameters, requestedState);
-    QVERIFY(producer.needsRender(requestedState));
+    QCOMPARE(
+        producer->render(*commandBuffer, requestedState),
+        VideoOperationResult::Ready);
+    QVERIFY(producer->needsRender(requestedState));
+    QCOMPARE(
+        producer->prepareForComposition(*commandBuffer),
+        VideoOperationResult::Ready);
     compositor.render(
         *commandBuffer,
         *outputTarget,
@@ -309,19 +334,24 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     };
     updates = rhi->nextResourceUpdateBatch();
     updates->readBackTexture(
-        QRhiReadbackDescription(&producer.texture()), &videoReadback);
+        QRhiReadbackDescription(
+            &producer->textureForComposition()),
+        &videoReadback);
     updates->readBackTexture(
         QRhiReadbackDescription(outputTexture.get()), &outputReadback);
     commandBuffer->resourceUpdate(updates);
 
     const QRhi::FrameOpResult firstFrameResult =
         rhi->endOffscreenFrame();
-    if (firstFrameResult == QRhi::FrameOpSuccess)
-        producer.commitPendingRender();
-    else
-        producer.discardPendingRender();
+    if (firstFrameResult == QRhi::FrameOpSuccess) {
+        producer->submissionAccepted();
+        producer->commitPendingRender();
+    } else {
+        producer->submissionAborted();
+        producer->discardPendingRender();
+    }
     QCOMPARE(firstFrameResult, QRhi::FrameOpSuccess);
-    QVERIFY(!producer.needsRender(requestedState));
+    QVERIFY(!producer->needsRender(requestedState));
     QVERIFY(videoReadbackCompleted);
     QVERIFY(outputReadbackCompleted);
     QCOMPARE(videoReadback.pixelSize, videoSize);
@@ -402,7 +432,10 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
             0, 0,
             QRhiTextureSubresourceUploadDescription(translucentRedUi))));
     commandBuffer->resourceUpdate(updates);
-    QVERIFY(!producer.needsRender(requestedState));
+    QVERIFY(!producer->needsRender(requestedState));
+    QCOMPARE(
+        producer->prepareForComposition(*commandBuffer),
+        VideoOperationResult::Ready);
     HdrCompositorParameters linearParameters = compositorParameters;
     constexpr float linearSdrScale = 1.5f;
     linearParameters.sdrScale = linearSdrScale;
@@ -424,6 +457,7 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
         &linearReadback);
     commandBuffer->resourceUpdate(updates);
     QCOMPARE(rhi->endOffscreenFrame(), QRhi::FrameOpSuccess);
+    producer->submissionAccepted();
     QVERIFY(linearReadbackCompleted);
     QCOMPARE(linearReadback.pixelSize, outputSize);
     QCOMPARE(linearReadback.format, QRhiTexture::RGBA16F);
@@ -490,6 +524,151 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     compareNear(
         reusedExtendedVideo.b, expectedExtendedGreenBlue, 0.01f);
     compareNear(reusedExtendedVideo.a, 1.0f, 0.001f);
+
+    // Submission tracking and content-state promotion are separate. Discarding
+    // a rendered state after an accepted submission must leave it dirty.
+    RenderedVideoSurfaceState resubmittedState = requestedState;
+    ++resubmittedState.contentRevision;
+    QCOMPARE(
+        rhi->beginOffscreenFrame(&commandBuffer),
+        QRhi::FrameOpSuccess);
+    QCOMPARE(
+        producer->render(*commandBuffer, resubmittedState),
+        VideoOperationResult::Ready);
+    QCOMPARE(
+        producer->prepareForComposition(*commandBuffer),
+        VideoOperationResult::Ready);
+    QCOMPARE(rhi->endOffscreenFrame(), QRhi::FrameOpSuccess);
+    producer->submissionAccepted();
+    producer->discardPendingRender();
+    QVERIFY(producer->needsRender(resubmittedState));
+
+    QCOMPARE(
+        rhi->beginOffscreenFrame(&commandBuffer),
+        QRhi::FrameOpSuccess);
+    QCOMPARE(
+        producer->render(*commandBuffer, resubmittedState),
+        VideoOperationResult::Ready);
+    QCOMPARE(
+        producer->prepareForComposition(*commandBuffer),
+        VideoOperationResult::Ready);
+    QCOMPARE(rhi->endOffscreenFrame(), QRhi::FrameOpSuccess);
+    producer->submissionAccepted();
+    producer->commitPendingRender();
+    QVERIFY(!producer->needsRender(resubmittedState));
+
+    // Recreate texture storage through the same target wrapper, observe the
+    // revision, rebind the compositor as production does, and capture again.
+    constexpr QSize resizedVideoSize{8, 6};
+    RenderedVideoSurfaceState resizedState = resubmittedState;
+    resizedState.description.pixelSize = resizedVideoSize;
+    ++resizedState.contentRevision;
+    const std::uint64_t previousTextureRevision =
+        producer->compositionTextureRevision();
+    QCOMPARE(
+        producer->ensureSurface(resizedState),
+        VideoOperationResult::Ready);
+    QVERIFY(
+        producer->compositionTextureRevision()
+        > previousTextureRevision);
+    QCOMPARE(
+        producer->textureForComposition().pixelSize(),
+        resizedVideoSize);
+    QVERIFY(producer->needsRender(resizedState));
+    QCOMPARE(
+        compositor.setTextures(
+            producer->textureForComposition(), *uiTexture),
+        HdrCompositor::ResourceResult::Ready);
+
+    QCOMPARE(
+        rhi->beginOffscreenFrame(&commandBuffer),
+        QRhi::FrameOpSuccess);
+    updates = rhi->nextResourceUpdateBatch();
+    updates->uploadTexture(
+        uiTexture.get(),
+        QRhiTextureUploadDescription(QRhiTextureUploadEntry(
+            0, 0, QRhiTextureSubresourceUploadDescription(
+                transparentUi))));
+    commandBuffer->resourceUpdate(updates);
+    QCOMPARE(
+        producer->render(*commandBuffer, resizedState),
+        VideoOperationResult::Ready);
+    QCOMPARE(
+        producer->prepareForComposition(*commandBuffer),
+        VideoOperationResult::Ready);
+    HdrCompositorParameters resizedParameters = compositorParameters;
+    resizedParameters.videoSize = {
+        static_cast<float>(resizedVideoSize.width()),
+        static_cast<float>(resizedVideoSize.height()),
+    };
+    compositor.render(
+        *commandBuffer,
+        *outputTarget,
+        outputSize,
+        resizedParameters);
+
+    bool resizedVideoReadbackCompleted = false;
+    bool resizedOutputReadbackCompleted = false;
+    QRhiReadbackResult resizedVideoReadback;
+    QRhiReadbackResult resizedOutputReadback;
+    resizedVideoReadback.completed =
+        [&resizedVideoReadbackCompleted] {
+            resizedVideoReadbackCompleted = true;
+        };
+    resizedOutputReadback.completed =
+        [&resizedOutputReadbackCompleted] {
+            resizedOutputReadbackCompleted = true;
+        };
+    updates = rhi->nextResourceUpdateBatch();
+    updates->readBackTexture(
+        QRhiReadbackDescription(
+            &producer->textureForComposition()),
+        &resizedVideoReadback);
+    updates->readBackTexture(
+        QRhiReadbackDescription(outputTexture.get()),
+        &resizedOutputReadback);
+    commandBuffer->resourceUpdate(updates);
+    const QRhi::FrameOpResult resizedFrameResult =
+        rhi->endOffscreenFrame();
+    if (resizedFrameResult == QRhi::FrameOpSuccess) {
+        producer->submissionAccepted();
+        producer->commitPendingRender();
+    } else {
+        producer->submissionAborted();
+        producer->discardPendingRender();
+    }
+    QCOMPARE(resizedFrameResult, QRhi::FrameOpSuccess);
+    QVERIFY(resizedVideoReadbackCompleted);
+    QVERIFY(resizedOutputReadbackCompleted);
+    QCOMPARE(resizedVideoReadback.pixelSize, resizedVideoSize);
+    QCOMPARE(resizedVideoReadback.format, QRhiTexture::RGBA16F);
+    QCOMPARE(
+        resizedVideoReadback.data.size(),
+        qsizetype(
+            resizedVideoSize.width()
+            * resizedVideoSize.height() * 8));
+    QCOMPARE(resizedOutputReadback.pixelSize, outputSize);
+    QCOMPARE(resizedOutputReadback.format, QRhiTexture::RGBA8);
+    QCOMPARE(
+        resizedOutputReadback.data.size(),
+        qsizetype(outputSize.width() * outputSize.height() * 4));
+    QVERIFY(!producer->needsRender(resizedState));
+
+    const FloatPixel resizedProducerPixel =
+        readFloatPixel(resizedVideoReadback, *rhi, sampleX, 1);
+    compareNear(
+        resizedProducerPixel.r,
+        expectedRamp(sampleX, resizedVideoSize.width()),
+        0.002f);
+    const BytePixel resizedComposedPixel = readBytePixel(
+        resizedOutputReadback,
+        *rhi,
+        videoOriginX + sampleX,
+        videoOriginY + 1);
+    compareByteNear(
+        resizedComposedPixel.r,
+        encodedByte(expectedRamp(
+            sampleX, resizedVideoSize.width())));
 #endif
 }
 

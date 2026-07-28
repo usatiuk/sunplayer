@@ -124,9 +124,40 @@ Item {
 
                 Label {
                     Layout.fillWidth: true
+                    text: outputState.graphicsAdapter
+                    color: "#aeb6c5"
+                    elide: Text.ElideRight
+                }
+
+                Label {
+                    Layout.fillWidth: true
                     text: outputState.videoSurfaceProducer
                         + " · " + outputState.videoSurfaceFormat
                     color: "#aeb6c5"
+                    elide: Text.ElideRight
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: outputState.videoOutputPath
+                        + " · " + outputState.videoCopySummary
+                    color: "#aeb6c5"
+                    elide: Text.ElideRight
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: outputState.videoSynchronization
+                    color: "#aeb6c5"
+                    elide: Text.ElideRight
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    visible: outputState.videoFallbackReason.length > 0
+                    text: qsTr("Fallback: %1").arg(
+                        outputState.videoFallbackReason)
+                    color: "#ffca7a"
                     elide: Text.ElideRight
                 }
 
@@ -235,16 +266,16 @@ Item {
                         Layout.fillWidth: true
                         from: 1
                         to: 25
-                        value: presentationSettings.sourcePeakHeadroom
+                        value: videoSource.sourcePeakHeadroom
                         stepSize: 0.1
-                        onMoved: presentationSettings.sourcePeakHeadroom = value
+                        onMoved: videoSource.sourcePeakHeadroom = value
                     }
 
                     Label {
                         Layout.minimumWidth: 140
                         horizontalAlignment: Text.AlignRight
                         text: root.headroomLabel(
-                            presentationSettings.sourcePeakHeadroom)
+                            videoSource.sourcePeakHeadroom)
                         color: "white"
                     }
 
@@ -252,14 +283,14 @@ Item {
                         id: toneMapSwitch
 
                         text: qsTr("Tone map")
-                        checked: presentationSettings.toneMappingEnabled
-                        onToggled: presentationSettings.toneMappingEnabled = checked
+                        checked: videoSource.toneMappingEnabled
+                        onToggled: videoSource.toneMappingEnabled = checked
                     }
 
                     Switch {
                         text: qsTr("Animate")
-                        checked: presentationSettings.animatePattern
-                        onToggled: presentationSettings.animatePattern = checked
+                        checked: videoSource.animatePattern
+                        onToggled: videoSource.animatePattern = checked
                     }
                 }
 
@@ -298,7 +329,7 @@ Item {
 
                 Label {
                     Layout.fillWidth: true
-                    text: qsTr("Pattern 1.0 is SDR white. Highlights are tone-mapped into the display headroom, then converted to Windows scRGB.")
+                    text: qsTr("Pattern 1.0 is SDR white. Highlights are tone-mapped into the display headroom, then encoded for the active presentation path.")
                     color: "#7f899b"
                     wrapMode: Text.WordWrap
                 }

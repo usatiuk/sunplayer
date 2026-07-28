@@ -1,15 +1,13 @@
 #pragma once
 
-#include <chrono>
 #include <cstdint>
 #include <memory>
-#include <optional>
 
 #include <QObject>
 #include <QPointer>
 #include <QTimer>
 
-class DiagnosticVideoProducer;
+class GraphicsDeviceDomain;
 class HdrCompositor;
 class PresentationOutputState;
 class PresentationSettings;
@@ -20,6 +18,9 @@ class QRhiRenderPassDescriptor;
 class QRhiSwapChain;
 class QWindow;
 class QuickUiLayer;
+class RenderedVideoProducer;
+class RenderedVideoSource;
+enum class VideoOperationResult;
 
 // Owns one presentation domain and sequences its QRhi work.
 class RhiPresentationEngine final : public QObject {
@@ -29,6 +30,7 @@ public:
     RhiPresentationEngine(QWindow &window,
                           PresentationOutputState &outputState,
                           PresentationSettings &settings,
+                          RenderedVideoSource &videoSource,
                           QObject *parent = nullptr);
     ~RhiPresentationEngine() override;
 
@@ -51,6 +53,8 @@ private:
     void releaseDevice();
     void handleDeviceLoss(const char *operation);
     void handleFrameError(const char *operation, int result);
+    bool handleVideoOperationResult(
+        const char *operation, VideoOperationResult result);
     void scheduleDeviceRecovery();
     void updateBackendState();
     void scheduleNextFrame();
@@ -61,11 +65,13 @@ private:
     QWindow &m_window;
     PresentationOutputState &m_outputState;
     PresentationSettings &m_settings;
-    std::unique_ptr<QRhi> m_rhi;
+    RenderedVideoSource &m_videoSource;
+    std::unique_ptr<GraphicsDeviceDomain> m_graphicsDevice;
+    QRhi *m_rhi = nullptr;
     std::unique_ptr<QRhiSwapChain> m_swapChain;
     std::unique_ptr<QRhiRenderPassDescriptor> m_renderPassDescriptor;
     std::unique_ptr<QuickUiLayer> m_quickUi;
-    std::unique_ptr<DiagnosticVideoProducer> m_videoProducer;
+    std::unique_ptr<RenderedVideoProducer> m_videoProducer;
     std::unique_ptr<HdrCompositor> m_compositor;
     // Output selected when the current swapchain was successfully created.
     QPointer<QScreen> m_swapChainScreen;
@@ -81,8 +87,5 @@ private:
     bool m_recoveringDevice = false;
     bool m_retriedFrameError = false;
     int m_deviceRecoveryAttempts = 0;
-    std::uint64_t m_deviceGeneration = 0;
-    std::uint64_t m_videoContentRevision = 1;
-    float m_phase = 0.0f;
-    std::optional<std::chrono::steady_clock::time_point> m_lastAnimationFrame;
+    std::uint64_t m_boundVideoTextureRevision = 0;
 };
