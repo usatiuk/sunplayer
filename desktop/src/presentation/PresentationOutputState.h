@@ -5,8 +5,8 @@
 #include <QObject>
 #include <QPointer>
 
-#include "DisplayState.h"
-#include "PresentationTarget.h"
+#include "platform/DisplayState.h"
+#include "presentation/PresentationTarget.h"
 
 class QScreen;
 class QWindow;
@@ -18,6 +18,10 @@ class PresentationOutputState final : public QObject {
     Q_PROPERTY(QString screenName READ screenName NOTIFY stateChanged)
     Q_PROPERTY(QString graphicsApi READ graphicsApi NOTIFY stateChanged)
     Q_PROPERTY(QString swapChainFormat READ swapChainFormat NOTIFY stateChanged)
+    Q_PROPERTY(QString videoSurfaceFormat READ videoSurfaceFormat
+               NOTIFY stateChanged)
+    Q_PROPERTY(QString videoSurfaceProducer READ videoSurfaceProducer
+               NOTIFY stateChanged)
     Q_PROPERTY(qreal devicePixelRatio READ devicePixelRatio NOTIFY stateChanged)
     Q_PROPERTY(qreal refreshRate READ refreshRate NOTIFY stateChanged)
     Q_PROPERTY(bool displayHdrEnabled READ displayHdrEnabled NOTIFY stateChanged)
@@ -43,6 +47,8 @@ public:
     QString screenName() const;
     QString graphicsApi() const;
     QString swapChainFormat() const;
+    QString videoSurfaceFormat() const;
+    QString videoSurfaceProducer() const;
     qreal devicePixelRatio() const;
     qreal refreshRate() const;
     bool displayHdrEnabled() const;
@@ -57,6 +63,7 @@ public:
     float potentialHeadroom() const;
     float effectiveTargetHeadroom() const;
     float sdrScale() const;
+    quint64 displayTargetRevision() const;
 
     Q_INVOKABLE void reprobePresentation();
     void setBackendState(const PresentationBackendState &state);
@@ -70,6 +77,7 @@ private:
     void updateMetrics();
     void applyDisplayState(const DisplayState &state);
     PresentationTarget presentationTarget() const;
+    void advanceDisplayTargetRevision();
 
     QPointer<QWindow> m_window;
     QPointer<QScreen> m_screen;
@@ -80,4 +88,5 @@ private:
     QString m_screenName = QStringLiteral("Unavailable");
     qreal m_dpr = 1.0;
     qreal m_refreshRate = 0.0;
+    quint64 m_displayTargetRevision = 1;
 };

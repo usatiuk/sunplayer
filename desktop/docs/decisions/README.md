@@ -17,3 +17,4 @@ with a new decision when the accepted choice changes materially.
 
 * [0001: Application-owned QRhi with redirected Qt Quick](0001-application-owned-qrhi-composition.md)
 * [0002: Prefer extended-linear sRGB presentation with explicit SDR-white mapping](0002-extended-linear-srgb-presentation.md)
+* [0003: Normalize rendered video to one display-targeted linear surface](0003-display-targeted-video-surface.md)

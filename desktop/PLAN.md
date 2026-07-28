@@ -67,8 +67,11 @@ not yet a media player:
   swapchain.
 * Qt Quick renders through `QQuickRenderControl` into an application-owned
   RGBA16F texture.
-* A final QRhi pass combines that UI with a procedural HDR diagnostic pattern
-  and presents extended-linear sRGB/scRGB when available, with an SDR fallback.
+* A temporary QRhi producer renders the procedural HDR diagnostic pattern into
+  an explicitly described, canvas-sized RGBA16F video surface.
+* A narrow final QRhi pass places that already processed video surface,
+  combines it with the UI, and presents extended-linear sRGB/scRGB when
+  available, with an SDR fallback.
 * Qt screen state, QRhi swapchain HDR information, and Windows Advanced Color
   telemetry feed a shared presentation snapshot and diagnostic UI.
 * Rendering is demand-driven outside explicit animation, and the graphics
@@ -77,16 +80,15 @@ not yet a media player:
 * The configured Windows Debug target builds successfully with Qt 6.11.1 and
   MSVC.
 
-FFmpeg, libplacebo, libass, real video surfaces, audio, playback, file opening,
-subtitles, and persistence are not integrated. Initial CTest/Qt Test coverage
-exists for pure presentation-target policy; GPU and application scenarios do
-not yet exist.
+FFmpeg, libplacebo, libass, decoded video, audio, playback, file opening,
+subtitles, and persistence are not integrated. CTest/Qt Test coverage exists
+for pure presentation-target policy and rendered-video surface
+validity/invalidation; GPU and application scenarios do not yet exist.
 
-The next implementation milestone is an explicitly described offscreen video
-surface sampled by a narrow final compositor. The procedural pattern will first
-move through that boundary; libplacebo and a single FFmpeg-decoded frame follow.
-Testing starts alongside that work with presentation-policy tests,
-surface-generation tests, and a real QRhi readback smoke test.
+The next implementation milestone is replacing the temporary pattern producer
+with a persistent libplacebo renderer for a known software-backed image. A
+single FFmpeg-decoded frame follows. Testing continues alongside that work with
+a real QRhi readback smoke test and libplacebo integration capture.
 
 ## Subsystems
 
@@ -142,8 +144,8 @@ Documentation: `docs/subsystems/playback/`
 * [x] One-device ownership model for the current presentation domain
 * [x] Windows D3D11 QRhi integration
 * [x] Redirected Qt Quick rendering integration
-* [ ] Final video, subtitle, and UI compositor (UI and diagnostic pattern
-  composition exists)
+* [ ] Final video, subtitle, and UI compositor (the explicit video/UI boundary
+  and narrow final pass exist; subtitles do not)
 * [x] Windows extended-linear HDR and SDR swapchain presentation
 * [ ] macOS EDR and SDR swapchain presentation
 * [ ] Linux HDR and SDR swapchain presentation
@@ -166,7 +168,7 @@ Documentation: `docs/subsystems/graphics/`
 * [ ] D3D11 importer
 * [ ] Vulkan, VAAPI, and DRM PRIME importer
 * [ ] VideoToolbox, IOSurface, and MoltenVK importer
-* [ ] Offscreen HDR render target
+* [x] Offscreen HDR render-target contract and temporary QRhi producer
 * [ ] Display-target and SDR-white updates
 * [ ] HDR10, HLG, HDR10+, and Dolby Vision capability reporting
 * [ ] Quality and energy profiles
@@ -235,7 +237,7 @@ Documentation: `docs/subsystems/diagnostics/`
 * [x] Testing principles and staged subsystem plan
 * [x] CTest and Qt Test structure
 * [x] Presentation-target policy tests
-* [ ] Rendered-surface generation and invalidation tests
+* [x] Rendered-surface description and invalidation tests
 * [ ] Real QRhi compositor capture smoke test
 * [ ] Deterministic first-frame and playback scenarios
 * [ ] Playback and seeking tests
@@ -276,6 +278,7 @@ docs/
         README.md
         0001-application-owned-qrhi-composition.md
         0002-extended-linear-srgb-presentation.md
+        0003-display-targeted-video-surface.md
 
     research/
         README.md

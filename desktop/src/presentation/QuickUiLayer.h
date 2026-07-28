@@ -17,6 +17,7 @@ class QRhiTexture;
 class QRhiTextureRenderTarget;
 class QWindow;
 
+// Redirected Qt Quick scene exposed as one compositor texture.
 class QuickUiLayer final : public QObject {
     Q_OBJECT
 

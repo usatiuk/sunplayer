@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
+// Redirected application UI composed by the presentation subsystem.
 Item {
     id: root
 
@@ -119,6 +120,14 @@ Item {
                 Label {
                     text: outputState.graphicsApi + " · " + outputState.swapChainFormat
                     color: "#aeb6c5"
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: outputState.videoSurfaceProducer
+                        + " · " + outputState.videoSurfaceFormat
+                    color: "#aeb6c5"
+                    elide: Text.ElideRight
                 }
 
                 Label {

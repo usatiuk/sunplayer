@@ -4,7 +4,7 @@
 
 #include <QObject>
 
-#include "DisplayState.h"
+#include "platform/DisplayState.h"
 
 class QWindow;
 

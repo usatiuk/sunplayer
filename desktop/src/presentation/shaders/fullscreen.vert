@@ -1,5 +1,6 @@
 #version 440
 
+// Shared vertex-free fullscreen triangle.
 layout(location = 0) out vec2 uv;
 
 void main()

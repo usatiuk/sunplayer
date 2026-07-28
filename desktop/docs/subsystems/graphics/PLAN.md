@@ -7,8 +7,8 @@ presentation boundary for decoded video, while preserving explicit color
 contracts, one-device composition, demand-driven rendering, and observable
 fallback behavior.
 
-The immediate milestone is not playback. It is a real offscreen video surface
-sampled by the final compositor.
+The immediate implementation milestone is now a libplacebo producer for the
+explicit offscreen video surface. It still precedes playback.
 
 ## Completed foundation
 
@@ -27,7 +27,8 @@ The current prototype establishes:
 * [x] Procedural HDR pattern for presentation testing.
 * [ ] Recorded manual runtime validation across the supported Windows display
   scenarios.
-* [ ] Automated graphics-state or image tests.
+* [x] Automated presentation-policy and video-surface-state tests.
+* [ ] Automated GPU image tests.
 
 ## Milestone 1: explicit video surface and narrow compositor
 
@@ -36,20 +37,20 @@ introducing FFmpeg or libplacebo yet.
 
 ### Work
 
-* [ ] Define the minimal display-targeted surface description alongside its
+* [x] Define the minimal display-targeted surface description alongside its
   first producer and consumer.
-* [ ] Create an offscreen RGBA16F video render target on the engine QRhi.
-* [ ] Render the existing diagnostic pattern into that target.
-* [ ] Bind the video and Qt Quick textures in the final compositor.
-* [ ] Reduce the final compositor to layer geometry, alpha composition, and
+* [x] Create an offscreen RGBA16F video render target on the engine QRhi.
+* [x] Render the existing diagnostic pattern into that target.
+* [x] Bind the video and Qt Quick textures in the final compositor.
+* [x] Reduce the final compositor to layer geometry, alpha composition, and
   swapchain encoding.
-* [ ] Remove source tone mapping and pattern generation from the final shader.
-* [ ] Track graphics-device and display revisions needed to invalidate a
+* [x] Remove source tone mapping and pattern generation from the final shader.
+* [x] Track graphics-device and display revisions needed to invalidate a
   rendered surface.
-* [ ] Preserve valid texture ownership through resize, swapchain recreation,
+* [x] Preserve valid texture ownership through resize, swapchain recreation,
   and device recreation.
-* [ ] Report the active video-surface format and producer in diagnostics.
-* [ ] Add focused tests for surface-description and invalidation logic where
+* [x] Report the active video-surface format and producer in diagnostics.
+* [x] Add focused tests for surface-description and invalidation logic where
   it can be kept independent of QRhi.
 
 ### Acceptance
@@ -63,6 +64,11 @@ introducing FFmpeg or libplacebo yet.
   resources.
 * Display-dependent surfaces are rerendered after a target display change.
 * Device loss cannot leave a surface from the old QRhi generation bound.
+
+The implementation and pure-state coverage are complete. Build and CTest
+verification pass. Visual equivalence in SDR and extended-linear modes remains
+part of the recorded manual Windows presentation matrix; the application was
+not launched as part of non-interactive automation.
 
 ## Milestone 2: libplacebo renderer
 

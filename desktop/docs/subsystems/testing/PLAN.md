@@ -45,13 +45,14 @@ to run.
 
 Implement alongside graphics milestone 1:
 
-* [ ] Test every required field and invariant of the explicit rendered-surface
+* [x] Test every required field and invariant of the explicit rendered-surface
   description.
-* [ ] Test that a graphics-device generation change always invalidates a
+* [x] Test that a graphics-device generation change always invalidates a
   surface.
-* [ ] Test that a target display revision invalidates a display-targeted
+* [x] Test that a target display revision invalidates a display-targeted
   surface.
-* [ ] Test that swapchain-only recreation preserves a surface when its explicit
+* [x] Test that producer-content changes invalidate the completed surface.
+* [x] Test that swapchain-only recreation preserves a surface when its explicit
   contract permits reuse.
 * [ ] Add an analytically known pattern with independently calculated expected
   values.

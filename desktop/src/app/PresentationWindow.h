@@ -4,6 +4,7 @@
 
 #include <QWindow>
 
+// Native window and event boundary for the current application shell.
 class PresentationWindow final : public QWindow {
     Q_OBJECT
 

@@ -3,13 +3,15 @@
 #include <QMetaType>
 #include <QString>
 
-#include "DisplayState.h"
+#include "platform/DisplayState.h"
 
 struct PresentationBackendState {
     bool operator==(const PresentationBackendState &) const = default;
 
     QString graphicsApi = QStringLiteral("Unavailable");
     QString swapChainFormat = QStringLiteral("Unavailable");
+    QString videoSurfaceFormat = QStringLiteral("Unavailable");
+    QString videoSurfaceProducer = QStringLiteral("Unavailable");
     bool extendedLinearActive = false;
     bool sceneReferred = false;
     bool sdrWhiteKnown = false;

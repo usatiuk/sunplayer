@@ -95,8 +95,10 @@ cross-display rerendering require an explicit reference-white convention.
 
 This decision does not settle:
 
-* The primaries of the future offscreen video surface.
-* Whether libplacebo output is fixed to scRGB or another explicit linear gamut.
+* How arbitrary decoded source color spaces map into the rendered-video
+  boundary. The consumer-side surface contract is now fixed by
+  [0003](0003-display-targeted-video-surface.md); libplacebo integration will
+  define the source-side mapping.
 * How macOS EDR and Linux compositor protocols supply equivalent state.
 * User overrides, calibration, or confidence policy for unreliable display
   metadata.

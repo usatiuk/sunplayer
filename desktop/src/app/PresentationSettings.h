@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QRectF>
 
+// Transient controls for the diagnostic application shell.
 class PresentationSettings final : public QObject {
     Q_OBJECT
 

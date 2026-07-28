@@ -1,7 +1,7 @@
 #include <QGuiApplication>
 #include <QPalette>
 #include <QQuickWindow>
-#include "PresentationWindow.h"
+#include "app/PresentationWindow.h"
 
 int main(int argc, char *argv[]) {
     QGuiApplication app(argc, argv);

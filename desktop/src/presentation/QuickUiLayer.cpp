@@ -1,4 +1,4 @@
-#include "QuickUiLayer.h"
+#include "presentation/QuickUiLayer.h"
 
 #include <cmath>
 
@@ -13,8 +13,8 @@
 #include <QWindow>
 #include <rhi/qrhi.h>
 
-#include "PresentationOutputState.h"
-#include "PresentationSettings.h"
+#include "app/PresentationSettings.h"
+#include "presentation/PresentationOutputState.h"
 
 namespace {
 class RenderControl final : public QQuickRenderControl {

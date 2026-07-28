@@ -1,4 +1,4 @@
-#include "PresentationWindow.h"
+#include "app/PresentationWindow.h"
 
 #include <QCoreApplication>
 #include <QKeyEvent>
@@ -8,9 +8,9 @@
 #include <QResizeEvent>
 #include <QWheelEvent>
 
-#include "PresentationOutputState.h"
-#include "PresentationSettings.h"
-#include "RhiPresentationEngine.h"
+#include "app/PresentationSettings.h"
+#include "presentation/PresentationOutputState.h"
+#include "presentation/RhiPresentationEngine.h"
 
 PresentationWindow::PresentationWindow() {
     setSurfaceType(QSurface::Direct3DSurface);

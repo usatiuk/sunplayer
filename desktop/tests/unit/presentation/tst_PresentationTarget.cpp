@@ -1,6 +1,6 @@
 #include <QtTest>
 
-#include "PresentationTarget.h"
+#include "presentation/PresentationTarget.h"
 
 #ifdef Q_OS_WIN
 #include <qt_windows.h>

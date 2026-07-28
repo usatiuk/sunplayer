@@ -1,4 +1,4 @@
-#include "HdrCompositor.h"
+#include "presentation/HdrCompositor.h"
 
 #include <QFile>
 #include <QtCore/qlogging.h>
@@ -22,6 +22,7 @@ HdrCompositor::~HdrCompositor() = default;
 
 HdrCompositor::ResourceResult HdrCompositor::initialize(
         QRhiRenderPassDescriptor &renderPassDescriptor,
+        QRhiTexture &videoTexture,
         QRhiTexture &uiTexture) {
     Q_ASSERT(!m_uniformBuffer);
     Q_ASSERT(!m_sampler);
@@ -49,7 +50,7 @@ HdrCompositor::ResourceResult HdrCompositor::initialize(
             return ResourceResult::DeviceLost;
         qFatal("Could not create the HDR compositor sampler");
     }
-    if (createBindings(uiTexture) == ResourceResult::DeviceLost)
+    if (createBindings(videoTexture, uiTexture) == ResourceResult::DeviceLost)
         return ResourceResult::DeviceLost;
 
     const QShader vertexShader =
@@ -72,9 +73,10 @@ HdrCompositor::ResourceResult HdrCompositor::initialize(
     return ResourceResult::Ready;
 }
 
-HdrCompositor::ResourceResult HdrCompositor::setUiTexture(
+HdrCompositor::ResourceResult HdrCompositor::setTextures(
+        QRhiTexture &videoTexture,
         QRhiTexture &uiTexture) {
-    return createBindings(uiTexture);
+    return createBindings(videoTexture, uiTexture);
 }
 
 void HdrCompositor::render(QRhiCommandBuffer &commandBuffer,
@@ -103,6 +105,7 @@ void HdrCompositor::render(QRhiCommandBuffer &commandBuffer,
 }
 
 HdrCompositor::ResourceResult HdrCompositor::createBindings(
+        QRhiTexture &videoTexture,
         QRhiTexture &uiTexture) {
     Q_ASSERT(m_uniformBuffer);
     Q_ASSERT(m_sampler);
@@ -112,9 +115,12 @@ HdrCompositor::ResourceResult HdrCompositor::createBindings(
     m_bindings->setBindings({
         QRhiShaderResourceBinding::sampledTexture(
             0, QRhiShaderResourceBinding::FragmentStage,
+            &videoTexture, m_sampler.get()),
+        QRhiShaderResourceBinding::sampledTexture(
+            1, QRhiShaderResourceBinding::FragmentStage,
             &uiTexture, m_sampler.get()),
         QRhiShaderResourceBinding::uniformBuffer(
-            1, QRhiShaderResourceBinding::FragmentStage,
+            2, QRhiShaderResourceBinding::FragmentStage,
             m_uniformBuffer.get()),
     });
     if (!m_bindings->create()) {

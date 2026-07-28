@@ -17,27 +17,31 @@ find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS
 qt_standard_project_setup(REQUIRES 6.11.1)
 
 qt_add_executable(sunroom
-        src/main.cpp
-        src/DisplayState.h
-        src/DisplayStateProvider.cpp
-        src/DisplayStateProvider.h
-        src/HdrCompositor.cpp
-        src/HdrCompositor.h
-        src/PresentationOutputState.cpp
-        src/PresentationOutputState.h
-        src/PresentationTarget.cpp
-        src/PresentationTarget.h
-        src/PresentationSettings.cpp
-        src/PresentationSettings.h
-        src/PresentationWindow.cpp
-        src/PresentationWindow.h
-        src/QuickUiLayer.cpp
-        src/QuickUiLayer.h
-        src/RhiPresentationEngine.cpp
-        src/RhiPresentationEngine.h
+        src/app/main.cpp
+        src/app/PresentationSettings.cpp
+        src/app/PresentationSettings.h
+        src/app/PresentationWindow.cpp
+        src/app/PresentationWindow.h
+        src/platform/DisplayState.h
+        src/platform/DisplayStateProvider.cpp
+        src/platform/DisplayStateProvider.h
+        src/presentation/DiagnosticVideoProducer.cpp
+        src/presentation/DiagnosticVideoProducer.h
+        src/presentation/HdrCompositor.cpp
+        src/presentation/HdrCompositor.h
+        src/presentation/PresentationOutputState.cpp
+        src/presentation/PresentationOutputState.h
+        src/presentation/PresentationTarget.cpp
+        src/presentation/PresentationTarget.h
+        src/presentation/QuickUiLayer.cpp
+        src/presentation/QuickUiLayer.h
+        src/presentation/RenderedVideoSurface.cpp
+        src/presentation/RenderedVideoSurface.h
+        src/presentation/RhiPresentationEngine.cpp
+        src/presentation/RhiPresentationEngine.h
 )
 
-set_source_files_properties(src/Main.qml PROPERTIES
+set_source_files_properties(src/app/Main.qml PROPERTIES
         QT_RESOURCE_ALIAS Main.qml
 )
 
@@ -45,7 +49,7 @@ qt_add_qml_module(sunroom
         URI Sunroom
         VERSION 1.0
         QML_FILES
-        src/Main.qml
+        src/app/Main.qml
 )
 
 qt_add_shaders(sunroom "sunroom_shaders"
@@ -54,10 +58,11 @@ qt_add_shaders(sunroom "sunroom_shaders"
         PREFIX
         /shaders
         BASE
-        src/shaders
+        src/presentation/shaders
         FILES
-        src/shaders/fullscreen.vert
-        src/shaders/compositor.frag
+        src/presentation/shaders/fullscreen.vert
+        src/presentation/shaders/diagnostic_video.frag
+        src/presentation/shaders/compositor.frag
 )
 
 target_link_libraries(sunroom

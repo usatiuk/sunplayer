@@ -2,9 +2,10 @@
 
 ## Status
 
-The current CMake project builds the Windows presentation prototype. It
-discovers Qt only; FFmpeg, libplacebo, libass, audio, testing, and packaging
-policy beyond Qt's basic deployment script are not integrated.
+The current CMake project builds the Windows presentation prototype and its
+focused Qt Test targets. It discovers Qt only; FFmpeg, libplacebo, libass,
+audio, and packaging policy beyond Qt's basic deployment script are not
+integrated.
 
 The currently validated configuration is:
 
@@ -39,9 +40,15 @@ texture and shader resources, surface loss, and device recovery.
 
 The project defines one executable target, `sunroom`.
 
-`qt_add_qml_module()` packages `src/Main.qml` under the `Sunroom` module.
-`qt_add_shaders()` precompiles and packages the fullscreen vertex and compositor
-fragment shaders under `/shaders`.
+`qt_add_qml_module()` packages `src/app/Main.qml` under the `Sunroom` module.
+`qt_add_shaders()` precompiles and packages the fullscreen vertex, diagnostic
+video producer, and compositor shaders from
+`src/presentation/shaders/` under `/shaders`.
+
+Production sources are grouped under `src/app`, `src/platform`, and
+`src/presentation`. Focused tests currently live under
+`tests/unit/presentation`; new trees should follow concrete execution classes
+rather than speculative subsystem placeholders.
 
 The target links Windows Runtime and dispatcher support libraries only on
 Windows:
@@ -78,7 +85,8 @@ define:
 ## Testing integration
 
 CTest and Qt Test are configured only under `BUILD_TESTING`, keeping test-only
-dependencies out of production-only configurations.
+dependencies out of production-only configurations. Separate test executables
+cover presentation-target policy and rendered-video surface validity/reuse.
 
 On Windows, each test target stages its transitive runtime DLLs beside the test
 executable with CMake's `TARGET_RUNTIME_DLLS` support. This is a build-tree test

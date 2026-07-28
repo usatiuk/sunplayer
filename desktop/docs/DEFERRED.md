@@ -16,12 +16,14 @@ adapters remain unimplemented.
 Track under the cross-platform section of
 `docs/subsystems/graphics/PLAN.md`.
 
-### No real video surface or libplacebo renderer
+### No libplacebo or decoded-video producer
 
-The final compositor still generates the procedural HDR canvas and applies a
-simple diagnostic tone mapper. This is intentionally not the video color
-pipeline. A separate explicitly described video surface must be introduced
-before libplacebo and FFmpeg integration.
+The explicit video surface and narrow final compositor now exist, but the
+current producer still renders only a procedural pattern with a simple
+diagnostic tone mapper. This is intentionally not the video color pipeline.
+FFmpeg source metadata normalization and a persistent libplacebo producer are
+still required for SDR, HDR10/PQ, HLG, dynamic HDR, and differing source color
+spaces.
 
 Track under graphics milestones 1–3.
 
@@ -85,6 +87,16 @@ Color data and QRhi swapchain data. It does not expose confidence, source
 provenance, maximum full-frame luminance, brightness changes, calibration, or
 user overrides. Expand the model when libplacebo target selection requires
 those distinctions.
+
+## Build and tooling
+
+### Vulkan and SPIR-V optimization tools are not configured
+
+The validated Windows D3D11 build succeeds and packages HLSL shaders, but CMake
+does not find Vulkan headers and Qt Shader Tools reports that `spirv-opt` is
+unavailable. This does not block the current D3D11 target. Vulkan support and
+cross-backend shader validation require a deliberate Vulkan SDK/tooling setup
+rather than treating the current shader build as proof of Vulkan readiness.
 
 ## Application and player
 

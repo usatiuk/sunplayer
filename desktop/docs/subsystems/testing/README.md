@@ -2,9 +2,10 @@
 
 ## Status
 
-Sunroom has an initial CTest/Qt Test target for pure presentation-target policy.
-It does not yet have a fixture corpus, render captures, or automated application
-scenarios. The accepted testing direction is defined in
+Sunroom has CTest/Qt Test targets for pure presentation-target policy and
+rendered-video surface validity/reuse. It does not yet have a fixture corpus,
+render captures, or automated application scenarios. The accepted testing
+direction is defined in
 [../../TESTING.md](../../TESTING.md), and active bootstrap work is tracked in
 [PLAN.md](PLAN.md).
 
@@ -72,7 +73,7 @@ Current verified coverage:
 | Boundary | State |
 | --- | --- |
 | Configured Windows Debug build | Builds successfully |
-| Focused automated tests | Presentation-target policy test implemented |
+| Focused automated tests | Presentation-target policy and rendered-video surface lifecycle tests pass |
 | Real QRhi capture | Not implemented |
 | Recorded SDR/HDR runtime matrix | Not implemented |
 | Media pipeline scenarios | Blocked on media pipeline implementation |
@@ -80,3 +81,7 @@ Current verified coverage:
 
 Missing coverage must remain visible in this table or the active testing plan
 until it is implemented or deliberately removed from scope.
+
+Focused tests are grouped by responsibility under
+`tests/unit/presentation/`. Future GPU integration and actual-application
+scenarios should use sibling trees only when their first concrete tests arrive.

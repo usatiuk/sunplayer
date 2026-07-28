@@ -2,6 +2,7 @@
 
 #include <QMetaType>
 
+// Color state observed from the operating system for the selected display.
 struct DisplayState {
     bool operator==(const DisplayState &) const = default;
 

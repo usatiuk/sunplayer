@@ -1,4 +1,4 @@
-#include "RhiPresentationEngine.h"
+#include "presentation/RhiPresentationEngine.h"
 
 #include <algorithm>
 #include <chrono>
@@ -10,12 +10,16 @@
 #include <QWindow>
 #include <rhi/qrhi.h>
 
-#include "HdrCompositor.h"
-#include "PresentationOutputState.h"
-#include "PresentationSettings.h"
-#include "QuickUiLayer.h"
+#include "app/PresentationSettings.h"
+#include "presentation/DiagnosticVideoProducer.h"
+#include "presentation/HdrCompositor.h"
+#include "presentation/PresentationOutputState.h"
+#include "presentation/QuickUiLayer.h"
+#include "presentation/RenderedVideoSurface.h"
 
 namespace {
+constexpr float scRgbReferenceWhiteNits = 80.0f;
+
 float positiveOrFallback(float value, float fallback, const char *name) {
     if (std::isfinite(value) && value > 0.0f)
         return value;
@@ -30,6 +34,12 @@ float nonNegativeOrZero(float value, const char *name) {
     qWarning("QRhi reported invalid %s: %g; using 0",
              name, value);
     return 0.0f;
+}
+
+void advanceRevision(std::uint64_t &revision) {
+    ++revision;
+    if (revision == 0)
+        ++revision;
 }
 }
 
@@ -111,24 +121,6 @@ void RhiPresentationEngine::renderFrame() {
         handleDeviceLoss("creating the Qt Quick render target");
         return;
     }
-    if (!m_compositor
-            || targetUpdate == QuickUiLayer::RenderTargetUpdate::Recreated) {
-        if (!m_compositor) {
-            m_compositor = std::make_unique<HdrCompositor>(*m_rhi);
-            if (m_compositor->initialize(
-                    *m_renderPassDescriptor, m_quickUi->texture())
-                    == HdrCompositor::ResourceResult::DeviceLost) {
-                handleDeviceLoss("creating the HDR compositor");
-                return;
-            }
-        } else {
-            if (m_compositor->setUiTexture(m_quickUi->texture())
-                    == HdrCompositor::ResourceResult::DeviceLost) {
-                handleDeviceLoss("rebinding the Qt Quick texture");
-                return;
-            }
-        }
-    }
 
     // QQuickRenderControl uses a separate offscreen QRhi frame. It must be
     // completed before beginning the visible swapchain frame.
@@ -136,6 +128,93 @@ void RhiPresentationEngine::renderFrame() {
     if (m_rhi->isDeviceLost()) {
         handleDeviceLoss("rendering the Qt Quick layer");
         return;
+    }
+
+    if (m_settings.animatePattern()) {
+        const auto now = std::chrono::steady_clock::now();
+        if (m_lastAnimationFrame) {
+            const float delta =
+                std::chrono::duration<float>(now - *m_lastAnimationFrame).count()
+                / 8.0f;
+            m_phase = std::fmod(m_phase + delta, 1.0f);
+            advanceRevision(m_videoContentRevision);
+        }
+        m_lastAnimationFrame = now;
+    } else {
+        m_lastAnimationFrame.reset();
+    }
+
+    const float scaleX = static_cast<float>(pixelSize.width())
+        / static_cast<float>(m_window.width());
+    const float scaleY = static_cast<float>(pixelSize.height())
+        / static_cast<float>(m_window.height());
+    const QRectF canvas = m_settings.canvasRect();
+    Q_ASSERT(std::isfinite(scaleX) && scaleX > 0.0f);
+    Q_ASSERT(std::isfinite(scaleY) && scaleY > 0.0f);
+    Q_ASSERT(canvas.width() >= 1.0 && canvas.height() >= 1.0);
+
+    const QRectF scaledCanvas(
+        canvas.x() * scaleX,
+        canvas.y() * scaleY,
+        canvas.width() * scaleX,
+        canvas.height() * scaleY);
+    const QRect videoRect = scaledCanvas.toAlignedRect().intersected(
+        QRect(QPoint{}, pixelSize));
+    Q_ASSERT(!videoRect.isEmpty());
+
+    const float targetPeak = m_settings.automaticTargetPeak()
+        ? m_outputState.effectiveTargetHeadroom()
+        : m_settings.manualTargetHeadroom();
+    Q_ASSERT(std::isfinite(targetPeak) && targetPeak >= 1.0f);
+    const float referenceWhiteNits = m_outputState.sdrWhiteKnown()
+        ? m_outputState.sdrWhiteNits()
+        : scRgbReferenceWhiteNits;
+    Q_ASSERT(
+        std::isfinite(referenceWhiteNits) && referenceWhiteNits > 0.0f);
+
+    RenderedVideoSurfaceState requestedSurface;
+    requestedSurface.description.pixelSize = videoRect.size();
+    requestedSurface.description.pixelFormat =
+        RenderedVideoPixelFormat::Rgba16Float;
+    requestedSurface.description.colorSpace =
+        RenderedVideoColorSpace::LinearSrgb;
+    requestedSurface.description.luminance =
+        RenderedVideoLuminance::DisplayTargetedSdrWhiteRelative;
+    requestedSurface.description.alphaMode =
+        RenderedVideoAlphaMode::Opaque;
+    requestedSurface.description.referenceWhiteNits = referenceWhiteNits;
+    requestedSurface.description.targetPeakHeadroom = targetPeak;
+    requestedSurface.graphicsDeviceGeneration = m_deviceGeneration;
+    requestedSurface.displayTargetRevision =
+        m_outputState.displayTargetRevision();
+    requestedSurface.contentRevision = m_videoContentRevision;
+    Q_ASSERT(requestedSurface.isValid());
+
+    Q_ASSERT(m_videoProducer);
+    if (m_videoProducer->ensureSurface(requestedSurface)
+            == DiagnosticVideoProducer::ResourceResult::DeviceLost) {
+        handleDeviceLoss("creating the diagnostic video surface");
+        return;
+    }
+
+    if (!m_compositor) {
+        m_compositor = std::make_unique<HdrCompositor>(*m_rhi);
+        if (m_compositor->initialize(
+                *m_renderPassDescriptor,
+                m_videoProducer->texture(),
+                m_quickUi->texture())
+                == HdrCompositor::ResourceResult::DeviceLost) {
+            handleDeviceLoss("creating the HDR compositor");
+            return;
+        }
+    } else if (targetUpdate
+               == QuickUiLayer::RenderTargetUpdate::Recreated) {
+        if (m_compositor->setTextures(
+                m_videoProducer->texture(), m_quickUi->texture())
+                == HdrCompositor::ResourceResult::DeviceLost) {
+            handleDeviceLoss("rebinding compositor layer textures");
+            return;
+        }
     }
 
     QRhi::FrameOpResult result = m_rhi->beginFrame(m_swapChain.get());
@@ -159,55 +238,38 @@ void RhiPresentationEngine::renderFrame() {
         return;
     }
 
-    if (m_settings.animatePattern()) {
-        const auto now = std::chrono::steady_clock::now();
-        if (m_lastAnimationFrame) {
-            const float delta =
-                std::chrono::duration<float>(now - *m_lastAnimationFrame).count()
-                / 8.0f;
-            m_phase = std::fmod(m_phase + delta, 1.0f);
-        }
-        m_lastAnimationFrame = now;
-    } else {
-        m_lastAnimationFrame.reset();
+    QRhiCommandBuffer &commandBuffer =
+        *m_swapChain->currentFrameCommandBuffer();
+    if (m_videoProducer->needsRender(requestedSurface)) {
+        DiagnosticVideoParameters videoParameters;
+        videoParameters.sourcePeak = m_settings.sourcePeakHeadroom();
+        videoParameters.targetPeak = targetPeak;
+        videoParameters.phase = m_phase;
+        videoParameters.toneMappingEnabled =
+            m_settings.toneMappingEnabled() ? 1.0f : 0.0f;
+        videoParameters.canonicalYFlip =
+            m_rhi->isYUpInNDC() != m_rhi->isYUpInFramebuffer()
+            ? 1.0f
+            : 0.0f;
+        m_videoProducer->render(
+            commandBuffer, videoParameters, requestedSurface);
     }
-
-    const float scaleX = static_cast<float>(pixelSize.width())
-        / static_cast<float>(m_window.width());
-    const float scaleY = static_cast<float>(pixelSize.height())
-        / static_cast<float>(m_window.height());
-    const QRectF canvas = m_settings.canvasRect();
-    Q_ASSERT(std::isfinite(scaleX) && scaleX > 0.0f);
-    Q_ASSERT(std::isfinite(scaleY) && scaleY > 0.0f);
-    Q_ASSERT(canvas.width() >= 1.0 && canvas.height() >= 1.0);
 
     const float sdrScale = m_outputState.sdrScale();
     Q_ASSERT(std::isfinite(sdrScale) && sdrScale > 0.0f);
-
     HdrCompositorParameters parameters;
     parameters.viewportSize = {
         static_cast<float>(pixelSize.width()),
         static_cast<float>(pixelSize.height()),
     };
-    parameters.canvasOrigin = {
-        static_cast<float>(canvas.x()) * scaleX,
-        static_cast<float>(canvas.y()) * scaleY,
+    parameters.videoOrigin = {
+        static_cast<float>(videoRect.x()),
+        static_cast<float>(videoRect.y()),
     };
-    parameters.canvasSize = {
-        static_cast<float>(canvas.width()) * scaleX,
-        static_cast<float>(canvas.height()) * scaleY,
+    parameters.videoSize = {
+        static_cast<float>(videoRect.width()),
+        static_cast<float>(videoRect.height()),
     };
-    parameters.sourcePeak = m_settings.sourcePeakHeadroom();
-    parameters.targetPeak = m_settings.automaticTargetPeak()
-        ? m_outputState.effectiveTargetHeadroom()
-        : m_settings.manualTargetHeadroom();
-    Q_ASSERT(std::isfinite(parameters.sourcePeak)
-             && parameters.sourcePeak >= 1.0f);
-    Q_ASSERT(std::isfinite(parameters.targetPeak)
-             && parameters.targetPeak >= 1.0f);
-    parameters.phase = m_phase;
-    parameters.toneMappingEnabled =
-        m_settings.toneMappingEnabled() ? 1.0f : 0.0f;
     parameters.sdrScale = sdrScale;
     parameters.ndcYUp = m_rhi->isYUpInNDC() ? 1.0f : 0.0f;
     // Final encoding follows the successfully created presentation path, not
@@ -217,7 +279,7 @@ void RhiPresentationEngine::renderFrame() {
 
     Q_ASSERT(m_compositor);
     m_compositor->render(
-        *m_swapChain->currentFrameCommandBuffer(),
+        commandBuffer,
         *m_swapChain->currentFrameRenderTarget(),
         pixelSize,
         parameters);
@@ -280,6 +342,7 @@ void RhiPresentationEngine::markUiDirty() {
 }
 
 void RhiPresentationEngine::markCanvasDirty() {
+    advanceRevision(m_videoContentRevision);
     requestFrame();
 }
 
@@ -290,7 +353,7 @@ void RhiPresentationEngine::markPresentationDirty() {
 void RhiPresentationEngine::releaseSwapChain() {
     m_framePending = false;
     // The pipeline and swapchain depend on this render-pass descriptor.
-    // The independent Quick texture intentionally survives this teardown.
+    // The independent Quick and video textures intentionally survive it.
     m_compositor.reset();
     if (m_swapChain)
         m_swapChain->destroy();
@@ -318,6 +381,7 @@ bool RhiPresentationEngine::initializeDevice() {
         scheduleDeviceRecovery();
         return false;
     }
+    advanceRevision(m_deviceGeneration);
 
     m_quickUi = std::make_unique<QuickUiLayer>(
         m_window, *m_rhi, m_outputState, m_settings);
@@ -328,6 +392,7 @@ bool RhiPresentationEngine::initializeDevice() {
         handleDeviceLoss("initializing Qt Quick");
         return false;
     }
+    m_videoProducer = std::make_unique<DiagnosticVideoProducer>(*m_rhi);
     m_recoveringDevice = false;
     m_deviceRecoveryAttempts = 0;
     m_deviceRecoveryTimer.stop();
@@ -395,9 +460,9 @@ bool RhiPresentationEngine::createOrResizeSwapChain(const char *operation) {
 }
 
 void RhiPresentationEngine::releaseDevice() {
-    // Quick owns resources on this QRhi, so the Quick scene and targets must
-    // be gone before destroying the device.
+    // Every child resource must be gone before destroying the QRhi.
     releaseSwapChain();
+    m_videoProducer.reset();
     // Quick invalidation may emit updateRequested while it tears down.
     if (m_quickUi)
         disconnect(m_quickUi.get(), nullptr, this, nullptr);
@@ -462,6 +527,9 @@ void RhiPresentationEngine::updateBackendState() {
         state.extendedLinearActive
         ? QStringLiteral("scRGB / extended linear sRGB")
         : QStringLiteral("SDR / sRGB");
+    state.videoSurfaceFormat =
+        QStringLiteral("RGBA16F · linear sRGB · SDR-white-relative");
+    state.videoSurfaceProducer = QStringLiteral("Diagnostic pattern");
 
     const QRhiSwapChainHdrInfo info = m_swapChain->hdrInfo();
     state.sceneReferred =

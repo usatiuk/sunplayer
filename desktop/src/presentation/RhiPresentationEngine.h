@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <optional>
 
@@ -8,6 +9,7 @@
 #include <QPointer>
 #include <QTimer>
 
+class DiagnosticVideoProducer;
 class HdrCompositor;
 class PresentationOutputState;
 class PresentationSettings;
@@ -19,6 +21,7 @@ class QRhiSwapChain;
 class QWindow;
 class QuickUiLayer;
 
+// Owns one presentation domain and sequences its QRhi work.
 class RhiPresentationEngine final : public QObject {
     Q_OBJECT
 
@@ -62,6 +65,7 @@ private:
     std::unique_ptr<QRhiSwapChain> m_swapChain;
     std::unique_ptr<QRhiRenderPassDescriptor> m_renderPassDescriptor;
     std::unique_ptr<QuickUiLayer> m_quickUi;
+    std::unique_ptr<DiagnosticVideoProducer> m_videoProducer;
     std::unique_ptr<HdrCompositor> m_compositor;
     // Output selected when the current swapchain was successfully created.
     QPointer<QScreen> m_swapChainScreen;
@@ -77,6 +81,8 @@ private:
     bool m_recoveringDevice = false;
     bool m_retriedFrameError = false;
     int m_deviceRecoveryAttempts = 0;
+    std::uint64_t m_deviceGeneration = 0;
+    std::uint64_t m_videoContentRevision = 1;
     float m_phase = 0.0f;
     std::optional<std::chrono::steady_clock::time_point> m_lastAnimationFrame;
 };
