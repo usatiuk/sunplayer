@@ -23,6 +23,7 @@ protected:
     bool event(QEvent *event) override;
 
 private:
-    class Impl;
-    std::unique_ptr<Impl> m_impl;
+    std::unique_ptr<class PresentationOutputState> m_outputState;
+    std::unique_ptr<class PresentationSettings> m_settings;
+    std::unique_ptr<class RhiPresentationEngine> m_engine;
 };

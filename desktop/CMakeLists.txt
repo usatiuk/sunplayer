@@ -5,16 +5,32 @@ project(Sunroom VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 6.11 REQUIRED COMPONENTS Quick QuickControls2)
+find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS
+        GuiPrivate
+        Quick
+        QuickControls2
+        ShaderTools
+)
 
-qt_standard_project_setup(REQUIRES 6.11)
+qt_standard_project_setup(REQUIRES 6.11.1)
 
 qt_add_executable(sunroom
         src/main.cpp
+        src/DisplayState.h
+        src/DisplayStateProvider.cpp
+        src/DisplayStateProvider.h
+        src/HdrCompositor.cpp
+        src/HdrCompositor.h
         src/PresentationOutputState.cpp
         src/PresentationOutputState.h
+        src/PresentationSettings.cpp
+        src/PresentationSettings.h
         src/PresentationWindow.cpp
         src/PresentationWindow.h
+        src/QuickUiLayer.cpp
+        src/QuickUiLayer.h
+        src/RhiPresentationEngine.cpp
+        src/RhiPresentationEngine.h
 )
 
 set_source_files_properties(src/Main.qml PROPERTIES
@@ -24,15 +40,25 @@ set_source_files_properties(src/Main.qml PROPERTIES
 qt_add_qml_module(sunroom
         URI Sunroom
         VERSION 1.0
-        SOURCES
-        src/WindowsDisplayMonitor.cpp
-        src/WindowsDisplayMonitor.h
         QML_FILES
         src/Main.qml
 )
 
+qt_add_shaders(sunroom "sunroom_shaders"
+        PRECOMPILE
+        OPTIMIZED
+        PREFIX
+        /shaders
+        BASE
+        src/shaders
+        FILES
+        src/shaders/fullscreen.vert
+        src/shaders/compositor.frag
+)
+
 target_link_libraries(sunroom
         PRIVATE
+        Qt6::GuiPrivate
         Qt6::Quick
         Qt6::QuickControls2
 )
@@ -54,20 +80,8 @@ if (WIN32)
             CoreMessaging
             RuntimeObject
             WindowsApp
-            d3d11
-            d3dcompiler
-            dxgi
     )
 
-    add_custom_command(TARGET sunroom POST_BUILD
-            COMMAND Qt6::windeployqt
-            --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/src"
-            --no-compiler-runtime
-            --no-translations
-            "$<TARGET_FILE:sunroom>"
-            COMMENT "Deploying Qt runtime dependencies"
-            VERBATIM
-    )
 endif ()
 
 include(GNUInstallDirs)
@@ -77,3 +91,12 @@ install(TARGETS sunroom
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
+
+qt_generate_deploy_qml_app_script(
+        TARGET sunroom
+        OUTPUT_SCRIPT deploy_script
+        NO_COMPILER_RUNTIME
+        NO_TRANSLATIONS
+        NO_UNSUPPORTED_PLATFORM_ERROR
+)
+install(SCRIPT ${deploy_script})

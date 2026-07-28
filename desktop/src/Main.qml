@@ -5,16 +5,10 @@ import QtQuick.Layouts
 Item {
     id: root
 
-    property bool automaticTargetPeak: true
-    property real manualTargetHeadroom: 7.5
-    property real phase: 0
-    readonly property real sourcePeakHeadroom: sourcePeakSlider.value
-    readonly property bool toneMappingEnabled: toneMapSwitch.checked
-    readonly property real effectiveTargetHeadroom: automaticTargetPeak
-        ? (outputState.hdrActive
-            ? outputState.currentHeadroom / Math.max(outputState.sdrScale, 0.001)
-            : 1.0)
-        : manualTargetHeadroom
+    readonly property real effectiveTargetHeadroom:
+        presentationSettings.automaticTargetPeak
+        ? outputState.effectiveTargetHeadroom
+        : presentationSettings.manualTargetHeadroom
     readonly property real canvasX: 24
     readonly property real canvasY: 112
     readonly property real canvasWidth: Math.max(1, width - 48)
@@ -28,11 +22,11 @@ Item {
             : value.toFixed(1) + qsTr("× SDR white")
     }
 
-    NumberAnimation on phase {
-        from: 0
-        to: 1
-        duration: 8000
-        loops: Animation.Infinite
+    Binding {
+        target: presentationSettings
+        property: "canvasRect"
+        value: Qt.rect(root.canvasX, root.canvasY,
+                       root.canvasWidth, root.canvasHeight)
     }
 
     Item {
@@ -65,9 +59,13 @@ Item {
                 }
 
                 Label {
-                    text: outputState.hdrActive
-                        ? qsTr("FP16 HDR presentation active")
-                        : qsTr("FP16 scRGB · SDR output")
+                    text: outputState.extendedLinearActive
+                        ? (outputState.displayHdrEnabled
+                            ? qsTr("FP16 HDR presentation active")
+                            : qsTr("FP16 extended-linear presentation active"))
+                        : (outputState.displayHdrEnabled
+                            ? qsTr("SDR presentation on HDR display")
+                            : qsTr("SDR presentation active"))
                     color: "#8ed6a8"
                 }
             }
@@ -147,14 +145,16 @@ Item {
                 }
 
                 Label {
-                    text: outputState.maxLuminanceNits > 0
-                        ? qsTr("Display range %1–%2 nits · %3× white")
-                            .arg(outputState.minLuminanceNits.toFixed(3))
-                            .arg(outputState.maxLuminanceNits.toFixed(1))
-                            .arg(root.effectiveTargetHeadroom.toFixed(2))
-                        : qsTr("EDR headroom %1× · potential %2×")
-                            .arg(outputState.currentHeadroom.toFixed(2))
-                            .arg(outputState.potentialHeadroom.toFixed(2))
+                    text: !outputState.extendedLinearActive
+                        ? qsTr("SDR output · HDR headroom unavailable")
+                        : (outputState.luminanceKnown
+                            ? qsTr("Display range %1–%2 nits · %3× white")
+                                .arg(outputState.minLuminanceNits.toFixed(3))
+                                .arg(outputState.maxLuminanceNits.toFixed(1))
+                                .arg(root.effectiveTargetHeadroom.toFixed(2))
+                            : qsTr("EDR headroom %1× · potential %2×")
+                                .arg(outputState.currentHeadroom.toFixed(2))
+                                .arg(outputState.potentialHeadroom.toFixed(2)))
                     color: "#aeb6c5"
                 }
 
@@ -183,8 +183,8 @@ Item {
 
                 Button {
                     Layout.alignment: Qt.AlignRight
-                    text: qsTr("Refresh")
-                    onClicked: outputState.refresh()
+                    text: qsTr("Reprobe")
+                    onClicked: outputState.reprobePresentation()
                 }
             }
         }
@@ -226,14 +226,16 @@ Item {
                         Layout.fillWidth: true
                         from: 1
                         to: 25
-                        value: 12.5
+                        value: presentationSettings.sourcePeakHeadroom
                         stepSize: 0.1
+                        onMoved: presentationSettings.sourcePeakHeadroom = value
                     }
 
                     Label {
                         Layout.minimumWidth: 140
                         horizontalAlignment: Text.AlignRight
-                        text: root.headroomLabel(sourcePeakSlider.value)
+                        text: root.headroomLabel(
+                            presentationSettings.sourcePeakHeadroom)
                         color: "white"
                     }
 
@@ -241,7 +243,14 @@ Item {
                         id: toneMapSwitch
 
                         text: qsTr("Tone map")
-                        checked: true
+                        checked: presentationSettings.toneMappingEnabled
+                        onToggled: presentationSettings.toneMappingEnabled = checked
+                    }
+
+                    Switch {
+                        text: qsTr("Animate")
+                        checked: presentationSettings.animatePattern
+                        onToggled: presentationSettings.animatePattern = checked
                     }
                 }
 
@@ -251,20 +260,22 @@ Item {
 
                     Switch {
                         text: qsTr("Auto display peak")
-                        checked: root.automaticTargetPeak
-                        onToggled: root.automaticTargetPeak = checked
+                        checked: presentationSettings.automaticTargetPeak
+                        onToggled:
+                            presentationSettings.automaticTargetPeak = checked
                     }
 
                     Slider {
                         id: targetPeakSlider
 
                         Layout.fillWidth: true
-                        enabled: !root.automaticTargetPeak
+                        enabled: !presentationSettings.automaticTargetPeak
                         from: 1
                         to: 25
-                        value: root.manualTargetHeadroom
+                        value: presentationSettings.manualTargetHeadroom
                         stepSize: 0.1
-                        onMoved: root.manualTargetHeadroom = value
+                        onMoved:
+                            presentationSettings.manualTargetHeadroom = value
                     }
 
                     Label {

@@ -1,4 +1,6 @@
-#include "WindowsDisplayMonitor.h"
+#include "DisplayStateProvider.h"
+
+#include <cmath>
 
 #include <QWindow>
 
@@ -18,31 +20,42 @@ using winrt::Windows::Graphics::Display::DisplayInformation;
 using winrt::Windows::System::DispatcherQueue;
 using winrt::Windows::System::DispatcherQueueController;
 
-class WindowsDisplayMonitor::Impl {
+namespace {
+float nonNegativeOrUnknown(float value, const char *name) {
+    if (std::isfinite(value) && value >= 0.0f)
+        return value;
+    qWarning("Windows reported invalid %s: %g", name, value);
+    return 0.0f;
+}
+
+enum class WindowsRuntimeState {
+    Uninitialized,
+    Borrowed,
+    Owned,
+};
+
+class WindowsDisplayStateProvider final : public DisplayStateProvider {
 public:
-    explicit Impl(ChangeHandler changeHandler)
-        : m_changeHandler(std::move(changeHandler)) {
-    }
+    explicit WindowsDisplayStateProvider(QObject *parent) : DisplayStateProvider(parent) {}
 
-    ~Impl() {
+    ~WindowsDisplayStateProvider() override {
         detach();
-
         if (m_dispatcherController) {
             try {
                 m_dispatcherController.ShutdownQueueAsync();
             } catch (...) {
-                // The process is shutting down; releasing the controller is enough.
             }
         }
-
-        if (m_roInitialized)
+        if (m_runtimeState == WindowsRuntimeState::Owned)
             RoUninitialize();
     }
 
-    bool attach(QWindow *window) {
+    void attach(QWindow &window) override {
         detach();
-        if (!window || !ensureWindowsRuntime() || !ensureDispatcherQueue())
-            return false;
+        if (!ensureWindowsRuntime() || !ensureDispatcherQueue()) {
+            publishInvalidState();
+            return;
+        }
 
         try {
             const auto factory = winrt::get_activation_factory<
@@ -51,60 +64,58 @@ public:
 
             DisplayInformation displayInformation{nullptr};
             winrt::check_hresult(factory->GetForWindow(
-                reinterpret_cast<HWND>(window->winId()),
+                reinterpret_cast<HWND>(window.winId()),
                 winrt::guid_of<DisplayInformation>(),
                 winrt::put_abi(displayInformation)));
 
             m_displayInformation = std::move(displayInformation);
             m_changeToken = m_displayInformation.AdvancedColorInfoChanged(
-                [this](const DisplayInformation &, const winrt::Windows::Foundation::IInspectable &) {
+                [this](const DisplayInformation &,
+                       const winrt::Windows::Foundation::IInspectable &) {
                     publishCurrentState();
                 });
             m_hasChangeToken = true;
             publishCurrentState();
-            return true;
         } catch (const winrt::hresult_error &error) {
             qWarning("Windows HDR display monitoring is unavailable: 0x%08X %ls",
                      static_cast<unsigned int>(error.code().value),
                      error.message().c_str());
             detach();
-            return false;
+            publishInvalidState();
         }
     }
 
-    void detach() {
+    void detach() override {
         if (m_displayInformation && m_hasChangeToken) {
             try {
                 m_displayInformation.AdvancedColorInfoChanged(m_changeToken);
             } catch (...) {
-                // The window or display object may already be gone.
             }
         }
-
         m_hasChangeToken = false;
         m_displayInformation = nullptr;
     }
 
-    void refresh() {
+    void refresh() override {
+        if (!m_displayInformation) {
+            publishInvalidState();
+            return;
+        }
         publishCurrentState();
     }
 
 private:
     bool ensureWindowsRuntime() {
-        if (m_roInitialized || m_roAvailable)
+        if (m_runtimeState != WindowsRuntimeState::Uninitialized)
             return true;
 
         const HRESULT result = RoInitialize(RO_INIT_SINGLETHREADED);
         if (SUCCEEDED(result)) {
-            m_roInitialized = true;
-            m_roAvailable = true;
+            m_runtimeState = WindowsRuntimeState::Owned;
             return true;
         }
-
-        // Qt or another library may already have initialized the GUI thread
-        // using a different COM apartment. WinRT activation can still work.
         if (result == RPC_E_CHANGED_MODE) {
-            m_roAvailable = true;
+            m_runtimeState = WindowsRuntimeState::Borrowed;
             return true;
         }
 
@@ -117,7 +128,10 @@ private:
         try {
             if (DispatcherQueue::GetForCurrentThread())
                 return true;
-        } catch (...) {
+        } catch (const winrt::hresult_error &error) {
+            qWarning("Could not query the Windows DispatcherQueue: 0x%08X %ls",
+                     static_cast<unsigned int>(error.code().value),
+                     error.message().c_str());
             return false;
         }
 
@@ -133,80 +147,65 @@ private:
                      static_cast<unsigned int>(result));
             return false;
         }
-
-        m_dispatcherController = {
-            controller,
-            winrt::take_ownership_from_abi,
-        };
+        m_dispatcherController = {controller, winrt::take_ownership_from_abi};
         return true;
     }
 
     void publishCurrentState() {
-        if (!m_displayInformation || !m_changeHandler)
-            return;
+        Q_ASSERT(m_displayInformation);
 
         try {
             const auto colorInfo = m_displayInformation.GetAdvancedColorInfo();
-            WindowsAdvancedColorState state;
+            DisplayState state;
             state.valid = true;
             state.hdrActive =
                 colorInfo.CurrentAdvancedColorKind() == AdvancedColorKind::HighDynamicRange;
-            state.sdrWhiteNits = colorInfo.SdrWhiteLevelInNits();
-            state.minLuminanceNits = colorInfo.MinLuminanceInNits();
-            state.maxLuminanceNits = colorInfo.MaxLuminanceInNits();
-            state.maxAverageFullFrameLuminanceNits =
-                colorInfo.MaxAverageFullFrameLuminanceInNits();
-            m_changeHandler(state);
+            state.sdrWhiteNits = nonNegativeOrUnknown(
+                colorInfo.SdrWhiteLevelInNits(), "SDR white level");
+            state.minLuminanceNits = nonNegativeOrUnknown(
+                colorInfo.MinLuminanceInNits(), "minimum luminance");
+            state.maxLuminanceNits = nonNegativeOrUnknown(
+                colorInfo.MaxLuminanceInNits(), "maximum luminance");
+            emit stateChanged(state);
         } catch (const winrt::hresult_error &error) {
             qWarning("Could not refresh Windows HDR display information: 0x%08X %ls",
                      static_cast<unsigned int>(error.code().value),
                      error.message().c_str());
+            publishInvalidState();
         }
     }
 
-    ChangeHandler m_changeHandler;
+    void publishInvalidState() {
+        emit stateChanged(DisplayState{});
+    }
+
     DisplayInformation m_displayInformation{nullptr};
     DispatcherQueueController m_dispatcherController{nullptr};
     winrt::event_token m_changeToken{};
     bool m_hasChangeToken = false;
-    bool m_roInitialized = false;
-    bool m_roAvailable = false;
+    WindowsRuntimeState m_runtimeState = WindowsRuntimeState::Uninitialized;
 };
+}
 
 #else
 
-class WindowsDisplayMonitor::Impl {
+namespace {
+class NullDisplayStateProvider final : public DisplayStateProvider {
 public:
-    explicit Impl(ChangeHandler) {
-    }
-
-    bool attach(QWindow *) {
-        return false;
-    }
-
-    void detach() {
-    }
-
-    void refresh() {
-    }
+    explicit NullDisplayStateProvider(QObject *parent) : DisplayStateProvider(parent) {}
+    void attach(QWindow &) override { emit stateChanged(DisplayState{}); }
+    void detach() override {}
+    void refresh() override {}
 };
+}
 
 #endif
 
-WindowsDisplayMonitor::WindowsDisplayMonitor(ChangeHandler changeHandler)
-    : m_impl(std::make_unique<Impl>(std::move(changeHandler))) {
-}
-
-WindowsDisplayMonitor::~WindowsDisplayMonitor() = default;
-
-bool WindowsDisplayMonitor::attach(QWindow *window) {
-    return m_impl->attach(window);
-}
-
-void WindowsDisplayMonitor::detach() {
-    m_impl->detach();
-}
-
-void WindowsDisplayMonitor::refresh() {
-    m_impl->refresh();
+std::unique_ptr<DisplayStateProvider> createDisplayStateProvider(QObject *parent) {
+    qRegisterMetaType<DisplayState>();
+#ifdef Q_OS_WIN
+    return std::make_unique<WindowsDisplayStateProvider>(parent);
+#else
+    return std::make_unique<NullDisplayStateProvider>(parent);
+#endif
 }

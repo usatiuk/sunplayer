@@ -1,85 +1,134 @@
 #include "PresentationOutputState.h"
 
 #include <algorithm>
+#include <cmath>
 
-#include <QMetaObject>
+#include <QGuiApplication>
 #include <QScreen>
-#include <QThread>
 #include <QWindow>
+
+#include "DisplayStateProvider.h"
 
 namespace {
 constexpr float scRgbReferenceWhiteNits = 80.0f;
 }
 
-PresentationOutputState::PresentationOutputState(QWindow *window, QObject *parent)
-    : QObject(parent), m_window(window) {
-    const QPointer<PresentationOutputState> guard(this);
-    m_monitor = std::make_unique<WindowsDisplayMonitor>(
-        [guard](const WindowsAdvancedColorState &state) {
-            if (!guard)
-                return;
-            QMetaObject::invokeMethod(guard, [guard, state] {
-                if (guard)
-                    guard->applyWindowsState(state);
-            }, Qt::QueuedConnection);
-        });
-
-    if (m_window) {
-        connect(m_window, &QWindow::screenChanged, this, [this](QScreen *screen) {
-            attachScreen(screen);
-            if (m_monitor)
-                m_monitor->attach(m_window);
-        });
-        attachScreen(m_window->screen());
-        m_monitor->attach(m_window);
-    }
+PresentationOutputState::PresentationOutputState(QObject *parent)
+    : QObject(parent) {
+    m_provider = createDisplayStateProvider();
+    Q_ASSERT(m_provider);
+    connect(m_provider.get(), &DisplayStateProvider::stateChanged,
+            this, &PresentationOutputState::applyDisplayState);
 }
 
 PresentationOutputState::~PresentationOutputState() = default;
 
-QString PresentationOutputState::screenName() const { return m_screenName; }
-QString PresentationOutputState::graphicsApi() const { return QStringLiteral("Direct3D 11"); }
-QString PresentationOutputState::swapChainFormat() const {
-    return QStringLiteral("scRGB / extended linear sRGB");
-}
-qreal PresentationOutputState::devicePixelRatio() const { return m_dpr; }
-qreal PresentationOutputState::logicalDotsPerInch() const { return m_logicalDpi; }
-qreal PresentationOutputState::refreshRate() const { return m_refreshRate; }
-bool PresentationOutputState::queryValid() const { return m_state.valid; }
-bool PresentationOutputState::hdrActive() const { return m_state.valid && m_state.hdrActive; }
-bool PresentationOutputState::scRgbSupported() const { return true; }
-bool PresentationOutputState::sceneReferred() const { return hdrActive(); }
-bool PresentationOutputState::absoluteLuminanceKnown() const { return m_state.valid; }
-bool PresentationOutputState::sdrWhiteKnown() const { return hdrActive(); }
-float PresentationOutputState::sdrWhiteNits() const {
-    return m_state.sdrWhiteNits > 0.0f ? m_state.sdrWhiteNits : scRgbReferenceWhiteNits;
-}
-float PresentationOutputState::minLuminanceNits() const {
-    return std::max(0.0f, m_state.minLuminanceNits);
-}
-float PresentationOutputState::maxLuminanceNits() const {
-    return std::max(0.0f, m_state.maxLuminanceNits);
-}
-float PresentationOutputState::currentHeadroom() const {
-    return hdrActive() && maxLuminanceNits() > 0.0f
-        ? maxLuminanceNits() / scRgbReferenceWhiteNits
-        : 1.0f;
-}
-float PresentationOutputState::potentialHeadroom() const { return currentHeadroom(); }
-float PresentationOutputState::referenceWhiteNits() const {
-    return hdrActive() ? scRgbReferenceWhiteNits : 0.0f;
-}
-float PresentationOutputState::displayPeakNits() const {
-    return hdrActive() ? maxLuminanceNits() : 0.0f;
-}
-float PresentationOutputState::sdrScale() const {
-    return hdrActive() ? sdrWhiteNits() / scRgbReferenceWhiteNits : 1.0f;
+void PresentationOutputState::attach(QWindow &window) {
+    Q_ASSERT(!m_window);
+    m_window = &window;
+    connect(m_window, &QWindow::screenChanged, this, [this](QScreen *screen) {
+        attachScreen(screen);
+        m_provider->attach(*m_window);
+    });
+    attachScreen(m_window->screen());
+    m_provider->attach(*m_window);
 }
 
-void PresentationOutputState::refresh() {
+QString PresentationOutputState::screenName() const { return m_screenName; }
+QString PresentationOutputState::graphicsApi() const { return m_backendState.graphicsApi; }
+QString PresentationOutputState::swapChainFormat() const { return m_backendState.swapChainFormat; }
+qreal PresentationOutputState::devicePixelRatio() const { return m_dpr; }
+qreal PresentationOutputState::refreshRate() const { return m_refreshRate; }
+bool PresentationOutputState::displayHdrEnabled() const {
+    return m_state.valid && m_state.hdrActive;
+}
+bool PresentationOutputState::extendedLinearActive() const {
+    return m_backendState.extendedLinearActive;
+}
+bool PresentationOutputState::sceneReferred() const {
+    return extendedLinearActive() && m_backendState.sceneReferred;
+}
+bool PresentationOutputState::sdrWhiteKnown() const {
+    return extendedLinearActive()
+        && ((m_state.valid && m_state.hdrActive
+                && m_state.sdrWhiteNits > 0.0f)
+            || m_backendState.sdrWhiteKnown);
+}
+bool PresentationOutputState::luminanceKnown() const {
+    return extendedLinearActive()
+        && ((m_state.valid && m_state.hdrActive
+                && m_state.maxLuminanceNits > 0.0f)
+            || m_backendState.luminanceKnown);
+}
+float PresentationOutputState::sdrWhiteNits() const {
+    if (!extendedLinearActive())
+        return 0.0f;
+    if (m_state.valid && m_state.hdrActive && m_state.sdrWhiteNits > 0.0f)
+        return m_state.sdrWhiteNits;
+    return m_backendState.sdrWhiteKnown
+        ? m_backendState.sdrWhiteNits : 0.0f;
+}
+float PresentationOutputState::minLuminanceNits() const {
+    if (!extendedLinearActive())
+        return 0.0f;
+    if (m_state.valid && m_state.hdrActive
+            && m_state.maxLuminanceNits > 0.0f) {
+        return m_state.minLuminanceNits;
+    }
+    return m_backendState.luminanceKnown
+        ? m_backendState.minLuminanceNits : 0.0f;
+}
+float PresentationOutputState::maxLuminanceNits() const {
+    if (!extendedLinearActive())
+        return 0.0f;
+    if (m_state.valid && m_state.hdrActive
+            && m_state.maxLuminanceNits > 0.0f) {
+        return m_state.maxLuminanceNits;
+    }
+    return m_backendState.luminanceKnown
+        ? m_backendState.maxLuminanceNits : 0.0f;
+}
+float PresentationOutputState::currentHeadroom() const {
+    if (!extendedLinearActive())
+        return 1.0f;
+    if (maxLuminanceNits() > 0.0f)
+        return std::max(
+            1.0f, maxLuminanceNits() / scRgbReferenceWhiteNits);
+    return std::max(1.0f, m_backendState.currentHeadroom);
+}
+float PresentationOutputState::potentialHeadroom() const {
+    return extendedLinearActive()
+        ? std::max(currentHeadroom(), m_backendState.potentialHeadroom)
+        : 1.0f;
+}
+float PresentationOutputState::effectiveTargetHeadroom() const {
+    const float scale = sdrScale();
+    Q_ASSERT(std::isfinite(scale) && scale > 0.0f);
+    return std::max(1.0f, currentHeadroom() / scale);
+}
+float PresentationOutputState::sdrScale() const {
+    return sceneReferred()
+        ? effectiveSdrWhiteNits() / scRgbReferenceWhiteNits
+        : 1.0f;
+}
+
+float PresentationOutputState::effectiveSdrWhiteNits() const {
+    const float queried = sdrWhiteNits();
+    return queried > 0.0f ? queried : scRgbReferenceWhiteNits;
+}
+
+void PresentationOutputState::reprobePresentation() {
+    Q_ASSERT(m_window);
     updateMetrics();
-    if (m_monitor)
-        m_monitor->refresh();
+    m_provider->refresh();
+    emit outputCharacteristicsChanged();
+}
+
+void PresentationOutputState::setBackendState(const PresentationBackendState &state) {
+    if (m_backendState == state)
+        return;
+    m_backendState = state;
+    emit stateChanged();
 }
 
 void PresentationOutputState::attachScreen(QScreen *screen) {
@@ -91,32 +140,46 @@ void PresentationOutputState::attachScreen(QScreen *screen) {
     if (m_screen) {
         const auto changed = [this] { updateMetrics(); };
         m_connections.append(connect(m_screen, &QScreen::geometryChanged, this, changed));
-        m_connections.append(connect(
-            m_screen, &QScreen::logicalDotsPerInchChanged, this, changed));
         m_connections.append(connect(m_screen, &QScreen::refreshRateChanged, this, changed));
     }
     updateMetrics();
 }
 
 void PresentationOutputState::updateMetrics() {
+    Q_ASSERT(m_window);
     const QString name = m_screen ? m_screen->name() : QStringLiteral("Unavailable");
-    const qreal dpr = m_window ? m_window->devicePixelRatio() : 1.0;
-    const qreal dpi = m_screen ? m_screen->logicalDotsPerInch() : 96.0;
+    const qreal dpr = m_window->devicePixelRatio();
     const qreal refresh = m_screen ? m_screen->refreshRate() : 0.0;
     if (name == m_screenName
         && qFuzzyCompare(dpr, m_dpr)
-        && qFuzzyCompare(dpi, m_logicalDpi)
         && qFuzzyCompare(refresh, m_refreshRate)) {
         return;
     }
     m_screenName = name;
     m_dpr = dpr;
-    m_logicalDpi = dpi;
     m_refreshRate = refresh;
     emit stateChanged();
 }
 
-void PresentationOutputState::applyWindowsState(const WindowsAdvancedColorState &state) {
-    m_state = state;
-    emit stateChanged();
+void PresentationOutputState::applyDisplayState(const DisplayState &state) {
+    Q_ASSERT(m_window);
+    bool screenSelectionChanged = false;
+    if (QScreen *screen =
+            QGuiApplication::screenAt(m_window->geometry().center());
+            screen && screen != m_screen) {
+        attachScreen(screen);
+        screenSelectionChanged = true;
+    }
+    const bool displayStateChanged = m_state != state;
+    const bool presentationModeChanged = displayStateChanged
+        && (m_state.valid != state.valid
+            || m_state.hdrActive != state.hdrActive);
+    if (!displayStateChanged && !screenSelectionChanged)
+        return;
+    if (displayStateChanged)
+        m_state = state;
+    if (presentationModeChanged || screenSelectionChanged)
+        emit outputCharacteristicsChanged();
+    if (displayStateChanged)
+        emit stateChanged();
 }

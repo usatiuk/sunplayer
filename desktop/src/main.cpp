@@ -1,9 +1,6 @@
-#include <cstdlib>
-
 #include <QGuiApplication>
 #include <QPalette>
 #include <QQuickWindow>
-
 #include "PresentationWindow.h"
 
 int main(int argc, char *argv[]) {

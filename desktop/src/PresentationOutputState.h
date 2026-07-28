@@ -5,77 +5,94 @@
 #include <QObject>
 #include <QPointer>
 
-#include "WindowsDisplayMonitor.h"
+#include "DisplayState.h"
 
 class QScreen;
 class QWindow;
+class DisplayStateProvider;
+
+struct PresentationBackendState {
+    bool operator==(const PresentationBackendState &) const = default;
+
+    QString graphicsApi = QStringLiteral("Unavailable");
+    QString swapChainFormat = QStringLiteral("Unavailable");
+    bool extendedLinearActive = false;
+    bool sceneReferred = false;
+    bool sdrWhiteKnown = false;
+    bool luminanceKnown = false;
+    float sdrWhiteNits = 80.0f;
+    float minLuminanceNits = 0.0f;
+    float maxLuminanceNits = 0.0f;
+    float currentHeadroom = 1.0f;
+    float potentialHeadroom = 1.0f;
+};
 
 class PresentationOutputState final : public QObject {
     Q_OBJECT
 
     Q_PROPERTY(QString screenName READ screenName NOTIFY stateChanged)
-    Q_PROPERTY(QString graphicsApi READ graphicsApi CONSTANT)
-    Q_PROPERTY(QString swapChainFormat READ swapChainFormat CONSTANT)
+    Q_PROPERTY(QString graphicsApi READ graphicsApi NOTIFY stateChanged)
+    Q_PROPERTY(QString swapChainFormat READ swapChainFormat NOTIFY stateChanged)
     Q_PROPERTY(qreal devicePixelRatio READ devicePixelRatio NOTIFY stateChanged)
-    Q_PROPERTY(qreal logicalDotsPerInch READ logicalDotsPerInch NOTIFY stateChanged)
     Q_PROPERTY(qreal refreshRate READ refreshRate NOTIFY stateChanged)
-    Q_PROPERTY(bool queryValid READ queryValid NOTIFY stateChanged)
-    Q_PROPERTY(bool hdrActive READ hdrActive NOTIFY stateChanged)
-    Q_PROPERTY(bool scRgbSupported READ scRgbSupported CONSTANT)
+    Q_PROPERTY(bool displayHdrEnabled READ displayHdrEnabled NOTIFY stateChanged)
+    Q_PROPERTY(bool extendedLinearActive READ extendedLinearActive NOTIFY stateChanged)
     Q_PROPERTY(bool sceneReferred READ sceneReferred NOTIFY stateChanged)
-    Q_PROPERTY(bool absoluteLuminanceKnown READ absoluteLuminanceKnown NOTIFY stateChanged)
     Q_PROPERTY(bool sdrWhiteKnown READ sdrWhiteKnown NOTIFY stateChanged)
+    Q_PROPERTY(bool luminanceKnown READ luminanceKnown NOTIFY stateChanged)
     Q_PROPERTY(float sdrWhiteNits READ sdrWhiteNits NOTIFY stateChanged)
     Q_PROPERTY(float minLuminanceNits READ minLuminanceNits NOTIFY stateChanged)
     Q_PROPERTY(float maxLuminanceNits READ maxLuminanceNits NOTIFY stateChanged)
     Q_PROPERTY(float currentHeadroom READ currentHeadroom NOTIFY stateChanged)
     Q_PROPERTY(float potentialHeadroom READ potentialHeadroom NOTIFY stateChanged)
-    Q_PROPERTY(float referenceWhiteNits READ referenceWhiteNits NOTIFY stateChanged)
-    Q_PROPERTY(float displayPeakNits READ displayPeakNits NOTIFY stateChanged)
+    Q_PROPERTY(float effectiveTargetHeadroom READ effectiveTargetHeadroom
+               NOTIFY stateChanged)
     Q_PROPERTY(float sdrScale READ sdrScale NOTIFY stateChanged)
 
 public:
-    explicit PresentationOutputState(QWindow *window, QObject *parent = nullptr);
+    explicit PresentationOutputState(QObject *parent = nullptr);
     ~PresentationOutputState() override;
+
+    void attach(QWindow &window);
 
     QString screenName() const;
     QString graphicsApi() const;
     QString swapChainFormat() const;
     qreal devicePixelRatio() const;
-    qreal logicalDotsPerInch() const;
     qreal refreshRate() const;
-    bool queryValid() const;
-    bool hdrActive() const;
-    bool scRgbSupported() const;
+    bool displayHdrEnabled() const;
+    bool extendedLinearActive() const;
     bool sceneReferred() const;
-    bool absoluteLuminanceKnown() const;
     bool sdrWhiteKnown() const;
+    bool luminanceKnown() const;
     float sdrWhiteNits() const;
     float minLuminanceNits() const;
     float maxLuminanceNits() const;
     float currentHeadroom() const;
     float potentialHeadroom() const;
-    float referenceWhiteNits() const;
-    float displayPeakNits() const;
+    float effectiveTargetHeadroom() const;
     float sdrScale() const;
 
-    Q_INVOKABLE void refresh();
+    Q_INVOKABLE void reprobePresentation();
+    void setBackendState(const PresentationBackendState &state);
 
 signals:
     void stateChanged();
+    void outputCharacteristicsChanged();
 
 private:
     void attachScreen(QScreen *screen);
     void updateMetrics();
-    void applyWindowsState(const WindowsAdvancedColorState &state);
+    void applyDisplayState(const DisplayState &state);
+    float effectiveSdrWhiteNits() const;
 
     QPointer<QWindow> m_window;
     QPointer<QScreen> m_screen;
     QList<QMetaObject::Connection> m_connections;
-    std::unique_ptr<WindowsDisplayMonitor> m_monitor;
-    WindowsAdvancedColorState m_state;
+    std::unique_ptr<DisplayStateProvider> m_provider;
+    DisplayState m_state;
+    PresentationBackendState m_backendState;
     QString m_screenName = QStringLiteral("Unavailable");
     qreal m_dpr = 1.0;
-    qreal m_logicalDpi = 96.0;
     qreal m_refreshRate = 0.0;
 };
