@@ -11,6 +11,16 @@ errors, or general logging.
 Graphics details belong to
 [../graphics/README.md](../graphics/README.md). The current diagnostic QML is
 part of validating that subsystem rather than the accepted player interface.
+The accepted page and viewport direction is documented in
+[../ui/README.md](../ui/README.md).
+
+## Accepted shell direction
+
+Keep one native presentation window, one QML engine, and one redirected Qt
+Quick scene. The application layer owns their lifetime and the top-level
+connection to session services; page selection, viewport policy, and the
+retained HDR Lab belong to the UI subsystem. Canonical playback/session state
+does not live in the application window or QML page.
 
 ## Startup
 
@@ -70,7 +80,8 @@ methods, accessibility, drag-and-drop, and file-open events remain deferred.
 * Automatic or manual target peak.
 * Diagnostic tone mapping.
 * Pattern animation.
-* QML-computed canvas rectangle.
+* QML-computed diagnostic canvas rectangle, pending replacement by the shared
+  active video-viewport contract.
 
 These values are not persisted and should not be grown into the final player
 settings indiscriminately. Player preferences, current playback session state,

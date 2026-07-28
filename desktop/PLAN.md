@@ -86,10 +86,14 @@ for pure presentation-target policy and rendered-video surface
 validity/invalidation and a real D3D11 offscreen producer/compositor capture.
 Whole-application scenarios do not yet exist.
 
-The next implementation milestone is replacing the temporary pattern producer
-with a persistent libplacebo renderer for a known software-backed image. A
-single FFmpeg-decoded frame follows. Testing continues alongside that work with
-libplacebo integration capture and the first deterministic frame scenario.
+The next implementation slices establish the already-known graphics-device,
+video-producer, and target-interop contracts around the diagnostic producer,
+then extract a thin QML shell, retained HDR Lab page, and generic viewport
+without introducing a pretend Player UI. A persistent libplacebo renderer for
+known SDR and HDR software-backed images follows. The real Player page arrives
+with the file/session model and first FFmpeg-decoded frame. Testing continues
+alongside that work with real-backend capture and the first deterministic frame
+scenario.
 
 ## Subsystems
 
@@ -143,6 +147,7 @@ Documentation: `docs/subsystems/playback/`
 ### 5. Graphics and display integration
 
 * [x] One-device ownership model for the current presentation domain
+* [ ] Factory-selected graphics-device domain and backend contract
 * [x] Windows D3D11 QRhi integration
 * [x] Redirected Qt Quick rendering integration
 * [ ] Final video, subtitle, and UI compositor (the explicit video/UI boundary
@@ -162,6 +167,8 @@ Documentation: `docs/subsystems/graphics/`
 
 ### 6. libplacebo video rendering
 
+* [ ] Shared rendered-video producer contract
+* [ ] Backend target-interop contract and observable copy/fallback paths
 * [ ] Persistent libplacebo renderer lifecycle
 * [ ] Effective FFmpeg metadata mapping
 * [ ] Software-frame upload path
@@ -205,6 +212,10 @@ Documentation: `docs/subsystems/subtitles/`
 
 ### 9. User interface
 
+* [ ] Thin application shell and page structure
+* [ ] Player page with truthful session states
+* [ ] Retained HDR Lab diagnostics page
+* [ ] Generic active video-viewport contract
 * [ ] Open-file and drag-and-drop interface
 * [ ] Play and pause controls
 * [ ] Seek bar and timestamps
@@ -280,6 +291,7 @@ docs/
         0001-application-owned-qrhi-composition.md
         0002-extended-linear-srgb-presentation.md
         0003-display-targeted-video-surface.md
+        0004-cross-platform-graphics-domain-and-video-interop.md
 
     research/
         README.md
@@ -299,6 +311,12 @@ docs/
         testing/
             README.md
             PLAN.md
+
+        ui/
+            README.md
+
+        video-rendering/
+            README.md
 ```
 
 Subsystem folders and subsystem plans should be created when enough concrete architecture or active work exists to justify them.

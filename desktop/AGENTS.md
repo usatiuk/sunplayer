@@ -46,9 +46,18 @@ Research notes and architecture notes are not automatically current project trut
 
 * Maximize shared cross-platform code and behavior.
 * Keep unavoidable platform-specific behavior behind narrow interfaces.
+* When accepted requirements make an axis of variation concrete and materially
+  different implementations, ownership, or lifecycle models are already
+  known, establish its narrow shared contract with the first implementation.
+  Do not hard-code the first case and defer the seam until another
+  implementation arrives.
+* Shape those contracts from known consumers, ownership, synchronization,
+  capability, fallback, and lifecycle requirements even when only one
+  implementation can be exercised immediately.
 * Keep modules cohesive, with narrow responsibilities and explicit contracts at subsystem boundaries.
 * Make designs as simple as possible, but not simpler than correctness, lifecycle, recovery, platform behavior, and observability require.
-* Prefer a small number of useful abstractions over layers introduced only for architectural symmetry.
+* Prefer a small number of purposeful abstractions over layers introduced only
+  for architectural symmetry.
 * Prefer mature libraries and operating-system facilities over custom implementations where appropriate.
 * Preserve modularity, testability, cancellation, and observable fallback behavior.
 * Avoid unnecessary platform forks and speculative micro-optimizations.

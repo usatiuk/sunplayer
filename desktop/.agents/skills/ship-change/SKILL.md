@@ -13,14 +13,20 @@ instructions first and use judgement to scale or reorder the workflow.
 1. Orient in the current code, plans, decisions, and relevant documentation.
 2. Identify the behavior, invariants, risks, unknowns, and a clear completion
    condition.
-3. Research only meaningful unknowns. Delegate bounded, independent questions
+3. When accepted requirements make an axis of variation concrete and
+   materially different implementations, ownership, or lifecycle models are
+   already known, establish its narrow shared contract with the first
+   implementation. Shape it from known consumers, synchronization, capability,
+   fallback, and lifecycle requirements; use judgement rather than wrapping
+   anything merely because it could be replaced.
+4. Research only meaningful unknowns. Delegate bounded, independent questions
    when that will improve confidence or speed; keep trivial and tightly coupled
    work local.
-4. Maintain a short working plan when the work has multiple meaningful steps.
-5. Implement the smallest coherent slice that proves the intended boundary.
-6. Validate at the strongest practical boundary, including important failure
+5. Maintain a short working plan when the work has multiple meaningful steps.
+6. Implement the smallest coherent slice that proves the intended boundary.
+7. Validate at the strongest practical boundary, including important failure
    and fallback paths. Prefer behavioral tests over implementation-call tests.
-7. Synchronize documentation, decisions, progress, diagnostics, and deferred
+8. Synchronize documentation, decisions, progress, diagnostics, and deferred
    work when the slice changes them.
 
 ## Challenge the result
@@ -48,11 +54,11 @@ Triage findings against evidence and project intent; the implementer owns the
 decision. Fix material findings, reject false positives with a reason, and
 rerun affected validation.
 
-Watch for AI-generated-code smells: speculative abstractions, wrappers without
-policy, duplicated helpers, comments that restate syntax, catch-all fallbacks,
-unsupported defensive checks, inconsistent naming, unrelated refactors, and
-tests that assert calls instead of behavior. “Modern” means an appropriate,
-established pattern—not novelty.
+Watch for AI-generated-code smells: abstractions without a known requirement
+or policy, wrappers without policy, duplicated helpers, comments that restate
+syntax, catch-all fallbacks, unsupported defensive checks, inconsistent
+naming, unrelated refactors, and tests that assert calls instead of behavior.
+“Modern” means an appropriate, established pattern—not novelty.
 
 ## Stop and rethink
 

@@ -225,6 +225,14 @@ The current backend is fixed to D3D11:
 * `RhiPresentationEngine` creates `QRhi::D3D11` on Windows and terminates on
   other platforms.
 
+This is current implementation status, not the accepted final ownership seam.
+The next foundation slice introduces a factory-selected graphics-device domain
+and explicit target interop before libplacebo is added. The decision and
+fallback policy are recorded in
+[ADR 0004](../../decisions/0004-cross-platform-graphics-domain-and-video-interop.md);
+video-rendering responsibilities are described in
+[../video-rendering/README.md](../video-rendering/README.md).
+
 ### Luminance convention
 
 The diagnostic pattern and UI use SDR-white-relative values:
@@ -324,8 +332,8 @@ video import diagnostics do not exist yet.
 The current implementation establishes these project rules:
 
 * The application owns the final swapchain and composition pass.
-* Qt Quick, the final compositor, and future video rendering share one graphics
-  device for a presentation domain.
+* Qt Quick, the final compositor, and the diagnostic video producer share the
+  current QRhi device.
 * Qt Quick is an offscreen layer, not the owner of final presentation.
 * Actual swapchain state controls final output encoding.
 * Operating-system display telemetry is advisory input to target selection and
@@ -343,6 +351,14 @@ The current implementation establishes these project rules:
 * Platform-specific display observation stays behind
   `DisplayStateProvider`.
 
+ADR 0004 adds these accepted invariants for the next graphics ownership slice;
+they are not implemented yet:
+
+* A factory-selected graphics domain owns the native device, QRhi, video-target
+  interop, generation, diagnostics, and deterministic teardown.
+* Qt Quick, the final compositor, and video rendering share that graphics
+  domain when the backend supports direct interop.
+
 ## Source layout
 
 The code layout follows current responsibilities without mirroring every class
@@ -353,12 +369,15 @@ src/
     app/            startup, native window, diagnostic settings, and QML
     platform/       operating-system display observation
     presentation/   output policy, QRhi orchestration, layers, and compositor
+        backends/   native graphics-device and target interop implementations
         shaders/
 ```
 
-Future media, playback, audio, subtitle, and diagnostics directories should be
-added when those subsystems have concrete code. Cross-directory includes use
-the responsibility-qualified path so dependencies remain visible.
+The `backends/` directory is the accepted destination when the graphics-domain
+seam is implemented; it does not exist yet. Future media, playback, audio,
+subtitle, and diagnostics directories should be added when those subsystems
+have concrete code. Cross-directory includes use the responsibility-qualified
+path so dependencies remain visible.
 
 ## Verification
 

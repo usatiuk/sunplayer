@@ -33,8 +33,10 @@ layers, scale the composed SDR-white-relative result into the active
 presentation convention, and encode the swapchain. It must not interpret
 source video metadata, select a source transfer function, or tone-map video.
 
-The producer owns the QRhi texture. The compositor borrows it for the current
-presentation device. A completed surface records:
+The producer owns the logical surface and its composition-visible QRhi texture
+view. Backend interop may arrange ownership of the underlying native
+allocation. The compositor borrows the QRhi view for the current presentation
+device. A completed surface records:
 
 * The graphics-device generation.
 * The effective display-target revision.

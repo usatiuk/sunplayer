@@ -7,8 +7,9 @@ presentation boundary for decoded video, while preserving explicit color
 contracts, one-device composition, demand-driven rendering, and observable
 fallback behavior.
 
-The immediate implementation milestone is now a libplacebo producer for the
-explicit offscreen video surface. It still precedes playback.
+The immediate implementation milestone establishes the known device, producer,
+and target-interop seams around the diagnostic producer. A libplacebo producer
+for the explicit offscreen video surface follows and still precedes playback.
 
 ## Completed foundation
 
@@ -72,16 +73,46 @@ part of the recorded manual Windows presentation matrix; the application was
 also launched successfully in an automated four-second startup liveness smoke,
 but that does not assert visual or color correctness.
 
-## Milestone 2: libplacebo renderer
+## Milestone 2: shared graphics and video-rendering seams
+
+Establish the boundaries already required by the supported rendering backends
+before the first libplacebo implementation fixes D3D11 assumptions into shared
+code.
+
+### Work
+
+* [ ] Extract a factory-selected graphics-device domain from direct D3D11
+  startup and ownership.
+* [ ] Define the rendered-video producer lifecycle, invalidation, successful
+  completion, and composition-texture contract.
+* [ ] Route the diagnostic producer through that contract without changing its
+  output.
+* [ ] Define backend target interop for direct sharing, same-device GPU copy,
+  and explicit CPU fallback.
+* [ ] Define backend capability and copy/fallback diagnostics.
+* [ ] Keep D3D11, Vulkan, Metal, IOSurface, queue, semaphore, and decoder-native
+  types inside backend implementations.
+* [ ] Preserve deterministic teardown and device-generation invalidation.
+
+### Acceptance
+
+* The current diagnostic output and demand-driven behavior remain unchanged.
+* The presentation engine depends on shared contracts rather than constructing
+  the D3D11 implementation directly.
+* Backend selection, capabilities, synchronization mode, copies, and fallback
+  reasons are queryable without native types.
+* Tests cover producer completion, failure, invalidation, and backend
+  capability policy at the strongest practical boundary.
+
+## Milestone 3: libplacebo renderer
 
 Replace the temporary producer with a persistent libplacebo renderer.
 
 ### Work
 
 * [ ] Add versioned libplacebo dependency and feature discovery.
-* [ ] Select and validate the Windows GPU integration compatible with the
-  application-owned D3D11 QRhi.
-* [ ] Keep native backend types behind a graphics/import boundary.
+* [ ] Implement and validate the Windows D3D11 target bridge against the
+  application-owned graphics-device domain.
 * [ ] Create persistent libplacebo log, GPU, and renderer objects.
 * [ ] Render a known software-backed test image into the video surface.
 * [ ] Map the display target, SDR white, peak, primaries, and transfer
@@ -95,12 +126,14 @@ Replace the temporary producer with a persistent libplacebo renderer.
 * libplacebo, not the final compositor, performs video color processing.
 * A known input produces repeatable output in SDR and extended-linear modes.
 * The normal test path does not perform an accidental GPU-to-CPU round trip.
-* Unsupported native interop produces an explicit software-upload fallback.
+* Unsupported output-target interop produces an explicit same-device GPU-copy
+  or CPU-round-trip fallback; software-frame upload remains a separate input
+  path.
 
 The exact libplacebo/D3D11 interop approach must be verified against the
 selected library version before its interface is committed.
 
-## Milestone 3: first decoded video frame
+## Milestone 4: first decoded video frame
 
 Feed one FFmpeg-decoded software frame through libplacebo and keep it displayed
 without a playback clock.
@@ -128,13 +161,12 @@ without a playback clock.
 Playback queues, continuous scheduling, seeking, audio, and hardware decoding
 remain later playback/media milestones.
 
-## Cross-platform follow-up
+## Backend realization
 
-The shared interfaces should be exercised on another QRhi backend only after
-the video-surface boundary has a concrete Windows producer and consumer.
+The first slice defines the known shared contracts; later platform work
+exercises and refines them from evidence without changing their semantic
+responsibilities.
 
-* [ ] Factor D3D11 selection out of shared startup and presentation code.
-* [ ] Add backend selection through a narrow graphics-host factory.
 * [ ] Implement macOS Metal/EDR presentation and display observation.
 * [ ] Implement Linux Vulkan presentation and available compositor/display
   observation.
