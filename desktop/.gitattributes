@@ -1,0 +1,6 @@
+# Keep repository text deterministic across Windows, macOS, and Linux.
+* text=auto eol=lf
+
+# Windows command processors require their native line endings.
+*.bat text eol=crlf
+*.cmd text eol=crlf
