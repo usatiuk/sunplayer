@@ -1,0 +1,23 @@
+file = "sdr-rgb-first-frame.ppm"
+sha256 = "9ae200dd106eee886acaeff5a072863f4871da517fc28b0d3e869b11f8fce13a"
+provenance = "Hand-authored Sunroom test fixture; no external source data"
+generator = "none"
+
+[expected]
+video_tracks = 1
+pixel_width = 4
+pixel_height = 4
+decoder = "ppm"
+pixel_format = "rgb24"
+component_depth = 8
+
+[coverage]
+features = [
+  "local-file-open",
+  "image-demux",
+  "software-video-decode",
+  "lossless-rgb",
+  "decoded-frame-lifetime",
+  "libplacebo-software-upload",
+  "final-qrhi-composition"
+]

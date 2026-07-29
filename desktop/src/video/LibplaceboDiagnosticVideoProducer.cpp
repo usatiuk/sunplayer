@@ -6,11 +6,11 @@
 
 #include <QtCore/qlogging.h>
 #include <libplacebo/colorspace.h>
-#include <libplacebo/tone_mapping.h>
 #include <rhi/qrhi.h>
 
 #include "graphics/GraphicsDeviceDomain.h"
 #include "video/DiagnosticVideoSource.h"
+#include "video/libplacebo/LibplaceboRenderContext.h"
 
 namespace {
 constexpr float libplaceboReferenceWhiteNits =
@@ -68,21 +68,9 @@ LibplaceboDiagnosticVideoProducer(
         return;
     }
 
-    m_referenceWhiteScaleVariable.var =
-        pl_var_float("sunroomReferenceWhiteScale");
-    m_referenceWhiteScaleVariable.data =
-        &m_referenceWhiteScale;
-    m_referenceWhiteScaleVariable.dynamic = true;
-    m_referenceWhiteHook.stages = PL_HOOK_PRE_OUTPUT;
-    m_referenceWhiteHook.input = PL_HOOK_SIG_COLOR;
-    m_referenceWhiteHook.priv = this;
-    m_referenceWhiteHook.hook =
-        applyReferenceWhiteScale;
-    m_referenceWhiteHook.signature =
-        UINT64_C(0x73756e726f6f6d01);
-
-    m_renderer = pl_renderer_create(context.log, m_gpu);
-    if (!m_renderer) {
+    m_renderContext =
+        std::make_unique<LibplaceboRenderContext>(context);
+    if (!m_renderContext->isValid()) {
         m_failureReason =
             QStringLiteral("Could not create the libplacebo renderer");
     }
@@ -90,7 +78,6 @@ LibplaceboDiagnosticVideoProducer(
 
 LibplaceboDiagnosticVideoProducer::
 ~LibplaceboDiagnosticVideoProducer() {
-    pl_renderer_destroy(&m_renderer);
     pl_tex_destroy(m_gpu, &m_sourceTexture);
 }
 
@@ -99,10 +86,13 @@ LibplaceboDiagnosticVideoProducer::ensureSurface(
         const RenderedVideoSurfaceState &requestedState) {
     Q_ASSERT(requestedState.isValid());
 
-    if (!m_renderer || !m_target)
+    if (!m_renderContext
+            || !m_renderContext->isValid()
+            || !m_target) {
         return unavailable(m_failureReason.isEmpty()
             ? QStringLiteral("Libplacebo renderer is unavailable")
             : m_failureReason);
+    }
 
     const VideoTargetUpdate update =
         m_target->ensureTarget(requestedState.description);
@@ -142,7 +132,7 @@ LibplaceboDiagnosticVideoProducer::render(
         QRhiCommandBuffer &commandBuffer,
         const RenderedVideoSurfaceState &requestedState) {
     Q_ASSERT(requestedState.isValid());
-    Q_ASSERT(m_renderer);
+    Q_ASSERT(m_renderContext && m_renderContext->isValid());
     Q_ASSERT(m_sourceTexture);
     Q_ASSERT(m_target);
     Q_ASSERT(!m_pendingState);
@@ -154,11 +144,6 @@ LibplaceboDiagnosticVideoProducer::render(
 
     const float referenceWhiteNits =
         requestedState.description.referenceWhiteNits;
-    m_referenceWhiteScale =
-        libplaceboReferenceWhiteNits
-        / referenceWhiteNits;
-    m_targetSize =
-        requestedState.description.pixelSize;
     const SourceUploadKey uploadKey =
         sourceUploadKey(referenceWhiteNits);
     bool sourceReady = true;
@@ -177,6 +162,7 @@ LibplaceboDiagnosticVideoProducer::render(
     }
 
     bool rendered = false;
+    QString renderError;
     if (sourceReady) {
         pl_frame image{};
         image.num_planes = 1;
@@ -209,52 +195,12 @@ LibplaceboDiagnosticVideoProducer::render(
                 referenceWhiteNits;
         }
 
-        pl_frame target{};
-        target.num_planes = 1;
-        configurePlane(
-            target.planes[0],
-            m_target->libplaceboRenderTarget());
-        configureRgbRepresentation(target.repr);
-        target.color.primaries = PL_COLOR_PRIM_BT_709;
-        target.color.transfer = PL_COLOR_TRC_LINEAR;
-        const RenderedVideoSurfaceDescription &targetDescription =
-            requestedState.description;
-        // libplacebo reserves numeric zero for unknown metadata. Preserve
-        // Sunroom's physical zero and translate it only at this API boundary.
-        target.color.hdr.min_luma =
-            targetDescription.targetMinimumLuminanceKnown
-            ? (targetDescription.targetMinimumLuminanceNits == 0.0f
-                ? PL_COLOR_HDR_BLACK
-                : targetDescription.targetMinimumLuminanceNits)
-            : 0.0f;
-        target.color.hdr.max_luma =
-            targetDescription.referenceWhiteNits
-            * targetDescription.targetPeakHeadroom;
-        target.crop = {
-            0.0f,
-            0.0f,
-            static_cast<float>(targetDescription.pixelSize.width()),
-            static_cast<float>(targetDescription.pixelSize.height()),
-        };
-
-        pl_color_map_params colorMap =
-            pl_color_map_default_params;
-        if (!m_source.toneMappingEnabled()) {
-            colorMap.tone_mapping_function =
-                &pl_tone_map_clip;
-        }
-        pl_render_params parameters =
-            pl_render_default_params;
-        parameters.color_map_params = &colorMap;
-        parameters.dither_params = nullptr;
-        parameters.peak_detect_params = nullptr;
-        const pl_hook *hooks[] = {
-            &m_referenceWhiteHook,
-        };
-        parameters.hooks = hooks;
-        parameters.num_hooks = 1;
-        rendered = pl_render_image(
-            m_renderer, &image, &target, &parameters);
+        rendered = m_renderContext->render(
+            image,
+            m_target->libplaceboRenderTarget(),
+            requestedState.description,
+            m_source.toneMappingEnabled(),
+            &renderError);
     }
 
     const VideoOperationResult endResult =
@@ -274,14 +220,10 @@ LibplaceboDiagnosticVideoProducer::render(
             "Libplacebo could not upload the analytic source texture"));
     }
     if (!rendered) {
-        const pl_render_errors errors =
-            pl_renderer_get_errors(m_renderer);
-        return unavailable(QStringLiteral(
-            "Libplacebo rejected the analytic render (error flags 0x%1)")
-            .arg(
-                static_cast<unsigned int>(errors.errors),
-                0,
-                16));
+        return unavailable(renderError.isEmpty()
+            ? QStringLiteral(
+                "Libplacebo rejected the analytic render")
+            : renderError);
     }
 
     m_failureReason.clear();
@@ -542,41 +484,4 @@ LibplaceboDiagnosticVideoProducer::unavailable(
         : reason;
     qWarning().noquote() << m_failureReason;
     return VideoOperationResult::Unavailable;
-}
-
-pl_hook_res
-LibplaceboDiagnosticVideoProducer::applyReferenceWhiteScale(
-        void *privateData,
-        const pl_hook_params *parameters) {
-    auto &self = *static_cast<
-        LibplaceboDiagnosticVideoProducer *>(privateData);
-    Q_ASSERT(parameters);
-    Q_ASSERT(parameters->stage == PL_HOOK_PRE_OUTPUT);
-    Q_ASSERT(parameters->sh);
-    pl_custom_shader shader{};
-    shader.description =
-        "Sunroom reference-white normalization";
-    shader.body =
-        "color.rgb *= vec3(sunroomReferenceWhiteScale);";
-    shader.input = PL_SHADER_SIG_COLOR;
-    shader.output = PL_SHADER_SIG_COLOR;
-    shader.output_w = self.m_targetSize.width();
-    shader.output_h = self.m_targetSize.height();
-    shader.variables =
-        &self.m_referenceWhiteScaleVariable;
-    shader.num_variables = 1;
-
-    pl_hook_res result{};
-    result.failed =
-        !pl_shader_custom(parameters->sh, &shader);
-    if (result.failed)
-        return result;
-
-    result.output = PL_HOOK_SIG_COLOR;
-    result.sh = parameters->sh;
-    result.repr = parameters->repr;
-    result.color = parameters->color;
-    result.components = parameters->components;
-    result.rect = parameters->rect;
-    return result;
 }

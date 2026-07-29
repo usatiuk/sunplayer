@@ -1,0 +1,131 @@
+#pragma once
+
+#include <cstdint>
+#include <memory>
+#include <optional>
+
+#include <QMargins>
+#include <QSize>
+#include <QString>
+
+struct AVFrame;
+
+struct VideoFrameRational {
+    bool operator==(const VideoFrameRational &) const = default;
+
+    int numerator = 0;
+    int denominator = 0;
+
+    bool isValid() const;
+};
+
+struct VideoFrameIdentity {
+    bool operator==(const VideoFrameIdentity &) const = default;
+
+    std::uint64_t playbackGeneration = 0;
+    std::uint64_t decoderRevision = 0;
+    std::uint64_t frameId = 0;
+
+    bool isValid() const;
+};
+
+struct VideoFrameTiming {
+    std::optional<std::int64_t> pts;
+    std::optional<std::int64_t> duration;
+    VideoFrameRational timeBase;
+
+    bool isValid() const;
+};
+
+struct VideoFrameGeometry {
+    QSize codedSize;
+    QMargins crop;
+    QSize visibleSize;
+    VideoFrameRational sampleAspectRatio{1, 1};
+    bool sampleAspectRatioKnown = false;
+    double rotationDegrees = 0.0;
+    bool displayMatrixPresent = false;
+
+    bool isValid() const;
+};
+
+enum class VideoFrameStorageKind {
+    SoftwarePlanes,
+    D3D11Surface,
+    VulkanImage,
+    DrmPrime,
+    VaapiSurface,
+    VideoToolboxSurface,
+    OtherHardwareSurface,
+};
+
+struct VideoFrameStorageDescription {
+    VideoFrameStorageKind kind =
+        VideoFrameStorageKind::SoftwarePlanes;
+    QString hardwareFormat;
+    QString softwareFormat;
+    std::optional<std::uint64_t> graphicsDeviceGeneration;
+
+    bool isHardware() const;
+    bool isValid() const;
+    bool isCompatibleWithGraphicsDevice(
+        std::uint64_t generation) const;
+};
+
+// Diagnostic snapshot of the decoded signal. The retained AVFrame remains
+// authoritative for exact side-data payloads such as HDR10+, Dolby Vision,
+// ICC profiles, and film grain.
+struct VideoSignalDescription {
+    QString pixelFormat;
+    QString colorPrimaries;
+    QString transferFunction;
+    QString matrixCoefficients;
+    QString colorRange;
+    QString chromaLocation;
+    int componentDepth = 0;
+    bool interlaced = false;
+
+    bool isValid() const;
+};
+
+// Immutable, reference-counted boundary between decoding, scheduling, and
+// frame import. The retained AVFrame owns or references the actual software
+// buffers or hardware surface; Sunroom never copies a native pointer out of
+// it and pretends to own the underlying pixels.
+class DecodedVideoFrame final {
+public:
+    static std::shared_ptr<const DecodedVideoFrame> clone(
+        const AVFrame &frame,
+        const VideoFrameIdentity &identity,
+        const VideoFrameRational &timeBase,
+        std::optional<std::uint64_t> graphicsDeviceGeneration,
+        QString *error = nullptr);
+
+    ~DecodedVideoFrame();
+
+    DecodedVideoFrame(const DecodedVideoFrame &) = delete;
+    DecodedVideoFrame &operator=(const DecodedVideoFrame &) = delete;
+
+    const VideoFrameIdentity &identity() const;
+    const VideoFrameTiming &timing() const;
+    const VideoFrameGeometry &geometry() const;
+    const VideoFrameStorageDescription &storage() const;
+    const VideoSignalDescription &signal() const;
+    const AVFrame &ffmpegFrame() const;
+
+private:
+    DecodedVideoFrame(
+        AVFrame *frame,
+        VideoFrameIdentity identity,
+        VideoFrameTiming timing,
+        VideoFrameGeometry geometry,
+        VideoFrameStorageDescription storage,
+        VideoSignalDescription signal);
+
+    AVFrame *m_frame = nullptr;
+    VideoFrameIdentity m_identity;
+    VideoFrameTiming m_timing;
+    VideoFrameGeometry m_geometry;
+    VideoFrameStorageDescription m_storage;
+    VideoSignalDescription m_signal;
+};

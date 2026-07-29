@@ -13,10 +13,11 @@ boundaries. The default regression test should therefore exercise the highest
 practical public boundary with real dependencies and representative data.
 
 The practical boundary changes as the player grows. Today the repository is a
-Windows QRhi presentation prototype, so useful tests begin with display-target
-policy, resource-generation contracts, and real QRhi composition. Once FFmpeg,
-libplacebo, libass, scheduling, and audio exist, deterministic whole-pipeline
-scenarios should become the bulk of behavioral coverage.
+Windows QRhi presentation prototype with one real FFmpeg first-frame path, so
+useful tests begin with display-target policy, resource-generation contracts,
+real QRhi composition, and the first retained software `AVFrame`. As libass,
+scheduling, audio, and continuous decoding arrive, deterministic
+whole-pipeline scenarios should become the bulk of behavioral coverage.
 
 The central principle is:
 
@@ -259,7 +260,7 @@ The first pipeline scenarios should grow with implementation milestones:
 
 1. Procedural producer to explicit video surface to final QRhi compositor.
 2. libplacebo-rendered known software frame to final composition.
-3. First FFmpeg-decoded frame from a pinned local container.
+3. First FFmpeg-decoded frame from a pinned lossless local image.
 4. Pause and display-target change with rerender.
 5. Deterministic short playback, then seek-generation invalidation.
 6. Audio-backed playback and A/V synchronization.
@@ -277,13 +278,15 @@ Each fixture should include:
 * Expected stream, timing, color, audio, and subtitle properties.
 * The behaviors and coverage tags it exists to exercise.
 
-Tests should consume pinned binary fixtures. Regeneration should be an explicit
+Tests should consume pinned fixtures. Binary video/audio inputs should not be
+regenerated implicitly during tests. Regeneration should be an explicit
 maintenance operation so upgrading the local FFmpeg executable cannot silently
 change test inputs.
 
 Initial additions should be narrowly tied to milestones:
 
 * An analytically known linear color pattern for the video-surface boundary.
+* A tiny lossless RGB image for the first real demux/decode/import boundary.
 * One small SDR container for first-frame integration.
 * One small HDR10 container with explicit mastering and content-light
   metadata.

@@ -88,8 +88,10 @@ Implement alongside graphics milestone 1:
   lifetime, synchronization, and copy path.
 * [ ] Add one pinned SDR media container and manifest.
 * [ ] Add one pinned HDR10 media container and manifest.
-* [ ] Decode the first frame with real FFmpeg and render it with real
-  libplacebo.
+* [x] Seed the fixture layout with a pinned, hashed lossless RGB image and
+  decode its first frame with real FFmpeg through the production libplacebo
+  and QRhi capture path.
+* [x] Enforce the seed fixture's manifest hash in the scenario.
 * [x] Capture the display-targeted video surface and final composition for the
   analytic libplacebo path.
 * [x] Capture-validate reference-white normalization for SDR at 80, 100, and

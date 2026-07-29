@@ -109,7 +109,7 @@ code.
   strongest practical boundary.
 
 The shared source/producer lifecycle, direct QRhi target, and optional
-composition layer are implemented. The full Windows build, six CTest targets,
+composition layer are implemented. The Windows build, nine CTest targets,
 real D3D11 capture, and hidden startup smoke pass. Tests drive the diagnostic
 source and producer through shared interfaces, verify direct-target diagnostics
 with no copies, exercise committed and discarded render states after accepted
@@ -167,11 +167,18 @@ playback should prefer the later platform hardware importer when available.
 ### Work
 
 * [ ] Accept a local file selected by the application shell.
-* [ ] Open and probe it through FFmpeg.
-* [ ] Select the default video stream and decode the first displayable frame.
-* [ ] Normalize timestamps and effective frame color metadata.
-* [ ] Map or upload the `AVFrame` through the libplacebo boundary.
-* [ ] Preserve the decoded frame so display changes can rerender it.
+* [x] Prove local open/probe through FFmpeg against a pinned headless fixture.
+* [x] Select the default video stream and decode its first displayable frame in
+  the headless integration boundary.
+* [x] Retain explicit time base, effective sample aspect ratio, frame identity,
+  geometry, storage, signal diagnostics, and exact side data.
+* [x] Map or upload a software `AVFrame` through the production libplacebo
+  boundary.
+* [x] Preserve the decoded frame so target-only changes can rerender it without
+  another input upload.
+* [ ] Normalize full effective color metadata with provenance.
+* [ ] Apply decoded sample-aspect-ratio and orientation to the final
+  aspect-preserving content rectangle.
 * [ ] Surface loading and decode errors without terminating the UI.
 * [ ] Display source pixel format, dimensions, color metadata, decode path,
   render path, and copies in diagnostics.

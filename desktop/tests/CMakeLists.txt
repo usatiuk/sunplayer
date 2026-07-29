@@ -19,6 +19,10 @@ qt_add_executable(sunroom_video_viewport_tests
         ../src/app/VideoViewportState.h
 )
 
+qt_add_executable(sunroom_decoded_video_frame_tests
+        unit/media/tst_DecodedVideoFrame.cpp
+)
+
 qt_add_executable(sunroom_qml_shell_tests
         integration/ui/tst_AppShell.cpp
         integration/ui/QmlShellTestTypes.h
@@ -27,6 +31,10 @@ qt_add_executable(sunroom_qml_shell_tests
 )
 
 if (WIN32)
+    qt_add_executable(sunroom_ffmpeg_dependency_tests
+            integration/video/tst_FfmpegDependency.cpp
+    )
+
     qt_add_executable(sunroom_libplacebo_dependency_tests
             integration/video/tst_LibplaceboDependency.cpp
     )
@@ -69,6 +77,11 @@ target_include_directories(sunroom_video_viewport_tests
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
 )
 
+target_include_directories(sunroom_decoded_video_frame_tests
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+)
+
 target_include_directories(sunroom_qml_shell_tests
         PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
@@ -91,6 +104,13 @@ target_link_libraries(sunroom_video_viewport_tests
         Qt6::Test
 )
 
+target_link_libraries(sunroom_decoded_video_frame_tests
+        PRIVATE
+        Qt6::Test
+        sunroom_media
+        sunroom_ffmpeg
+)
+
 target_link_libraries(sunroom_qml_shell_tests
         PRIVATE
         Qt6::Quick
@@ -99,6 +119,12 @@ target_link_libraries(sunroom_qml_shell_tests
 )
 
 if (WIN32)
+    target_link_libraries(sunroom_ffmpeg_dependency_tests
+            PRIVATE
+            Qt6::Test
+            sunroom_ffmpeg
+    )
+
     target_link_libraries(sunroom_libplacebo_dependency_tests
             PRIVATE
             Qt6::Test
@@ -111,15 +137,14 @@ if (WIN32)
             sunroom_video_viewport_tests
             sunroom_qml_shell_tests
             sunroom_libplacebo_dependency_tests)
-        add_custom_command(
-                TARGET ${test_target}
-                POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        $<TARGET_RUNTIME_DLLS:${test_target}>
-                        $<TARGET_FILE_DIR:${test_target}>
-                COMMAND_EXPAND_LISTS
-        )
+        sunroom_stage_windows_runtime(${test_target})
     endforeach ()
+    sunroom_stage_windows_runtime(
+            sunroom_decoded_video_frame_tests
+    )
+    sunroom_stage_windows_runtime(
+            sunroom_ffmpeg_dependency_tests
+    )
 endif ()
 
 add_test(
@@ -138,6 +163,11 @@ add_test(
 )
 
 add_test(
+        NAME decoded-video-frame
+        COMMAND sunroom_decoded_video_frame_tests
+)
+
+add_test(
         NAME qml-shell
         COMMAND sunroom_qml_shell_tests
 )
@@ -146,6 +176,7 @@ set_tests_properties(
         presentation-target
         rendered-video-surface
         video-viewport
+        decoded-video-frame
         PROPERTIES LABELS "unit"
 )
 
@@ -157,6 +188,17 @@ set_tests_properties(
 )
 
 if (WIN32)
+    add_test(
+            NAME ffmpeg-dependency
+            COMMAND sunroom_ffmpeg_dependency_tests
+    )
+    set_tests_properties(
+            ffmpeg-dependency
+            PROPERTIES
+            LABELS "dependency;integration;windows"
+            TIMEOUT 30
+    )
+
     add_test(
             NAME libplacebo-dependency
             COMMAND sunroom_libplacebo_dependency_tests
@@ -170,30 +212,6 @@ if (WIN32)
 
     qt_add_executable(sunroom_qrhi_compositor_tests
             integration/presentation/tst_QrhiCompositor.cpp
-            ../src/graphics/GraphicsBackendFactory.cpp
-            ../src/graphics/GraphicsBackendFactory.h
-            ../src/graphics/GraphicsDeviceDomain.cpp
-            ../src/graphics/GraphicsDeviceDomain.h
-            ../src/graphics/backends/D3D11GraphicsDeviceDomain.cpp
-            ../src/graphics/backends/D3D11GraphicsDeviceDomain.h
-            ../src/graphics/backends/D3D11LibplaceboVideoTarget.cpp
-            ../src/graphics/backends/D3D11LibplaceboVideoTarget.h
-            ../src/presentation/HdrCompositor.cpp
-            ../src/presentation/HdrCompositor.h
-            ../src/video/DiagnosticVideoProducer.cpp
-            ../src/video/DiagnosticVideoProducer.h
-            ../src/video/DiagnosticVideoSource.cpp
-            ../src/video/DiagnosticVideoSource.h
-            ../src/video/LibplaceboDiagnosticVideoProducer.cpp
-            ../src/video/LibplaceboDiagnosticVideoProducer.h
-            ../src/video/QrhiVideoTarget.cpp
-            ../src/video/QrhiVideoTarget.h
-            ../src/video/RenderedVideoProducer.h
-            ../src/video/RenderedVideoSurface.cpp
-            ../src/video/RenderedVideoSurface.h
-            ../src/video/RenderedVideoSource.h
-            ../src/video/VideoTargetInterop.cpp
-            ../src/video/VideoTargetInterop.h
     )
 
     target_include_directories(sunroom_qrhi_compositor_tests
@@ -206,7 +224,7 @@ if (WIN32)
             Qt6::GuiPrivate
             Qt6::Quick
             Qt6::Test
-            libplacebo::libplacebo
+            sunroom_video_pipeline
     )
 
     qt_add_shaders(
@@ -224,13 +242,8 @@ if (WIN32)
             ../src/presentation/shaders/compositor.frag
     )
 
-    add_custom_command(
-            TARGET sunroom_qrhi_compositor_tests
-            POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    $<TARGET_RUNTIME_DLLS:sunroom_qrhi_compositor_tests>
-                    $<TARGET_FILE_DIR:sunroom_qrhi_compositor_tests>
-            COMMAND_EXPAND_LISTS
+    sunroom_stage_windows_runtime(
+            sunroom_qrhi_compositor_tests
     )
 
     add_test(
@@ -241,6 +254,54 @@ if (WIN32)
             qrhi-compositor
             PROPERTIES
             LABELS "gpu;windows"
+            TIMEOUT 30
+    )
+
+    qt_add_executable(sunroom_ffmpeg_first_frame_tests
+            integration/video/tst_FfmpegFirstFrame.cpp
+    )
+    target_include_directories(
+            sunroom_ffmpeg_first_frame_tests
+            PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+    )
+    target_compile_definitions(
+            sunroom_ffmpeg_first_frame_tests
+            PRIVATE
+            SUNROOM_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
+    )
+    target_link_libraries(
+            sunroom_ffmpeg_first_frame_tests
+            PRIVATE
+            Qt6::GuiPrivate
+            Qt6::Quick
+            Qt6::Test
+            sunroom_video_pipeline
+    )
+    qt_add_shaders(
+            sunroom_ffmpeg_first_frame_tests
+            "sunroom_ffmpeg_first_frame_test_shaders"
+            PRECOMPILE
+            OPTIMIZED
+            PREFIX
+            /shaders
+            BASE
+            ../src/presentation/shaders
+            FILES
+            ../src/presentation/shaders/fullscreen.vert
+            ../src/presentation/shaders/compositor.frag
+    )
+    sunroom_stage_windows_runtime(
+            sunroom_ffmpeg_first_frame_tests
+    )
+    add_test(
+            NAME ffmpeg-first-frame
+            COMMAND sunroom_ffmpeg_first_frame_tests
+    )
+    set_tests_properties(
+            ffmpeg-first-frame
+            PROPERTIES
+            LABELS "ffmpeg;gpu;integration;windows"
             TIMEOUT 30
     )
 endif ()

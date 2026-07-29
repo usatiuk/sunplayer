@@ -9,7 +9,9 @@ diagnostic comparison. This switch is not a player fallback: real playback
 will use libplacebo and report an error if no supported libplacebo target path
 can be created. On Windows, libplacebo shares the QRhi D3D11 device and
 immediate context, wraps the QRhi-owned RGBA16F texture, and renders directly
-without an output copy. Decoded-frame import and real copy/CPU target paths are
+without an output copy. A real FFmpeg software `AVFrame` now maps through
+libplacebo with one reusable input upload and retains its source across
+target-only rerenders. Hardware-frame import and real copy/CPU target paths are
 not implemented.
 
 The broad investigation in
@@ -45,13 +47,18 @@ The known seams are established with their first implementations:
   preparation for composition, submission acceptance/abort, the composition
   texture and its revision, and path diagnostics. The graphics domain selects
   the implementation and the producer owns the returned target.
-* The analytic producer currently models the software-frame branch with one
+* The analytic producer models the software-frame branch with one
   persistent 640×360 RGBA32F texture and buffer. It performs one explicit
   CPU-to-GPU upload when the input frame changes and reuses that texture for
-  target-only rerenders; the work does not scale with the viewport. The future
-  frame importer will map decoded software planes or platform hardware
-  surfaces into libplacebo input planes while retaining their lifetime and
-  synchronization state; that seam is not yet implemented.
+  target-only rerenders; the work does not scale with the viewport.
+* The decoded-frame importer uses libplacebo's FFmpeg helper for software
+  planes, retains the referenced `AVFrame`, and reuses its plane textures for
+  target-only rerenders. Its typed path diagnostics already include direct
+  hardware, GPU-copy, CPU-round-trip, and unavailable outcomes; only software
+  upload is implemented. Shared policy rejects a hardware frame whose recorded
+  graphics-device generation differs from the active domain.
+* Future native importers map platform hardware surfaces into the same
+  libplacebo frame boundary while retaining lifetime and synchronization state.
 
 These are purpose-specific boundaries, not another general graphics API.
 
@@ -106,6 +113,13 @@ contracts, but not storage behavior. Software planes require observable
 uploads. Hardware frames require backend-native import, synchronization, and
 lifetime retention and should be the normal playback path when supported.
 
+Before rendering, shared policy resolves unspecified source color fields
+through libplacebo. A source that remains relative SDR is anchored to the
+active target SDR white; PQ, HLG, or another effectively HDR source retains its
+absolute signal and mastering metadata. This prevents the same SDR frame from
+changing composition-relative brightness when the platform SDR-white value
+changes.
+
 The final QRhi compositor only places the resulting linear BT.709 surface,
 blends other described layers in the same reference-white-relative convention,
 and converts the final composition to the selected presentation convention.
@@ -143,8 +157,12 @@ metadata policy, renderer policy, subtitles, and the compositor remain shared.
 8. [ ] Add the Vulkan implementation and exercise it on Linux.
 9. [ ] Validate MoltenVK presentation on macOS before choosing shared Vulkan or a
    Metal interop backend.
-10. [ ] Add FFmpeg software and hardware frame importers through the established
-   input seam.
+10. [x] Add the retained FFmpeg `AVFrame` contract, software-plane importer,
+    persistent upload reuse, and real first-frame capture.
+11. [ ] Make the Windows graphics domain own a video-capable,
+    multithread-protected D3D11 device and add direct D3D11VA plane import.
+12. [ ] Add Vulkan/DRM/VAAPI and VideoToolbox platform importers as their
+    backends are implemented.
 
 ## Verification
 
@@ -172,6 +190,17 @@ configuration enables D3D11, Shaderc, and built-in DOVI handling while
 disabling Vulkan, OpenGL, and external libdovi, checks the pinned version, and
 exercises a real log create/destroy lifecycle.
 
-Physical display correctness, macOS EDR viability, Vulkan synchronization, and
-hardware-decoder zero-copy behavior remain platform-lab requirements rather
-than claims made by the current Windows test.
+The FFmpeg first-frame test opens a pinned, hashed lossless RGB fixture through
+real `avformat`/`avcodec`, destroys the decoder contexts after returning the
+retained frame, maps RGB24 through the production software importer, and
+captures both the display-targeted surface and final composition. It asserts
+known red/green/gray pixels, one input upload, zero input download/GPU copy,
+zero output copies, and source-upload reuse while rerendering the same SDR frame
+for 203- and 100-nit reference whites.
+
+The PPM fixture is intentionally a lossless first boundary, not representative
+compressed-video or timing coverage. Physical display correctness, fixed
+mastered HDR input, macOS EDR viability, Vulkan synchronization, and
+hardware-decoder zero-copy behavior remain unproven. The frame boundary retains
+effective sample aspect ratio and display-matrix rotation, but the player
+content-rectangle policy does not consume them yet.

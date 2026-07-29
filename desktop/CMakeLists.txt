@@ -39,8 +39,10 @@ if (CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET)
     )
 endif ()
 
-project(Sunroom VERSION 0.1.0 LANGUAGES CXX)
+project(Sunroom VERSION 0.1.0 LANGUAGES C CXX)
 
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -49,8 +51,11 @@ include(CTest)
 if (NOT VCPKG_MANIFEST_MODE)
     message(FATAL_ERROR
             "Sunroom currently requires vcpkg manifest mode. Set VCPKG_ROOT "
-            "or configure with the vcpkg CMake toolchain.")
+             "or configure with the vcpkg CMake toolchain.")
 endif ()
+
+include(cmake/SunroomFFmpeg.cmake)
+sunroom_configure_ffmpeg()
 
 find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS
         GuiPrivate
@@ -60,37 +65,54 @@ find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS
 )
 find_package(libplacebo 7.360.1 EXACT CONFIG REQUIRED)
 
+if (WIN32)
+    function(sunroom_stage_windows_runtime target)
+        add_custom_command(
+                TARGET ${target}
+                POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        $<TARGET_RUNTIME_DLLS:${target}>
+                        $<TARGET_FILE_DIR:${target}>
+                COMMAND_EXPAND_LISTS
+        )
+    endfunction()
+endif ()
+
 qt_standard_project_setup(REQUIRES 6.11.1)
 
-qt_add_executable(sunroom
-        src/app/main.cpp
-        src/app/PresentationSettings.cpp
-        src/app/PresentationSettings.h
-        src/app/PresentationWindow.cpp
-        src/app/PresentationWindow.h
-        src/app/VideoViewportState.cpp
-        src/app/VideoViewportState.h
+add_library(sunroom_media STATIC
+        src/media/DecodedVideoFrame.cpp
+        src/media/DecodedVideoFrame.h
+        src/media/FfmpegFirstFrameDecoder.cpp
+        src/media/FfmpegFirstFrameDecoder.h
+        src/media/ffmpeg/FfmpegFrameMetadata.cpp
+        src/media/ffmpeg/FfmpegFrameMetadata.h
+)
+target_include_directories(sunroom_media
+        PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+)
+target_link_libraries(sunroom_media
+        PRIVATE
+        Qt6::Core
+        sunroom_ffmpeg
+)
+
+add_library(sunroom_video_pipeline STATIC
         src/graphics/GraphicsBackendFactory.cpp
         src/graphics/GraphicsBackendFactory.h
         src/graphics/GraphicsDeviceDomain.cpp
         src/graphics/GraphicsDeviceDomain.h
-        src/platform/DisplayState.h
-        src/platform/DisplayStateProvider.cpp
-        src/platform/DisplayStateProvider.h
         src/presentation/HdrCompositor.cpp
         src/presentation/HdrCompositor.h
-        src/presentation/PresentationOutputState.cpp
-        src/presentation/PresentationOutputState.h
-        src/presentation/PresentationTarget.cpp
-        src/presentation/PresentationTarget.h
-        src/presentation/QuickUiLayer.cpp
-        src/presentation/QuickUiLayer.h
-        src/presentation/RhiPresentationEngine.cpp
-        src/presentation/RhiPresentationEngine.h
         src/video/DiagnosticVideoProducer.cpp
         src/video/DiagnosticVideoProducer.h
         src/video/DiagnosticVideoSource.cpp
         src/video/DiagnosticVideoSource.h
+        src/video/DecodedVideoSource.cpp
+        src/video/DecodedVideoSource.h
+        src/video/LibplaceboDecodedVideoProducer.cpp
+        src/video/LibplaceboDecodedVideoProducer.h
         src/video/LibplaceboDiagnosticVideoProducer.cpp
         src/video/LibplaceboDiagnosticVideoProducer.h
         src/video/QrhiVideoTarget.cpp
@@ -101,6 +123,54 @@ qt_add_executable(sunroom
         src/video/RenderedVideoSource.h
         src/video/VideoTargetInterop.cpp
         src/video/VideoTargetInterop.h
+        src/video/libplacebo/LibplaceboFfmpegInterop.c
+        src/video/libplacebo/LibplaceboFrameImporter.cpp
+        src/video/libplacebo/LibplaceboFrameImporter.h
+        src/video/libplacebo/LibplaceboRenderContext.cpp
+        src/video/libplacebo/LibplaceboRenderContext.h
+)
+target_include_directories(sunroom_video_pipeline
+        PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+)
+target_link_libraries(sunroom_video_pipeline
+        PUBLIC
+        libplacebo::libplacebo
+        PRIVATE
+        Qt6::GuiPrivate
+        Qt6::Quick
+        sunroom_ffmpeg
+        sunroom_media
+)
+
+if (WIN32)
+    target_sources(sunroom_video_pipeline PRIVATE
+            src/graphics/backends/D3D11GraphicsDeviceDomain.cpp
+            src/graphics/backends/D3D11GraphicsDeviceDomain.h
+            src/graphics/backends/D3D11LibplaceboVideoTarget.cpp
+            src/graphics/backends/D3D11LibplaceboVideoTarget.h
+    )
+endif ()
+
+qt_add_executable(sunroom
+        src/app/main.cpp
+        src/app/PresentationSettings.cpp
+        src/app/PresentationSettings.h
+        src/app/PresentationWindow.cpp
+        src/app/PresentationWindow.h
+        src/app/VideoViewportState.cpp
+        src/app/VideoViewportState.h
+        src/platform/DisplayState.h
+        src/platform/DisplayStateProvider.cpp
+        src/platform/DisplayStateProvider.h
+        src/presentation/PresentationOutputState.cpp
+        src/presentation/PresentationOutputState.h
+        src/presentation/PresentationTarget.cpp
+        src/presentation/PresentationTarget.h
+        src/presentation/QuickUiLayer.cpp
+        src/presentation/QuickUiLayer.h
+        src/presentation/RhiPresentationEngine.cpp
+        src/presentation/RhiPresentationEngine.h
 )
 
 set_source_files_properties(src/app/Main.qml PROPERTIES
@@ -140,7 +210,7 @@ target_link_libraries(sunroom
         Qt6::GuiPrivate
         Qt6::Quick
         Qt6::QuickControls2
-        libplacebo::libplacebo
+        sunroom_video_pipeline
 )
 
 target_include_directories(sunroom
@@ -160,27 +230,13 @@ set_target_properties(sunroom PROPERTIES
 )
 
 if (WIN32)
-    target_sources(sunroom PRIVATE
-            src/graphics/backends/D3D11GraphicsDeviceDomain.cpp
-            src/graphics/backends/D3D11GraphicsDeviceDomain.h
-            src/graphics/backends/D3D11LibplaceboVideoTarget.cpp
-            src/graphics/backends/D3D11LibplaceboVideoTarget.h
-    )
-
     target_link_libraries(sunroom PRIVATE
             CoreMessaging
             RuntimeObject
             WindowsApp
     )
 
-    add_custom_command(
-            TARGET sunroom
-            POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    $<TARGET_RUNTIME_DLLS:sunroom>
-                    $<TARGET_FILE_DIR:sunroom>
-            COMMAND_EXPAND_LISTS
-    )
+    sunroom_stage_windows_runtime(sunroom)
 
 endif ()
 
@@ -202,6 +258,7 @@ if (WIN32)
             IMPORTED_RUNTIME_ARTIFACTS
             libplacebo::libplacebo
             spirv-cross-c-shared
+            ${SUNROOM_FFMPEG_RUNTIME_TARGETS}
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
 endif ()

@@ -98,26 +98,35 @@ not yet a media player:
   foundation handles resize, output changes, surface destruction, swapchain
   invalidation, and bounded device recovery.
 * The configured Windows Debug target builds successfully with Qt 6.11.1,
-  MSVC, and a pinned D3D11-only libplacebo 7.360.1 dependency built through
-  the project-local vcpkg configuration.
+  MSVC, pinned D3D11-only libplacebo 7.360.1, and official minimal FFmpeg
+  8.1.2 dependencies built through the project-local vcpkg configuration.
+* A synchronous first-frame media boundary opens a pinned local fixture through
+  real FFmpeg demux/decode, retains the resulting `AVFrame` behind an immutable
+  Sunroom frame contract, uploads its software RGB24 planes through libplacebo,
+  and captures both the display-targeted surface and final composition. The
+  same input import is reused for target-only SDR-white rerenders.
 
-FFmpeg, libass, decoded video, audio, playback, file opening, subtitles, and
-persistence are not integrated. CTest/Qt Test coverage exists for pure
+libass, continuous decoding, audio, playback, general file opening, subtitles,
+and persistence are not integrated. CTest/Qt Test coverage exists for pure
 presentation-target policy, video-viewport state, the real QML shell's
 viewport publication and diagnostic renderer selection, rendered-video surface
-validity/invalidation, the libplacebo binary boundary, and real D3D11 offscreen
-QRhi and libplacebo producer/compositor capture. The GPU capture covers SDR
+validity/invalidation, decoded-frame ownership, the libplacebo and FFmpeg
+binary boundaries, and real D3D11 offscreen QRhi/libplacebo
+producer/compositor capture. The GPU capture covers SDR
 targets at 80, 100, and 203 nits and a target-relative PQ diagnostic at 100 and
-203 nits. A sustained headless probe also exercises 60 animated 640×360 frames
+203 nits, plus known pixels from the first FFmpeg-decoded frame at two SDR-white
+targets. A sustained headless probe also exercises 60 animated 640×360 frames
 into a 1100×600 target without viewport-sized CPU generation.
-Whole-application scenarios, a fixed mastered PQ source moved between targets,
-and physical-output validation do not yet exist.
+Whole-application scenarios, representative compressed video, hardware decode,
+a fixed mastered PQ source moved between targets, and physical-output
+validation do not yet exist.
 
-The next media slice establishes the FFmpeg dependency and a semantic frame
-contract with explicit software-plane and hardware-surface import paths before
-displaying a first decoded frame. Playback prefers platform hardware decoding
-when supported, while keeping software decode observable and functional. The
-real Player page arrives with that file/session model rather than as
+The next media slice makes the Windows graphics domain own a video-capable,
+multithread-protected D3D11 device, supplies that same device to FFmpeg,
+implements direct D3D11VA NV12/P010 plane import, and proves zero CPU transfers
+against a representative compressed fixture. Playback prefers that path when
+supported while keeping software decode observable and functional. The real
+Player page then arrives with the first file/session state rather than as
 disconnected controls. Playback uses libplacebo as its video renderer; the
 procedural producer remains HDR-Lab-only diagnostic tooling.
 
@@ -146,6 +155,9 @@ Documentation: `docs/subsystems/media-io/`
 
 ### 3. FFmpeg media integration
 
+* [x] Official minimal FFmpeg dependency and runtime deployment
+* [x] Retained decoded-frame ownership/timing/storage contract
+* [x] Synchronous first local-file frame demux/decode integration proof
 * [ ] Container opening and probing
 * [ ] Stream, chapter, and attachment discovery
 * [ ] Packet demuxing
@@ -203,15 +215,16 @@ Documentation: `docs/subsystems/graphics/`
 * [x] Persistent libplacebo GPU and renderer lifecycle
 * [ ] Effective FFmpeg metadata mapping
 * [x] Deterministic software-backed RGBA32F diagnostic upload path
-* [ ] Hardware-frame importer abstraction
+* [x] FFmpeg software-frame importer and persistent upload reuse
+* [x] Shared hardware-frame import result/diagnostic contract
 * [ ] D3D11 importer
 * [ ] Vulkan, VAAPI, and DRM PRIME importer
 * [ ] VideoToolbox, IOSurface, and MoltenVK importer
 * [x] Offscreen HDR render-target contract and temporary QRhi producer
-* [ ] Display-target and SDR-white updates
+* [x] Display-target and SDR-white updates
 * [ ] HDR10, HLG, HDR10+, and Dolby Vision capability reporting
 * [ ] Quality and energy profiles
-* [ ] Rendering diagnostics and copy detection
+* [x] Initial rendering-path and copy/transfer diagnostics
 
 Documentation: `docs/subsystems/video-rendering/`
 
@@ -284,7 +297,8 @@ Documentation: `docs/subsystems/diagnostics/`
 * [x] Pinned libplacebo dependency and public-API lifecycle test
 * [x] Real D3D11 QRhi compositor capture smoke test
 * [x] Real D3D11 libplacebo SDR/PQ surface and compositor capture
-* [ ] Deterministic first-frame and playback scenarios
+* [x] Deterministic FFmpeg first-frame scenario
+* [ ] Deterministic playback scenarios
 * [ ] Playback and seeking tests
 * [ ] Color-metadata normalization tests
 * [ ] Renderer image tests
@@ -302,7 +316,8 @@ Documentation: `docs/TESTING.md` and `docs/subsystems/testing/`
 * [x] Project-local vcpkg manifest, pinned baseline, and Windows dependency
   triplet
 * [x] Reproducible D3D11-only libplacebo dependency integration
-* [ ] Reproducible FFmpeg and libass integration
+* [x] Reproducible FFmpeg integration
+* [ ] Reproducible libass integration
 * [ ] Cross-platform libplacebo dependency configurations
 * [ ] Windows packaging
 * [ ] macOS packaging
@@ -328,10 +343,12 @@ docs/
         0002-extended-linear-srgb-presentation.md
         0003-display-targeted-video-surface.md
         0004-cross-platform-graphics-domain-and-video-interop.md
+        0005-retain-ffmpeg-frames-at-the-decoded-frame-boundary.md
 
     research/
         README.md
         2026-07-28-testing-tools-and-boundaries.md
+        2026-07-29-ffmpeg-windows-dependency-and-frame-import.md
 
     subsystems/
         application/
@@ -343,6 +360,12 @@ docs/
         graphics/
             README.md
             PLAN.md
+
+        media/
+            README.md
+
+        playback/
+            README.md
 
         testing/
             README.md

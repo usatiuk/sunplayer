@@ -19,3 +19,4 @@ with a new decision when the accepted choice changes materially.
 * [0002: Prefer extended-linear sRGB presentation with explicit SDR-white mapping](0002-extended-linear-srgb-presentation.md)
 * [0003: Normalize rendered video to one display-targeted linear surface](0003-display-targeted-video-surface.md)
 * [0004: Establish one graphics-device domain and explicit video interop seams](0004-cross-platform-graphics-domain-and-video-interop.md)
+* [0005: Retain FFmpeg frames at the decoded-frame boundary](0005-retain-ffmpeg-frames-at-the-decoded-frame-boundary.md)

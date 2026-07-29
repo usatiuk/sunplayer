@@ -17,19 +17,22 @@ unimplemented.
 Track under the backend-realization section of
 `docs/subsystems/graphics/PLAN.md`.
 
-### No decoded-video importer or effective source-metadata pipeline
+### Incomplete decoded-video metadata and hardware import
 
 The explicit video surface, narrow final compositor, persistent libplacebo
 renderer, and direct D3D11 QRhi target bridge now exist. Their analytic input
 proves relative sRGB and target-relative BT.2020/PQ rendering across multiple
 active reference-white values, including the explicit conversion from
 libplacebo's 203-nit linear convention to Sunroom's display-relative surface
-convention. It does not yet prove that one fixed, absolutely mastered PQ frame
-is preserved correctly while the output target changes. This is an offscreen
-numerical result, not physical-display validation. FFmpeg software-plane and
-hardware-surface import plus effective source-metadata normalization are still
-required for real SDR, HDR10/PQ, HLG, dynamic HDR, ranges, chroma layouts, and
-differing source color spaces.
+convention. A retained software `AVFrame` path now demuxes and decodes a pinned
+lossless RGB fixture, uploads it through libplacebo, and preserves relative SDR
+white across target changes. It does not yet prove one fixed, absolutely
+mastered PQ frame, representative YUV/chroma/range combinations, or full
+metadata provenance. D3D11VA device creation, direct hardware-plane import,
+immediate-context multithread protection, hardware fallback diagnostics, and
+the other platform importers remain required. Effective sample aspect ratio is
+retained, but decoded aspect/orientation is not yet applied to an
+aspect-preserving presentation rectangle.
 
 Track under graphics milestones 3–4.
 

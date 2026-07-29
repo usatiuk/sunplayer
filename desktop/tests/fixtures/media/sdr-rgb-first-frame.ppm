@@ -1,0 +1,8 @@
+P3
+# Purpose-built lossless SDR fixture for FFmpeg first-frame integration.
+4 4
+255
+255 0 0      0 255 0      0 0 255      255 255 255
+0 0 0        128 128 128  255 255 0    0 255 255
+255 0 255    64 0 0       0 64 0       0 0 64
+255 255 255  0 0 0        255 0 0      0 255 0

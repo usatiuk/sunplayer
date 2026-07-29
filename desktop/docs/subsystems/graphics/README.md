@@ -6,13 +6,13 @@ The repository contains a working Windows presentation prototype. It proves the
 application-owned QRhi, redirected Qt Quick, final-compositor, extended-linear
 presentation, display-observation, and recovery model.
 
-It is not yet a media-backed video renderer. HDR Lab uses the real libplacebo
-renderer and direct D3D11 QRhi target bridge by default, with the retained
-procedural QRhi producer available only for diagnostic A/B comparison. Both
-receive the same analytic pattern layout and nominal samples. Different
-tone-mapping and color-processing results are expected; unrelated pattern
-geometry is not. FFmpeg, decoded frames, subtitles, and playback scheduling are
-not integrated.
+The production decoded-frame/render boundary now exists and is capture-tested
+headlessly: a retained FFmpeg software `AVFrame` maps through libplacebo into
+the same direct D3D11 QRhi target and final compositor. It is not yet wired into
+the application shell as a player, continuous decoder, or file-open session.
+HDR Lab still uses the analytic libplacebo producer by default, with the
+retained procedural QRhi producer available only for diagnostic A/B
+comparison. Subtitles and playback scheduling are not integrated.
 
 The currently accepted implementation is deliberately narrower than the
 cross-platform target:
@@ -23,11 +23,11 @@ cross-platform target:
 | Graphics domain | Factory-selected D3D11 implementation owning QRhi, same-device libplacebo GPU, and device generation |
 | Presentation | Extended-linear sRGB/scRGB when supported, otherwise SDR |
 | Qt Quick | Redirected into an application-owned full-window RGBA16F texture |
-| Video | Shared QRhi or analytic libplacebo producer → direct target → display-targeted RGBA16F surface |
+| Video | Shared QRhi diagnostic, analytic libplacebo, or FFmpeg-frame libplacebo producer → direct target → display-targeted RGBA16F surface |
 | Display telemetry | Qt screen metrics, QRhi swapchain HDR information, and Windows Advanced Color |
 | Rendering cadence | Demand-driven, continuous only while the pattern or UI animates |
 
-The active work required to turn this foundation into a real video boundary is
+The active work required to turn this foundation into a real player boundary is
 tracked in [PLAN.md](PLAN.md). Known limitations are also collected in
 [../../DEFERRED.md](../../DEFERRED.md).
 
@@ -441,13 +441,15 @@ src/
     app/            startup, native window, presentation settings, and QML
     graphics/       graphics factory, device-domain contract, and backends
         backends/
+    media/          retained decoded frames and FFmpeg integration
+        ffmpeg/
     platform/       operating-system display observation
     presentation/   output policy, QRhi orchestration, layers, and compositor
         shaders/
     video/          rendered surfaces, producers, and target interop
 ```
 
-Future media, playback, audio, subtitle, and diagnostics directories should be
+Future playback, audio, subtitle, and diagnostics source directories should be
 added when those subsystems have concrete code. Cross-directory includes use
 the responsibility-qualified path so dependencies remain visible.
 
@@ -471,9 +473,16 @@ headroom, one explicit software input upload, shared-target synchronization,
 zero output copies, final linear composition, pixel-validated texture rewrap
 after resize, and producer destruction/rebinding. A sustained 60-frame probe
 uses a fixed 640×360 input and a 1100×600 target; it reports local throughput
-without imposing a machine-independent CI threshold. A fixed mastered PQ
-fixture, renderer image corpus, cross-backend capture, and recorded runtime
-display matrix do not exist yet.
+without imposing a machine-independent CI threshold.
+
+A separate headless test opens the manifest-hashed PPM fixture through real
+FFmpeg demux/decode, retains the immutable frame after decoder teardown,
+uploads its RGB24 planes through the production importer, captures both video
+and composition output, and verifies input/output copy diagnostics plus
+target-only rerender reuse. This is a first-frame integration proof, not
+continuous playback or representative compressed-media coverage. A fixed
+mastered PQ fixture, renderer image corpus, cross-backend capture, and recorded
+runtime display matrix do not exist yet.
 
 The built GUI has also completed an automated four-second startup liveness
 smoke with the configured Qt runtime. It created the normal application path
