@@ -76,6 +76,10 @@ Implement alongside graphics milestone 1:
 
 ## Milestone 2: libplacebo and first-frame coverage
 
+* [x] Load the pinned libplacebo DLL through CTest and verify its version,
+  installed D3D11, Shaderc, and built-in DOVI configuration, disabled Vulkan,
+  OpenGL, and external libdovi features, runtime staging, and basic public-API
+  lifecycle.
 * [ ] Run the pinned libplacebo upstream suite as dependency validation where
   practical.
 * [ ] Render a known software-backed frame through real libplacebo.

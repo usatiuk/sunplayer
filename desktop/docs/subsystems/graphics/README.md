@@ -8,8 +8,9 @@ presentation, display-observation, and recovery model.
 
 It is not yet a media-backed video renderer. A temporary producer renders the
 procedural HDR test pattern into the explicit display-targeted video surface
-that libplacebo will later produce. FFmpeg, libplacebo, decoded frames,
-subtitles, and playback scheduling are not integrated.
+that libplacebo will later produce. The pinned D3D11-only libplacebo dependency
+is integrated, but its renderer and QRhi target bridge are not. FFmpeg, decoded
+frames, subtitles, and playback scheduling are not integrated.
 
 The currently accepted implementation is deliberately narrower than the
 cross-platform target:

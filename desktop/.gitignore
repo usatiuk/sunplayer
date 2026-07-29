@@ -1,6 +1,9 @@
 # Local agent instructions
 /AGENTS.override.md
 
+# Project-local vcpkg manifest installation output
+/vcpkg_installed/
+
 # Shared project-local agent workflow
 !/.agents/
 !/.agents/skills/

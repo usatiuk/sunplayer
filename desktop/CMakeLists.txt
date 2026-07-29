@@ -1,5 +1,44 @@
 cmake_minimum_required(VERSION 3.21)
 
+if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    set(_sunroom_vcpkg_toolchain)
+
+    if (DEFINED ENV{VCPKG_ROOT})
+        set(_sunroom_vcpkg_toolchain
+                "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
+    elseif (CMAKE_HOST_WIN32 AND DEFINED ENV{VCToolsInstallDir})
+        get_filename_component(
+                _sunroom_vc_root
+                "$ENV{VCToolsInstallDir}/../../.."
+                ABSOLUTE
+        )
+        set(_sunroom_vcpkg_toolchain
+                "${_sunroom_vc_root}/vcpkg/scripts/buildsystems/vcpkg.cmake")
+        unset(_sunroom_vc_root)
+    endif ()
+
+    if (_sunroom_vcpkg_toolchain
+            AND EXISTS "${_sunroom_vcpkg_toolchain}")
+        set(
+                CMAKE_TOOLCHAIN_FILE
+                "${_sunroom_vcpkg_toolchain}"
+                CACHE FILEPATH
+                "Toolchain used to configure Sunroom"
+        )
+    endif ()
+
+    unset(_sunroom_vcpkg_toolchain)
+endif ()
+
+if (CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET)
+    set(
+            VCPKG_TARGET_TRIPLET
+            x64-windows-clangcl
+            CACHE STRING
+            "Sunroom dependency target triplet"
+    )
+endif ()
+
 project(Sunroom VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -7,12 +46,19 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(CTest)
 
+if (NOT VCPKG_MANIFEST_MODE)
+    message(FATAL_ERROR
+            "Sunroom currently requires vcpkg manifest mode. Set VCPKG_ROOT "
+            "or configure with the vcpkg CMake toolchain.")
+endif ()
+
 find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS
         GuiPrivate
         Quick
         QuickControls2
         ShaderTools
 )
+find_package(libplacebo 7.360.1 EXACT CONFIG REQUIRED)
 
 qt_standard_project_setup(REQUIRES 6.11.1)
 
@@ -92,6 +138,7 @@ target_link_libraries(sunroom
         Qt6::GuiPrivate
         Qt6::Quick
         Qt6::QuickControls2
+        libplacebo::libplacebo
 )
 
 target_include_directories(sunroom
@@ -122,6 +169,15 @@ if (WIN32)
             WindowsApp
     )
 
+    add_custom_command(
+            TARGET sunroom
+            POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_RUNTIME_DLLS:sunroom>
+                    $<TARGET_FILE_DIR:sunroom>
+            COMMAND_EXPAND_LISTS
+    )
+
 endif ()
 
 if (BUILD_TESTING)
@@ -136,6 +192,15 @@ install(TARGETS sunroom
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
+
+if (WIN32)
+    install(
+            IMPORTED_RUNTIME_ARTIFACTS
+            libplacebo::libplacebo
+            spirv-cross-c-shared
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif ()
 
 qt_generate_deploy_qml_app_script(
         TARGET sunroom

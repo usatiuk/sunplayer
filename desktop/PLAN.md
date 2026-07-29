@@ -83,15 +83,17 @@ not yet a media player:
 * Rendering is demand-driven outside explicit animation, and the graphics
   foundation handles resize, output changes, surface destruction, swapchain
   invalidation, and bounded device recovery.
-* The configured Windows Debug target builds successfully with Qt 6.11.1 and
-  MSVC.
+* The configured Windows Debug target builds successfully with Qt 6.11.1,
+  MSVC, and a pinned D3D11-only libplacebo 7.360.1 dependency built through
+  the project-local vcpkg configuration.
 
-FFmpeg, libplacebo, libass, decoded video, audio, playback, file opening,
+The libplacebo dependency is integrated, but its renderer and QRhi target
+bridge are not. FFmpeg, libass, decoded video, audio, playback, file opening,
 subtitles, and persistence are not integrated. CTest/Qt Test coverage exists
 for pure presentation-target policy, video-viewport state, the real QML
 shell's viewport publication, rendered-video surface validity/invalidation,
-and a real D3D11 offscreen producer/compositor capture. Whole-application
-scenarios do not yet exist.
+the libplacebo binary boundary, and a real D3D11 offscreen
+producer/compositor capture. Whole-application scenarios do not yet exist.
 
 The next implementation slice introduces a persistent libplacebo renderer for
 known SDR and HDR software-backed images. The real Player page arrives with the
@@ -171,6 +173,8 @@ Documentation: `docs/subsystems/graphics/`
 
 ### 6. libplacebo video rendering
 
+* [x] Pinned D3D11-only dependency and installed-configuration/lifecycle
+  verification
 * [x] Shared rendered-video producer contract
 * [x] Direct QRhi target lifecycle and output-path diagnostic schema
 * [ ] Native libplacebo target interop and observable copy/fallback paths
@@ -255,6 +259,7 @@ Documentation: `docs/subsystems/diagnostics/`
 * [x] CTest and Qt Test structure
 * [x] Presentation-target policy tests
 * [x] Rendered-surface description and invalidation tests
+* [x] Pinned libplacebo dependency and public-API lifecycle test
 * [x] Real D3D11 QRhi compositor capture smoke test
 * [ ] Deterministic first-frame and playback scenarios
 * [ ] Playback and seeking tests
@@ -271,8 +276,11 @@ Documentation: `docs/TESTING.md` and `docs/subsystems/testing/`
 
 ### 12. Build and packaging
 
-* [ ] Dependency and feature discovery
-* [ ] Reproducible FFmpeg, libplacebo, and libass integration
+* [x] Project-local vcpkg manifest, pinned baseline, and Windows dependency
+  triplet
+* [x] Reproducible D3D11-only libplacebo dependency integration
+* [ ] Reproducible FFmpeg and libass integration
+* [ ] Cross-platform libplacebo dependency configurations
 * [ ] Windows packaging
 * [ ] macOS packaging
 * [ ] Linux packaging

@@ -3,9 +3,8 @@
 ## Status
 
 The current CMake project builds the Windows presentation prototype and its
-focused Qt Test targets. It discovers Qt only; FFmpeg, libplacebo, libass,
-audio, and packaging policy beyond Qt's basic deployment script are not
-integrated.
+focused Qt Test targets. Qt and a pinned D3D11-only libplacebo dependency are
+integrated. FFmpeg, libass, audio, and complete distributable packaging are not.
 
 The currently validated configuration is:
 
@@ -13,14 +12,58 @@ The currently validated configuration is:
 | --- | --- |
 | Build system | CMake 3.21 or newer |
 | Language | C++20 |
-| Compiler/toolchain | MSVC in a Visual Studio developer environment |
+| Application compiler | MSVC in a Visual Studio developer environment |
+| Windows dependency compiler | Visual Studio clang-cl through a project-local vcpkg triplet |
 | Qt | Exactly 6.11.1 |
+| libplacebo | Exactly 7.360.1, D3D11 enabled |
 | Graphics backend | Windows D3D11 through QRhi |
 | Generator in the local configured tree | Ninja |
 
-Local absolute tool paths and developer-shell setup are machine-specific and
-belong in ignored local agent or IDE configuration, not in the shared build
-contract.
+The Visual Studio C++ Clang tools component is required for Windows dependency
+builds. The application and installed Qt package remain MSVC-built; clang-cl
+supplies the same Windows ABI and runtime conventions for the vcpkg dependency
+graph.
+
+Local absolute Qt, CMake, and developer-shell paths remain machine-specific and
+belong in ignored local agent or IDE configuration.
+
+## Dependency management
+
+Sunroom uses vcpkg manifest mode. The repository owns:
+
+* `vcpkg.json`, including the pinned registry baseline and requested features.
+* `vcpkg-configuration.json`, including project-local overlay ports and
+  triplets.
+* `vcpkg-ports/libplacebo`, because the pinned registry does not provide the
+  required package.
+* `vcpkg-ports/spirv-cross-c-shared`, because the registry's static-only
+  SPIRV-Cross port cannot satisfy libplacebo's shared C dependency.
+* `cmake/vcpkg/triplets/x64-windows-clangcl.cmake` and its chainloaded
+  toolchain, so compiler identity participates in vcpkg's package ABI and
+  binary-cache key.
+
+The vcpkg executable itself is supplied by Visual Studio rather than cloned
+into the repository. CMake uses an explicitly supplied toolchain when present,
+then falls back to `VCPKG_ROOT` or the Visual Studio vcpkg discovered from a
+sourced developer environment. Windows configurations default to the
+`x64-windows-clangcl` dependency triplet while preserving an explicit caller
+override.
+
+Manifest installation output lives under the configured build directory's
+`vcpkg_installed/` tree. Source downloads and binary archives use vcpkg's
+normal per-user cache. Neither path registers libraries globally or modifies
+the system `PATH`.
+
+The initial libplacebo feature set enables D3D11, Shaderc, the shared
+SPIRV-Cross C API, and libplacebo's built-in DOVI handling. The optional
+external libdovi dependency, Vulkan, and OpenGL remain disabled. glslang and
+SPIRV-Tools are transitive implementation dependencies of the Shaderc build,
+not enabled Sunroom graphics backends. The port also stages libplacebo's
+pinned Vulkan-Headers source submodule because its disabled Vulkan stub and
+public header require the types; this is not a Vulkan SDK, loader, runtime, or
+enabled backend. The compiler and dependency experiments behind this choice
+are recorded in
+[the Windows dependency-build research note](../../research/2026-07-29-libplacebo-windows-dependency-build.md).
 
 ## Qt dependency
 
@@ -48,9 +91,9 @@ compositor shaders from `src/presentation/shaders/` under `/shaders`.
 Production sources are grouped under `src/app`, `src/graphics`, `src/platform`,
 `src/presentation`, and `src/video`. Focused tests currently live under
 `tests/unit/presentation`, `tests/unit/ui`, `tests/unit/video`,
-`tests/integration/presentation`, and `tests/integration/ui`; new trees should
-follow concrete execution classes rather than speculative subsystem
-placeholders.
+`tests/integration/presentation`, `tests/integration/ui`, and
+`tests/integration/video`; new trees should follow concrete execution classes
+rather than speculative subsystem placeholders.
 
 The target links Windows Runtime and dispatcher support libraries only on
 Windows:
@@ -66,18 +109,25 @@ supported player.
 
 ## Installation
 
-CMake installs the executable or bundle through `GNUInstallDirs`.
-`qt_generate_deploy_qml_app_script()` supplies the current Qt deployment step
-with:
+CMake installs the executable or bundle through `GNUInstallDirs`. On Windows,
+the libplacebo and SPIRV-Cross shared runtime artifacts are installed
+explicitly before `qt_generate_deploy_qml_app_script()` supplies the current
+Qt deployment step with:
 
 * No compiler-runtime deployment.
 * No translation deployment.
 * No unsupported-platform configuration error.
 
-This is scaffolding, not a complete distributable package. It does not yet
-define:
+Build-tree application and test targets also stage their transitive runtime
+DLLs with `TARGET_RUNTIME_DLLS`, preventing loader dialogs and making the
+libplacebo runtime boundary reproducible during development.
 
-* Dependency bundling and licensing for FFmpeg, libplacebo, or libass.
+This remains scaffolding rather than a complete distributable package. It does
+not yet define:
+
+* Dependency bundling and licensing for FFmpeg or libass.
+* A complete third-party notice and source-offer workflow for shipped
+  libplacebo and other LGPL components.
 * Windows installer or portable layout.
 * macOS signing, notarization, and bundle policy.
 * Linux package formats and compositor/runtime requirements.
@@ -90,30 +140,32 @@ CTest and Qt Test are configured only under `BUILD_TESTING`, keeping test-only
 dependencies out of production-only configurations. Separate test executables
 cover presentation-target policy, active viewport state, real QML shell
 publication, rendered-video surface validity/reuse, and a real D3D11 QRhi
-producer/compositor capture.
+producer/compositor capture. A dependency integration test verifies the pinned
+libplacebo version, installed feature configuration, and real log
+create/destroy lifecycle across the MSVC-to-clang-cl DLL boundary. That
+configuration enables D3D11, Shaderc, and built-in DOVI handling while
+disabling Vulkan, OpenGL, and external libdovi.
 
 On Windows, each test target stages its transitive runtime DLLs beside the test
 executable with CMake's `TARGET_RUNTIME_DLLS` support. This is a build-tree test
 convenience, not an installed test package. It prevents the Windows loader from
 opening a missing-DLL dialog when CTest launches the test.
 
-The application follows a different contract:
-
-* Running from the development build tree relies on the configured Qt
-  development environment.
-* Installing the application runs Qt's QML deployment script to populate the
-  install tree with required Qt libraries, plugins, and QML runtime content.
-
 See [../testing/PLAN.md](../testing/PLAN.md).
 
 ## Verification
 
-The `sunroom` Debug target builds successfully in the current configured
-Windows/MSVC/Ninja environment after initializing the Visual Studio developer
-environment. A build-tree GUI startup liveness smoke also passes when the
-configured Qt runtime directory is present on `PATH`; the harness terminates
-the process after four seconds without user interaction.
+The manifest configure, full Debug build, and six registered CTest targets pass
+in the current Windows/MSVC/Ninja environment after initializing the Visual
+Studio developer environment. The dependency graph is built under the
+project-local clang-cl triplet; the Sunroom executable remains MSVC-built.
+A build-local install-tree generation also succeeds and stages the expected
+Qt runtime, `libplacebo-360.dll`, and `spirv-cross-c-sharedd.dll`.
 
-No clean configure, Release build, install-tree launch, deployment audit, or
-cross-platform build is recorded yet. These remain coverage gaps rather than
-implied support.
+A prior build-tree GUI startup liveness smoke also passed with the configured
+Qt runtime available; the harness terminated the process after four seconds
+without user interaction.
+
+No Release application build, installed-application launch, clean-machine
+deployment audit, or cross-platform build is recorded yet. These remain
+coverage gaps rather than implied support.

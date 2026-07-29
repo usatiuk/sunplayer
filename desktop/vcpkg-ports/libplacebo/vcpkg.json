@@ -1,0 +1,23 @@
+{
+  "name": "libplacebo",
+  "version": "7.360.1",
+  "description": "Reusable library for GPU-accelerated video and image rendering",
+  "homepage": "https://libplacebo.org/",
+  "license": "LGPL-2.1-or-later",
+  "supports": "windows & !uwp",
+  "dependencies": [
+    {
+      "name": "vcpkg-tool-meson",
+      "host": true
+    }
+  ],
+  "features": {
+    "d3d11": {
+      "description": "Build the Direct3D 11 renderer",
+      "dependencies": [
+        "shaderc",
+        "spirv-cross-c-shared"
+      ]
+    }
+  }
+}

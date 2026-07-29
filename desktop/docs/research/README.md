@@ -20,3 +20,4 @@ the newer note or decision rather than silently rewriting the investigation.
 ## Index
 
 * [2026-07-28: Testing tools and boundaries](2026-07-28-testing-tools-and-boundaries.md)
+* [2026-07-29: libplacebo Windows dependency build](2026-07-29-libplacebo-windows-dependency-build.md)

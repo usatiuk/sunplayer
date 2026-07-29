@@ -17,12 +17,13 @@ unimplemented.
 Track under the backend-realization section of
 `docs/subsystems/graphics/PLAN.md`.
 
-### No libplacebo or decoded-video producer
+### No libplacebo renderer or decoded-video producer
 
 The explicit video surface and narrow final compositor now exist, but the
 current producer still renders only a procedural pattern with a simple
 diagnostic tone mapper. This is intentionally not the video color pipeline.
-FFmpeg source metadata normalization and a persistent libplacebo producer are
+A pinned D3D11-only libplacebo dependency is available, but its persistent
+renderer, QRhi target bridge, and FFmpeg source metadata normalization are
 still required for SDR, HDR10/PQ, HLG, dynamic HDR, and differing source color
 spaces.
 
@@ -96,10 +97,13 @@ those distinctions.
 ### Vulkan and SPIR-V optimization tools are not configured
 
 The validated Windows D3D11 build succeeds and packages HLSL shaders, but CMake
-does not find Vulkan headers and Qt Shader Tools reports that `spirv-opt` is
-unavailable. This does not block the current D3D11 target. Vulkan support and
-cross-backend shader validation require a deliberate Vulkan SDK/tooling setup
-rather than treating the current shader build as proof of Vulkan readiness.
+does not find a system Vulkan SDK and Qt Shader Tools reports that `spirv-opt`
+is unavailable. The libplacebo port stages its pinned Vulkan-Headers source
+snapshot only because disabled-backend stubs and public declarations require
+those types; it does not enable or install Vulkan. This does not block the
+current D3D11 target. Vulkan support and cross-backend shader validation
+require a deliberate Vulkan SDK/tooling decision rather than treating the
+current dependency build as proof of Vulkan readiness.
 
 ## Application and player
 

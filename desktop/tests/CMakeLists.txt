@@ -26,6 +26,12 @@ qt_add_executable(sunroom_qml_shell_tests
         ../src/app/VideoViewportState.h
 )
 
+if (WIN32)
+    qt_add_executable(sunroom_libplacebo_dependency_tests
+            integration/video/tst_LibplaceboDependency.cpp
+    )
+endif ()
+
 set_source_files_properties(../src/app/Main.qml PROPERTIES
         QT_RESOURCE_ALIAS Main.qml
         QT_QML_SKIP_CACHEGEN TRUE
@@ -93,11 +99,18 @@ target_link_libraries(sunroom_qml_shell_tests
 )
 
 if (WIN32)
+    target_link_libraries(sunroom_libplacebo_dependency_tests
+            PRIVATE
+            Qt6::Test
+            libplacebo::libplacebo
+    )
+
     foreach (test_target IN ITEMS
             sunroom_presentation_target_tests
             sunroom_rendered_video_surface_tests
             sunroom_video_viewport_tests
-            sunroom_qml_shell_tests)
+            sunroom_qml_shell_tests
+            sunroom_libplacebo_dependency_tests)
         add_custom_command(
                 TARGET ${test_target}
                 POST_BUILD
@@ -144,6 +157,17 @@ set_tests_properties(
 )
 
 if (WIN32)
+    add_test(
+            NAME libplacebo-dependency
+            COMMAND sunroom_libplacebo_dependency_tests
+    )
+    set_tests_properties(
+            libplacebo-dependency
+            PROPERTIES
+            LABELS "dependency;integration;windows"
+            TIMEOUT 30
+    )
+
     qt_add_executable(sunroom_qrhi_compositor_tests
             integration/presentation/tst_QrhiCompositor.cpp
             ../src/graphics/GraphicsBackendFactory.cpp

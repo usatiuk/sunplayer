@@ -1,0 +1,19 @@
+{
+  "name": "spirv-cross-c-shared",
+  "version": "1.4.350.1",
+  "description": "Stable shared C API for SPIRV-Cross",
+  "homepage": "https://github.com/KhronosGroup/SPIRV-Cross",
+  "license": "Apache-2.0",
+  "supports": "!uwp",
+  "dependencies": [
+    "spirv-headers",
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ]
+}

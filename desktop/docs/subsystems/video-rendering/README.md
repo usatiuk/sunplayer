@@ -6,8 +6,9 @@ Sunroom currently has an explicit rendered-video surface contract and a
 procedural QRhi diagnostic source and producer behind shared lifecycle
 contracts. The graphics domain factory-selects the current direct QRhi target,
 which reports provisioning state, synchronization, texture revision, and its
-zero-copy path. libplacebo, decoded-frame import, native libplacebo target
-interop, and real fallback paths are not implemented.
+zero-copy path. A pinned D3D11-only libplacebo 7.360.1 dependency is available
+through the build system, but its renderer lifecycle, decoded-frame import,
+native target interop, and real fallback paths are not implemented.
 
 The broad investigation in
 [../../ARCHITECTURE_NOTES.md](../../ARCHITECTURE_NOTES.md) is non-binding
@@ -31,8 +32,8 @@ The known seams are established with their first implementations:
 
 * The graphics-device domain owns QRhi, native backend state, device
   generation, backend/adapter diagnostics, and teardown order. It will also
-  own libplacebo GPU state and report relevant capabilities once that
-  dependency is integrated.
+  own libplacebo GPU state and report relevant capabilities once the renderer
+  is implemented.
 * The rendered-video source owns source-specific state, content revision,
   cadence, update requests, and device-recreatable producer creation.
 * The rendered-video producer owns invalidation, submission reporting, and
@@ -87,14 +88,16 @@ metadata policy, renderer policy, subtitles, and the compositor remain shared.
    source lifecycle; route the diagnostic path through them.
 2. [x] Expose output path, synchronization, copy/transfer, and fallback
    diagnostics through the current UI for the direct QRhi target.
-3. [ ] Add a pinned libplacebo dependency, its renderer-facing target access
-   contract, and the Windows D3D11 direct/copy/fallback implementations.
-4. [ ] Render known SDR and HDR/extended-value software images and capture both the
+3. [x] Add a pinned D3D11-only libplacebo dependency and verify its installed
+   feature configuration and basic runtime lifecycle.
+4. [ ] Add the renderer-facing target access contract and Windows D3D11
+   direct/copy/fallback implementations.
+5. [ ] Render known SDR and HDR/extended-value software images and capture both the
    video surface and final composition.
-5. [ ] Add the Vulkan implementation and exercise it on Linux.
-6. [ ] Validate MoltenVK presentation on macOS before choosing shared Vulkan or a
+6. [ ] Add the Vulkan implementation and exercise it on Linux.
+7. [ ] Validate MoltenVK presentation on macOS before choosing shared Vulkan or a
    Metal interop backend.
-7. [ ] Add FFmpeg software and hardware frame importers through the established
+8. [ ] Add FFmpeg software and hardware frame importers through the established
    input seam.
 
 ## Verification
@@ -107,6 +110,13 @@ discarded render-state promotion after accepted submissions, and
 reprovisions/resizes the texture through an explicit revision and compositor
 rebind. Each future native libplacebo backend requires equivalent real-GPU
 coverage. Cross-backend output comparisons use declared tolerances.
+
+The dependency integration test links the MSVC-built test process to the
+clang-cl-built libplacebo DLL, checks that the installed generated
+configuration enables D3D11, Shaderc, and built-in DOVI handling while
+disabling Vulkan, OpenGL, and external libdovi, checks the pinned version, and
+exercises a real log create/destroy lifecycle. It does not claim that a
+libplacebo D3D11 GPU, renderer, or QRhi target bridge exists yet.
 
 Physical display correctness, macOS EDR viability, Vulkan synchronization, and
 hardware-decoder zero-copy behavior remain platform-lab requirements rather

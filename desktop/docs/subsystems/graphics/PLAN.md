@@ -108,13 +108,13 @@ code.
   strongest practical boundary.
 
 The shared source/producer lifecycle, direct QRhi target, and optional
-composition layer are implemented. The full Windows build, five CTest targets,
+composition layer are implemented. The full Windows build, six CTest targets,
 real D3D11 capture, and hidden startup smoke pass. Tests drive the diagnostic
 source and producer through shared interfaces, verify direct-target diagnostics
 with no copies, exercise committed and discarded render states after accepted
-submissions, resize and rebind the native texture, and verify UI-only
-composition without sampling video. Native libplacebo interop and actual
-fallback selection remain part of milestone 3.
+submissions, resize and rebind the native texture, verify UI-only composition
+without sampling video, and load the pinned libplacebo dependency. Native
+libplacebo interop and actual fallback selection remain part of milestone 3.
 
 ## Milestone 3: libplacebo renderer
 
@@ -122,7 +122,8 @@ Replace the temporary producer with a persistent libplacebo renderer.
 
 ### Work
 
-* [ ] Add versioned libplacebo dependency and feature discovery.
+* [x] Add the versioned D3D11-only libplacebo dependency and verify its
+  installed feature configuration and public-API lifecycle.
 * [ ] Implement and validate the Windows D3D11 target bridge against the
   application-owned graphics-device domain.
 * [ ] Create persistent libplacebo log, GPU, and renderer objects.
