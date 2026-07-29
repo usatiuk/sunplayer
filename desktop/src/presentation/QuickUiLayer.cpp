@@ -15,8 +15,10 @@
 
 #include "app/PresentationSettings.h"
 #include "app/VideoViewportState.h"
+#include "playback/MediaSession.h"
 #include "presentation/PresentationOutputState.h"
-#include "video/RenderedVideoSource.h"
+#include "video/ActiveVideoSource.h"
+#include "video/DiagnosticVideoSource.h"
 
 namespace {
 class RenderControl final : public QQuickRenderControl {
@@ -38,7 +40,9 @@ QuickUiLayer::QuickUiLayer(QWindow &renderWindow,
                            QRhi &rhi,
                            PresentationOutputState &outputState,
                            PresentationSettings &settings,
-                           RenderedVideoSource &videoSource,
+                           DiagnosticVideoSource &diagnosticSource,
+                           MediaSession &mediaSession,
+                           ActiveVideoSource &activeVideoSource,
                            VideoViewportState &videoViewport,
                            QObject *parent)
     : QObject(parent),
@@ -46,7 +50,9 @@ QuickUiLayer::QuickUiLayer(QWindow &renderWindow,
       m_rhi(rhi),
       m_outputState(outputState),
       m_settings(settings),
-      m_videoSource(videoSource),
+      m_diagnosticSource(diagnosticSource),
+      m_mediaSession(mediaSession),
+      m_activeVideoSource(activeVideoSource),
       m_videoViewport(videoViewport) {
 }
 
@@ -84,9 +90,8 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
     QQmlComponent component(m_qmlEngine.get());
     component.loadFromModule(QStringLiteral("Sunroom"), QStringLiteral("Main"));
     if (component.isError()) {
-        for (const auto &error : component.errors())
-            qWarning() << error;
-        qFatal("Could not load the packaged Sunroom QML component");
+        qFatal("Could not load the packaged Sunroom QML component:\n%s",
+               qPrintable(component.errorString()));
     }
 
     const QVariantMap initialProperties{
@@ -100,7 +105,15 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
         },
         {
             QStringLiteral("diagnosticSource"),
-            QVariant::fromValue(&m_videoSource),
+            QVariant::fromValue(&m_diagnosticSource),
+        },
+        {
+            QStringLiteral("mediaSession"),
+            QVariant::fromValue(&m_mediaSession),
+        },
+        {
+            QStringLiteral("activeVideoSource"),
+            QVariant::fromValue(&m_activeVideoSource),
         },
         {
             QStringLiteral("viewportState"),
@@ -112,7 +125,8 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
     m_rootItem.reset(qobject_cast<QQuickItem *>(object));
     if (!m_rootItem) {
         delete object;
-        qFatal("Sunroom Main.qml must create a QQuickItem root");
+        qFatal("Sunroom Main.qml must create a QQuickItem root:\n%s",
+               qPrintable(component.errorString()));
     }
 
     m_rootItem->setParentItem(m_quickWindow->contentItem());

@@ -190,17 +190,17 @@ configuration enables D3D11, Shaderc, and built-in DOVI handling while
 disabling Vulkan, OpenGL, and external libdovi, checks the pinned version, and
 exercises a real log create/destroy lifecycle.
 
-The FFmpeg first-frame test opens a pinned, hashed lossless RGB fixture through
-real `avformat`/`avcodec`, destroys the decoder contexts after returning the
-retained frame, maps RGB24 through the production software importer, and
-captures both the display-targeted surface and final composition. It asserts
-known red/green/gray pixels, one input upload, zero input download/GPU copy,
-zero output copies, and source-upload reuse while rerendering the same SDR frame
-for 203- and 100-nit reference whites.
+The FFmpeg first-frame test opens pinned, hashed RGB and Matroska/FFV1 fixtures
+through real `avformat`/`avcodec` and destroys decoder contexts after returning
+the retained frame. The RGB case maps through the production software importer
+and captures both the display-targeted surface and final composition. It
+asserts known pixels, one input upload, zero input download/GPU copy, zero
+output copies, and source-upload reuse while rerendering the same SDR frame for
+203- and 100-nit reference whites.
 
-The PPM fixture is intentionally a lossless first boundary, not representative
-compressed-video or timing coverage. Physical display correctness, fixed
-mastered HDR input, macOS EDR viability, Vulkan synchronization, and
-hardware-decoder zero-copy behavior remain unproven. The frame boundary retains
-effective sample aspect ratio and display-matrix rotation, but the player
-content-rectangle policy does not consume them yet.
+The FFV1 case proves real compressed-video demux, timestamp and metadata
+retention, exact limited-range BT.709 YUV420P samples, and tolerant
+libplacebo-converted linear RGB. Its SAR 32:27 produces a 16:9 Player content
+rectangle. Physical display correctness, fixed mastered HDR input, general
+display-matrix rotation, macOS EDR viability, Vulkan synchronization, and
+hardware-decoder zero-copy behavior remain unproven.

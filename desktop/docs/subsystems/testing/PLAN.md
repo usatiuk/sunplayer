@@ -84,14 +84,17 @@ Implement alongside graphics milestone 1:
   practical.
 * [x] Render known sRGB and BT.2020/PQ software-backed frames through real
   libplacebo.
-* [ ] Assert effective input metadata, target description, plane mapping,
+* [x] Assert effective SDR input metadata, target description, plane mapping,
   lifetime, synchronization, and copy path.
-* [ ] Add one pinned SDR media container and manifest.
+* [x] Add one pinned SDR media container and manifest.
 * [ ] Add one pinned HDR10 media container and manifest.
 * [x] Seed the fixture layout with a pinned, hashed lossless RGB image and
   decode its first frame with real FFmpeg through the production libplacebo
   and QRhi capture path.
 * [x] Enforce the seed fixture's manifest hash in the scenario.
+* [x] Cover an analytically generated Matroska/FFV1 YUV420P stream with
+  BT.709 limited-range metadata, timestamps, non-square pixels, exact decoded
+  plane samples, and tolerant linear-RGB capture.
 * [x] Capture the display-targeted video surface and final composition for the
   analytic libplacebo path.
 * [x] Capture-validate reference-white normalization for SDR at 80, 100, and
@@ -108,6 +111,9 @@ Implement alongside graphics milestone 1:
 
 ## Milestone 3: playback scenarios
 
+* [x] Cover initial Empty/Opening/Ready/Error session state, nonblocking
+  cancellation and replacement, superseding generations, worker destruction,
+  and presentation failure without fixed sleeps.
 * [ ] Add a controlled monotonic clock and audio sink when scheduling requires
   deterministic advancement.
 * [ ] Cover short playback, pause, end of stream, buffering, and frame
@@ -126,7 +132,8 @@ Implement alongside graphics milestone 1:
 * [ ] D3D, Vulkan, and Metal validation modes where applicable.
 * [ ] Device loss, allocation failure, and long resource-lifecycle stress.
 * [ ] Real operating-system display changes and multi-monitor movement.
-* [ ] Controlled unreliable source and cancellation scenarios.
+* [x] Controlled first-frame cancellation and stale-completion scenarios.
+* [ ] Controlled unreliable continuous-source scenarios.
 * [ ] Real SMB/NFS failure scenarios when mounted sources are supported.
 * [ ] Packaged-application UI and clean-machine smoke tests.
 * [ ] Stable-machine performance and power baselines.

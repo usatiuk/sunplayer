@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include <QUrl>
 #include <QWindow>
 
 // Native window and event boundary for the current application shell.
@@ -11,6 +12,8 @@ class PresentationWindow final : public QWindow {
 public:
     PresentationWindow();
     ~PresentationWindow() override;
+
+    void openMedia(const QUrl &url);
 
 protected:
     void exposeEvent(QExposeEvent *event) override;
@@ -26,7 +29,9 @@ protected:
 private:
     std::unique_ptr<class PresentationOutputState> m_outputState;
     std::unique_ptr<class PresentationSettings> m_settings;
-    std::unique_ptr<class DiagnosticVideoSource> m_videoSource;
+    std::unique_ptr<class DiagnosticVideoSource> m_diagnosticVideoSource;
+    std::unique_ptr<class MediaSession> m_mediaSession;
+    std::unique_ptr<class ActiveVideoSource> m_activeVideoSource;
     std::unique_ptr<class VideoViewportState> m_videoViewport;
     std::unique_ptr<class RhiPresentationEngine> m_engine;
 };

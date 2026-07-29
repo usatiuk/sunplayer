@@ -32,6 +32,8 @@ private slots:
 
 public:
     static void initMain() {
+        qputenv("QT_QPA_PLATFORM", "offscreen");
+        qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
 #ifdef Q_OS_WIN
         SetErrorMode(
             SEM_FAILCRITICALERRORS
@@ -43,6 +45,8 @@ public:
 
 void AppShellTest::publishesActiveViewport() {
     QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(
+        SUNROOM_QT_QML_IMPORT_PATH));
     QQmlComponent component(&engine);
     component.loadFromModule(
         QStringLiteral("SunroomShellTest"), QStringLiteral("Main"));
@@ -53,6 +57,8 @@ void AppShellTest::publishesActiveViewport() {
     ShellTestPresentationOutputState outputState(nullptr);
     ShellTestPresentationSettings presentationSettings(nullptr);
     ShellTestDiagnosticVideoSource videoSource(nullptr);
+    ShellTestMediaSession mediaSession(nullptr);
+    ShellTestActiveVideoSource activeVideoSource(nullptr);
     VideoViewportState videoViewport(nullptr);
     const QVariantMap initialProperties{
         {
@@ -66,6 +72,14 @@ void AppShellTest::publishesActiveViewport() {
         {
             QStringLiteral("diagnosticSource"),
             QVariant::fromValue(&videoSource),
+        },
+        {
+            QStringLiteral("mediaSession"),
+            QVariant::fromValue(&mediaSession),
+        },
+        {
+            QStringLiteral("activeVideoSource"),
+            QVariant::fromValue(&activeVideoSource),
         },
         {
             QStringLiteral("viewportState"),
@@ -82,23 +96,94 @@ void AppShellTest::publishesActiveViewport() {
         rootItem->findChild<QObject *>(
             QStringLiteral("videoRendererSwitch"));
     QVERIFY(rendererSwitch);
+    QObject *const emptyState =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("emptyState"));
+    QObject *const openingState =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("openingState"));
+    QObject *const errorState =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("errorState"));
+    QObject *const cancelOpenButton =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("cancelOpenButton"));
+    QObject *const retryMediaButton =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("retryMediaButton"));
+    QObject *const closeMediaButton =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("closeMediaButton"));
+    QVERIFY(emptyState);
+    QVERIFY(openingState);
+    QVERIFY(errorState);
+    QVERIFY(cancelOpenButton);
+    QVERIFY(retryMediaButton);
+    QVERIFY(closeMediaButton);
     QCOMPARE(
         rendererSwitch->property("checked").toBool(),
         true);
+    QCOMPARE(
+        activeVideoSource.route(),
+        ShellTestActiveVideoSource::Route::Player);
 
     QQuickWindow quickWindow;
     rootItem->setParentItem(quickWindow.contentItem());
     rootItem->setSize({1100.0, 760.0});
+    QTRY_VERIFY(!videoViewport.visible());
+    QTRY_VERIFY(emptyState->property("visible").toBool());
+    QVERIFY(!openingState->property("visible").toBool());
+    QVERIFY(!errorState->property("visible").toBool());
+
+    mediaSession.setState(
+        ShellTestMediaSession::State::Opening);
+    QTRY_VERIFY(openingState->property("visible").toBool());
+    QVERIFY(!videoViewport.visible());
+    QVERIFY(QMetaObject::invokeMethod(
+        cancelOpenButton, "clicked", Qt::DirectConnection));
+    QCOMPARE(mediaSession.cancelCount(), 1);
+    QCOMPARE(
+        mediaSession.state(),
+        ShellTestMediaSession::State::Empty);
+
+    mediaSession.setState(
+        ShellTestMediaSession::State::Ready, true);
+    mediaSession.setState(
+        ShellTestMediaSession::State::Error);
+    QTRY_VERIFY(errorState->property("visible").toBool());
+    QVERIFY(retryMediaButton->property("enabled").toBool());
+    QVERIFY(QMetaObject::invokeMethod(
+        retryMediaButton, "clicked", Qt::DirectConnection));
+    QCOMPARE(mediaSession.retryCount(), 1);
+    QCOMPARE(mediaSession.openCount(), 0);
+
+    mediaSession.setState(
+        ShellTestMediaSession::State::Ready, true);
     QTRY_VERIFY(videoViewport.visible());
     QTRY_COMPARE(videoViewport.rect().x(), 24.0);
-    QTRY_COMPARE(videoViewport.rect().y(), 112.0);
+    QTRY_COMPARE(videoViewport.rect().y(), 128.0);
     QTRY_COMPARE(videoViewport.rect().width(), 1052.0);
-    QVERIFY(videoViewport.rect().height() > 1.0);
+    QTRY_COMPARE(videoViewport.rect().height(), 608.0);
 
     const qreal originalHeight = videoViewport.rect().height();
     rootItem->setSize({900.0, 650.0});
     QTRY_COMPARE(videoViewport.rect().width(), 852.0);
     QTRY_VERIFY(videoViewport.rect().height() < originalHeight);
+
+    QVERIFY(QMetaObject::invokeMethod(
+        closeMediaButton, "clicked", Qt::DirectConnection));
+    QCOMPARE(mediaSession.cancelCount(), 2);
+    QTRY_VERIFY(!videoViewport.visible());
+    mediaSession.setState(
+        ShellTestMediaSession::State::Ready, true);
+
+    rootItem->setProperty("currentPage", 1);
+    QTRY_COMPARE(
+        activeVideoSource.route(),
+        ShellTestActiveVideoSource::Route::Diagnostics);
+    QTRY_COMPARE(videoViewport.rect().x(), 24.0);
+    QTRY_COMPARE(videoViewport.rect().y(), 168.0);
+    QTRY_COMPARE(videoViewport.rect().width(), 852.0);
 
     rootItem->setVisible(false);
     QTRY_VERIFY(!videoViewport.visible());

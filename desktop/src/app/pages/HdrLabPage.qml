@@ -3,16 +3,16 @@ import QtQuick.Controls
 import QtQuick.Layouts
 
 // Developer-facing HDR and presentation diagnostics retained as an app page.
-Item {
+VideoPage {
     id: root
 
     required property PresentationOutputState outputState
     required property PresentationSettings presentationSettings
     required property DiagnosticVideoSource videoSource
 
-    readonly property rect videoViewportRect:
+    videoViewportRect:
         Qt.rect(canvasX, canvasY, canvasWidth, canvasHeight)
-    readonly property bool videoViewportVisible: visible
+    videoViewportVisible: visible
     readonly property real effectiveTargetHeadroom:
         root.presentationSettings.automaticTargetPeak
         ? root.outputState.effectiveTargetHeadroom

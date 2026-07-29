@@ -2,11 +2,26 @@
 
 ## Status
 
-No playback session, scheduler, queues, seek implementation, or audio clock
-exists yet. The decoded-frame boundary now carries the identity and timing
-values those components require. This document records the intended clock and
-recovery contract so the first scheduler does not accidentally hard-code a
-wall-clock-only model.
+`MediaSession` now owns the first playback lifecycle:
+
+* `Empty`.
+* `Opening`.
+* `Ready` with one paused decoded frame.
+* `Error`.
+
+Opening happens off the GUI thread. A nonzero playback generation belongs to
+each request; cancellation or a newer request invalidates older completion.
+One persistent worker receives cancellation without a GUI-thread join and
+retains only the latest pending request, keeping repeated replacement bounded.
+The frame is published before `Ready`, and clearing the session releases its
+source and forces any hidden producer retaining that frame to be recreated.
+Presentation/import failures return to the session as user-visible errors.
+
+There is still no continuous decoder, scheduler, bounded packet/frame queues,
+seek implementation, or audio clock. The decoded-frame boundary carries the
+identity and timing values those components require. This document records the
+intended clock and recovery contract so the first scheduler does not
+accidentally hard-code a wall-clock-only model.
 
 ## Clock ownership
 

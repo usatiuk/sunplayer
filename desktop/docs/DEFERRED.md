@@ -28,11 +28,12 @@ convention. A retained software `AVFrame` path now demuxes and decodes a pinned
 lossless RGB fixture, uploads it through libplacebo, and preserves relative SDR
 white across target changes. It does not yet prove one fixed, absolutely
 mastered PQ frame, representative YUV/chroma/range combinations, or full
-metadata provenance. D3D11VA device creation, direct hardware-plane import,
-immediate-context multithread protection, hardware fallback diagnostics, and
-the other platform importers remain required. Effective sample aspect ratio is
-retained, but decoded aspect/orientation is not yet applied to an
-aspect-preserving presentation rectangle.
+metadata provenance. A deterministic FFV1 fixture now covers compressed
+limited-range BT.709 YUV420P and non-square-pixel aspect fitting, but not a
+fixed absolutely mastered PQ frame. D3D11VA device creation, direct
+hardware-plane import, immediate-context multithread protection, hardware
+fallback diagnostics, and the other platform importers remain required.
+General display-matrix rotation still lacks a dedicated render capture.
 
 Track under graphics milestones 3–4.
 
@@ -115,10 +116,19 @@ current dependency build as proof of Vulkan readiness.
 
 ## Application and player
 
-### No player session or page
+### No continuous playback
 
-The thin QML shell, generic video viewport, and retained HDR Lab exist, but
-there is no Player page, local-file workflow, persistent settings, playback
-state, audio, subtitles, player controls, structured error model, or general
-session diagnostics view yet. These remain in the root `PLAN.md` and should be
+The thin QML shell now includes a Player page and an asynchronous local-file
+session that displays one paused decoded frame. There is no persistent
+demux/decoder loop, packet/frame queue, scheduler, seek, audio, subtitles,
+playback controls, buffering model, persistent settings, or general session
+diagnostics view yet. These remain in the root `PLAN.md` and should be
 implemented as coherent vertical slices.
+
+The local-file open uses FFmpeg's interrupt callback and a bounded persistent
+worker. Cancel and replacement invalidate UI state immediately without joining
+that worker; only the latest pending open is retained. An operation that does
+not observe cancellation can delay the replacement open, and a mounted
+filesystem blocked uninterruptibly inside the kernel can still stall final
+shutdown. Helper-process containment remains the intended stronger boundary
+for unreliable network filesystems.

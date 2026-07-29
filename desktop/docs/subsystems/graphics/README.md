@@ -153,17 +153,19 @@ For a visible, non-empty window, one engine frame proceeds as follows:
 3. Create or resize the swapchain.
 4. Ensure the Quick RGBA16F target matches the swapchain pixel size.
 5. Render the Quick scene if it is dirty. `QQuickRenderControl` uses its own
-   offscreen QRhi frame, which completes before the visible frame begins.
-6. Map the active page's logical video viewport to an aligned physical-pixel
-   rectangle.
-7. If the viewport is visible and intersects the output, ensure the video
+   offscreen QRhi frame, which completes before the visible frame begins. Page
+   route and viewport bindings are therefore coherent for this engine frame.
+6. Refresh the concrete producer when the stable active-source router reports
+   a configuration change.
+7. Map the active page's logical video viewport to an aligned physical-pixel
+   rectangle and aspect-fit a known decoded display ratio inside it.
+8. Ask the active source to prepare its device-independent state. If the
+   viewport is visible and intersects the output, ensure the video
    producer's RGBA16F target matches it, rebinding the compositor if the
    composition texture revision changed. Otherwise bind the compositor's
    empty video layer.
-8. Begin the swapchain frame, retrying an out-of-date swapchain after an
+9. Begin the swapchain frame, retrying an out-of-date swapchain after an
    explicit resize.
-9. Ask the active video source whether its device-independent content state
-   advanced.
 10. Rerender the video surface when its device, display, content, or size state
     changed, then prepare the target for composition.
 11. Sample the optional video layer and UI texture in the final swapchain pass.
@@ -475,14 +477,15 @@ after resize, and producer destruction/rebinding. A sustained 60-frame probe
 uses a fixed 640×360 input and a 1100×600 target; it reports local throughput
 without imposing a machine-independent CI threshold.
 
-A separate headless test opens the manifest-hashed PPM fixture through real
-FFmpeg demux/decode, retains the immutable frame after decoder teardown,
-uploads its RGB24 planes through the production importer, captures both video
-and composition output, and verifies input/output copy diagnostics plus
-target-only rerender reuse. This is a first-frame integration proof, not
-continuous playback or representative compressed-media coverage. A fixed
-mastered PQ fixture, renderer image corpus, cross-backend capture, and recorded
-runtime display matrix do not exist yet.
+A separate headless test opens manifest-hashed PPM and Matroska/FFV1 fixtures
+through real FFmpeg demux/decode and retains immutable frames after decoder
+teardown. The RGB case captures both video and composition output and verifies
+copy diagnostics plus target-only rerender reuse. The compressed YUV case
+verifies exact decoded plane samples, BT.709 limited-range conversion, timing,
+and non-square-pixel metadata. This is first-frame software integration, not
+continuous playback or hardware decode. A fixed mastered PQ fixture, renderer
+image corpus, cross-backend capture, and recorded runtime display matrix do not
+exist yet.
 
 The built GUI has also completed an automated four-second startup liveness
 smoke with the configured Qt runtime. It created the normal application path

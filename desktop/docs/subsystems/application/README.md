@@ -2,12 +2,13 @@
 
 ## Status
 
-The current application shell is a single-window Windows presentation host
-with a thin QML `AppShell` and retained HDR Lab page. It establishes startup,
-object ownership, native presentation events, redirected Qt Quick input, and
-the active video-viewport boundary. It does not yet provide player navigation,
-file opening, persistent settings, fullscreen behavior, structured errors, or
-general logging.
+The application shell is a single-window Windows presentation host with a thin
+QML `AppShell`, default Player page, and retained HDR Lab. It establishes
+startup, object ownership, native presentation events, redirected Qt Quick
+input, the active video-viewport boundary, and asynchronous first-frame local
+file opening. It does not yet provide continuous playback, drag-and-drop,
+persistent settings, fullscreen behavior, general structured errors, or
+logging.
 
 Graphics details belong to
 [../graphics/README.md](../graphics/README.md). The current diagnostic QML is
@@ -34,7 +35,8 @@ does not live in the application window or QML page.
 4. Constructs and shows one `PresentationWindow`.
 5. Enters the Qt event loop.
 
-There is no command-line model, single-instance policy, recent-file state,
+One optional positional command-line path opens local media after construction.
+There is no full command-line model, single-instance policy, recent-file state,
 settings store, or application service container.
 
 ## Window ownership
@@ -45,6 +47,8 @@ this order, so destruction occurs in reverse:
 * `PresentationOutputState`.
 * `PresentationSettings`.
 * `DiagnosticVideoSource`.
+* `MediaSession`.
+* `ActiveVideoSource`.
 * `VideoViewportState`.
 * `RhiPresentationEngine`.
 
@@ -54,7 +58,7 @@ synchronous events.
 
 The window requests the factory-selected surface type, currently Direct3D,
 starts at 1100 × 760 logical pixels, has a 760 × 560 minimum, and currently
-uses the diagnostic title `Sunroom — RHI / HDR`.
+uses the title `Sunroom`.
 
 This direct ownership is intentionally simple for one window. Application-wide
 services should only be introduced when a concrete subsystem needs shared
@@ -83,15 +87,21 @@ methods, accessibility, drag-and-drop, and file-open events remain deferred.
 * Automatic or manual target peak.
 
 `VideoViewportState` separately holds the active page's video rectangle in root
-logical coordinates and its visibility. `AppShell` publishes the current
-`HdrLabPage` viewport; the presentation engine consumes it without knowing page
-types or QML layout.
+logical coordinates and its visibility. `AppShell` publishes either the Player
+or HDR Lab viewport; the presentation engine consumes it without knowing page
+types or QML layout. The engine further aspect-fits a known decoded display
+ratio inside that layout rectangle.
 
 `DiagnosticVideoSource` separately owns the pattern peak, diagnostic
 tone-mapping switch, animation state and cadence, content revision, and
 HDR-Lab-only renderer selection. It creates a new producer when the graphics
 device is recreated or that diagnostic selection changes, keeping
 source-specific state and producer choice out of the presentation engine.
+
+`MediaSession` owns file-open state and a decoded-frame source.
+`ActiveVideoSource` is the stable engine-facing router between that source and
+HDR Lab. QML selects only the semantic Player/Diagnostics route; it never sees
+native textures, producers, or backends.
 
 None of these values are persisted. They should not be grown into the final
 player settings indiscriminately: player preferences, playback-session state,
@@ -100,28 +110,35 @@ lifetimes.
 
 ## Errors and recovery
 
-The shell has no structured application error model. Graphics code logs
-recoverable failures and performs bounded recovery, while deployment,
-invariant, and exhausted recovery failures terminate through `qFatal`.
+The shell has a narrow media-session error model. File-open, decoded-frame
+import, and video-render failures become `MediaSession::Error` and hide the
+Player viewport. Graphics code logs recoverable failures and performs bounded
+recovery, while deployment, invariant, unsupported diagnostic-path, and
+exhausted recovery failures may still terminate through `qFatal`.
 
-The player eventually needs:
+The player still needs:
 
 * Structured subsystem errors.
-* User-facing loading, fallback, recovery, and fatal states.
+* Unified buffering, fallback, recovery, and fatal states beyond first-frame
+  opening.
 * Logs and diagnostics that remain available after a playback-session failure.
-* Cancellation-aware shutdown that does not block on a source or device.
+* Stronger cancellation containment for uninterruptible sources and devices.
 
-Those should be introduced with the first file-open and playback-session
-vertical slices rather than as an empty global framework.
+Introduce these with the playback and recovery slices that supply their real
+state rather than as an empty global framework.
 
 ## Verification
 
-Viewport state has a focused Qt Test target. A Qt Quick component target
-verifies root initial-property handoff and active-page viewport publication.
-The built application has completed an automated four-second hidden startup
-liveness smoke without user interaction; this verifies packaged-QML loading,
-startup, and graphics initialization, not complete UI behavior or visual
-correctness.
+Viewport, active-source routing, and media-session lifecycle have focused Qt
+Test targets. A Qt Quick component target verifies root initial-property
+handoff, all four initial Player states, cancel/retry/close command wiring,
+Player/HDR-Lab route selection, and active-page viewport publication.
+A prior diagnostic build completed an automated four-second hidden startup
+liveness smoke without user interaction. The current Player executable has a
+registered no-window mode that loads its packaged QML module with production
+type registrations. A full process scenario still needs to prove native-window,
+graphics-device, and swapchain liveness; the module check and component tests
+do not cover those boundaries.
 
 When features arrive, use:
 

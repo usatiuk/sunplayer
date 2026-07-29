@@ -11,21 +11,34 @@
 #include "app/PresentationSettings.h"
 #include "app/VideoViewportState.h"
 #include "graphics/GraphicsBackendFactory.h"
+#include "playback/MediaSession.h"
 #include "presentation/PresentationOutputState.h"
 #include "presentation/RhiPresentationEngine.h"
+#include "video/ActiveVideoSource.h"
 #include "video/DiagnosticVideoSource.h"
 
 PresentationWindow::PresentationWindow() {
     setSurfaceType(GraphicsBackendFactory::windowSurfaceType());
-    setTitle(tr("Sunroom — RHI / HDR"));
+    setTitle(tr("Sunroom"));
 
     m_outputState = std::make_unique<PresentationOutputState>(nullptr);
     m_settings = std::make_unique<PresentationSettings>(nullptr);
-    m_videoSource = std::make_unique<DiagnosticVideoSource>(
+    m_diagnosticVideoSource =
+        std::make_unique<DiagnosticVideoSource>(
+            VideoTargetReadback::Disabled);
+    m_mediaSession = std::make_unique<MediaSession>(
         VideoTargetReadback::Disabled);
+    m_activeVideoSource = std::make_unique<ActiveVideoSource>(
+        m_mediaSession->videoSource(),
+        *m_diagnosticVideoSource);
     m_videoViewport = std::make_unique<VideoViewportState>(nullptr);
     m_engine = std::make_unique<RhiPresentationEngine>(
-        *this, *m_outputState, *m_settings, *m_videoSource,
+        *this,
+        *m_outputState,
+        *m_settings,
+        *m_activeVideoSource,
+        *m_diagnosticVideoSource,
+        *m_mediaSession,
         *m_videoViewport);
 
     setMinimumSize({760, 560});
@@ -36,6 +49,10 @@ PresentationWindow::PresentationWindow() {
 }
 
 PresentationWindow::~PresentationWindow() = default;
+
+void PresentationWindow::openMedia(const QUrl &url) {
+    m_mediaSession->openMedia(url);
+}
 
 void PresentationWindow::exposeEvent(QExposeEvent *) {
     m_engine->handleExposure();

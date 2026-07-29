@@ -59,6 +59,22 @@ FfmpegFirstFrameResult failure(const QString &message) {
     return result;
 }
 
+FfmpegFirstFrameResult cancellation() {
+    FfmpegFirstFrameResult result;
+    result.cancelled = true;
+    return result;
+}
+
+struct InterruptState {
+    std::stop_token stopToken;
+};
+
+int interruptFfmpeg(void *opaque) {
+    const auto &state =
+        *static_cast<const InterruptState *>(opaque);
+    return state.stopToken.stop_requested() ? 1 : 0;
+}
+
 FfmpegFirstFrameResult decodedResult(
         AVFrame &frame,
         AVStream &stream,
@@ -118,12 +134,22 @@ bool FfmpegFirstFrameDiagnostics::isValid() const {
 bool FfmpegFirstFrameResult::isSuccess() const {
     return frame
         && diagnostics.isValid()
+        && error.isEmpty()
+        && !cancelled;
+}
+
+bool FfmpegFirstFrameResult::isCancelled() const {
+    return cancelled
+        && !frame
         && error.isEmpty();
 }
 
 FfmpegFirstFrameResult decodeFirstVideoFrame(
         const QString &path,
-        const VideoFrameIdentity &identity) {
+        const VideoFrameIdentity &identity,
+        std::stop_token stopToken) {
+    if (stopToken.stop_requested())
+        return cancellation();
     if (path.isEmpty())
         return failure(QStringLiteral("Media path is empty"));
 
@@ -132,7 +158,17 @@ FfmpegFirstFrameResult decodeFirstVideoFrame(
             "First-frame decode identity is invalid"));
     }
 
-    AVFormatContext *rawFormatContext = nullptr;
+    InterruptState interruptState{stopToken};
+    AVFormatContext *rawFormatContext =
+        avformat_alloc_context();
+    if (!rawFormatContext) {
+        return failure(QStringLiteral(
+            "Could not allocate the media container context"));
+    }
+    rawFormatContext->interrupt_callback = {
+        interruptFfmpeg,
+        &interruptState,
+    };
     const QByteArray encodedPath = path.toUtf8();
     int status = avformat_open_input(
         &rawFormatContext,
@@ -140,6 +176,10 @@ FfmpegFirstFrameResult decodeFirstVideoFrame(
         nullptr,
         nullptr);
     if (status < 0) {
+        if (rawFormatContext)
+            avformat_close_input(&rawFormatContext);
+        if (stopToken.stop_requested())
+            return cancellation();
         return failure(QStringLiteral(
             "Could not open media: %1")
             .arg(ffmpegError(status)));
@@ -149,6 +189,8 @@ FfmpegFirstFrameResult decodeFirstVideoFrame(
     status = avformat_find_stream_info(
         formatContext.get(), nullptr);
     if (status < 0) {
+        if (stopToken.stop_requested())
+            return cancellation();
         return failure(QStringLiteral(
             "Could not discover media streams: %1")
             .arg(ffmpegError(status)));
@@ -162,6 +204,8 @@ FfmpegFirstFrameResult decodeFirstVideoFrame(
         -1,
         &decoder,
         0);
+    if (stopToken.stop_requested())
+        return cancellation();
     if (streamIndex < 0 || !decoder) {
         return failure(QStringLiteral(
             "Could not select a video stream: %1")
@@ -187,6 +231,8 @@ FfmpegFirstFrameResult decodeFirstVideoFrame(
     status = avcodec_open2(
         codecContext.get(), decoder, nullptr);
     if (status < 0) {
+        if (stopToken.stop_requested())
+            return cancellation();
         return failure(QStringLiteral(
             "Could not open video decoder %1: %2")
             .arg(
@@ -203,6 +249,8 @@ FfmpegFirstFrameResult decodeFirstVideoFrame(
 
     const auto receiveFrame = [&]()
             -> std::optional<FfmpegFirstFrameResult> {
+        if (stopToken.stop_requested())
+            return cancellation();
         const int receiveStatus =
             avcodec_receive_frame(
                 codecContext.get(), frame.get());
@@ -211,10 +259,14 @@ FfmpegFirstFrameResult decodeFirstVideoFrame(
             return std::nullopt;
         }
         if (receiveStatus < 0) {
+            if (stopToken.stop_requested())
+                return cancellation();
             return failure(QStringLiteral(
                 "Video decoding failed: %1")
                 .arg(ffmpegError(receiveStatus)));
         }
+        if (stopToken.stop_requested())
+            return cancellation();
         return decodedResult(
             *frame,
             stream,
@@ -226,6 +278,8 @@ FfmpegFirstFrameResult decodeFirstVideoFrame(
 
     while ((status = av_read_frame(
                 formatContext.get(), packet.get())) >= 0) {
+        if (stopToken.stop_requested())
+            return cancellation();
         if (packet->stream_index != streamIndex) {
             av_packet_unref(packet.get());
             continue;
@@ -236,6 +290,8 @@ FfmpegFirstFrameResult decodeFirstVideoFrame(
                 codecContext.get(), packet.get());
         av_packet_unref(packet.get());
         if (sendStatus < 0) {
+            if (stopToken.stop_requested())
+                return cancellation();
             return failure(QStringLiteral(
                 "Could not submit video packet: %1")
                 .arg(ffmpegError(sendStatus)));
@@ -249,6 +305,8 @@ FfmpegFirstFrameResult decodeFirstVideoFrame(
             return std::move(*result);
         }
     }
+    if (stopToken.stop_requested())
+        return cancellation();
     if (status != AVERROR_EOF) {
         return failure(QStringLiteral(
             "Media read failed: %1")
@@ -257,6 +315,8 @@ FfmpegFirstFrameResult decodeFirstVideoFrame(
 
     status = avcodec_send_packet(codecContext.get(), nullptr);
     if (status < 0 && status != AVERROR_EOF) {
+        if (stopToken.stop_requested())
+            return cancellation();
         return failure(QStringLiteral(
             "Could not flush video decoder: %1")
             .arg(ffmpegError(status)));
@@ -269,6 +329,8 @@ FfmpegFirstFrameResult decodeFirstVideoFrame(
         return std::move(*result);
     }
 
+    if (stopToken.stop_requested())
+        return cancellation();
     return failure(QStringLiteral(
         "The selected video stream produced no decoded frame"));
 }

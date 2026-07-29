@@ -23,16 +23,27 @@ public:
         currentFrame() const;
     void setFrame(
         std::shared_ptr<const DecodedVideoFrame> frame);
+    void clearFrame();
 
     void prepareForPresentation(
         std::chrono::steady_clock::time_point now) override;
     std::uint64_t contentRevision() const override;
+    std::uint64_t producerConfigurationRevision() const override;
+    std::optional<double> displayAspectRatio() const override;
     bool wantsContinuousFrames() const override;
     std::unique_ptr<RenderedVideoProducer> createProducer(
         GraphicsDeviceDomain &graphicsDevice) const override;
+    bool reportPresentationFailure(const QString &reason) override;
+
+signals:
+    void presentationFailed(const QString &reason);
 
 private:
+    void advanceContentRevision();
+    void advanceProducerConfigurationRevision();
+
     std::shared_ptr<const DecodedVideoFrame> m_frame;
     VideoTargetReadback m_readback;
     std::uint64_t m_contentRevision = 1;
+    std::uint64_t m_producerConfigurationRevision = 1;
 };

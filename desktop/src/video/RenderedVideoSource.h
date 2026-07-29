@@ -3,8 +3,11 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 #include <QObject>
+#include <QString>
+#include <QtQml/qqmlregistration.h>
 
 class GraphicsDeviceDomain;
 class RenderedVideoProducer;
@@ -14,6 +17,7 @@ class RenderedVideoProducer;
 // contract; source-specific controls remain in the implementation.
 class RenderedVideoSource : public QObject {
     Q_OBJECT
+    QML_ANONYMOUS
 
 public:
     using QObject::QObject;
@@ -25,9 +29,16 @@ public:
     virtual std::uint64_t producerConfigurationRevision() const {
         return 1;
     }
+    virtual std::optional<double> displayAspectRatio() const {
+        return std::nullopt;
+    }
     virtual bool wantsContinuousFrames() const = 0;
     virtual std::unique_ptr<RenderedVideoProducer> createProducer(
         GraphicsDeviceDomain &graphicsDevice) const = 0;
+    virtual bool reportPresentationFailure(const QString &reason) {
+        Q_UNUSED(reason);
+        return false;
+    }
 
 signals:
     void updateRequested();

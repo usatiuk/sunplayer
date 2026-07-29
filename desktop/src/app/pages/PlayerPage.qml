@@ -1,0 +1,205 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Dialogs
+import QtQuick.Layouts
+
+VideoPage {
+    id: root
+
+    required property MediaSession session
+
+    readonly property bool ready:
+        session.state === MediaSession.Ready && session.hasFrame
+    videoViewportRect:
+        Qt.rect(videoFrame.x, videoFrame.y,
+                videoFrame.width, videoFrame.height)
+    videoViewportVisible:
+        visible && ready
+
+    FileDialog {
+        id: openDialog
+
+        title: qsTr("Open media")
+        fileMode: FileDialog.OpenFile
+        nameFilters: [
+            qsTr("Media files (*)")
+        ]
+        onAccepted: root.session.openMedia(selectedFile)
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        visible: !root.ready
+        color: "#090b10"
+    }
+
+    Item {
+        id: videoFrame
+
+        x: 24
+        y: 72
+        width: Math.max(1, root.width - 48)
+        height: Math.max(1, root.height - 96)
+
+        Rectangle {
+            anchors.fill: parent
+            color: "transparent"
+            border.color: root.ready ? "#303746" : "transparent"
+            border.width: 1
+        }
+    }
+
+    ColumnLayout {
+        objectName: "emptyState"
+        anchors.centerIn: parent
+        visible: root.session.state === MediaSession.Empty
+        spacing: 14
+
+        Label {
+            Layout.alignment: Qt.AlignHCenter
+            text: qsTr("Open a video to inspect its first decoded frame")
+            color: "white"
+            font.pixelSize: 22
+        }
+
+        Label {
+            Layout.alignment: Qt.AlignHCenter
+            text: qsTr("Playback controls arrive with continuous decoding.")
+            color: "#8e97a8"
+        }
+
+        Button {
+            objectName: "openMediaButton"
+            Layout.alignment: Qt.AlignHCenter
+            text: qsTr("Open media…")
+            onClicked: openDialog.open()
+        }
+    }
+
+    ColumnLayout {
+        objectName: "openingState"
+        anchors.centerIn: parent
+        visible: root.session.state === MediaSession.Opening
+        spacing: 14
+
+        BusyIndicator {
+            Layout.alignment: Qt.AlignHCenter
+            running: parent.visible
+        }
+
+        Label {
+            Layout.alignment: Qt.AlignHCenter
+            text: qsTr("Opening %1…").arg(
+                root.session.displayName)
+            color: "white"
+            font.pixelSize: 20
+        }
+
+        Button {
+            objectName: "cancelOpenButton"
+            Layout.alignment: Qt.AlignHCenter
+            text: qsTr("Cancel")
+            onClicked: root.session.cancel()
+        }
+    }
+
+    ColumnLayout {
+        objectName: "errorState"
+        anchors.centerIn: parent
+        visible: root.session.state === MediaSession.Error
+        width: Math.min(560, root.width - 64)
+        spacing: 14
+
+        Label {
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
+            text: qsTr("Could not display this video")
+            color: "#ffb5ad"
+            font.pixelSize: 22
+            font.weight: Font.DemiBold
+        }
+
+        Label {
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
+            text: root.session.errorMessage
+            color: "#c7ccd6"
+            wrapMode: Text.WordWrap
+        }
+
+        RowLayout {
+            Layout.alignment: Qt.AlignHCenter
+            spacing: 10
+
+            Button {
+                objectName: "retryMediaButton"
+                text: qsTr("Retry")
+                enabled: root.session.mediaUrl.toString().length > 0
+                onClicked: root.session.retry()
+            }
+
+            Button {
+                text: qsTr("Open another…")
+                onClicked: openDialog.open()
+            }
+        }
+    }
+
+    Rectangle {
+        anchors {
+            left: parent.left
+            right: parent.right
+            top: parent.top
+            margins: 16
+        }
+        visible: root.ready
+        height: readyLayout.implicitHeight + 16
+        radius: 8
+        color: Qt.rgba(17 / 255, 19 / 255, 24 / 255, 0.92)
+        border.color: "#303746"
+
+        RowLayout {
+            id: readyLayout
+
+            anchors {
+                fill: parent
+                leftMargin: 12
+                rightMargin: 12
+            }
+            spacing: 12
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 1
+
+                Label {
+                    Layout.fillWidth: true
+                    text: root.session.displayName
+                    color: "white"
+                    font.weight: Font.DemiBold
+                    elide: Text.ElideMiddle
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("Paused first frame · %1 · %2")
+                        .arg(root.session.videoSummary)
+                        .arg(root.session.decoderName)
+                    color: "#9ca6b8"
+                    elide: Text.ElideRight
+                }
+            }
+
+            Button {
+                text: qsTr("Open another…")
+                onClicked: openDialog.open()
+            }
+
+            Button {
+                objectName: "closeMediaButton"
+                text: qsTr("Close")
+                onClicked: root.session.cancel()
+            }
+        }
+    }
+}

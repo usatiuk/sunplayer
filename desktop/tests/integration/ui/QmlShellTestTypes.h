@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QUrl>
 #include <QtQml/qqmlregistration.h>
 
 class ShellTestPresentationOutputState final : public QObject {
@@ -129,4 +130,112 @@ private:
     bool m_toneMappingEnabled = true;
     bool m_animatePattern = false;
     bool m_useLibplacebo = true;
+};
+
+class ShellTestMediaSession final : public QObject {
+    Q_OBJECT
+    QML_NAMED_ELEMENT(MediaSession)
+    QML_UNCREATABLE("Test state is supplied by the component harness")
+
+    Q_PROPERTY(State state READ state NOTIFY sessionChanged)
+    Q_PROPERTY(QUrl mediaUrl MEMBER m_mediaUrl NOTIFY sessionChanged)
+    Q_PROPERTY(QString displayName MEMBER m_displayName NOTIFY sessionChanged)
+    Q_PROPERTY(QString errorMessage MEMBER m_errorMessage NOTIFY sessionChanged)
+    Q_PROPERTY(QString containerFormat MEMBER m_containerFormat
+               NOTIFY sessionChanged)
+    Q_PROPERTY(QString decoderName MEMBER m_decoderName NOTIFY sessionChanged)
+    Q_PROPERTY(QString videoSummary MEMBER m_videoSummary NOTIFY sessionChanged)
+    Q_PROPERTY(bool hasFrame READ hasFrame NOTIFY sessionChanged)
+
+public:
+    enum class State {
+        Empty,
+        Opening,
+        Ready,
+        Error,
+    };
+    Q_ENUM(State)
+
+    explicit ShellTestMediaSession(QObject *parent)
+        : QObject(parent) {}
+
+    State state() const { return m_state; }
+    bool hasFrame() const { return m_hasFrame; }
+    int openCount() const { return m_openCount; }
+    int cancelCount() const { return m_cancelCount; }
+    int retryCount() const { return m_retryCount; }
+
+    void setState(State state, bool hasFrame = false) {
+        m_state = state;
+        m_hasFrame = hasFrame;
+        if (state == State::Ready) {
+            m_mediaUrl = QUrl::fromLocalFile(
+                QStringLiteral("test-video.mkv"));
+            m_displayName =
+                QStringLiteral("test-video.mkv");
+            m_decoderName = QStringLiteral("ffv1");
+            m_videoSummary =
+                QStringLiteral("96×64 · yuv420p · 8-bit");
+        }
+        emit sessionChanged();
+    }
+
+    Q_INVOKABLE void openMedia(const QUrl &) {
+        ++m_openCount;
+    }
+    Q_INVOKABLE void cancel() {
+        ++m_cancelCount;
+        setState(State::Empty);
+    }
+    Q_INVOKABLE void retry() {
+        ++m_retryCount;
+    }
+
+signals:
+    void sessionChanged();
+
+private:
+    State m_state = State::Empty;
+    bool m_hasFrame = false;
+    QUrl m_mediaUrl;
+    QString m_displayName;
+    QString m_errorMessage;
+    QString m_containerFormat;
+    QString m_decoderName;
+    QString m_videoSummary;
+    int m_openCount = 0;
+    int m_cancelCount = 0;
+    int m_retryCount = 0;
+};
+
+class ShellTestActiveVideoSource final : public QObject {
+    Q_OBJECT
+    QML_NAMED_ELEMENT(ActiveVideoSource)
+    QML_UNCREATABLE("Test state is supplied by the component harness")
+
+    Q_PROPERTY(Route route READ route WRITE setRoute NOTIFY routeChanged)
+
+public:
+    enum class Route {
+        Player,
+        Diagnostics,
+    };
+    Q_ENUM(Route)
+
+    explicit ShellTestActiveVideoSource(QObject *parent)
+        : QObject(parent) {}
+
+    Route route() const { return m_route; }
+    void setRoute(Route route) {
+        if (route == m_route)
+            return;
+        m_route = route;
+        emit routeChanged();
+    }
+
+signals:
+    void routeChanged();
+
+private:
+    Route m_route = Route::Player;
 };

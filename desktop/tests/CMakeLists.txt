@@ -19,8 +19,26 @@ qt_add_executable(sunroom_video_viewport_tests
         ../src/app/VideoViewportState.h
 )
 
+qt_add_executable(sunroom_video_presentation_geometry_tests
+        unit/presentation/tst_VideoPresentationGeometry.cpp
+        ../src/presentation/VideoPresentationGeometry.cpp
+        ../src/presentation/VideoPresentationGeometry.h
+)
+
 qt_add_executable(sunroom_decoded_video_frame_tests
         unit/media/tst_DecodedVideoFrame.cpp
+)
+
+qt_add_executable(sunroom_media_session_tests
+        unit/playback/tst_MediaSession.cpp
+        ../src/playback/MediaSession.cpp
+        ../src/playback/MediaSession.h
+)
+
+qt_add_executable(sunroom_active_video_source_tests
+        unit/video/tst_ActiveVideoSource.cpp
+        ../src/video/ActiveVideoSource.cpp
+        ../src/video/ActiveVideoSource.h
 )
 
 qt_add_executable(sunroom_qml_shell_tests
@@ -52,6 +70,14 @@ set_source_files_properties(../src/app/pages/HdrLabPage.qml PROPERTIES
         QT_RESOURCE_ALIAS HdrLabPage.qml
         QT_QML_SKIP_CACHEGEN TRUE
 )
+set_source_files_properties(../src/app/pages/PlayerPage.qml PROPERTIES
+        QT_RESOURCE_ALIAS PlayerPage.qml
+        QT_QML_SKIP_CACHEGEN TRUE
+)
+set_source_files_properties(../src/app/pages/VideoPage.qml PROPERTIES
+        QT_RESOURCE_ALIAS VideoPage.qml
+        QT_QML_SKIP_CACHEGEN TRUE
+)
 
 qt_add_qml_module(sunroom_qml_shell_tests
         URI SunroomShellTest
@@ -60,6 +86,8 @@ qt_add_qml_module(sunroom_qml_shell_tests
         ../src/app/Main.qml
         ../src/app/AppShell.qml
         ../src/app/pages/HdrLabPage.qml
+        ../src/app/pages/PlayerPage.qml
+        ../src/app/pages/VideoPage.qml
 )
 
 target_include_directories(sunroom_presentation_target_tests
@@ -82,11 +110,33 @@ target_include_directories(sunroom_decoded_video_frame_tests
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
 )
 
+target_include_directories(
+        sunroom_video_presentation_geometry_tests
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+)
+
+target_include_directories(sunroom_media_session_tests
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+)
+
+target_include_directories(sunroom_active_video_source_tests
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+)
+
 target_include_directories(sunroom_qml_shell_tests
         PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
         "${CMAKE_CURRENT_SOURCE_DIR}/../src/app"
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/ui"
+)
+
+target_compile_definitions(
+        sunroom_qml_shell_tests
+        PRIVATE
+        SUNROOM_QT_QML_IMPORT_PATH="${QT6_INSTALL_PREFIX}/${QT6_INSTALL_QML}"
 )
 
 target_link_libraries(sunroom_presentation_target_tests
@@ -111,10 +161,36 @@ target_link_libraries(sunroom_decoded_video_frame_tests
         sunroom_ffmpeg
 )
 
+target_link_libraries(
+        sunroom_video_presentation_geometry_tests
+        PRIVATE
+        Qt6::Test
+)
+
+target_compile_definitions(
+        sunroom_media_session_tests
+        PRIVATE
+        SUNROOM_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
+)
+target_link_libraries(sunroom_media_session_tests
+        PRIVATE
+        Qt6::Quick
+        Qt6::Test
+        sunroom_video_pipeline
+)
+
+target_link_libraries(sunroom_active_video_source_tests
+        PRIVATE
+        Qt6::Quick
+        Qt6::Test
+        sunroom_video_pipeline
+)
+
 target_link_libraries(sunroom_qml_shell_tests
         PRIVATE
         Qt6::Quick
         Qt6::QuickControls2
+        Qt6::QuickDialogs2
         Qt6::Test
 )
 
@@ -135,6 +211,9 @@ if (WIN32)
             sunroom_presentation_target_tests
             sunroom_rendered_video_surface_tests
             sunroom_video_viewport_tests
+            sunroom_video_presentation_geometry_tests
+            sunroom_media_session_tests
+            sunroom_active_video_source_tests
             sunroom_qml_shell_tests
             sunroom_libplacebo_dependency_tests)
         sunroom_stage_windows_runtime(${test_target})
@@ -144,6 +223,10 @@ if (WIN32)
     )
     sunroom_stage_windows_runtime(
             sunroom_ffmpeg_dependency_tests
+    )
+    sunroom_stage_qt_platform_plugin(
+            sunroom_qml_shell_tests
+            Qt6::QOffscreenIntegrationPlugin
     )
 endif ()
 
@@ -168,22 +251,60 @@ add_test(
 )
 
 add_test(
+        NAME video-presentation-geometry
+        COMMAND sunroom_video_presentation_geometry_tests
+)
+
+add_test(
+        NAME media-session
+        COMMAND sunroom_media_session_tests
+)
+
+add_test(
+        NAME active-video-source
+        COMMAND sunroom_active_video_source_tests
+)
+
+add_test(
         NAME qml-shell
         COMMAND sunroom_qml_shell_tests
+)
+
+add_test(
+        NAME packaged-qml-module
+        COMMAND $<TARGET_FILE:sunroom> --verify-qml
 )
 
 set_tests_properties(
         presentation-target
         rendered-video-surface
         video-viewport
+        video-presentation-geometry
         decoded-video-frame
+        active-video-source
         PROPERTIES LABELS "unit"
+)
+
+set_tests_properties(
+        media-session
+        PROPERTIES
+        LABELS "concurrency;integration;media"
+        TIMEOUT 30
 )
 
 set_tests_properties(
         qml-shell
         PROPERTIES
         LABELS "component;ui"
+        TIMEOUT 30
+        ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}"
+)
+
+set_tests_properties(
+        packaged-qml-module
+        PROPERTIES
+        LABELS "application;integration;ui"
         TIMEOUT 30
 )
 

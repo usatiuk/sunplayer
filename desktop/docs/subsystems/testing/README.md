@@ -6,13 +6,16 @@ Sunroom has CTest/Qt Test targets for pure presentation-target policy,
 video-viewport state, rendered-video surface validity/reuse, and real
 headless D3D11 QRhi and libplacebo producer/compositor capture. A non-presenting Qt Quick
 component test covers the real QML shell's initial-property and viewport
-publication contract. Dependency tests verify the pinned installed libplacebo
-and FFmpeg configurations across the MSVC-to-clang-cl DLL boundary. A first
-pinned, hashed lossless RGB fixture crosses real FFmpeg demux/decode,
-libplacebo upload, and final QRhi composition. Sunroom does not yet have a
-representative compressed-media corpus, golden-image suite, or automated
-application scenarios. The accepted testing
-direction is defined in
+publication and Player/HDR-Lab routing contract. Dependency tests verify the
+pinned installed libplacebo and FFmpeg configurations across the
+MSVC-to-clang-cl DLL boundary. Pinned, hashed lossless RGB and compressed
+BT.709 YUV fixtures cross real FFmpeg demux/decode and libplacebo upload; the
+RGB path also crosses final QRhi composition. Session tests cover real
+asynchronous opening plus controlled cancellation, stale-generation rejection,
+destruction, and presentation failure. A no-window application mode loads the
+packaged QML module with its production type registrations. Sunroom does not
+yet have a broad media corpus, golden-image suite, or automated application
+scenarios. The accepted testing direction is defined in
 [../../TESTING.md](../../TESTING.md), and active bootstrap work is tracked in
 [PLAN.md](PLAN.md).
 
@@ -29,7 +32,7 @@ the whole player:
 * The real pinned FFmpeg DLLs, software-frame ownership, first-frame decode,
   stream-default precedence, hardware-plane description, software upload,
   target-only rerender reuse, and final composition.
-* A recorded Windows SDR/HDR manual matrix.
+* A future recorded Windows SDR/HDR manual matrix.
 
 As media subsystems arrive, coverage moves outward through real libplacebo,
 FFmpeg, libass, scheduling, audio, and the application process.
@@ -81,10 +84,18 @@ second case crosses that boundary with the production D3D11 domain and
 libplacebo renderer. The first-frame integration test uses
 `QTEST_GUILESS_MAIN` for the same headless QRhi reason.
 
+The media-session test uses `QTEST_GUILESS_MAIN` because worker completion is
+delivered through queued Qt events and therefore needs `QCoreApplication`,
+without loading a GUI platform plugin.
+
 The QML shell component test uses `QTEST_MAIN` because Qt Quick Controls and
-its hidden `QQuickWindow` scene require `QGuiApplication`. It never shows a
-native window. Correct build-local DLL staging remains necessary because
-loader failures occur before test code can run.
+its hidden `QQuickWindow` scene require `QGuiApplication`. It selects and
+stages Qt's offscreen platform plugin before application construction and
+selects the deterministic Basic Controls style. It adds the configured Qt QML
+module root to its engine and CTest prepends Qt's configured binary directory
+for QML-plugin dependencies; it never shows a native window. Correct
+build-local DLL and platform-plugin staging remains necessary because loader
+failures can occur before test code runs.
 
 ## Test seams
 
@@ -96,6 +107,8 @@ Early likely seams are:
 * Explicit graphics-device and display revisions on rendered surfaces.
 * Production source/producer/target contracts with readback enabled only for
   the real offscreen GPU test.
+* An injected first-frame open operation for deterministic cancellation and
+  stale-completion tests; real FFmpeg remains the default and covers success.
 
 Later seams include a monotonic clock, audio sink, source-fault adapter, and
 test-control endpoint. They should arrive with the subsystem behavior they
@@ -108,14 +121,15 @@ Current verified coverage:
 | Boundary | State |
 | --- | --- |
 | Configured Windows Debug build | Builds successfully |
-| Focused automated tests | Nine CTest targets pass, covering presentation-target policy, video-viewport state, real QML shell publication, rendered-video and decoded-frame lifecycle, two dependency boundaries, and two real GPU paths |
+| Focused automated tests | Thirteen CTest targets cover presentation-target and aspect-fit policy, video-viewport state, active-source routing, media-session lifecycle, real QML shell publication and production registration, rendered-video and decoded-frame lifecycle, two dependency boundaries, and two real GPU paths |
 | libplacebo dependency boundary | The real DLL loads; pinned version, installed D3D11/Shaderc/built-in-DOVI configuration, disabled Vulkan/OpenGL/external-libdovi features, runtime staging, and log lifecycle pass |
 | FFmpeg dependency boundary | The three selected DLLs load; pinned major versions, D3D11VA, native H.264/HEVC decoders, disabled Vulkan/swscale configuration, and explicit runtime staging pass |
 | Real QRhi/libplacebo capture | Factory-selected D3D11 domain; shared QRhi device and immediate context; persistent libplacebo renderer; fixed-size persistent software input; distinct per-input-frame and per-output-render transfer diagnostics; direct wrapped RGBA16F target; aligned pattern layout; sRGB normalization at 80, 100, and 203 nits; target-relative PQ normalization at 100 and 203 nits; minimum-target value/known-state contract; zero output copies; pixel-validated resize/rewrap and producer rebinding; final composition readbacks; and a non-gating 60-frame throughput probe pass |
-| First decoded frame | Manifest-enforced SHA-256 for the pinned PPM fixture; caller-owned unique identities; real demux/decode; retained AVFrame and side-data lifetime; stream/frame metadata precedence; hardware-plane description and generation compatibility; RGB24 software upload; known pixel capture; final composition; one input upload reused across 203/100-nit target rerender; zero input download/GPU copy and zero output copy |
-| Built application startup | Automated four-second GUI/device/swapchain liveness smoke passed; not yet a registered scenario |
+| First decoded frame | Manifest-enforced SHA-256 for pinned PPM and Matroska/FFV1 fixtures; caller-owned unique identities; real demux/decode; retained AVFrame and side-data lifetime; stream/frame metadata precedence; hardware-plane description and generation compatibility; RGB24 and limited-range BT.709 YUV420P software upload; exact YUV and tolerant linear-RGB capture; final RGB composition; one input upload reused across 203/100-nit target rerender; zero input download/GPU copy and zero output copy |
+| First media session | Real off-thread local open plus controlled Opening/Ready/Error, nonblocking cancellation/replacement, superseding generation, shutdown, and nonfatal presentation-failure behavior |
+| Built application startup | The built Player executable has a registered no-window check for packaged QML and production type registration. A prior diagnostic build passed a four-second GUI/device/swapchain liveness smoke; a full Player process scenario remains missing |
 | Recorded SDR/HDR runtime matrix | Not implemented |
-| Representative compressed-media scenarios | Not implemented; the current lossless image fixture proves only the first-frame boundary |
+| Representative compressed-media scenarios | Deterministic software Matroska/FFV1 YUV fixture implemented; H.264/HEVC hardware-decode coverage remains missing |
 | Fixed mastered PQ source across display targets | Not implemented |
 | Physical output measurement | Deferred |
 
@@ -123,7 +137,8 @@ Missing coverage must remain visible in this table or the active testing plan
 until it is implemented or deliberately removed from scope.
 
 Focused tests are grouped by responsibility under `tests/unit/media/`,
-`tests/unit/presentation/`, `tests/unit/ui/`, and `tests/unit/video/`. Future
+`tests/unit/playback/`, `tests/unit/presentation/`, `tests/unit/ui/`, and
+`tests/unit/video/`. Future
 actual-application scenarios
 use sibling trees when their first concrete tests arrive; the first GPU
 boundary test is under `tests/integration/presentation/`, and the libplacebo

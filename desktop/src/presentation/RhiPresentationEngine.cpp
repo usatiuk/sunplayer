@@ -16,9 +16,13 @@
 #include "app/VideoViewportState.h"
 #include "graphics/GraphicsBackendFactory.h"
 #include "graphics/GraphicsDeviceDomain.h"
+#include "playback/MediaSession.h"
 #include "presentation/HdrCompositor.h"
 #include "presentation/PresentationOutputState.h"
 #include "presentation/QuickUiLayer.h"
+#include "presentation/VideoPresentationGeometry.h"
+#include "video/ActiveVideoSource.h"
+#include "video/DiagnosticVideoSource.h"
 #include "video/RenderedVideoProducer.h"
 #include "video/RenderedVideoSurface.h"
 #include "video/RenderedVideoSource.h"
@@ -54,7 +58,9 @@ RhiPresentationEngine::RhiPresentationEngine(
         QWindow &window,
         PresentationOutputState &outputState,
         PresentationSettings &settings,
-        RenderedVideoSource &videoSource,
+        ActiveVideoSource &videoSource,
+        DiagnosticVideoSource &diagnosticSource,
+        MediaSession &mediaSession,
         VideoViewportState &videoViewport,
         QObject *parent)
     : QObject(parent),
@@ -62,6 +68,8 @@ RhiPresentationEngine::RhiPresentationEngine(
       m_outputState(outputState),
       m_settings(settings),
       m_videoSource(videoSource),
+      m_diagnosticSource(diagnosticSource),
+      m_mediaSession(mediaSession),
       m_videoViewport(videoViewport) {
     m_outputVerificationTimer.setSingleShot(true);
     m_outputVerificationTimer.setInterval(std::chrono::milliseconds(100));
@@ -118,8 +126,7 @@ void RhiPresentationEngine::renderFrame() {
 
     if (!m_rhi && !initializeDevice())
         return;
-    const bool videoProducerChanged =
-        refreshVideoProducer();
+    bool videoProducerChanged = false;
     if (m_recreateSwapChain) {
         releaseSwapChain();
         m_recreateSwapChain = false;
@@ -146,6 +153,18 @@ void RhiPresentationEngine::renderFrame() {
         handleDeviceLoss("rendering the Qt Quick layer");
         return;
     }
+    // QML synchronization can switch the active page/source. Let a visible
+    // source select its frame first because preparation may change producer
+    // configuration, content, or display geometry.
+    const bool videoLayerRenderable =
+        m_videoViewport.isRenderable();
+    if (videoLayerRenderable) {
+        m_videoSource.prepareForPresentation(
+            std::chrono::steady_clock::now());
+    }
+    // Rebind only after the page route and prepared source state are coherent.
+    // Hidden route changes still replace the producer promptly.
+    videoProducerChanged = refreshVideoProducer();
 
     const float scaleX = static_cast<float>(pixelSize.width())
         / static_cast<float>(m_window.width());
@@ -157,21 +176,20 @@ void RhiPresentationEngine::renderFrame() {
     Q_ASSERT(m_videoProducer);
     QRect videoRect;
     std::optional<RenderedVideoSurfaceState> requestedSurface;
-    if (m_videoViewport.isRenderable()) {
+    if (videoLayerRenderable) {
         const QRectF viewport = m_videoViewport.rect();
         const QRectF scaledViewport(
             viewport.x() * scaleX,
             viewport.y() * scaleY,
             viewport.width() * scaleX,
             viewport.height() * scaleY);
-        videoRect = scaledViewport.toAlignedRect().intersected(
-            QRect(QPoint{}, pixelSize));
+        videoRect = aspectFitVideoRect(
+            scaledViewport.toAlignedRect().intersected(
+                QRect(QPoint{}, pixelSize)),
+            m_videoSource.displayAspectRatio());
     }
 
     if (!videoRect.isEmpty()) {
-        m_videoSource.prepareForPresentation(
-            std::chrono::steady_clock::now());
-
         const float targetPeak = m_settings.automaticTargetPeak()
             ? m_outputState.effectiveTargetHeadroom()
             : m_settings.manualTargetHeadroom();
@@ -478,6 +496,8 @@ bool RhiPresentationEngine::initializeDevice() {
         *m_rhi,
         m_outputState,
         m_settings,
+        m_diagnosticSource,
+        m_mediaSession,
         m_videoSource,
         m_videoViewport);
     connect(m_quickUi.get(), &QuickUiLayer::updateRequested,
@@ -625,12 +645,22 @@ bool RhiPresentationEngine::handleVideoOperationResult(
     updateBackendState();
     const QString reason =
         m_videoProducer->diagnostics().target.fallbackReason;
+    const QString effectiveReason = reason.isEmpty()
+        ? QStringLiteral("No supported video path is available")
+        : reason;
+    if (m_videoSource.reportPresentationFailure(
+            effectiveReason)) {
+        qWarning(
+            "Video path unavailable while %s: %s",
+            operation,
+            qPrintable(effectiveReason));
+        requestFrame();
+        return false;
+    }
     qFatal(
         "Video path unavailable while %s: %s",
         operation,
-        qPrintable(reason.isEmpty()
-            ? QStringLiteral("no supported path")
-            : reason));
+        qPrintable(effectiveReason));
     return false;
 }
 

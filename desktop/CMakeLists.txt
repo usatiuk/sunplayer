@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.22)
 
 if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     set(_sunroom_vcpkg_toolchain)
@@ -61,6 +61,7 @@ find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS
         GuiPrivate
         Quick
         QuickControls2
+        QuickDialogs2
         ShaderTools
 )
 find_package(libplacebo 7.360.1 EXACT CONFIG REQUIRED)
@@ -74,6 +75,20 @@ if (WIN32)
                         $<TARGET_RUNTIME_DLLS:${target}>
                         $<TARGET_FILE_DIR:${target}>
                 COMMAND_EXPAND_LISTS
+                VERBATIM
+        )
+    endfunction()
+
+    function(sunroom_stage_qt_platform_plugin target plugin_target)
+        add_custom_command(
+                TARGET ${target}
+                POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory
+                        "$<TARGET_FILE_DIR:${target}>/platforms"
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "$<TARGET_FILE:${plugin_target}>"
+                        "$<TARGET_FILE_DIR:${target}>/platforms/"
+                VERBATIM
         )
     endfunction()
 endif ()
@@ -105,6 +120,8 @@ add_library(sunroom_video_pipeline STATIC
         src/graphics/GraphicsDeviceDomain.h
         src/presentation/HdrCompositor.cpp
         src/presentation/HdrCompositor.h
+        src/presentation/VideoPresentationGeometry.cpp
+        src/presentation/VideoPresentationGeometry.h
         src/video/DiagnosticVideoProducer.cpp
         src/video/DiagnosticVideoProducer.h
         src/video/DiagnosticVideoSource.cpp
@@ -153,6 +170,8 @@ if (WIN32)
 endif ()
 
 qt_add_executable(sunroom
+        src/playback/MediaSession.cpp
+        src/playback/MediaSession.h
         src/app/main.cpp
         src/app/PresentationSettings.cpp
         src/app/PresentationSettings.h
@@ -171,6 +190,8 @@ qt_add_executable(sunroom
         src/presentation/QuickUiLayer.h
         src/presentation/RhiPresentationEngine.cpp
         src/presentation/RhiPresentationEngine.h
+        src/video/ActiveVideoSource.cpp
+        src/video/ActiveVideoSource.h
 )
 
 set_source_files_properties(src/app/Main.qml PROPERTIES
@@ -182,6 +203,12 @@ set_source_files_properties(src/app/AppShell.qml PROPERTIES
 set_source_files_properties(src/app/pages/HdrLabPage.qml PROPERTIES
         QT_RESOURCE_ALIAS HdrLabPage.qml
 )
+set_source_files_properties(src/app/pages/PlayerPage.qml PROPERTIES
+        QT_RESOURCE_ALIAS PlayerPage.qml
+)
+set_source_files_properties(src/app/pages/VideoPage.qml PROPERTIES
+        QT_RESOURCE_ALIAS VideoPage.qml
+)
 
 qt_add_qml_module(sunroom
         URI Sunroom
@@ -190,7 +217,11 @@ qt_add_qml_module(sunroom
         src/app/Main.qml
         src/app/AppShell.qml
         src/app/pages/HdrLabPage.qml
+        src/app/pages/PlayerPage.qml
+        src/app/pages/VideoPage.qml
 )
+
+qt_generate_foreign_qml_types(sunroom_video_pipeline sunroom)
 
 qt_add_shaders(sunroom "sunroom_shaders"
         PRECOMPILE
@@ -210,14 +241,17 @@ target_link_libraries(sunroom
         Qt6::GuiPrivate
         Qt6::Quick
         Qt6::QuickControls2
+        Qt6::QuickDialogs2
         sunroom_video_pipeline
 )
 
 target_include_directories(sunroom
         PRIVATE
+        "${CMAKE_CURRENT_BINARY_DIR}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
         # qmltyperegistrar includes declaratively registered types by basename.
         "${CMAKE_CURRENT_SOURCE_DIR}/src/app"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/playback"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/presentation"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/video"
 )
@@ -237,6 +271,23 @@ if (WIN32)
     )
 
     sunroom_stage_windows_runtime(sunroom)
+    add_custom_command(
+            TARGET sunroom
+            POST_BUILD
+            COMMAND "$<TARGET_FILE:Qt6::windeployqt>"
+                    --qmldir
+                    "${CMAKE_CURRENT_SOURCE_DIR}/src/app"
+                    --verbose
+                    0
+                    --no-compiler-runtime
+                    --no-translations
+                    --no-opengl-sw
+                    "$<TARGET_FILE:sunroom>"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/qt.conf"
+                    "$<TARGET_FILE_DIR:sunroom>/qt.conf"
+            VERBATIM
+    )
 
 endif ()
 

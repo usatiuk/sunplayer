@@ -8,13 +8,18 @@ DXVA2, and Media Foundation support; the application currently exercises only
 software decoding. Hardware-device creation and D3D11 frame import are the next
 media/video-rendering slice.
 
-The current synchronous `decodeFirstVideoFrame()` boundary opens a local file,
+The synchronous `decodeFirstVideoFrame()` operation opens a local file,
 discovers the best video stream, decodes the first presentable frame, makes its
 stream metadata self-contained, and returns an immutable
-`DecodedVideoFrame`. It is an integration proof, not the eventual continuous
-decoder: it has no cancellation, worker ownership, packet queue, seeking, or
-source-stall recovery. The caller supplies the complete frame identity; the
-helper does not invent session generations or reusable frame IDs.
+`DecodedVideoFrame`. `MediaSession` runs that operation on a worker with a
+`std::stop_token`; an FFmpeg interrupt callback and decode-loop checks make
+ordinary local-file work cooperatively cancellable. The caller still supplies
+the complete frame identity.
+
+This is an integration slice, not the eventual continuous decoder: it has no
+packet queue, seeking, track discovery model, or source-stall recovery.
+Uninterruptible mounted-filesystem kernel waits remain outside the guarantee
+and may require helper-process containment.
 
 ## Dependency boundary
 
@@ -73,24 +78,27 @@ created them and derive their signal format and component depth from
 `AVHWFramesContext::sw_format`, not the opaque hardware pixel format. A frame
 from a stale generation cannot be imported after device recreation.
 
-The first-frame render fixture has square pixels. The presentation pipeline
-does not yet apply decoded sample aspect ratio or orientation to an
-aspect-preserving content rectangle; that geometry seam remains part of the
-first Player-page/session slice.
+`DecodedVideoSource` publishes the current immutable frame on the presentation
+thread and derives its display aspect ratio from visible geometry and effective
+sample aspect ratio. The presentation engine fits that ratio inside the
+page-provided viewport. Quarter-turn orientation adjusts the fitted ratio;
+rotated-content output still needs a dedicated fixture and capture.
 
 ## Next implementation
 
 Continuous decoding will reuse this frame contract while adding:
 
-1. Cancellable local-source ownership and stream discovery results.
-2. Decoder worker and bounded packet/frame queues.
+1. Persistent demux/decoder worker ownership and bounded packet/frame queues.
+2. Complete stream discovery and normalized session metadata.
 3. Standard FFmpeg hardware-config negotiation.
 4. A D3D11VA hardware context created from Sunroom's video-capable shared
    D3D11 device.
 5. Explicit hardware rejection and software-decoder fallback diagnostics.
 
-The first-frame helper should disappear into that session rather than grow a
-parallel mini-player API.
+The first-frame operation is already owned by `MediaSession` through one
+persistent, latest-request worker. Continuous decoding should evolve that
+worker into bounded demux/decode queues rather than create a parallel
+mini-player API.
 
 ## Verification
 
@@ -101,8 +109,9 @@ Vulkan and swscale remain disabled.
 The decoded-frame unit test releases the originating `AVFrame` and verifies the
 Sunroom wrapper still owns valid software pixels and semantic snapshots.
 
-The first pipeline fixture is a pinned, hashed, lossless 4×4 PPM image. A real
-FFmpeg demuxer and decoder produce RGB24, then the production libplacebo
-software importer and QRhi compositor capture its known pixels. This proves
-the integration boundary but is not yet representative compressed-video,
-timeline, or hardware-decoding coverage.
+The first pipeline fixture is a pinned, hashed, lossless 4×4 PPM image. A
+second analytically generated fixture is a three-frame Matroska/FFV1 stream
+with `yuv420p`, BT.709 primaries/transfer/matrix, limited range, left chroma
+location, 4 fps timing, and SAR 32:27. Tests verify its exact decoded YUV
+samples and tolerant linear-RGB libplacebo output. It proves deterministic
+compressed software decode and YUV conversion, not hardware decoding.

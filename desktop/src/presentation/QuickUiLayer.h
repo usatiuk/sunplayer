@@ -7,6 +7,9 @@
 
 class PresentationOutputState;
 class PresentationSettings;
+class ActiveVideoSource;
+class DiagnosticVideoSource;
+class MediaSession;
 class QQuickItem;
 class QQuickRenderControl;
 class QQuickWindow;
@@ -16,7 +19,6 @@ class QRhiRenderPassDescriptor;
 class QRhiTexture;
 class QRhiTextureRenderTarget;
 class QWindow;
-class RenderedVideoSource;
 class VideoViewportState;
 
 // Redirected Qt Quick scene exposed as one compositor texture.
@@ -39,7 +41,9 @@ public:
                  QRhi &rhi,
                  PresentationOutputState &outputState,
                  PresentationSettings &settings,
-                 RenderedVideoSource &videoSource,
+                 DiagnosticVideoSource &diagnosticSource,
+                 MediaSession &mediaSession,
+                 ActiveVideoSource &activeVideoSource,
                  VideoViewportState &videoViewport,
                  QObject *parent = nullptr);
     ~QuickUiLayer() override;
@@ -66,7 +70,9 @@ private:
     QRhi &m_rhi;
     PresentationOutputState &m_outputState;
     PresentationSettings &m_settings;
-    RenderedVideoSource &m_videoSource;
+    DiagnosticVideoSource &m_diagnosticSource;
+    MediaSession &m_mediaSession;
+    ActiveVideoSource &m_activeVideoSource;
     VideoViewportState &m_videoViewport;
     std::unique_ptr<QQuickRenderControl> m_renderControl;
     std::unique_ptr<QQuickWindow> m_quickWindow;

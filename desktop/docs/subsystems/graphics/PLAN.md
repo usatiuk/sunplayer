@@ -109,7 +109,7 @@ code.
   strongest practical boundary.
 
 The shared source/producer lifecycle, direct QRhi target, and optional
-composition layer are implemented. The Windows build, nine CTest targets,
+composition layer are implemented. The Windows build, focused CTest targets,
 real D3D11 capture, and hidden startup smoke pass. Tests drive the diagnostic
 source and producer through shared interfaces, verify direct-target diagnostics
 with no copies, exercise committed and discarded render states after accepted
@@ -166,7 +166,7 @@ playback should prefer the later platform hardware importer when available.
 
 ### Work
 
-* [ ] Accept a local file selected by the application shell.
+* [x] Accept a local file selected by the application shell.
 * [x] Prove local open/probe through FFmpeg against a pinned headless fixture.
 * [x] Select the default video stream and decode its first displayable frame in
   the headless integration boundary.
@@ -177,8 +177,9 @@ playback should prefer the later platform hardware importer when available.
 * [x] Preserve the decoded frame so target-only changes can rerender it without
   another input upload.
 * [ ] Normalize full effective color metadata with provenance.
-* [ ] Apply decoded sample-aspect-ratio and orientation to the final
-  aspect-preserving content rectangle.
+* [x] Apply decoded sample aspect ratio to an aspect-preserving content
+  rectangle.
+* [ ] Capture-validate general display-matrix orientation.
 * [ ] Surface loading and decode errors without terminating the UI.
 * [ ] Display source pixel format, dimensions, color metadata, decode path,
   render path, and copies in diagnostics.

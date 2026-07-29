@@ -2,13 +2,14 @@
 
 ## Status
 
-The current QML scene has a thin `AppShell` containing the retained
-`HdrLabPage`, rendered offscreen through `QQuickRenderControl`. The shell and
-viewport boundary are production structure; HDR Lab remains developer tooling,
-not the final player interface.
+The QML scene has a thin `AppShell` with a default `PlayerPage` and retained
+`HdrLabPage`, rendered offscreen through `QQuickRenderControl`. The shell,
+navigation, and viewport boundary are production structure; HDR Lab remains
+developer tooling.
 
-There is no `PlayerPage` or page selector yet. Both arrive with truthful
-file-open/session states rather than controls disconnected from behavior.
+Player currently opens a local file and displays one paused decoded frame
+through the production libplacebo path. It intentionally has no play, seek,
+track, subtitle, or volume controls before those commands exist.
 
 ## Page structure
 
@@ -21,16 +22,19 @@ The current and intended QML organization is:
 Main.qml
     AppShell.qml
     pages/
+        VideoPage.qml
         HdrLabPage.qml
-        PlayerPage.qml        # with the first real session slice
+        PlayerPage.qml
     components/
         shared controls and read-only diagnostics as they become concrete
 ```
 
-`AppShell` currently owns the only active page and translates that page's
-viewport into root logical coordinates. Once Player exists, the shell will own
-simple top-level navigation and shared chrome. A small selector is sufficient;
-a routing framework, page registry, or service container is not needed.
+`VideoPage` defines the viewport rectangle and visibility contract shared by
+Player and HDR Lab. `AppShell` owns simple top-level navigation and translates
+the active page's viewport into root logical coordinates. A stable
+`ActiveVideoSource` delegates presentation to Player or HDR Lab and changes the
+concrete producer only at a render boundary. No routing framework, page
+registry, or service container is needed.
 
 `QuickUiLayer` supplies application-owned objects as initial properties of
 `Main.qml`; it does not install global QML context properties. The root is an
@@ -49,8 +53,8 @@ UI-facing session contract. `PlayerPage` observes that state and issues
 commands; it does not recreate canonical open, playback, track, timing, or
 error state in page-local properties.
 
-Define this seam with the first `PlayerPage` implementation from the states and
-commands that slice actually needs. Expand it with working behavior rather than
+The current seam exposes `Empty`, `Opening`, `Ready`, and `Error`, plus open,
+cancel, retry, and close behavior. Expand it with working behavior rather than
 adding disconnected controls.
 
 ## Video viewport
@@ -73,15 +77,16 @@ Inactive pages cannot compete for the viewport.
 
 ## Player page
 
-Introduce `PlayerPage` with the first real file-open/session slice:
+`PlayerPage` implements the first real file-open/session slice:
 
 * Empty.
 * Opening.
 * Error.
 * Ready with a displayed frame.
 
-Add play, seek, track, subtitle, and volume controls only when their underlying
-commands and observable states exist.
+The Ready state labels the view as a paused first frame and exposes only open
+another or close. Add play, seek, track, subtitle, and volume controls only when
+their underlying commands and observable states exist.
 
 ## HDR Lab and diagnostics
 
@@ -94,8 +99,8 @@ recreate the producer at a frame boundary and show the retained procedural QRhi
 implementation for A/B inspection. Both implementations receive the same
 pattern layout and nominal samples; renderer and tone-mapping differences may
 remain. This control is explicitly not a playback fallback or a player
-preference. The future Player page uses libplacebo and exposes an actionable
-error if no supported target path is available.
+preference. Player uses libplacebo and exposes an actionable session error if
+no supported target path is available.
 
 Diagnostics label the input path separately from output interop. The current
 libplacebo lab source reports one fixed-size software-frame CPU upload; the direct
@@ -103,8 +108,8 @@ D3D11 target reports zero output copies or CPU transfers. Future hardware-frame
 import must therefore remain distinguishable rather than making every path
 look “zero-copy.”
 
-Once Player exists, it becomes the default page and HDR Lab remains reachable
-through an explicit diagnostics entry or shortcut. Reusable read-only pipeline
+Player is the default page and HDR Lab remains reachable through the top-level
+selector. Reusable read-only pipeline
 diagnostics may also appear in a Player drawer or page, but HDR Lab controls do
 not become ordinary player preferences.
 
@@ -114,13 +119,16 @@ Focused Qt Test coverage verifies viewport geometry, visibility, notification,
 and renderability. A non-presenting Qt Quick component test creates the real
 QML shell through the same initial-property contract, resizes it, and verifies
 that active-page geometry and visibility reach `VideoViewportState`. It also
-verifies the diagnostic renderer switch's default and source binding. The real
+verifies Empty/Opening/Ready/Error visibility, cancel/retry/close command
+wiring, Player/HDR-Lab route and viewport selection, and the diagnostic
+renderer switch's default and source binding. The real
 D3D11 capture verifies that zero video geometry and the compositor's fallback
 binding produce the normal background rather than sampling the retained video
 surface. It also destroys a bound diagnostic producer, creates the other
 implementation, rebinds the compositor, and captures the new result. The
-packaged application also passes the noninteractive hidden startup smoke.
+earlier diagnostic build passed a noninteractive build-tree startup smoke; the
+current Player shell still needs a registered actual-application scenario.
 
-Extend Qt Quick component coverage when page selection or page commands create
-new isolated behavior. Use actual-application scenarios for file open,
-navigation, diagnostics access, and shutdown once those flows exist.
+Extend Qt Quick component coverage as commands gain behavior. Add
+actual-application scenarios for file open, navigation, diagnostics access,
+and shutdown when the private scenario-control boundary exists.

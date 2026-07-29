@@ -9,6 +9,9 @@
 
 class GraphicsDeviceDomain;
 class HdrCompositor;
+class ActiveVideoSource;
+class DiagnosticVideoSource;
+class MediaSession;
 class PresentationOutputState;
 class PresentationSettings;
 class QQuickWindow;
@@ -19,7 +22,6 @@ class QRhiSwapChain;
 class QWindow;
 class QuickUiLayer;
 class RenderedVideoProducer;
-class RenderedVideoSource;
 class VideoViewportState;
 enum class VideoOperationResult;
 
@@ -31,7 +33,9 @@ public:
     RhiPresentationEngine(QWindow &window,
                           PresentationOutputState &outputState,
                           PresentationSettings &settings,
-                          RenderedVideoSource &videoSource,
+                          ActiveVideoSource &videoSource,
+                          DiagnosticVideoSource &diagnosticSource,
+                          MediaSession &mediaSession,
                           VideoViewportState &videoViewport,
                           QObject *parent = nullptr);
     ~RhiPresentationEngine() override;
@@ -67,7 +71,9 @@ private:
     QWindow &m_window;
     PresentationOutputState &m_outputState;
     PresentationSettings &m_settings;
-    RenderedVideoSource &m_videoSource;
+    ActiveVideoSource &m_videoSource;
+    DiagnosticVideoSource &m_diagnosticSource;
+    MediaSession &m_mediaSession;
     VideoViewportState &m_videoViewport;
     std::unique_ptr<GraphicsDeviceDomain> m_graphicsDevice;
     QRhi *m_rhi = nullptr;

@@ -60,19 +60,20 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 
 ## Current implementation status
 
-As of 2026-07-29, the repository contains a Windows presentation foundation,
-not yet a media player:
+As of 2026-07-29, the repository contains a Windows presentation foundation
+and a first visible media-opening slice, not yet continuous playback:
 
 * A factory-selected graphics-device domain owns the current D3D11 QRhi,
   same-device libplacebo GPU, and device generation; the presentation engine
   owns its window swapchain.
 * Qt Quick renders through `QQuickRenderControl` into an application-owned
   RGBA16F texture.
-* A thin QML application shell hosts the retained HDR Lab page. The active page
-  publishes a generic root-coordinate video viewport with explicit visibility.
-  HDR Lab uses libplacebo by default and can select the retained procedural
-  QRhi producer for diagnostic comparison; that switch is not a playback
-  fallback or player preference.
+* A thin QML application shell defaults to a truthful Player page and keeps the
+  retained HDR Lab reachable through simple top-level navigation. The active
+  page publishes a generic root-coordinate video viewport with explicit
+  visibility. HDR Lab uses libplacebo by default and can select the retained
+  procedural QRhi producer for diagnostic comparison; that switch is not a
+  playback fallback or player preference.
 * Both diagnostic producers render the same grayscale, color-spectrum, and
   stepped pattern through the shared source, producer, and target lifecycle
   contracts. The QRhi implementation uses its temporary diagnostic shader.
@@ -100,14 +101,20 @@ not yet a media player:
 * The configured Windows Debug target builds successfully with Qt 6.11.1,
   MSVC, pinned D3D11-only libplacebo 7.360.1, and official minimal FFmpeg
   8.1.2 dependencies built through the project-local vcpkg configuration.
-* A synchronous first-frame media boundary opens a pinned local fixture through
-  real FFmpeg demux/decode, retains the resulting `AVFrame` behind an immutable
-  Sunroom frame contract, uploads its software RGB24 planes through libplacebo,
-  and captures both the display-targeted surface and final composition. The
-  same input import is reused for target-only SDR-white rerenders.
+* `MediaSession` opens a local file and decodes its first video frame on a
+  cooperatively cancellable worker. Nonzero playback generations reject stale
+  completions, and ordinary open/import/render failures become visible session
+  errors instead of terminating the process.
+* A stable active-source router switches the presentation engine between the
+  Player's decoded source and HDR Lab at a render boundary. The Player fits the
+  decoded display aspect ratio inside its viewport and shows the resulting
+  paused first frame through the production libplacebo path.
+* Pinned RGB and compressed BT.709 limited-range YUV fixtures cross real FFmpeg
+  demux/decode and libplacebo upload. The YUV fixture is a three-frame
+  Matroska/FFV1 stream with non-square pixels and known signal/timing values.
 
-libass, continuous decoding, audio, playback, general file opening, subtitles,
-and persistence are not integrated. CTest/Qt Test coverage exists for pure
+libass, continuous decoding, audio, playback scheduling, drag-and-drop,
+subtitles, and persistence are not integrated. CTest/Qt Test coverage exists for pure
 presentation-target policy, video-viewport state, the real QML shell's
 viewport publication and diagnostic renderer selection, rendered-video surface
 validity/invalidation, decoded-frame ownership, the libplacebo and FFmpeg
@@ -117,18 +124,18 @@ targets at 80, 100, and 203 nits and a target-relative PQ diagnostic at 100 and
 203 nits, plus known pixels from the first FFmpeg-decoded frame at two SDR-white
 targets. A sustained headless probe also exercises 60 animated 640×360 frames
 into a 1100×600 target without viewport-sized CPU generation.
-Whole-application scenarios, representative compressed video, hardware decode,
-a fixed mastered PQ source moved between targets, and physical-output
-validation do not yet exist.
+Whole-application scenarios, hardware decode, a fixed mastered PQ source moved
+between targets, and physical-output validation do not yet exist.
 
 The next media slice makes the Windows graphics domain own a video-capable,
 multithread-protected D3D11 device, supplies that same device to FFmpeg,
 implements direct D3D11VA NV12/P010 plane import, and proves zero CPU transfers
-against a representative compressed fixture. Playback prefers that path when
-supported while keeping software decode observable and functional. The real
-Player page then arrives with the first file/session state rather than as
-disconnected controls. Playback uses libplacebo as its video renderer; the
-procedural producer remains HDR-Lab-only diagnostic tooling.
+against a representative H.264 or HEVC fixture. Playback prefers that path
+when supported while keeping software decode observable and functional.
+Continuous packet/frame queues and scheduling then replace the one-frame open
+operation without changing the Player/source/compositor contracts. Playback
+uses libplacebo as its video renderer; the procedural producer remains
+HDR-Lab-only diagnostic tooling.
 
 ## Subsystems
 
@@ -137,15 +144,17 @@ procedural producer remains HDR-Lab-only diagnostic tooling.
 * [x] Basic application and presentation-window lifecycle for the current
   Windows diagnostic shell
 * [ ] Settings and persistence
-* [ ] File-open, drag-and-drop, and platform file associations
-* [ ] Top-level error and logging integration
+* [x] Local file dialog and optional positional command-line open
+* [ ] Drag-and-drop and platform file associations
+* [ ] Top-level logging and non-media error integration
 
 Documentation: `docs/subsystems/application/`
 
 ### 2. Media sources and file loading
 
-* [ ] Local-file source
-* [ ] Cancellation and timeout model
+* [x] Cancellable local-file first-frame open
+* [x] Generation invalidation for superseded first-frame opens
+* [ ] Continuous-source cancellation and timeout model
 * [ ] FFmpeg AVIO integration
 * [ ] Bounded read-ahead and byte caching
 * [ ] Unreliable or blocking source isolation model
@@ -157,8 +166,8 @@ Documentation: `docs/subsystems/media-io/`
 
 * [x] Official minimal FFmpeg dependency and runtime deployment
 * [x] Retained decoded-frame ownership/timing/storage contract
-* [x] Synchronous first local-file frame demux/decode integration proof
-* [ ] Container opening and probing
+* [x] Asynchronous first local-file frame demux/decode integration
+* [x] Initial container open and best-video-stream probing
 * [ ] Stream, chapter, and attachment discovery
 * [ ] Packet demuxing
 * [ ] Video decoding
@@ -171,9 +180,9 @@ Documentation: `docs/subsystems/media/`
 
 ### 4. Playback core
 
-* [ ] Playback-session state model
+* [x] Initial Empty/Opening/Ready/Error session state model
 * [ ] Bounded packet and frame queues
-* [ ] Cancellation and generation-based invalidation
+* [x] First-frame open cancellation and generation invalidation
 * [ ] Seeking
 * [ ] Audio/video clock and synchronization
 * [ ] Buffering and end-of-stream behavior
@@ -257,10 +266,11 @@ Documentation: `docs/subsystems/subtitles/`
 ### 9. User interface
 
 * [x] Thin application shell and page structure
-* [ ] Player page with truthful session states
+* [x] Player page with truthful first-frame session states
 * [x] Retained HDR Lab diagnostics page
 * [x] Generic active video-viewport contract
-* [ ] Open-file and drag-and-drop interface
+* [x] Open-file interface
+* [ ] Drag-and-drop interface
 * [ ] Play and pause controls
 * [ ] Seek bar and timestamps
 * [ ] Jump backward and forward
@@ -268,7 +278,8 @@ Documentation: `docs/subsystems/subtitles/`
 * [ ] Subtitle-track selection
 * [ ] Volume and mute
 * [ ] Fullscreen
-* [ ] Loading, buffering, and error presentation
+* [x] First-frame loading and media error presentation
+* [ ] Continuous buffering presentation
 * [ ] Keyboard shortcuts
 * [ ] Minimal settings surface
 * [ ] Playback-pipeline diagnostics view
@@ -297,7 +308,8 @@ Documentation: `docs/subsystems/diagnostics/`
 * [x] Pinned libplacebo dependency and public-API lifecycle test
 * [x] Real D3D11 QRhi compositor capture smoke test
 * [x] Real D3D11 libplacebo SDR/PQ surface and compositor capture
-* [x] Deterministic FFmpeg first-frame scenario
+* [x] Deterministic RGB and compressed-YUV FFmpeg first-frame scenarios
+* [x] First-frame session cancellation and stale-generation tests
 * [ ] Deterministic playback scenarios
 * [ ] Playback and seeking tests
 * [ ] Color-metadata normalization tests
@@ -305,7 +317,8 @@ Documentation: `docs/subsystems/diagnostics/`
 * [ ] Subtitle layout tests
 * [ ] Hardware decode and frame-import integration tests
 * [ ] Display-change and multi-monitor tests
-* [ ] Unreliable-source and cancellation tests
+* [x] Cooperative first-frame cancellation tests
+* [ ] Unreliable-source and mounted-filesystem containment tests
 * [ ] Cross-platform performance and power measurements
 * [ ] Physical HDR and A/V output verification
 
@@ -344,11 +357,13 @@ docs/
         0003-display-targeted-video-surface.md
         0004-cross-platform-graphics-domain-and-video-interop.md
         0005-retain-ffmpeg-frames-at-the-decoded-frame-boundary.md
+        0006-asynchronous-media-session-and-stable-active-video-source.md
 
     research/
         README.md
         2026-07-28-testing-tools-and-boundaries.md
         2026-07-29-ffmpeg-windows-dependency-and-frame-import.md
+        2026-07-29-compressed-sdr-fixture.md
 
     subsystems/
         application/

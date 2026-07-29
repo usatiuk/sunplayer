@@ -11,7 +11,7 @@ The currently validated configuration is:
 
 | Requirement | Current value |
 | --- | --- |
-| Build system | CMake 3.21 or newer |
+| Build system | CMake 3.22 or newer |
 | Languages | C11 for the libplacebo/FFmpeg adapter; C++20 elsewhere |
 | Application compiler | MSVC in a Visual Studio developer environment |
 | Windows dependency compiler | Visual Studio clang-cl through a project-local vcpkg triplet |
@@ -82,6 +82,7 @@ The executable currently requires:
 
 * `Qt6::Quick`.
 * `Qt6::QuickControls2`.
+* `Qt6::QuickDialogs2`.
 * `Qt6::ShaderTools`.
 * `Qt6::GuiPrivate` for QRhi.
 
@@ -99,15 +100,19 @@ target, and final-compositor code. The application and GPU tests link these
 same compiled production libraries rather than maintaining parallel source
 lists.
 
-`qt_add_qml_module()` packages `src/app/Main.qml`, `AppShell.qml`, and
-`pages/HdrLabPage.qml` under the `Sunroom` module. `qt_add_shaders()`
-precompiles and packages the fullscreen vertex, diagnostic video producer, and
-compositor shaders from `src/presentation/shaders/` under `/shaders`.
+`qt_add_qml_module()` packages `src/app/Main.qml`, `AppShell.qml`,
+`pages/VideoPage.qml`, `pages/PlayerPage.qml`, and `pages/HdrLabPage.qml` under
+the `Sunroom` module.
+Qt's cross-target foreign-type generation exposes QML-marked source contracts
+from `sunroom_video_pipeline` without compiling their QObject metadata into the
+application again. `qt_add_shaders()` precompiles and packages the fullscreen
+vertex, diagnostic video producer, and compositor shaders from
+`src/presentation/shaders/` under `/shaders`.
 
 Production sources are grouped under `src/app`, `src/graphics`, `src/media`,
-`src/platform`, `src/presentation`, and `src/video`. Focused tests currently
-live under `tests/unit/media`, `tests/unit/presentation`, `tests/unit/ui`,
-`tests/unit/video`,
+`src/playback`, `src/platform`, `src/presentation`, and `src/video`. Focused
+tests currently live under `tests/unit/media`, `tests/unit/playback`,
+`tests/unit/presentation`, `tests/unit/ui`, `tests/unit/video`,
 `tests/integration/presentation`, `tests/integration/ui`, and
 `tests/integration/video`; new trees should follow concrete execution classes
 rather than speculative subsystem placeholders.
@@ -168,22 +173,32 @@ disabling Vulkan, OpenGL, and external libdovi.
 A separate FFmpeg dependency test verifies the three selected DLLs, pinned
 major versions, D3D11VA availability, native H.264/HEVC decoders, and the
 absence of Vulkan and swscale. The first-frame integration target then
-exercises real demux, software decode, libplacebo upload, and final QRhi
-composition.
+exercises real image and compressed-video demux, software RGB/YUV decode,
+libplacebo upload, and final QRhi composition. Additional focused targets cover
+aspect fitting, active-source routing, media-session cancellation/generation,
+and the real Player/HDR-Lab QML shell.
 
-On Windows, each test target stages its transitive runtime DLLs beside the test
-executable with CMake's `TARGET_RUNTIME_DLLS` support. This is a build-tree test
-convenience, not an installed test package. It prevents the Windows loader from
-opening a missing-DLL dialog when CTest launches the test.
+On Windows, the application and each test target stage their transitive runtime
+DLLs beside the executable with CMake's `TARGET_RUNTIME_DLLS` support. The
+build-tree application then runs Qt's `windeployqt --qmldir` so its platform
+plugin, imported QML modules, Controls style libraries, and Dialogs support are
+staged as one consistent runtime. A relative build-tree `qt.conf` restricts
+plugin and QML lookup to that deployed tree instead of silently using the Qt
+SDK. This is a developer convenience, not the installed package layout, and
+prevents loader or QML-import dialogs at startup.
+The QML component test additionally stages Qt's offscreen platform plugin,
+selects the Basic Controls style, and receives the configured Qt binary and
+QML-module roots through its CTest/CMake harness. Installed artifacts use Qt's
+generated deployment script and their deployed relative paths.
 
 See [../testing/PLAN.md](../testing/PLAN.md).
 
 ## Verification
 
-The manifest configure, focused Debug build, and nine registered CTest targets pass
-in the current Windows/MSVC/Ninja environment after initializing the Visual
-Studio developer environment. The dependency graph is built under the
-project-local clang-cl triplet; the Sunroom executable remains MSVC-built.
+The manifest configure, complete Debug build, and thirteen registered CTest
+targets pass in the current Windows/MSVC/Ninja environment after initializing
+the Visual Studio developer environment. The dependency graph is built under
+the project-local clang-cl triplet; the Sunroom executable remains MSVC-built.
 A build-local install-tree generation also succeeds and stages the expected
 Qt runtime, `libplacebo-360.dll`, `spirv-cross-c-sharedd.dll`, and selected
 FFmpeg DLLs.
