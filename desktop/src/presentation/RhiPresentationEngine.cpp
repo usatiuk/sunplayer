@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <optional>
 
 #include <QGuiApplication>
 #include <QQuickWindow>
@@ -12,6 +13,7 @@
 #include <rhi/qrhi.h>
 
 #include "app/PresentationSettings.h"
+#include "app/VideoViewportState.h"
 #include "graphics/GraphicsBackendFactory.h"
 #include "graphics/GraphicsDeviceDomain.h"
 #include "presentation/HdrCompositor.h"
@@ -53,19 +55,23 @@ RhiPresentationEngine::RhiPresentationEngine(
         PresentationOutputState &outputState,
         PresentationSettings &settings,
         RenderedVideoSource &videoSource,
+        VideoViewportState &videoViewport,
         QObject *parent)
     : QObject(parent),
       m_window(window),
       m_outputState(outputState),
       m_settings(settings),
-      m_videoSource(videoSource) {
+      m_videoSource(videoSource),
+      m_videoViewport(videoViewport) {
     m_outputVerificationTimer.setSingleShot(true);
     m_outputVerificationTimer.setInterval(std::chrono::milliseconds(100));
     m_deviceRecoveryTimer.setSingleShot(true);
 
     connect(&m_settings, &PresentationSettings::settingsChanged,
-            this, &RhiPresentationEngine::markCanvasDirty);
+            this, &RhiPresentationEngine::requestFrame);
     connect(&m_videoSource, &RenderedVideoSource::updateRequested,
+            this, &RhiPresentationEngine::requestFrame);
+    connect(&m_videoViewport, &VideoViewportState::viewportChanged,
             this, &RhiPresentationEngine::requestFrame);
     connect(&m_outputState, &PresentationOutputState::stateChanged,
             this, &RhiPresentationEngine::markPresentationDirty);
@@ -139,93 +145,106 @@ void RhiPresentationEngine::renderFrame() {
         return;
     }
 
-    m_videoSource.prepareForPresentation(
-        std::chrono::steady_clock::now());
-
     const float scaleX = static_cast<float>(pixelSize.width())
         / static_cast<float>(m_window.width());
     const float scaleY = static_cast<float>(pixelSize.height())
         / static_cast<float>(m_window.height());
-    const QRectF canvas = m_settings.canvasRect();
     Q_ASSERT(std::isfinite(scaleX) && scaleX > 0.0f);
     Q_ASSERT(std::isfinite(scaleY) && scaleY > 0.0f);
-    Q_ASSERT(canvas.width() >= 1.0 && canvas.height() >= 1.0);
-
-    const QRectF scaledCanvas(
-        canvas.x() * scaleX,
-        canvas.y() * scaleY,
-        canvas.width() * scaleX,
-        canvas.height() * scaleY);
-    const QRect videoRect = scaledCanvas.toAlignedRect().intersected(
-        QRect(QPoint{}, pixelSize));
-    Q_ASSERT(!videoRect.isEmpty());
-
-    const float targetPeak = m_settings.automaticTargetPeak()
-        ? m_outputState.effectiveTargetHeadroom()
-        : m_settings.manualTargetHeadroom();
-    Q_ASSERT(std::isfinite(targetPeak) && targetPeak >= 1.0f);
-    const float referenceWhiteNits = m_outputState.sdrWhiteKnown()
-        ? m_outputState.sdrWhiteNits()
-        : scRgbReferenceWhiteNits;
-    Q_ASSERT(
-        std::isfinite(referenceWhiteNits) && referenceWhiteNits > 0.0f);
-
-    RenderedVideoSurfaceState requestedSurface;
-    requestedSurface.description.pixelSize = videoRect.size();
-    requestedSurface.description.pixelFormat =
-        RenderedVideoPixelFormat::Rgba16Float;
-    requestedSurface.description.colorSpace =
-        RenderedVideoColorSpace::LinearSrgb;
-    requestedSurface.description.luminance =
-        RenderedVideoLuminance::DisplayTargetedSdrWhiteRelative;
-    requestedSurface.description.alphaMode =
-        RenderedVideoAlphaMode::Opaque;
-    requestedSurface.description.referenceWhiteNits = referenceWhiteNits;
-    requestedSurface.description.targetPeakHeadroom = targetPeak;
-    requestedSurface.graphicsDeviceGeneration =
-        m_graphicsDevice->generation();
-    requestedSurface.displayTargetRevision =
-        m_outputState.displayTargetRevision();
-    requestedSurface.contentRevision =
-        m_videoSource.contentRevision();
-    Q_ASSERT(requestedSurface.isValid());
 
     Q_ASSERT(m_videoProducer);
-    const VideoOperationResult ensureResult =
-        m_videoProducer->ensureSurface(requestedSurface);
-    if (!handleVideoOperationResult(
-            "creating the rendered-video surface",
-            ensureResult)) {
-        return;
+    QRect videoRect;
+    std::optional<RenderedVideoSurfaceState> requestedSurface;
+    if (m_videoViewport.isRenderable()) {
+        const QRectF viewport = m_videoViewport.rect();
+        const QRectF scaledViewport(
+            viewport.x() * scaleX,
+            viewport.y() * scaleY,
+            viewport.width() * scaleX,
+            viewport.height() * scaleY);
+        videoRect = scaledViewport.toAlignedRect().intersected(
+            QRect(QPoint{}, pixelSize));
     }
-    // Target provisioning can select a direct, copy, or fallback path.
-    updateBackendState();
+
+    if (!videoRect.isEmpty()) {
+        m_videoSource.prepareForPresentation(
+            std::chrono::steady_clock::now());
+
+        const float targetPeak = m_settings.automaticTargetPeak()
+            ? m_outputState.effectiveTargetHeadroom()
+            : m_settings.manualTargetHeadroom();
+        Q_ASSERT(std::isfinite(targetPeak) && targetPeak >= 1.0f);
+        const float referenceWhiteNits = m_outputState.sdrWhiteKnown()
+            ? m_outputState.sdrWhiteNits()
+            : scRgbReferenceWhiteNits;
+        Q_ASSERT(
+            std::isfinite(referenceWhiteNits)
+            && referenceWhiteNits > 0.0f);
+
+        requestedSurface.emplace();
+        requestedSurface->description.pixelSize = videoRect.size();
+        requestedSurface->description.pixelFormat =
+            RenderedVideoPixelFormat::Rgba16Float;
+        requestedSurface->description.colorSpace =
+            RenderedVideoColorSpace::LinearSrgb;
+        requestedSurface->description.luminance =
+            RenderedVideoLuminance::DisplayTargetedSdrWhiteRelative;
+        requestedSurface->description.alphaMode =
+            RenderedVideoAlphaMode::Opaque;
+        requestedSurface->description.referenceWhiteNits =
+            referenceWhiteNits;
+        requestedSurface->description.targetPeakHeadroom = targetPeak;
+        requestedSurface->graphicsDeviceGeneration =
+            m_graphicsDevice->generation();
+        requestedSurface->displayTargetRevision =
+            m_outputState.displayTargetRevision();
+        requestedSurface->contentRevision =
+            m_videoSource.contentRevision();
+        Q_ASSERT(requestedSurface->isValid());
+
+        const VideoOperationResult ensureResult =
+            m_videoProducer->ensureSurface(*requestedSurface);
+        if (!handleVideoOperationResult(
+                "creating the rendered-video surface",
+                ensureResult)) {
+            return;
+        }
+        // Target provisioning can select a direct, copy, or fallback path.
+        updateBackendState();
+    }
+
+    QRhiTexture *const compositionVideoTexture = requestedSurface
+        ? &m_videoProducer->textureForComposition()
+        : nullptr;
+    const std::uint64_t compositionTextureRevision = requestedSurface
+        ? m_videoProducer->compositionTextureRevision()
+        : 0;
 
     if (!m_compositor) {
         m_compositor = std::make_unique<HdrCompositor>(*m_rhi);
         if (m_compositor->initialize(
                 *m_renderPassDescriptor,
-                m_videoProducer->textureForComposition(),
+                compositionVideoTexture,
                 m_quickUi->texture())
                 == HdrCompositor::ResourceResult::DeviceLost) {
             handleDeviceLoss("creating the HDR compositor");
             return;
         }
         m_boundVideoTextureRevision =
-            m_videoProducer->compositionTextureRevision();
+            compositionTextureRevision;
     } else if (targetUpdate
                    == QuickUiLayer::RenderTargetUpdate::Recreated
                || m_boundVideoTextureRevision
-                   != m_videoProducer->compositionTextureRevision()) {
+                   != compositionTextureRevision) {
         if (m_compositor->setTextures(
-                m_videoProducer->textureForComposition(),
+                compositionVideoTexture,
                 m_quickUi->texture())
                 == HdrCompositor::ResourceResult::DeviceLost) {
             handleDeviceLoss("rebinding compositor layer textures");
             return;
         }
         m_boundVideoTextureRevision =
-            m_videoProducer->compositionTextureRevision();
+            compositionTextureRevision;
     }
 
     QRhi::FrameOpResult result = m_rhi->beginFrame(m_swapChain.get());
@@ -286,10 +305,11 @@ void RhiPresentationEngine::renderFrame() {
             }
         });
 
-    if (m_videoProducer->needsRender(requestedSurface)) {
+    if (requestedSurface
+            && m_videoProducer->needsRender(*requestedSurface)) {
         const VideoOperationResult renderResult =
             m_videoProducer->render(
-                commandBuffer, requestedSurface);
+                commandBuffer, *requestedSurface);
         if (renderResult != VideoOperationResult::Ready) {
             const QRhi::FrameOpResult abandonedResult =
                 finishFrame(QRhi::SkipPresent, false);
@@ -301,17 +321,19 @@ void RhiPresentationEngine::renderFrame() {
             return;
         }
     }
-    const VideoOperationResult compositionResult =
-        m_videoProducer->prepareForComposition(commandBuffer);
-    if (compositionResult != VideoOperationResult::Ready) {
-        const QRhi::FrameOpResult abandonedResult =
-            finishFrame(QRhi::SkipPresent, false);
-        handleVideoOperationResult(
-            "preparing video for composition",
-            abandonedResult == QRhi::FrameOpDeviceLost
-                ? VideoOperationResult::DeviceLost
-                : compositionResult);
-        return;
+    if (requestedSurface) {
+        const VideoOperationResult compositionResult =
+            m_videoProducer->prepareForComposition(commandBuffer);
+        if (compositionResult != VideoOperationResult::Ready) {
+            const QRhi::FrameOpResult abandonedResult =
+                finishFrame(QRhi::SkipPresent, false);
+            handleVideoOperationResult(
+                "preparing video for composition",
+                abandonedResult == QRhi::FrameOpDeviceLost
+                    ? VideoOperationResult::DeviceLost
+                    : compositionResult);
+            return;
+        }
     }
 
     const float sdrScale = m_outputState.sdrScale();
@@ -359,7 +381,7 @@ void RhiPresentationEngine::renderFrame() {
     }
 
     m_retriedFrameError = false;
-    scheduleNextFrame();
+    scheduleNextFrame(requestedSurface.has_value());
 }
 
 void RhiPresentationEngine::requestFrame() {
@@ -397,10 +419,6 @@ void RhiPresentationEngine::handleExposure() {
 void RhiPresentationEngine::markUiDirty() {
     if (m_quickUi)
         m_quickUi->markDirty();
-    requestFrame();
-}
-
-void RhiPresentationEngine::markCanvasDirty() {
     requestFrame();
 }
 
@@ -444,7 +462,8 @@ bool RhiPresentationEngine::initializeDevice() {
         *m_rhi,
         m_outputState,
         m_settings,
-        m_videoSource);
+        m_videoSource,
+        m_videoViewport);
     connect(m_quickUi.get(), &QuickUiLayer::updateRequested,
             this, &RhiPresentationEngine::requestFrame);
     if (m_quickUi->initialize()
@@ -659,8 +678,8 @@ void RhiPresentationEngine::updateBackendState() {
     m_outputState.setBackendState(state);
 }
 
-void RhiPresentationEngine::scheduleNextFrame() {
-    if (m_videoSource.wantsContinuousFrames()
+void RhiPresentationEngine::scheduleNextFrame(bool videoLayerActive) {
+    if ((videoLayerActive && m_videoSource.wantsContinuousFrames())
         || m_quickUi->isDirty()) {
         requestFrame();
     }

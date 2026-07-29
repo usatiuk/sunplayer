@@ -2,32 +2,42 @@
 
 ## Status
 
-The current QML scene is an HDR diagnostics playground rendered offscreen
-through `QQuickRenderControl`. It is useful project tooling, not the final
-player interface.
+The current QML scene has a thin `AppShell` containing the retained
+`HdrLabPage`, rendered offscreen through `QQuickRenderControl`. The shell and
+viewport boundary are production structure; HDR Lab remains developer tooling,
+not the final player interface.
 
-The first visible player shell should arrive with truthful file-open/session
-states rather than a screen of controls that are not connected to behavior.
+There is no `PlayerPage` or page selector yet. Both arrive with truthful
+file-open/session states rather than controls disconnected from behavior.
 
 ## Page structure
 
 Keep one native presentation window, one QML engine, one redirected Qt Quick
 scene, and one final compositor.
 
-The intended QML organization is:
+The current and intended QML organization is:
 
 ```text
-Main.qml / AppShell
+Main.qml
+    AppShell.qml
     pages/
-        PlayerPage.qml
         HdrLabPage.qml
+        PlayerPage.qml        # with the first real session slice
     components/
-        shared controls and read-only diagnostics
+        shared controls and read-only diagnostics as they become concrete
 ```
 
-The shell owns simple top-level navigation and shared chrome. A small
-top-level selector is sufficient for the known Player and HDR Lab pages; a
-routing framework, page registry, or service container is not needed.
+`AppShell` currently owns the only active page and translates that page's
+viewport into root logical coordinates. Once Player exists, the shell will own
+simple top-level navigation and shared chrome. A small selector is sufficient;
+a routing framework, page registry, or service container is not needed.
+
+`QuickUiLayer` supplies application-owned objects as initial properties of
+`Main.qml`; it does not install global QML context properties. The root is an
+`AppShell`, and the shell passes each page its dependencies explicitly. The
+C++ types are registered as named but uncreatable QML types, so tooling can
+validate these contracts without transferring object construction or lifetime
+to QML.
 
 Pages publish domain commands and viewport geometry. They do not know QRhi,
 libplacebo, native textures, graphics backends, or producer implementations.
@@ -45,15 +55,21 @@ adding disconnected controls.
 
 ## Video viewport
 
-Replace the diagnostic `canvasRect` setting with a generic viewport contract
-containing at least:
+`VideoViewportState` is the application-owned boundary between QML page layout
+and presentation. It contains:
 
 * Rectangle in root logical coordinates.
 * Visibility.
 
-The active page publishes its viewport through the shell. The presentation
-engine continues to place the video layer below the redirected transparent
-Quick texture. Inactive pages cannot compete for the viewport.
+The active page publishes its page-local viewport through `AppShell`, which
+maps it into root logical coordinates and updates the shared state. The
+presentation engine converts that rectangle to physical pixels and places the
+video below the redirected transparent Quick texture.
+
+When the viewport is hidden or empty, the engine does not provision, render,
+or prepare a video surface. The compositor binds its internal fallback texture
+and uses zero video geometry, so UI-only pages do not require a fake surface.
+Inactive pages cannot compete for the viewport.
 
 ## Player page
 
@@ -69,9 +85,9 @@ commands and observable states exist.
 
 ## HDR Lab and diagnostics
 
-Move the current diagnostic playground into `HdrLabPage` without discarding
-its working controls. It remains a developer-facing way to inspect display
-state, tone mapping, surface invalidation, and presentation behavior.
+The former diagnostic playground now lives in `HdrLabPage` without losing its
+working controls. It remains a developer-facing way to inspect display state,
+tone mapping, surface invalidation, and presentation behavior.
 
 Once Player exists, it becomes the default page and HDR Lab remains reachable
 through an explicit diagnostics entry or shortcut. Reusable read-only pipeline
@@ -80,7 +96,15 @@ not become ordinary player preferences.
 
 ## Verification
 
-Use Qt Quick component tests for page selection, active viewport mapping,
-truthful session states, and emitted commands. Keep real QRhi capture tests at
-the composition boundary and use actual-application scenarios for file open,
-navigation, diagnostics access, and shutdown.
+Focused Qt Test coverage verifies viewport geometry, visibility, notification,
+and renderability. A non-presenting Qt Quick component test creates the real
+QML shell through the same initial-property contract, resizes it, and verifies
+that active-page geometry and visibility reach `VideoViewportState`. The real
+D3D11 capture verifies that zero video geometry and the compositor's fallback
+binding produce the normal background rather than sampling the retained video
+surface. The packaged application also passes the noninteractive hidden
+startup smoke.
+
+Extend Qt Quick component coverage when page selection or page commands create
+new isolated behavior. Use actual-application scenarios for file open,
+navigation, diagnostics access, and shutdown once those flows exist.

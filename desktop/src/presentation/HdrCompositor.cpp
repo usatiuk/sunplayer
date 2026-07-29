@@ -22,10 +22,11 @@ HdrCompositor::~HdrCompositor() = default;
 
 HdrCompositor::ResourceResult HdrCompositor::initialize(
         QRhiRenderPassDescriptor &renderPassDescriptor,
-        QRhiTexture &videoTexture,
+        QRhiTexture *videoTexture,
         QRhiTexture &uiTexture) {
     Q_ASSERT(!m_uniformBuffer);
     Q_ASSERT(!m_sampler);
+    Q_ASSERT(!m_emptyVideoTexture);
     Q_ASSERT(!m_bindings);
     Q_ASSERT(!m_pipeline);
 
@@ -49,6 +50,16 @@ HdrCompositor::ResourceResult HdrCompositor::initialize(
         if (m_rhi.isDeviceLost())
             return ResourceResult::DeviceLost;
         qFatal("Could not create the HDR compositor sampler");
+    }
+
+    m_emptyVideoTexture.reset(m_rhi.newTexture(
+        QRhiTexture::RGBA8, {1, 1}, 1));
+    m_emptyVideoTexture->setName(
+        QByteArrayLiteral("Sunroom empty video layer"));
+    if (!m_emptyVideoTexture->create()) {
+        if (m_rhi.isDeviceLost())
+            return ResourceResult::DeviceLost;
+        qFatal("Could not create the empty video-layer texture");
     }
     if (createBindings(videoTexture, uiTexture) == ResourceResult::DeviceLost)
         return ResourceResult::DeviceLost;
@@ -74,7 +85,7 @@ HdrCompositor::ResourceResult HdrCompositor::initialize(
 }
 
 HdrCompositor::ResourceResult HdrCompositor::setTextures(
-        QRhiTexture &videoTexture,
+        QRhiTexture *videoTexture,
         QRhiTexture &uiTexture) {
     return createBindings(videoTexture, uiTexture);
 }
@@ -88,6 +99,12 @@ void HdrCompositor::render(QRhiCommandBuffer &commandBuffer,
     Q_ASSERT(m_sampler);
     Q_ASSERT(m_bindings);
     Q_ASSERT(m_pipeline);
+    Q_ASSERT(parameters.videoSize[0] >= 0.0f);
+    Q_ASSERT(parameters.videoSize[1] >= 0.0f);
+    Q_ASSERT(
+        m_videoLayerAvailable
+        || (parameters.videoSize[0] == 0.0f
+            && parameters.videoSize[1] == 0.0f));
 
     QRhiResourceUpdateBatch *updates = m_rhi.nextResourceUpdateBatch();
     updates->updateDynamicBuffer(
@@ -105,17 +122,21 @@ void HdrCompositor::render(QRhiCommandBuffer &commandBuffer,
 }
 
 HdrCompositor::ResourceResult HdrCompositor::createBindings(
-        QRhiTexture &videoTexture,
+        QRhiTexture *videoTexture,
         QRhiTexture &uiTexture) {
     Q_ASSERT(m_uniformBuffer);
     Q_ASSERT(m_sampler);
+    Q_ASSERT(m_emptyVideoTexture);
+
+    QRhiTexture *const compositionVideoTexture =
+        videoTexture ? videoTexture : m_emptyVideoTexture.get();
 
     if (!m_bindings)
         m_bindings.reset(m_rhi.newShaderResourceBindings());
     m_bindings->setBindings({
         QRhiShaderResourceBinding::sampledTexture(
             0, QRhiShaderResourceBinding::FragmentStage,
-            &videoTexture, m_sampler.get()),
+            compositionVideoTexture, m_sampler.get()),
         QRhiShaderResourceBinding::sampledTexture(
             1, QRhiShaderResourceBinding::FragmentStage,
             &uiTexture, m_sampler.get()),
@@ -128,5 +149,6 @@ HdrCompositor::ResourceResult HdrCompositor::createBindings(
             return ResourceResult::DeviceLost;
         qFatal("Could not create the HDR compositor resource bindings");
     }
+    m_videoLayerAvailable = videoTexture != nullptr;
     return ResourceResult::Ready;
 }

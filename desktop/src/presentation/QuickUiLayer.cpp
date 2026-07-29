@@ -3,17 +3,18 @@
 #include <cmath>
 
 #include <QQmlComponent>
-#include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickGraphicsDevice>
 #include <QQuickItem>
 #include <QQuickRenderControl>
 #include <QQuickRenderTarget>
 #include <QQuickWindow>
+#include <QVariant>
 #include <QWindow>
 #include <rhi/qrhi.h>
 
 #include "app/PresentationSettings.h"
+#include "app/VideoViewportState.h"
 #include "presentation/PresentationOutputState.h"
 #include "video/RenderedVideoSource.h"
 
@@ -38,13 +39,15 @@ QuickUiLayer::QuickUiLayer(QWindow &renderWindow,
                            PresentationOutputState &outputState,
                            PresentationSettings &settings,
                            RenderedVideoSource &videoSource,
+                           VideoViewportState &videoViewport,
                            QObject *parent)
     : QObject(parent),
       m_renderWindow(renderWindow),
       m_rhi(rhi),
       m_outputState(outputState),
       m_settings(settings),
-      m_videoSource(videoSource) {
+      m_videoSource(videoSource),
+      m_videoViewport(videoViewport) {
 }
 
 QuickUiLayer::~QuickUiLayer() {
@@ -77,12 +80,6 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
     m_quickWindow->setGraphicsDevice(QQuickGraphicsDevice::fromRhi(&m_rhi));
 
     m_qmlEngine = std::make_unique<QQmlEngine>();
-    m_qmlEngine->rootContext()->setContextProperty(
-        QStringLiteral("outputState"), &m_outputState);
-    m_qmlEngine->rootContext()->setContextProperty(
-        QStringLiteral("presentationSettings"), &m_settings);
-    m_qmlEngine->rootContext()->setContextProperty(
-        QStringLiteral("videoSource"), &m_videoSource);
 
     QQmlComponent component(m_qmlEngine.get());
     component.loadFromModule(QStringLiteral("Sunroom"), QStringLiteral("Main"));
@@ -92,7 +89,26 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
         qFatal("Could not load the packaged Sunroom QML component");
     }
 
-    QObject *object = component.create();
+    const QVariantMap initialProperties{
+        {
+            QStringLiteral("presentationOutput"),
+            QVariant::fromValue(&m_outputState),
+        },
+        {
+            QStringLiteral("presentationPolicy"),
+            QVariant::fromValue(&m_settings),
+        },
+        {
+            QStringLiteral("diagnosticSource"),
+            QVariant::fromValue(&m_videoSource),
+        },
+        {
+            QStringLiteral("viewportState"),
+            QVariant::fromValue(&m_videoViewport),
+        },
+    };
+    QObject *object = component.createWithInitialProperties(
+        initialProperties);
     m_rootItem.reset(qobject_cast<QQuickItem *>(object));
     if (!m_rootItem) {
         delete object;

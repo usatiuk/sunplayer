@@ -38,17 +38,19 @@ texture and shader resources, surface loss, and device recovery.
 
 ## Targets and resources
 
-The project defines one executable target, `sunroom`.
+The project defines one production executable target, `sunroom`.
 
-`qt_add_qml_module()` packages `src/app/Main.qml` under the `Sunroom` module.
-`qt_add_shaders()` precompiles and packages the fullscreen vertex, diagnostic
-video producer, and compositor shaders from
-`src/presentation/shaders/` under `/shaders`.
+`qt_add_qml_module()` packages `src/app/Main.qml`, `AppShell.qml`, and
+`pages/HdrLabPage.qml` under the `Sunroom` module. `qt_add_shaders()`
+precompiles and packages the fullscreen vertex, diagnostic video producer, and
+compositor shaders from `src/presentation/shaders/` under `/shaders`.
 
-Production sources are grouped under `src/app`, `src/platform`, and
-`src/presentation`. Focused tests currently live under
-`tests/unit/presentation`; new trees should follow concrete execution classes
-rather than speculative subsystem placeholders.
+Production sources are grouped under `src/app`, `src/graphics`, `src/platform`,
+`src/presentation`, and `src/video`. Focused tests currently live under
+`tests/unit/presentation`, `tests/unit/ui`, `tests/unit/video`,
+`tests/integration/presentation`, and `tests/integration/ui`; new trees should
+follow concrete execution classes rather than speculative subsystem
+placeholders.
 
 The target links Windows Runtime and dispatcher support libraries only on
 Windows:
@@ -86,8 +88,9 @@ define:
 
 CTest and Qt Test are configured only under `BUILD_TESTING`, keeping test-only
 dependencies out of production-only configurations. Separate test executables
-cover presentation-target policy, rendered-video surface validity/reuse, and a
-real D3D11 QRhi producer/compositor capture.
+cover presentation-target policy, active viewport state, real QML shell
+publication, rendered-video surface validity/reuse, and a real D3D11 QRhi
+producer/compositor capture.
 
 On Windows, each test target stages its transitive runtime DLLs beside the test
 executable with CMake's `TARGET_RUNTIME_DLLS` support. This is a build-tree test

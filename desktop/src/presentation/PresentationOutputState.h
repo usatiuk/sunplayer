@@ -4,6 +4,7 @@
 
 #include <QObject>
 #include <QPointer>
+#include <QtQml/qqmlregistration.h>
 
 #include "platform/DisplayState.h"
 #include "presentation/PresentationTarget.h"
@@ -14,6 +15,8 @@ class DisplayStateProvider;
 
 class PresentationOutputState final : public QObject {
     Q_OBJECT
+    QML_ELEMENT
+    QML_UNCREATABLE("PresentationOutputState is owned by the application")
 
     Q_PROPERTY(QString screenName READ screenName NOTIFY stateChanged)
     Q_PROPERTY(QString graphicsApi READ graphicsApi NOTIFY stateChanged)
@@ -49,7 +52,7 @@ class PresentationOutputState final : public QObject {
     Q_PROPERTY(float sdrScale READ sdrScale NOTIFY stateChanged)
 
 public:
-    explicit PresentationOutputState(QObject *parent = nullptr);
+    explicit PresentationOutputState(QObject *parent);
     ~PresentationOutputState() override;
 
     void attach(QWindow &window);

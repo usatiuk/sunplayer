@@ -103,10 +103,10 @@ rather than treating the current shader build as proof of Vulkan readiness.
 
 ## Application and player
 
-### Diagnostic shell only
+### No player session or page
 
-The QML interface and `PresentationSettings` are a transient HDR playground.
-There is no local-file workflow, persistent settings, playback state, audio,
-subtitles, player controls, structured error model, or general diagnostics
-view yet. These remain in the root `PLAN.md` and should be implemented as
-coherent vertical slices.
+The thin QML shell, generic video viewport, and retained HDR Lab exist, but
+there is no Player page, local-file workflow, persistent settings, playback
+state, audio, subtitles, player controls, structured error model, or general
+session diagnostics view yet. These remain in the root `PLAN.md` and should be
+implemented as coherent vertical slices.

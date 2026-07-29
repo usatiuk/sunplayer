@@ -20,7 +20,7 @@ cross-platform target:
 | Graphics domain | Factory-selected D3D11 implementation owning QRhi and device generation |
 | Presentation | Extended-linear sRGB/scRGB when supported, otherwise SDR |
 | Qt Quick | Redirected into an application-owned full-window RGBA16F texture |
-| Video | Shared producer → direct QRhi target → canvas-sized display-targeted RGBA16F surface |
+| Video | Active page viewport → shared producer → direct QRhi target → display-targeted RGBA16F surface |
 | Display telemetry | Qt screen metrics, QRhi swapchain HDR information, and Windows Advanced Color |
 | Rendering cadence | Demand-driven, continuous only while the pattern or UI animates |
 
@@ -40,7 +40,7 @@ The subsystem currently owns:
 * Final GPU composition and swapchain encoding.
 * Display selection and HDR/SDR presentation-state observation.
 * Render invalidation, resizing, surface loss, and bounded device recovery.
-* Presentation diagnostics exposed to the QML playground.
+* Presentation diagnostics exposed to the HDR Lab page.
 
 The future subsystem boundary also includes:
 
@@ -57,6 +57,7 @@ track selection.
 ```text
 PresentationWindow
     │ window, surface, input, and UpdateRequest events
+    ├── VideoViewportState ← AppShell / active QML page
     ▼
 RhiPresentationEngine
     ├── GraphicsDeviceDomain
@@ -73,7 +74,7 @@ RhiPresentationEngine
     │               └── pattern + diagnostic tone map
     │                       → QrhiVideoTarget → RGBA16F video surface
     └── HdrCompositor
-            ├── display-targeted video surface
+            ├── display-targeted video surface or empty-layer binding
             ├── redirected Qt Quick texture
             └── layer composition + extended-linear or SDR encoding
 ```
@@ -86,6 +87,7 @@ thread or playback thread yet.
 | Component | Current role |
 | --- | --- |
 | `PresentationWindow` | Owns presentation-facing state, forwards supported input to the redirected Quick window, and translates native window events into engine invalidation or teardown. |
+| `VideoViewportState` | Carries the active QML page's root-logical video rectangle and visibility into presentation code without exposing page types. |
 | `GraphicsBackendFactory` | Selects Qt Quick API, window surface type, and graphics-device implementation without exposing native types to application or presentation code. |
 | `GraphicsDeviceDomain` | Owns QRhi, device generation, backend/adapter diagnostics, and the native implementation's teardown. |
 | `RhiPresentationEngine` | Owns the swapchain, render-pass lifecycle, frame scheduling, output verification, and device recovery around a graphics domain. |
@@ -96,10 +98,10 @@ thread or playback thread yet.
 | `VideoTargetInterop` | Owns the renderer-to-compositor texture boundary and reports output path, synchronization, copies, transfers, and fallback reason. |
 | `DiagnosticVideoProducer` | Implements the producer contract with the temporary pattern pipeline and direct `QrhiVideoTarget`. |
 | `RenderedVideoSurfaceState` | Pure description and device/display/content reuse key for a completed display-targeted surface. It does not own a native texture. |
-| `HdrCompositor` | Places the already processed video surface, converts and blends the flattened UI layer, applies presentation scaling, and encodes the swapchain. It has no source peak, transfer, metadata, or tone-mapping inputs. |
+| `HdrCompositor` | Places an optional already processed video surface, converts and blends the flattened UI layer, applies presentation scaling, and encodes the swapchain. It owns a valid fallback binding for UI-only frames and has no source peak, transfer, metadata, or tone-mapping inputs. |
 | `PresentationOutputState` | Combines screen metrics, operating-system display state, and the successfully created swapchain's properties into one QML-facing presentation snapshot. |
 | `DisplayStateProvider` | Narrow platform adapter for dynamic display color information. The Windows implementation uses WinRT; other platforms currently return an invalid snapshot. |
-| `PresentationSettings` | Holds target-peak policy and the transient diagnostic canvas rectangle. It is not the eventual persistent player-settings model. |
+| `PresentationSettings` | Holds the current target-peak policy. It is not the eventual persistent player-settings model. |
 
 ## Ownership and execution model
 
@@ -140,18 +142,22 @@ For a visible, non-empty window, one engine frame proceeds as follows:
 4. Ensure the Quick RGBA16F target matches the swapchain pixel size.
 5. Render the Quick scene if it is dirty. `QQuickRenderControl` uses its own
    offscreen QRhi frame, which completes before the visible frame begins.
-6. Align the logical canvas to an integer physical-pixel rectangle and ensure
-   the video producer's RGBA16F target matches it, rebinding the compositor if
-   the composition texture revision changed.
-7. Begin the swapchain frame, retrying an out-of-date swapchain after an
+6. Map the active page's logical video viewport to an aligned physical-pixel
+   rectangle.
+7. If the viewport is visible and intersects the output, ensure the video
+   producer's RGBA16F target matches it, rebinding the compositor if the
+   composition texture revision changed. Otherwise bind the compositor's
+   empty video layer.
+8. Begin the swapchain frame, retrying an out-of-date swapchain after an
    explicit resize.
-8. Ask the active video source whether its device-independent content state
+9. Ask the active video source whether its device-independent content state
    advanced.
-9. Rerender the video surface when its device, display, content, or size state
-   changed, then prepare the target for composition.
-10. Sample the video and UI textures in the final swapchain pass.
-11. End the frame and either commit or discard the pending video result.
-12. Request another frame only if the active source or Qt Quick wants one.
+10. Rerender the video surface when its device, display, content, or size state
+    changed, then prepare the target for composition.
+11. Sample the optional video layer and UI texture in the final swapchain pass.
+12. End the frame and either commit or discard the pending video result.
+13. Request another frame only if the visible active source or Qt Quick wants
+    one.
 
 An outstanding `QWindow::requestUpdate()` is represented by `m_framePending`.
 Synchronous invalidation during rendering is coalesced into a later request
@@ -167,6 +173,7 @@ A frame is requested when:
 
 * The Qt Quick scene requests rendering or changes.
 * The window size or device-pixel ratio changes.
+* The active video viewport geometry or visibility changes.
 * Presentation policy or the active source changes.
 * Display state or successfully created backend state changes.
 * The window moves and its settled output needs verification.
@@ -273,7 +280,7 @@ available.
 `DiagnosticVideoSource` owns the procedural pattern state, revision, and
 animation cadence. Its `DiagnosticVideoProducer` generates the grayscale,
 color-spectrum, and stepped ramps and applies their optional diagnostic tone
-mapper. It writes one opaque, canvas-sized texture with the contract recorded in
+mapper. It writes one opaque, viewport-sized texture with the contract recorded in
 [ADR 0003](../../decisions/0003-display-targeted-video-surface.md):
 
 * RGBA16F linear sRGB/BT.709 D65 with extended floating-point values.
@@ -288,6 +295,11 @@ The final compositor does not know the source peak, pattern phase, tone-map
 setting, source transfer function, or HDR metadata. It places the video layer,
 blends the UI in linear SDR-white-relative space, applies `sdrScale` once, and
 encodes extended-linear or SDR output.
+
+An invisible or empty active viewport disables video production and
+composition for that frame. The compositor retains a valid internal texture
+binding but uses zero video geometry, leaving only its background and the
+redirected UI.
 
 The future FFmpeg/libplacebo path will replace the temporary producer, not this
 consumer contract. Effective source metadata can describe SDR, HDR10/PQ, HLG,
@@ -324,7 +336,7 @@ shell boundary rather than continued one-event-at-a-time growth.
 
 ## Diagnostics
 
-The current QML playground displays:
+The current HDR Lab page displays:
 
 * Selected screen.
 * Active QRhi backend and swapchain format.
@@ -365,6 +377,9 @@ The current implementation establishes these project rules:
 * Surface reuse requires matching device, display-target, content, and
   description state. Swapchain identity is not part of that key.
 * Resource mutation occurs at engine-owned render points.
+* Page layout crosses into presentation only through root-logical viewport
+  geometry and visibility.
+* UI-only frames do not require a fabricated rendered-video surface.
 * Rendering remains demand-driven when no layer is changing.
 * Platform-specific display observation stays behind
   `DisplayStateProvider`.
@@ -402,15 +417,15 @@ the responsibility-qualified path so dependencies remain visible.
 
 The configured Debug target builds successfully with Qt 6.11.1 and MSVC after
 initializing the Visual Studio developer environment. Pure presentation-target,
-rendered-surface reuse, and target-diagnostic policy have automated coverage. A
-headless real D3D11 QRhi test creates the production graphics domain, drives
-the diagnostic producer through the shared interface, renders into RGBA16F,
-composes with the production final pass, and reads back both boundaries. It
-checks analytic extended values, orientation, placement, SDR encoding,
-non-unity extended-linear scaling, post-submission surface reuse, accepted
-submissions with committed and discarded rendered states, target
-resize/revision-driven compositor rebinding, premultiplied UI blending, and the
-direct zero-copy target report.
+viewport, rendered-surface reuse, and target-diagnostic policy have automated
+coverage. A headless real D3D11 QRhi test creates the production graphics
+domain, drives the diagnostic producer through the shared interface, renders
+into RGBA16F, composes with the production final pass, and reads back both
+boundaries. It checks analytic extended values, orientation, placement, SDR
+encoding, non-unity extended-linear scaling, post-submission surface reuse,
+accepted submissions with committed and discarded rendered states, target
+resize/revision-driven compositor rebinding, hidden-video fallback,
+premultiplied UI blending, and the direct zero-copy target report.
 A renderer image corpus, cross-backend capture, and recorded runtime display
 matrix do not exist yet.
 

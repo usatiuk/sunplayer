@@ -49,9 +49,9 @@ public:
     HdrCompositor &operator=(const HdrCompositor &) = delete;
 
     ResourceResult initialize(QRhiRenderPassDescriptor &renderPassDescriptor,
-                              QRhiTexture &videoTexture,
+                              QRhiTexture *videoTexture,
                               QRhiTexture &uiTexture);
-    ResourceResult setTextures(QRhiTexture &videoTexture,
+    ResourceResult setTextures(QRhiTexture *videoTexture,
                                QRhiTexture &uiTexture);
     void render(QRhiCommandBuffer &commandBuffer,
                 QRhiRenderTarget &renderTarget,
@@ -59,12 +59,14 @@ public:
                 const HdrCompositorParameters &parameters);
 
 private:
-    ResourceResult createBindings(QRhiTexture &videoTexture,
+    ResourceResult createBindings(QRhiTexture *videoTexture,
                                   QRhiTexture &uiTexture);
 
     QRhi &m_rhi;
     std::unique_ptr<QRhiBuffer> m_uniformBuffer;
     std::unique_ptr<QRhiSampler> m_sampler;
+    std::unique_ptr<QRhiTexture> m_emptyVideoTexture;
     std::unique_ptr<QRhiShaderResourceBindings> m_bindings;
     std::unique_ptr<QRhiGraphicsPipeline> m_pipeline;
+    bool m_videoLayerAvailable = false;
 };

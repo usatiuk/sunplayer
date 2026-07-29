@@ -22,6 +22,8 @@ qt_add_executable(sunroom
         src/app/PresentationSettings.h
         src/app/PresentationWindow.cpp
         src/app/PresentationWindow.h
+        src/app/VideoViewportState.cpp
+        src/app/VideoViewportState.h
         src/graphics/GraphicsBackendFactory.cpp
         src/graphics/GraphicsBackendFactory.h
         src/graphics/GraphicsDeviceDomain.cpp
@@ -56,12 +58,20 @@ qt_add_executable(sunroom
 set_source_files_properties(src/app/Main.qml PROPERTIES
         QT_RESOURCE_ALIAS Main.qml
 )
+set_source_files_properties(src/app/AppShell.qml PROPERTIES
+        QT_RESOURCE_ALIAS AppShell.qml
+)
+set_source_files_properties(src/app/pages/HdrLabPage.qml PROPERTIES
+        QT_RESOURCE_ALIAS HdrLabPage.qml
+)
 
 qt_add_qml_module(sunroom
         URI Sunroom
         VERSION 1.0
         QML_FILES
         src/app/Main.qml
+        src/app/AppShell.qml
+        src/app/pages/HdrLabPage.qml
 )
 
 qt_add_shaders(sunroom "sunroom_shaders"
@@ -87,6 +97,10 @@ target_link_libraries(sunroom
 target_include_directories(sunroom
         PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        # qmltyperegistrar includes declaratively registered types by basename.
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/app"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/presentation"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/video"
 )
 
 set_target_properties(sunroom PROPERTIES

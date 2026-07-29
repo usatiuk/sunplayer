@@ -20,6 +20,7 @@ class QWindow;
 class QuickUiLayer;
 class RenderedVideoProducer;
 class RenderedVideoSource;
+class VideoViewportState;
 enum class VideoOperationResult;
 
 // Owns one presentation domain and sequences its QRhi work.
@@ -31,6 +32,7 @@ public:
                           PresentationOutputState &outputState,
                           PresentationSettings &settings,
                           RenderedVideoSource &videoSource,
+                          VideoViewportState &videoViewport,
                           QObject *parent = nullptr);
     ~RhiPresentationEngine() override;
 
@@ -38,7 +40,6 @@ public:
     void handleExposure();
     void requestFrame();
     void markUiDirty();
-    void markCanvasDirty();
     void markPresentationDirty();
     void releaseSwapChain();
 
@@ -57,7 +58,7 @@ private:
         const char *operation, VideoOperationResult result);
     void scheduleDeviceRecovery();
     void updateBackendState();
-    void scheduleNextFrame();
+    void scheduleNextFrame(bool videoLayerActive);
     void requestSwapChainRecreation();
     void scheduleOutputVerification();
     void verifyOutput();
@@ -66,6 +67,7 @@ private:
     PresentationOutputState &m_outputState;
     PresentationSettings &m_settings;
     RenderedVideoSource &m_videoSource;
+    VideoViewportState &m_videoViewport;
     std::unique_ptr<GraphicsDeviceDomain> m_graphicsDevice;
     QRhi *m_rhi = nullptr;
     std::unique_ptr<QRhiSwapChain> m_swapChain;

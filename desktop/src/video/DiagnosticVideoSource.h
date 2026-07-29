@@ -2,11 +2,15 @@
 
 #include <optional>
 
+#include <QtQml/qqmlregistration.h>
+
 #include "video/RenderedVideoSource.h"
 #include "video/VideoTargetInterop.h"
 
 class DiagnosticVideoSource final : public RenderedVideoSource {
     Q_OBJECT
+    QML_ELEMENT
+    QML_UNCREATABLE("DiagnosticVideoSource is owned by the application")
 
     Q_PROPERTY(float sourcePeakHeadroom READ sourcePeakHeadroom
                WRITE setSourcePeakHeadroom NOTIFY settingsChanged)
@@ -17,7 +21,7 @@ class DiagnosticVideoSource final : public RenderedVideoSource {
 
 public:
     explicit DiagnosticVideoSource(
-        VideoTargetReadback readback = VideoTargetReadback::Disabled,
+        VideoTargetReadback readback,
         QObject *parent = nullptr);
 
     float sourcePeakHeadroom() const;

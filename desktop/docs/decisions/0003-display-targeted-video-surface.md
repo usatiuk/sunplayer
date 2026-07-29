@@ -16,7 +16,7 @@ needs to cross the same boundary that libplacebo-rendered video will use.
 ## Decision
 
 Rendered video crosses into final composition as a producer-owned,
-canvas-sized texture with this contract:
+active-viewport-sized texture with this contract:
 
 * RGBA16F.
 * Linear RGB using sRGB/BT.709 D65 primaries.
@@ -74,9 +74,9 @@ Costs and limitations:
   output selection changes.
 * A fixed linear-sRGB working surface can represent extended and negative
   values but does not eliminate precision or gamut-mapping choices upstream.
-* Canvas dimensions are aligned to integer physical pixels, so fractional
-  device-pixel ratios can move an edge by less than one pixel relative to the
-  former analytic full-window pass.
+* Active viewport dimensions are aligned to integer physical pixels, so
+  fractional device-pixel ratios can move an edge by less than one pixel
+  relative to its logical QML geometry.
 * The current diagnostic producer's tone mapper is temporary and is not a
   claim of video color correctness.
 

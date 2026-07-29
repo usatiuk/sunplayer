@@ -7,10 +7,9 @@ presentation boundary for decoded video, while preserving explicit color
 contracts, one-device composition, demand-driven rendering, and observable
 fallback behavior.
 
-The device, producer, and target-interop seams now wrap the diagnostic
-producer. The immediate UI milestone extracts the retained HDR Lab and generic
-viewport; a libplacebo producer for the explicit offscreen video surface then
-follows and still precedes playback.
+The device, producer, target-interop, and generic active-viewport seams now
+wrap the retained HDR Lab. A libplacebo producer for the explicit offscreen
+video surface is the next milestone and still precedes playback.
 
 ## Completed foundation
 
@@ -108,14 +107,14 @@ code.
   states, invalidation, target resizing, and backend target state at the
   strongest practical boundary.
 
-The shared source/producer lifecycle and direct QRhi target portion is
-implemented. The full Windows build, three CTest targets, real D3D11 capture,
-and hidden startup smoke pass. The test drives the diagnostic source and
-producer through shared interfaces, verifies direct-target diagnostics with no
-copies, exercises committed and discarded render states after accepted
-submissions, resizes the native texture, observes its revision, rebinds the
-compositor, and captures the resized result. Native libplacebo interop and
-actual fallback selection remain part of milestone 3.
+The shared source/producer lifecycle, direct QRhi target, and optional
+composition layer are implemented. The full Windows build, five CTest targets,
+real D3D11 capture, and hidden startup smoke pass. Tests drive the diagnostic
+source and producer through shared interfaces, verify direct-target diagnostics
+with no copies, exercise committed and discarded render states after accepted
+submissions, resize and rebind the native texture, and verify UI-only
+composition without sampling video. Native libplacebo interop and actual
+fallback selection remain part of milestone 3.
 
 ## Milestone 3: libplacebo renderer
 

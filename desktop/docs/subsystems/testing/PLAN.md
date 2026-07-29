@@ -68,6 +68,9 @@ Implement alongside graphics milestone 1:
 
 * [x] Compare selected values or regions with declared tolerances.
 * [x] Report backend and floating-point readback capability.
+* [x] Cover active video-viewport geometry and visibility as pure state.
+* [x] Exercise QML shell-to-viewport publication through the real components.
+* [x] Capture UI-only composition with the video layer hidden.
 * [x] Label the GPU test separately so dedicated runs can select it while it
   remains part of the current supported Windows default suite.
 

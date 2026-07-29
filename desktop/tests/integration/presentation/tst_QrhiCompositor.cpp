@@ -267,14 +267,14 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     QCOMPARE(
         compositor.initialize(
             *outputRenderPass,
-            producer->textureForComposition(),
+            &producer->textureForComposition(),
             *uiTexture),
         HdrCompositor::ResourceResult::Ready);
     HdrCompositor linearOutputCompositor(*rhi);
     QCOMPARE(
         linearOutputCompositor.initialize(
             *linearOutputRenderPass,
-            producer->textureForComposition(),
+            &producer->textureForComposition(),
             *uiTexture),
         HdrCompositor::ResourceResult::Ready);
 
@@ -525,6 +525,60 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
         reusedExtendedVideo.b, expectedExtendedGreenBlue, 0.01f);
     compareNear(reusedExtendedVideo.a, 1.0f, 0.001f);
 
+    // The compositor owns a valid fallback binding when no page publishes a
+    // visible video viewport. No video surface is prepared or sampled.
+    QCOMPARE(
+        compositor.setTextures(nullptr, *uiTexture),
+        HdrCompositor::ResourceResult::Ready);
+    QCOMPARE(
+        rhi->beginOffscreenFrame(&commandBuffer),
+        QRhi::FrameOpSuccess);
+    updates = rhi->nextResourceUpdateBatch();
+    updates->uploadTexture(
+        uiTexture.get(),
+        QRhiTextureUploadDescription(QRhiTextureUploadEntry(
+            0, 0, QRhiTextureSubresourceUploadDescription(
+                transparentUi))));
+    commandBuffer->resourceUpdate(updates);
+    HdrCompositorParameters hiddenVideoParameters =
+        compositorParameters;
+    hiddenVideoParameters.videoSize = {0.0f, 0.0f};
+    compositor.render(
+        *commandBuffer,
+        *outputTarget,
+        outputSize,
+        hiddenVideoParameters);
+
+    bool hiddenVideoReadbackCompleted = false;
+    QRhiReadbackResult hiddenVideoReadback;
+    hiddenVideoReadback.completed =
+        [&hiddenVideoReadbackCompleted] {
+            hiddenVideoReadbackCompleted = true;
+        };
+    updates = rhi->nextResourceUpdateBatch();
+    updates->readBackTexture(
+        QRhiReadbackDescription(outputTexture.get()),
+        &hiddenVideoReadback);
+    commandBuffer->resourceUpdate(updates);
+    QCOMPARE(rhi->endOffscreenFrame(), QRhi::FrameOpSuccess);
+    producer->submissionAccepted();
+    producer->commitPendingRender();
+    QVERIFY(hiddenVideoReadbackCompleted);
+    QCOMPARE(hiddenVideoReadback.pixelSize, outputSize);
+    QCOMPARE(hiddenVideoReadback.format, QRhiTexture::RGBA8);
+    QCOMPARE(
+        hiddenVideoReadback.data.size(),
+        qsizetype(outputSize.width() * outputSize.height() * 4));
+    const BytePixel hiddenVideoPixel = readBytePixel(
+        hiddenVideoReadback,
+        *rhi,
+        videoOriginX + sampleX,
+        videoOriginY + 1);
+    compareByteNear(hiddenVideoPixel.r, 17);
+    compareByteNear(hiddenVideoPixel.g, 19);
+    compareByteNear(hiddenVideoPixel.b, 24);
+    QCOMPARE(hiddenVideoPixel.a, 255);
+
     // Submission tracking and content-state promotion are separate. Discarding
     // a rendered state after an accepted submission must leave it dirty.
     RenderedVideoSurfaceState resubmittedState = requestedState;
@@ -577,7 +631,7 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     QVERIFY(producer->needsRender(resizedState));
     QCOMPARE(
         compositor.setTextures(
-            producer->textureForComposition(), *uiTexture),
+            &producer->textureForComposition(), *uiTexture),
         HdrCompositor::ResourceResult::Ready);
 
     QCOMPARE(

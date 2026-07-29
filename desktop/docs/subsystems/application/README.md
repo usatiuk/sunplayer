@@ -2,11 +2,12 @@
 
 ## Status
 
-The current application shell is a single-window Windows HDR diagnostics
-playground. It establishes startup, object ownership, native presentation
-events, and redirected Qt Quick input. It does not yet provide player
-navigation, file opening, persistent settings, fullscreen behavior, structured
-errors, or general logging.
+The current application shell is a single-window Windows presentation host
+with a thin QML `AppShell` and retained HDR Lab page. It establishes startup,
+object ownership, native presentation events, redirected Qt Quick input, and
+the active video-viewport boundary. It does not yet provide player navigation,
+file opening, persistent settings, fullscreen behavior, structured errors, or
+general logging.
 
 Graphics details belong to
 [../graphics/README.md](../graphics/README.md). The current diagnostic QML is
@@ -44,6 +45,7 @@ this order, so destruction occurs in reverse:
 * `PresentationOutputState`.
 * `PresentationSettings`.
 * `DiagnosticVideoSource`.
+* `VideoViewportState`.
 * `RhiPresentationEngine`.
 
 The graphics engine is created before display observation attaches to the
@@ -64,7 +66,7 @@ The native window translates:
 
 * Exposure into first-frame handling.
 * `UpdateRequest` into engine rendering.
-* Resize and device-pixel-ratio changes into UI and canvas invalidation.
+* Resize and device-pixel-ratio changes into UI and viewport invalidation.
 * Native surface destruction into swapchain teardown.
 
 Mouse, wheel, and keyboard input are forwarded to the redirected hidden
@@ -79,8 +81,11 @@ methods, accessibility, drag-and-drop, and file-open events remain deferred.
 `PresentationSettings` contains presentation-facing controls:
 
 * Automatic or manual target peak.
-* QML-computed diagnostic canvas rectangle, pending replacement by the shared
-  active video-viewport contract.
+
+`VideoViewportState` separately holds the active page's video rectangle in root
+logical coordinates and its visibility. `AppShell` publishes the current
+`HdrLabPage` viewport; the presentation engine consumes it without knowing page
+types or QML layout.
 
 `DiagnosticVideoSource` separately owns the procedural pattern peak, diagnostic
 tone-mapping switch, animation state and cadence, and content revision. It
@@ -110,10 +115,12 @@ vertical slices rather than as an empty global framework.
 
 ## Verification
 
-Application-shell behavior does not yet have a registered scenario. The built
-application has completed an automated four-second hidden startup liveness
-smoke without user interaction; this verifies startup and graphics
-initialization, not UI behavior or visual correctness.
+Viewport state has a focused Qt Test target. A Qt Quick component target
+verifies root initial-property handoff and active-page viewport publication.
+The built application has completed an automated four-second hidden startup
+liveness smoke without user interaction; this verifies packaged-QML loading,
+startup, and graphics initialization, not complete UI behavior or visual
+correctness.
 
 When features arrive, use:
 

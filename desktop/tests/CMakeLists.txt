@@ -13,6 +13,41 @@ qt_add_executable(sunroom_rendered_video_surface_tests
         ../src/video/VideoTargetInterop.h
 )
 
+qt_add_executable(sunroom_video_viewport_tests
+        unit/ui/tst_VideoViewportState.cpp
+        ../src/app/VideoViewportState.cpp
+        ../src/app/VideoViewportState.h
+)
+
+qt_add_executable(sunroom_qml_shell_tests
+        integration/ui/tst_AppShell.cpp
+        integration/ui/QmlShellTestTypes.h
+        ../src/app/VideoViewportState.cpp
+        ../src/app/VideoViewportState.h
+)
+
+set_source_files_properties(../src/app/Main.qml PROPERTIES
+        QT_RESOURCE_ALIAS Main.qml
+        QT_QML_SKIP_CACHEGEN TRUE
+)
+set_source_files_properties(../src/app/AppShell.qml PROPERTIES
+        QT_RESOURCE_ALIAS AppShell.qml
+        QT_QML_SKIP_CACHEGEN TRUE
+)
+set_source_files_properties(../src/app/pages/HdrLabPage.qml PROPERTIES
+        QT_RESOURCE_ALIAS HdrLabPage.qml
+        QT_QML_SKIP_CACHEGEN TRUE
+)
+
+qt_add_qml_module(sunroom_qml_shell_tests
+        URI SunroomShellTest
+        VERSION 1.0
+        QML_FILES
+        ../src/app/Main.qml
+        ../src/app/AppShell.qml
+        ../src/app/pages/HdrLabPage.qml
+)
+
 target_include_directories(sunroom_presentation_target_tests
         PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
@@ -21,6 +56,18 @@ target_include_directories(sunroom_presentation_target_tests
 target_include_directories(sunroom_rendered_video_surface_tests
         PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+)
+
+target_include_directories(sunroom_video_viewport_tests
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+)
+
+target_include_directories(sunroom_qml_shell_tests
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src/app"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/ui"
 )
 
 target_link_libraries(sunroom_presentation_target_tests
@@ -33,10 +80,24 @@ target_link_libraries(sunroom_rendered_video_surface_tests
         Qt6::Test
 )
 
+target_link_libraries(sunroom_video_viewport_tests
+        PRIVATE
+        Qt6::Test
+)
+
+target_link_libraries(sunroom_qml_shell_tests
+        PRIVATE
+        Qt6::Quick
+        Qt6::QuickControls2
+        Qt6::Test
+)
+
 if (WIN32)
     foreach (test_target IN ITEMS
             sunroom_presentation_target_tests
-            sunroom_rendered_video_surface_tests)
+            sunroom_rendered_video_surface_tests
+            sunroom_video_viewport_tests
+            sunroom_qml_shell_tests)
         add_custom_command(
                 TARGET ${test_target}
                 POST_BUILD
@@ -58,10 +119,28 @@ add_test(
         COMMAND sunroom_rendered_video_surface_tests
 )
 
+add_test(
+        NAME video-viewport
+        COMMAND sunroom_video_viewport_tests
+)
+
+add_test(
+        NAME qml-shell
+        COMMAND sunroom_qml_shell_tests
+)
+
 set_tests_properties(
         presentation-target
         rendered-video-surface
+        video-viewport
         PROPERTIES LABELS "unit"
+)
+
+set_tests_properties(
+        qml-shell
+        PROPERTIES
+        LABELS "component;ui"
+        TIMEOUT 30
 )
 
 if (WIN32)

@@ -60,19 +60,22 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 
 ## Current implementation status
 
-As of 2026-07-28, the repository contains a Windows presentation foundation,
+As of 2026-07-29, the repository contains a Windows presentation foundation,
 not yet a media player:
 
 * A factory-selected graphics-device domain owns the current D3D11 QRhi and
   device generation; the presentation engine owns its window swapchain.
 * Qt Quick renders through `QQuickRenderControl` into an application-owned
   RGBA16F texture.
+* A thin QML application shell hosts the retained HDR Lab page. The active page
+  publishes a generic root-coordinate video viewport with explicit visibility.
 * A temporary QRhi producer renders the procedural HDR diagnostic pattern into
-  an explicitly described, canvas-sized RGBA16F video surface through the
+  an explicitly described, viewport-sized RGBA16F video surface through the
   shared source, producer, and target lifecycle contracts.
 * A narrow final QRhi pass places that already processed video surface,
   combines it with the UI, and presents extended-linear sRGB/scRGB when
-  available, with an SDR fallback.
+  available, with an SDR fallback. It can also compose UI without an active
+  video layer.
 * Qt screen state, QRhi swapchain HDR information, and Windows Advanced Color
   telemetry feed a shared presentation snapshot and diagnostic UI.
 * Diagnostics expose the graphics adapter, producer, output-target path,
@@ -85,16 +88,16 @@ not yet a media player:
 
 FFmpeg, libplacebo, libass, decoded video, audio, playback, file opening,
 subtitles, and persistence are not integrated. CTest/Qt Test coverage exists
-for pure presentation-target policy and rendered-video surface
-validity/invalidation and a real D3D11 offscreen producer/compositor capture.
-Whole-application scenarios do not yet exist.
+for pure presentation-target policy, video-viewport state, the real QML
+shell's viewport publication, rendered-video surface validity/invalidation,
+and a real D3D11 offscreen producer/compositor capture. Whole-application
+scenarios do not yet exist.
 
-The next implementation slice extracts a thin QML shell, retained HDR Lab
-page, and generic viewport without introducing a pretend Player UI. A
-persistent libplacebo renderer for known SDR and HDR software-backed images
-follows. The real Player page arrives with the file/session model and first
-FFmpeg-decoded frame. Testing continues alongside that work with real-backend
-capture and the first deterministic frame scenario.
+The next implementation slice introduces a persistent libplacebo renderer for
+known SDR and HDR software-backed images. The real Player page arrives with the
+file/session model and first FFmpeg-decoded frame rather than as disconnected
+controls. Testing continues alongside that work with real-backend capture and
+the first deterministic frame scenario.
 
 ## Subsystems
 
@@ -214,10 +217,10 @@ Documentation: `docs/subsystems/subtitles/`
 
 ### 9. User interface
 
-* [ ] Thin application shell and page structure
+* [x] Thin application shell and page structure
 * [ ] Player page with truthful session states
-* [ ] Retained HDR Lab diagnostics page
-* [ ] Generic active video-viewport contract
+* [x] Retained HDR Lab diagnostics page
+* [x] Generic active video-viewport contract
 * [ ] Open-file and drag-and-drop interface
 * [ ] Play and pause controls
 * [ ] Seek bar and timestamps

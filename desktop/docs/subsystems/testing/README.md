@@ -3,8 +3,10 @@
 ## Status
 
 Sunroom has CTest/Qt Test targets for pure presentation-target policy,
-rendered-video surface validity/reuse, and a real headless D3D11 QRhi
-producer/compositor capture. It does not yet have a media fixture corpus,
+video-viewport state, rendered-video surface validity/reuse, and a real
+headless D3D11 QRhi producer/compositor capture. A non-presenting Qt Quick
+component test covers the real QML shell's initial-property and viewport
+publication contract. Sunroom does not yet have a media fixture corpus,
 golden-image suite, or automated application scenarios. The accepted testing
 direction is defined in
 [../../TESTING.md](../../TESTING.md), and active bootstrap work is tracked in
@@ -14,6 +16,7 @@ Testing begins with the current presentation boundaries rather than waiting for
 the whole player:
 
 * Display-target and SDR-white policy.
+* Active video-viewport geometry and visibility.
 * Render-surface device/display-generation validity.
 * A real D3D11 QRhi offscreen composition readback.
 * A recorded Windows SDR/HDR manual matrix.
@@ -49,18 +52,22 @@ The first implementation should use:
 * CTest labels to distinguish deterministic, GPU, platform, slow, and manual
   coverage as those classes appear.
 
-Qt Quick Test may be added for isolated QML behavior when the player UI exists.
-OpenEXR/OpenImageIO, a local process-control channel, and dedicated scenario
-syntax remain candidates to adopt when a concrete test needs them.
+Qt Quick Test may be added when page selection, commands, or other isolated QML
+behavior exists to justify it. OpenEXR/OpenImageIO, a local process-control
+channel, and dedicated scenario syntax remain candidates to adopt when a
+concrete test needs them.
 
 Pure policy tests use Qt Test's `QTEST_APPLESS_MAIN`. The QRhi integration test
 uses `QTEST_GUILESS_MAIN`, not generic `QTEST_MAIN`: linking Qt GUI for QRhi
 would make the generic macro instantiate `QGuiApplication` and load the GUI
 platform stack, while the offscreen test needs only `QCoreApplication`
 lifetime. Qt Test's public static `initMain()` hook applies the Windows
-noninteractive error mode before application construction. Correct build-local
-DLL staging remains necessary because loader failures occur before test code
-can run.
+noninteractive error mode before application construction.
+
+The QML shell component test uses `QTEST_MAIN` because Qt Quick Controls and
+its hidden `QQuickWindow` scene require `QGuiApplication`. It never shows a
+native window. Correct build-local DLL staging remains necessary because
+loader failures occur before test code can run.
 
 ## Test seams
 
@@ -84,8 +91,8 @@ Current verified coverage:
 | Boundary | State |
 | --- | --- |
 | Configured Windows Debug build | Builds successfully |
-| Focused automated tests | Presentation-target policy, rendered-video surface lifecycle, and target-path diagnostic policy tests pass |
-| Real QRhi capture | Factory-selected D3D11 domain, shared source/producer contracts, direct RGBA16F target, resize/revision rebinding, and final SDR/extended-linear composition readbacks pass |
+| Focused automated tests | Presentation-target policy, video-viewport state, real QML shell publication, rendered-video surface lifecycle, and target-path diagnostic policy tests pass |
+| Real QRhi capture | Factory-selected D3D11 domain, shared source/producer contracts, direct RGBA16F target, resize/revision rebinding, hidden-video fallback, and final SDR/extended-linear composition readbacks pass |
 | Built application startup | Automated four-second GUI/device/swapchain liveness smoke passed; not yet a registered scenario |
 | Recorded SDR/HDR runtime matrix | Not implemented |
 | Media pipeline scenarios | Blocked on media pipeline implementation |
@@ -95,6 +102,6 @@ Missing coverage must remain visible in this table or the active testing plan
 until it is implemented or deliberately removed from scope.
 
 Focused tests are grouped by responsibility under `tests/unit/presentation/`
-and `tests/unit/video/`. Future actual-application scenarios use sibling trees
-when their first concrete tests arrive; the first GPU boundary test is under
-`tests/integration/presentation/`.
+`tests/unit/ui/`, and `tests/unit/video/`. Future actual-application scenarios
+use sibling trees when their first concrete tests arrive; the first GPU
+boundary test is under `tests/integration/presentation/`.

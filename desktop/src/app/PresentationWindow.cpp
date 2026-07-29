@@ -9,6 +9,7 @@
 #include <QWheelEvent>
 
 #include "app/PresentationSettings.h"
+#include "app/VideoViewportState.h"
 #include "graphics/GraphicsBackendFactory.h"
 #include "presentation/PresentationOutputState.h"
 #include "presentation/RhiPresentationEngine.h"
@@ -18,11 +19,14 @@ PresentationWindow::PresentationWindow() {
     setSurfaceType(GraphicsBackendFactory::windowSurfaceType());
     setTitle(tr("Sunroom — RHI / HDR"));
 
-    m_outputState = std::make_unique<PresentationOutputState>();
-    m_settings = std::make_unique<PresentationSettings>();
-    m_videoSource = std::make_unique<DiagnosticVideoSource>();
+    m_outputState = std::make_unique<PresentationOutputState>(nullptr);
+    m_settings = std::make_unique<PresentationSettings>(nullptr);
+    m_videoSource = std::make_unique<DiagnosticVideoSource>(
+        VideoTargetReadback::Disabled);
+    m_videoViewport = std::make_unique<VideoViewportState>(nullptr);
     m_engine = std::make_unique<RhiPresentationEngine>(
-        *this, *m_outputState, *m_settings, *m_videoSource);
+        *this, *m_outputState, *m_settings, *m_videoSource,
+        *m_videoViewport);
 
     setMinimumSize({760, 560});
     resize(1100, 760);
@@ -39,7 +43,6 @@ void PresentationWindow::exposeEvent(QExposeEvent *) {
 
 void PresentationWindow::resizeEvent(QResizeEvent *) {
     m_engine->markUiDirty();
-    m_engine->markCanvasDirty();
 }
 
 void PresentationWindow::mousePressEvent(QMouseEvent *event) {
@@ -91,7 +94,6 @@ bool PresentationWindow::event(QEvent *event) {
         return true;
     case QEvent::DevicePixelRatioChange:
         m_engine->markUiDirty();
-        m_engine->markCanvasDirty();
         break;
     case QEvent::PlatformSurface:
         if (static_cast<QPlatformSurfaceEvent *>(event)->surfaceEventType()
