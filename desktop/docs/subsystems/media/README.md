@@ -7,23 +7,36 @@ Sunroom integrates the official vcpkg FFmpeg 8.1.2 package with `avformat`,
 DXVA2, and Media Foundation support. Sunroom now exercises D3D11VA for
 supported streams and keeps software decoding as an explicit fallback.
 
-The synchronous `decodeFirstVideoFrame()` operation opens a local file,
-discovers the best video stream, decodes the first presentable frame, makes its
-stream metadata self-contained, and returns an immutable
-`DecodedVideoFrame`. `MediaSession` runs that operation on a worker with a
-`std::stop_token`; an FFmpeg interrupt callback and decode-loop checks make
-ordinary local-file work cooperatively cancellable. The caller still supplies
-the complete frame identity.
+The production `decodeVideoFrames()` operation opens a local file, discovers
+the best video stream, and continuously emits immutable
+`DecodedVideoFrame`s. `decodeFirstVideoFrame()` is now only a focused-test
+adapter over that same implementation, so hardware negotiation, metadata,
+timestamp, EOF, and fallback behavior do not diverge.
+
+Each operation has two FFmpeg owners:
+
+* A demux worker exclusively owns `AVFormatContext`.
+* Its caller/decoder worker exclusively owns `AVCodecContext` and the hardware
+  frame pool.
+
+They exchange only selected-video `AVPacket`s through a channel bounded to 64
+packets and four encoded megabytes. One packet larger than that byte budget is
+allowed only when the channel is otherwise empty. End of input is ordered
+behind the last packet and causes one null packet to be sent followed by
+`avcodec_receive_frame()` until `AVERROR_EOF`. Send-side `EAGAIN` retains and
+retries the exact packet after receiving output; a double-EAGAIN no-progress
+state is reported rather than spun.
 
 The Windows graphics domain creates an initialized FFmpeg D3D11VA context from
 the same application-owned D3D11 device used by QRhi and libplacebo. The
-first-frame operation enumerates the selected decoder's hardware
+continuous operation enumerates the selected decoder's hardware
 configurations, requests the matching hardware pixel format, and records the
-graphics-device generation on returned hardware frames. If configuration or
-post-selection decoding fails, it retries the entire open/decode operation in
-software and preserves the fallback reason in session diagnostics. Failures
-before the hardware format is actually selected are not misreported as
-hardware-decode failures.
+graphics-device generation on returned hardware frames. Its extra hardware
+frame reserve covers three queued frames, the current selected frame, a
+decoder output blocked on the queue, and the producer's transient prior
+mapping during a frame switch. A configured hardware failure retries in
+software only before any frame has been published; a later decoder failure is
+visible rather than silently replaying from the beginning.
 
 If the retained hardware surface later cannot be imported by the active
 graphics backend, `MediaSession` consumes at most one software-only re-decode
@@ -33,10 +46,15 @@ and published hardware frames, then re-decodes after the replacement domain
 supplies its capability. Ready software frames are generation-independent and
 remain published for the recreated producer.
 
-This is an integration slice, not the eventual continuous decoder: it has no
-packet queue, seeking, track discovery model, or source-stall recovery.
+The operation and both bounded channels are cooperatively cancellable through
+`std::stop_token`. The FFmpeg interrupt state outlives format teardown, and
+every blocking queue wait includes stop or generation invalidation.
 Uninterruptible mounted-filesystem kernel waits remain outside the guarantee
 and may require helper-process containment.
+
+This remains the first selected-video pipeline. It has no audio/subtitle
+packet dispatch, seek implementation, complete track-discovery model, or
+source-stall recovery.
 
 ## Dependency boundary
 
@@ -85,8 +103,8 @@ The Sunroom wrapper snapshots:
 
 Stream-level scalar color defaults, rotation, mastering-display, content-light,
 and HDR10+ metadata are copied onto the private frame when the decoder did not
-propagate them. Effective sample aspect ratio is resolved through FFmpeg while
-the format and stream contexts remain alive.
+propagate them. Effective sample aspect ratio prefers the decoded frame and
+then the snapshotted stream/codec default while those contexts remain alive.
 Published frames do not retain or expose mutable format, stream, or decoder
 contexts.
 
@@ -103,20 +121,13 @@ rotated-content output still needs a dedicated fixture and capture.
 
 ## Next implementation
 
-Continuous decoding will reuse this frame contract while adding:
-
-1. Persistent demux/decoder worker ownership and bounded packet/frame queues.
-2. Complete stream discovery and normalized session metadata.
-3. Reuse of the proven D3D11VA negotiation and software retry across decoder
-   lifetime, stream changes, flushes, and device recreation.
-4. Per-frame completion events and queue diagnostics for scheduling.
-5. Equivalent native hardware-device negotiation on Linux and macOS when
+1. Add a seekable demux command boundary and keyframe-anchored decoder restart.
+2. Normalize complete stream, chapter, attachment, and session duration state.
+3. Dispatch audio and subtitle packets without letting a full video channel
+   prevent progress for interleaved streams.
+4. Add packet byte/duration and decode-time diagnostics.
+5. Add equivalent native hardware-device negotiation on Linux and macOS when
    their graphics domains are implemented.
-
-The first-frame operation is already owned by `MediaSession` through one
-persistent, latest-request worker. Continuous decoding should evolve that
-worker into bounded demux/decode queues rather than create a parallel
-mini-player API.
 
 ## Verification
 
@@ -137,7 +148,13 @@ Matroska/H.264 fixture runs on the real D3D11VA decoder, returns a retained NV12
 texture-array slice from the shared graphics device, and is compared against
 software decode after production libplacebo rendering. The test asserts that
 the hardware input path performs no CPU transfer or GPU copy and that the
-direct output target performs no copy or CPU transfer. A controlled failed
+direct output target performs no copy or CPU transfer. Both three-frame
+fixtures are also drained continuously through the production packet/decode
+state machine; the D3D11VA case retains all three hardware frames
+simultaneously within the declared surface budget. A controlled failed
 post-selection result at the fallback-policy boundary verifies software retry
-and preserved reason; session tests verify the corresponding import-failure
-retry and graphics-recovery generation replacement.
+and preserved reason. Queue tests verify hard capacity, backpressure,
+generation reset, and stop wakeup. A separate twelve-frame FFV1 fixture drives
+the production session beyond mailbox capacity and verifies pause-induced
+decoder backpressure, resume/refill, due-frame dropping, complete drain, end,
+and replay.

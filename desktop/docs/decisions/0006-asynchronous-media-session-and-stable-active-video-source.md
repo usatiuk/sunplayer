@@ -2,6 +2,7 @@
 
 * Status: Accepted
 * Date: 2026-07-29
+* Extended by: [0007](0007-bound-continuous-video-and-select-on-presentation-thread.md)
 
 ## Context
 
@@ -49,17 +50,18 @@ graphics invariants are not silently replaced with a fake player renderer.
 
 ## Consequences
 
-* File opening and first-frame decode no longer block the GUI thread.
-* A later continuous decoder can publish frames into the same presentation
-  mailbox without changing the compositor or source router.
+* File opening and decoding do not block the GUI thread.
+* The continuous decoder publishes selected frames through the same
+  presentation mailbox without changing the compositor or source router.
 * Clearing a decoded source advances its producer configuration so a hidden
   producer releases any retained mapped `AVFrame`.
 * Cancel and replacement return immediately, but an operation that ignores
   cancellation delays the latest pending open. Final shutdown must still join
   it. Kernel-level mounted-filesystem hangs may require helper-process
   containment.
-* The first session is intentionally not continuous playback. It has no packet
-  queue, scheduler, audio clock, seek, track selection, or buffering model.
+* ADR 0007 evolves the first session into bounded continuous video playback.
+  Audio clocking, seeking, track selection, and unified buffering remain
+  outside this decision.
 
 ## Alternatives considered
 

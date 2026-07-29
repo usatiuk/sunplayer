@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <condition_variable>
 #include <functional>
 #include <mutex>
@@ -13,11 +14,16 @@
 #include <QtQml/qqmlregistration.h>
 
 #include "media/DecodedVideoFrame.h"
-#include "media/FfmpegFirstFrameDecoder.h"
+#include "media/FfmpegVideoDecoder.h"
 #include "media/FfmpegHardwareDevice.h"
+#include "playback/CoalescedGenerationWake.h"
+#include "playback/VideoFrameQueue.h"
+#include "playback/VideoFrameScheduler.h"
 #include "video/DecodedVideoSource.h"
 
-class MediaSession final : public QObject {
+class MediaSession final
+    : public QObject,
+      private DecodedVideoFrameSelector {
     Q_OBJECT
     QML_ELEMENT
     QML_UNCREATABLE("MediaSession is owned by the application")
@@ -33,6 +39,16 @@ class MediaSession final : public QObject {
                READ hardwareFallbackReason NOTIFY sessionChanged)
     Q_PROPERTY(QString videoSummary READ videoSummary NOTIFY sessionChanged)
     Q_PROPERTY(bool hasFrame READ hasFrame NOTIFY sessionChanged)
+    Q_PROPERTY(bool playing READ playing NOTIFY sessionChanged)
+    Q_PROPERTY(bool ended READ ended NOTIFY sessionChanged)
+    Q_PROPERTY(qulonglong decodedVideoFrames
+               READ decodedFrameCount NOTIFY playbackMetricsChanged)
+    Q_PROPERTY(qulonglong selectedVideoFrames
+               READ selectedFrameCount NOTIFY playbackMetricsChanged)
+    Q_PROPERTY(qulonglong droppedVideoFrames
+               READ droppedFrameCount NOTIFY playbackMetricsChanged)
+    Q_PROPERTY(int queuedVideoFrames
+               READ queuedVideoFrames NOTIFY playbackMetricsChanged)
 
 public:
     enum class State {
@@ -44,10 +60,12 @@ public:
     Q_ENUM(State)
 
     using DecodeOperation = std::function<
-        FfmpegFirstFrameResult(
+        FfmpegVideoDecodeResult(
             const QString &,
             const VideoFrameIdentity &,
             const VideoHardwareDecodeCapability &,
+            int,
+            const FfmpegVideoFrameSink &,
             std::stop_token)>;
 
     explicit MediaSession(
@@ -69,7 +87,15 @@ public:
     QString hardwareFallbackReason() const;
     QString videoSummary() const;
     bool hasFrame() const;
+    bool playing() const;
+    bool ended() const;
     std::uint64_t playbackGeneration() const;
+    std::uint64_t decodedFrameCount() const;
+    std::uint64_t selectedFrameCount() const;
+    std::uint64_t droppedFrameCount() const;
+    std::size_t queuedFrameCount() const;
+    std::size_t maximumQueuedFrameCount() const;
+    int queuedVideoFrames() const;
 
     DecodedVideoSource &videoSource();
     const DecodedVideoSource &videoSource() const;
@@ -80,9 +106,12 @@ public:
     Q_INVOKABLE void openMedia(const QUrl &url);
     Q_INVOKABLE void cancel();
     Q_INVOKABLE void retry();
+    Q_INVOKABLE void play();
+    Q_INVOKABLE void pause();
 
 signals:
     void sessionChanged();
+    void playbackMetricsChanged();
 
 private:
     struct OpenRequest {
@@ -97,11 +126,20 @@ private:
         const QString &path,
         VideoHardwareDecodeCapability hardwareDecode);
     void submitOpen(OpenRequest request);
-    void cancelOpen();
+    void cancelPipeline();
     void workerLoop(std::stop_token workerStopToken);
-    void completeOpen(
+    void completeDecode(
         std::uint64_t generation,
-        FfmpegFirstFrameResult result);
+        FfmpegVideoDecodeResult result);
+    void postFramesAvailable(
+        std::uint64_t generation);
+    bool recordDecodedFrame(
+        std::uint64_t generation);
+    void postPlaybackMetricsChanged(
+        std::uint64_t generation);
+    void handleFramesAvailable(
+        std::uint64_t generation);
+    void handleVideoFrameChanged();
     void failWithoutWorker(
         const QUrl &url,
         const QString &message);
@@ -110,9 +148,23 @@ private:
     void shutdownWorker();
     void advanceGeneration();
     void resetDiagnostics();
+    void resetPlayback();
+    void publishSessionAndPlaybackMetrics(
+        std::uint64_t generation);
+    void applyDiagnostics(
+        const FfmpegVideoStreamDiagnostics &diagnostics);
+    MediaClockSnapshot mediaClockSnapshotAt(
+        std::chrono::steady_clock::time_point now) const;
+
+    std::shared_ptr<const DecodedVideoFrame>
+        selectFrameForPresentation(
+            std::chrono::steady_clock::time_point now) override;
+    bool wantsContinuousVideoFrames() const override;
 
     DecodeOperation m_decodeOperation;
     DecodedVideoSource m_videoSource;
+    VideoFrameQueue m_frameQueue;
+    VideoFrameScheduler m_frameScheduler;
     State m_state = State::Empty;
     QUrl m_mediaUrl;
     QString m_displayName;
@@ -125,7 +177,23 @@ private:
     VideoHardwareDecodeCapability m_videoDecodeCapability;
     bool m_reopenAfterGraphicsRecovery = false;
     bool m_hardwareImportFallbackConsumed = false;
+    bool m_userWantsPlaying = true;
+    bool m_decoderDrained = false;
+    bool m_ended = false;
+    std::optional<std::chrono::steady_clock::time_point>
+        m_clockAnchorTime;
+    std::int64_t m_clockAnchorMediaMicroseconds = 0;
+    std::uint64_t m_selectedFrameCount = 0;
+    std::uint64_t m_droppedFrameCount = 0;
+    std::uint64_t m_pendingPublicationGeneration = 0;
+    bool m_sessionNotificationPending = false;
+    bool m_playbackMetricsNotificationPending = false;
     std::uint64_t m_playbackGeneration = 1;
+    CoalescedGenerationWake m_frameWake;
+    CoalescedGenerationWake m_metricsWake;
+    mutable std::mutex m_playbackMetricsMutex;
+    std::uint64_t m_playbackMetricsGeneration = 1;
+    std::uint64_t m_decodedFrameCount = 0;
     std::mutex m_workerMutex;
     std::condition_variable_any m_workerWake;
     std::optional<OpenRequest> m_pendingOpen;

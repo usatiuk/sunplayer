@@ -13,12 +13,13 @@ boundaries. The default regression test should therefore exercise the highest
 practical public boundary with real dependencies and representative data.
 
 The practical boundary changes as the player grows. Today the repository has a
-Windows QRhi presentation path plus an asynchronous first-frame media session,
+Windows QRhi presentation path plus asynchronous continuous video playback,
 so useful tests cover display-target policy, resource-generation contracts,
-real QRhi composition, active-source/session lifecycle, and retained RGB/YUV
-software `AVFrame`s. As libass, scheduling, audio, and continuous decoding
-arrive, deterministic whole-pipeline scenarios should become the bulk of
-behavioral coverage.
+real QRhi composition, bounded frame-mailbox backpressure, stop-aware packet
+channels, timestamp-driven selection, active-source/session lifecycle, and
+retained software/D3D11VA `AVFrame`s. As libass, seeking, and audio arrive,
+deterministic whole-pipeline scenarios should become the bulk of behavioral
+coverage.
 
 The central principle is:
 
@@ -262,9 +263,10 @@ The first pipeline scenarios should grow with implementation milestones:
 1. Procedural producer to explicit video surface to final QRhi compositor.
 2. libplacebo-rendered known software frame to final composition.
 3. First FFmpeg-decoded frame from a pinned lossless local image.
-4. Compressed BT.709 YUV first-frame open through the real session.
-5. Pause and display-target change with rerender.
-6. Deterministic short playback, then seek-generation invalidation.
+4. Complete three-frame compressed BT.709 YUV software/hardware drain.
+5. Twelve-frame bounded queue, play/pause/replay, timestamp selection, due
+   dropping, and end of stream through the real session.
+6. Display-target change with rerender, then seek-generation invalidation.
 7. Audio-backed playback and A/V synchronization.
 
 ## Media fixture corpus
@@ -289,10 +291,12 @@ Initial additions should be narrowly tied to milestones:
 
 * An analytically known linear color pattern for the video-surface boundary.
 * A tiny lossless RGB image for the first real demux/decode/import boundary.
-* One small SDR container for first-frame integration. The current
+* One small SDR container for continuous integration. The current
   Matroska/FFV1 fixture covers deterministic compressed software YUV, limited
-  range, BT.709 metadata, timestamps, and non-square pixels. A pinned
-  Matroska/H.264 fixture covers D3D11VA decode, retained NV12 import, complete
+  range, BT.709 metadata, timestamps, and non-square pixels. Its twelve-frame
+  playback variant crosses the three-frame mailbox capacity. A pinned
+  Matroska/H.264 fixture covers three-frame D3D11VA decode and retention,
+  retained NV12 import, complete
   BT.709 signal metadata plus PTS, duration, time-base, derived frame-rate, and
   SAR assertions, hardware/software output comparison, and zero-copy
   input/output diagnostics.

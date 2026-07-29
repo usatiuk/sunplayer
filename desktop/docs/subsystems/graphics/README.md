@@ -516,8 +516,10 @@ D3D11VA NV12 frame on the graphics-domain device, imports the retained texture
 slice directly, asserts zero input CPU transfers/GPU copies and zero output
 copies/transfers, and compares captured output against software decode. CTest
 requires D3D11VA for this target rather than treating a missing capability as
-green coverage. This remains first-frame integration, not continuous playback.
-A fixed mastered PQ fixture, P010/P012/P016 capture,
+green coverage. The FFV1 and H.264 fixtures are also decoded as complete
+three-frame streams through the bounded continuous path, including simultaneous
+retention of three D3D11VA surfaces. A fixed mastered PQ fixture,
+P010/P012/P016 capture,
 renderer image corpus, cross-backend capture, and recorded runtime display
 matrix do not exist yet.
 

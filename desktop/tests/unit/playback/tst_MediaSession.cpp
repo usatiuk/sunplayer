@@ -3,6 +3,8 @@
 #include <memory>
 #include <mutex>
 
+#include <QCryptographicHash>
+#include <QFile>
 #include <QSignalSpy>
 #include <QtTest>
 
@@ -20,8 +22,20 @@ QString fixturePath() {
         "/media/sdr-bt709-ffv1.mkv");
 }
 
-FfmpegFirstFrameResult cancelledResult() {
-    FfmpegFirstFrameResult result;
+QString playbackFixturePath() {
+    return QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-ffv1-playback.mkv");
+}
+
+QString replacementFixturePath() {
+    return QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-rgb-first-frame.ppm");
+}
+
+FfmpegVideoDecodeResult cancelledResult() {
+    FfmpegVideoDecodeResult result;
     result.cancelled = true;
     return result;
 }
@@ -32,7 +46,7 @@ struct BlockingOperation {
     std::mutex mutex;
     std::condition_variable_any wake;
 
-    FfmpegFirstFrameResult wait(
+    FfmpegVideoDecodeResult wait(
             std::stop_token stopToken) {
         started = true;
         std::unique_lock lock(mutex);
@@ -52,7 +66,7 @@ struct DelayedStopOperation {
     std::condition_variable_any wake;
     bool exitAllowed = false;
 
-    FfmpegFirstFrameResult wait(
+    FfmpegVideoDecodeResult wait(
             std::stop_token stopToken) {
         started = true;
         std::unique_lock lock(mutex);
@@ -75,6 +89,30 @@ struct DelayedStopOperation {
         wake.notify_all();
     }
 };
+
+struct OperationGate {
+    std::mutex mutex;
+    std::condition_variable_any wake;
+    bool open = false;
+
+    bool wait(std::stop_token stopToken) {
+        std::unique_lock lock(mutex);
+        return wake.wait(
+            lock,
+            stopToken,
+            [this] {
+                return open;
+            });
+    }
+
+    void release() {
+        {
+            std::lock_guard lock(mutex);
+            open = true;
+        }
+        wake.notify_all();
+    }
+};
 }
 
 class MediaSessionTest final : public QObject {
@@ -92,6 +130,10 @@ public:
 
 private slots:
     void opensRealMediaOffThread();
+    void readyNotificationCanCancelWithoutRepublishing();
+    void openingNotificationKeepsNewestRequest();
+    void continuousPlaybackIsBoundedAndPauseable();
+    void dropsSupersededDueFrames();
     void rejectsNonLocalUrls();
     void newerOpenRejectsStaleCompletion();
     void cancelReturnsBeforeWorkerExit();
@@ -106,20 +148,44 @@ void MediaSessionTest::opensRealMediaOffThread() {
     QThread *const ownerThread =
         QThread::currentThread();
     std::atomic_bool decodedOffOwnerThread = false;
+    std::atomic_int hardwareFrameReserve = 0;
     MediaSession session(
         VideoTargetReadback::Disabled,
-        [ownerThread, &decodedOffOwnerThread](
+        [ownerThread,
+         &decodedOffOwnerThread,
+         &hardwareFrameReserve](
                 const QString &path,
                 const VideoFrameIdentity &identity,
-                const VideoHardwareDecodeCapability &,
+                const VideoHardwareDecodeCapability &capability,
+                int extraHardwareFrames,
+                const FfmpegVideoFrameSink &sink,
                 std::stop_token stopToken) {
             decodedOffOwnerThread =
                 QThread::currentThread() != ownerThread;
-            return decodeFirstVideoFrame(
-                path, identity, stopToken);
+            hardwareFrameReserve =
+                extraHardwareFrames;
+            return decodeVideoFrames(
+                path,
+                identity,
+                capability,
+                extraHardwareFrames,
+                sink,
+                stopToken);
         });
     QSignalSpy changes(
         &session, &MediaSession::sessionChanged);
+    bool publishedReadyWithoutFrame = false;
+    connect(
+        &session,
+        &MediaSession::sessionChanged,
+        &session,
+        [&] {
+            if (session.state()
+                        == MediaSession::State::Ready
+                    && !session.hasFrame()) {
+                publishedReadyWithoutFrame = true;
+            }
+        });
 
     session.openMedia(
         QUrl::fromLocalFile(fixturePath()));
@@ -129,7 +195,12 @@ void MediaSessionTest::opensRealMediaOffThread() {
     QTRY_COMPARE_WITH_TIMEOUT(
         session.state(), MediaSession::State::Ready, 5000);
     QVERIFY(session.hasFrame());
+    QVERIFY(!publishedReadyWithoutFrame);
     QVERIFY(decodedOffOwnerThread.load());
+    QCOMPARE(
+        hardwareFrameReserve.load(),
+        static_cast<int>(
+            VideoFrameQueue::capacity + 2));
     QVERIFY(changes.count() >= 2);
     QCOMPARE(session.decoderName(), QStringLiteral("ffv1"));
     QCOMPARE(session.decodePath(), QStringLiteral("Software"));
@@ -143,6 +214,316 @@ void MediaSessionTest::opensRealMediaOffThread() {
             ->identity()
             .playbackGeneration,
         session.playbackGeneration());
+}
+
+void MediaSessionTest::
+readyNotificationCanCancelWithoutRepublishing() {
+    MediaSession session(VideoTargetReadback::Disabled);
+    bool cancelledFromReadyNotification = false;
+    connect(
+        &session,
+        &MediaSession::sessionChanged,
+        &session,
+        [&] {
+            if (!cancelledFromReadyNotification
+                    && session.state()
+                        == MediaSession::State::Ready) {
+                cancelledFromReadyNotification = true;
+                session.cancel();
+            }
+        });
+
+    session.openMedia(
+        QUrl::fromLocalFile(fixturePath()));
+    QTRY_VERIFY_WITH_TIMEOUT(
+        cancelledFromReadyNotification, 5000);
+    QCOMPARE(session.state(), MediaSession::State::Empty);
+    QVERIFY(!session.hasFrame());
+    QCOMPARE(session.queuedFrameCount(), 0U);
+}
+
+void MediaSessionTest::
+openingNotificationKeepsNewestRequest() {
+    auto gate = std::make_shared<OperationGate>();
+    MediaSession session(
+        VideoTargetReadback::Disabled,
+        [gate](
+                const QString &path,
+                const VideoFrameIdentity &identity,
+                const VideoHardwareDecodeCapability &capability,
+                int extraHardwareFrames,
+                const FfmpegVideoFrameSink &sink,
+                std::stop_token stopToken) {
+            if (!gate->wait(stopToken))
+                return cancelledResult();
+            return decodeVideoFrames(
+                path,
+                identity,
+                capability,
+                extraHardwareFrames,
+                sink,
+                stopToken);
+        });
+    const QUrl first =
+        QUrl::fromLocalFile(fixturePath());
+    const QUrl replacement =
+        QUrl::fromLocalFile(
+            replacementFixturePath());
+    bool replacementRequested = false;
+    connect(
+        &session,
+        &MediaSession::playbackMetricsChanged,
+        &session,
+        [&] {
+            if (!replacementRequested
+                    && session.state()
+                        == MediaSession::State::Opening
+                    && session.mediaUrl() == first) {
+                replacementRequested = true;
+                session.openMedia(replacement);
+            }
+        });
+
+    session.openMedia(first);
+    QVERIFY(replacementRequested);
+    QCOMPARE(session.mediaUrl(), replacement);
+    gate->release();
+
+    QTRY_COMPARE_WITH_TIMEOUT(
+        session.state(), MediaSession::State::Ready, 5000);
+    QCOMPARE(session.mediaUrl(), replacement);
+    QCOMPARE(
+        session.displayName(),
+        QStringLiteral("sdr-rgb-first-frame.ppm"));
+    QVERIFY(session.videoSummary().startsWith(
+        QStringLiteral("4×4")));
+    QCOMPARE(
+        session.videoSource()
+            .currentFrame()
+            ->identity()
+            .playbackGeneration,
+        session.playbackGeneration());
+}
+
+void MediaSessionTest::
+continuousPlaybackIsBoundedAndPauseable() {
+    QFile fixture(playbackFixturePath());
+    QVERIFY(fixture.open(QIODevice::ReadOnly));
+    QCOMPARE(
+        QCryptographicHash::hash(
+            fixture.readAll(),
+            QCryptographicHash::Sha256)
+            .toHex(),
+        QByteArray(
+            "771e53aa2f15725d334bb7fcaecdb41cf"
+            "69707ba2f21918e830a9abfd2dfe19d"));
+
+    auto fifthFrameGate =
+        std::make_shared<OperationGate>();
+    auto decoderOutputCount =
+        std::make_shared<std::atomic_uint64_t>(0);
+    MediaSession session(
+        VideoTargetReadback::Disabled,
+        [fifthFrameGate, decoderOutputCount](
+                const QString &path,
+                const VideoFrameIdentity &identity,
+                const VideoHardwareDecodeCapability &capability,
+                int extraHardwareFrames,
+                const FfmpegVideoFrameSink &sink,
+                std::stop_token stopToken) {
+            return decodeVideoFrames(
+                path,
+                identity,
+                capability,
+                extraHardwareFrames,
+                [fifthFrameGate,
+                 decoderOutputCount,
+                 &sink,
+                 stopToken](
+                        std::shared_ptr<
+                            const DecodedVideoFrame> frame,
+                        const FfmpegVideoStreamDiagnostics
+                            &diagnostics) {
+                    const std::uint64_t output =
+                        ++*decoderOutputCount;
+                    if (output == 5
+                            && !fifthFrameGate->wait(
+                                stopToken)) {
+                        return false;
+                    }
+                    return sink(
+                        std::move(frame), diagnostics);
+                },
+                stopToken);
+        });
+    std::uint64_t notifiedDecodedFrames = 0;
+    QSignalSpy metricsSpy(
+        &session,
+        &MediaSession::playbackMetricsChanged);
+    QSignalSpy updateSpy(
+        &session.videoSource(),
+        &RenderedVideoSource::updateRequested);
+    connect(
+        &session,
+        &MediaSession::playbackMetricsChanged,
+        &session,
+        [&] {
+            notifiedDecodedFrames =
+                session.decodedFrameCount();
+        });
+    session.openMedia(
+        QUrl::fromLocalFile(playbackFixturePath()));
+    QTRY_COMPARE_WITH_TIMEOUT(
+        session.state(), MediaSession::State::Ready, 5000);
+    QVERIFY(session.playing());
+    QVERIFY(session.hasFrame());
+    const std::uint64_t firstFrameId =
+        session.videoSource()
+            .currentFrame()
+            ->identity()
+            .frameId;
+
+    session.pause();
+    QVERIFY(!session.playing());
+    session.videoSource().prepareForPresentation(
+        std::chrono::steady_clock::now()
+        + std::chrono::seconds(5));
+    QCOMPARE(
+        session.videoSource()
+            .currentFrame()
+            ->identity()
+            .frameId,
+        firstFrameId);
+
+    QTRY_COMPARE_WITH_TIMEOUT(
+        decoderOutputCount->load(), 5U, 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(
+        notifiedDecodedFrames, 4U, 5000);
+    QCOMPARE(session.decodedFrameCount(), 4U);
+    QCOMPARE(session.selectedFrameCount(), 1U);
+    QCOMPARE(
+        session.queuedFrameCount(),
+        VideoFrameQueue::capacity);
+    QCoreApplication::sendPostedEvents(
+        &session, QEvent::MetaCall);
+    const qsizetype metricsBeforeFifth =
+        metricsSpy.count();
+    const qsizetype updatesBeforeFifth =
+        updateSpy.count();
+
+    fifthFrameGate->release();
+    QTRY_VERIFY_WITH_TIMEOUT(
+        metricsSpy.count() > metricsBeforeFifth,
+        5000);
+    QCOMPARE(notifiedDecodedFrames, 5U);
+    QCOMPARE(session.decodedFrameCount(), 5U);
+    QCOMPARE(session.selectedFrameCount(), 1U);
+    QCOMPARE(
+        session.queuedFrameCount(),
+        VideoFrameQueue::capacity);
+    QCOMPARE(updateSpy.count(), updatesBeforeFifth);
+    QCOMPARE(
+        session.maximumQueuedFrameCount(),
+        VideoFrameQueue::capacity);
+
+    session.play();
+    QVERIFY(session.playing());
+    const auto playbackAnchor =
+        std::chrono::steady_clock::now();
+    for (std::uint64_t frameOffset = 1;
+            frameOffset < 12;
+            ++frameOffset) {
+        QTRY_VERIFY_WITH_TIMEOUT(
+            ([&] {
+                session.videoSource()
+                    .prepareForPresentation(
+                        playbackAnchor
+                        + std::chrono::milliseconds(
+                            frameOffset * 250 + 20));
+                const auto &frame =
+                    session.videoSource()
+                        .currentFrame();
+                return frame
+                    && frame->identity().frameId
+                        == firstFrameId + frameOffset;
+            }()),
+            5000);
+    }
+
+    QTRY_VERIFY_WITH_TIMEOUT(
+        ([&] {
+            session.videoSource().prepareForPresentation(
+                playbackAnchor
+                + std::chrono::milliseconds(3020));
+            return session.ended();
+        }()),
+        5000);
+    QCOMPARE(
+        session.videoSource()
+            .currentFrame()
+            ->identity()
+            .frameId,
+        firstFrameId + 11);
+    QVERIFY(!session.playing());
+    QCOMPARE(session.decodedFrameCount(), 12U);
+    QCOMPARE(session.selectedFrameCount(), 12U);
+    QCOMPARE(session.droppedFrameCount(), 0U);
+    QCOMPARE(
+        session.maximumQueuedFrameCount(),
+        VideoFrameQueue::capacity);
+
+    const std::uint64_t completedGeneration =
+        session.playbackGeneration();
+    session.play();
+    QCOMPARE(session.state(), MediaSession::State::Opening);
+    QTRY_COMPARE_WITH_TIMEOUT(
+        session.state(), MediaSession::State::Ready, 5000);
+    QVERIFY(session.playing());
+    QVERIFY(
+        session.playbackGeneration()
+        != completedGeneration);
+    QCOMPARE(
+        session.videoSource()
+            .currentFrame()
+            ->identity()
+            .frameId,
+        1U);
+}
+
+void MediaSessionTest::dropsSupersededDueFrames() {
+    MediaSession session(VideoTargetReadback::Disabled);
+    session.openMedia(
+        QUrl::fromLocalFile(playbackFixturePath()));
+    QTRY_COMPARE_WITH_TIMEOUT(
+        session.state(), MediaSession::State::Ready, 5000);
+    const std::uint64_t firstFrameId =
+        session.videoSource()
+            .currentFrame()
+            ->identity()
+            .frameId;
+
+    session.pause();
+    QTRY_COMPARE_WITH_TIMEOUT(
+        session.decodedFrameCount(), 5U, 5000);
+    QCOMPARE(
+        session.queuedFrameCount(),
+        VideoFrameQueue::capacity);
+
+    session.play();
+    const auto playbackAnchor =
+        std::chrono::steady_clock::now();
+    session.videoSource().prepareForPresentation(
+        playbackAnchor
+        + std::chrono::milliseconds(770));
+
+    QCOMPARE(
+        session.videoSource()
+            .currentFrame()
+            ->identity()
+            .frameId,
+        firstFrameId + 3);
+    QCOMPARE(session.selectedFrameCount(), 2U);
+    QCOMPARE(session.droppedFrameCount(), 2U);
 }
 
 void MediaSessionTest::rejectsNonLocalUrls() {
@@ -163,14 +544,21 @@ void MediaSessionTest::newerOpenRejectsStaleCompletion() {
         [delayed](
                 const QString &path,
                 const VideoFrameIdentity &identity,
-                const VideoHardwareDecodeCapability &,
+                const VideoHardwareDecodeCapability &capability,
+                int extraHardwareFrames,
+                const FfmpegVideoFrameSink &sink,
                 std::stop_token stopToken) {
             if (path.endsWith(
                     QStringLiteral("blocked.mkv"))) {
                 return delayed->wait(stopToken);
             }
-            return decodeFirstVideoFrame(
-                path, identity, stopToken);
+            return decodeVideoFrames(
+                path,
+                identity,
+                capability,
+                extraHardwareFrames,
+                sink,
+                stopToken);
         });
 
     session.openMedia(QUrl::fromLocalFile(
@@ -210,6 +598,8 @@ void MediaSessionTest::cancelReturnsBeforeWorkerExit() {
                 const QString &,
                 const VideoFrameIdentity &,
                 const VideoHardwareDecodeCapability &,
+                int,
+                const FfmpegVideoFrameSink &,
                 std::stop_token stopToken) {
             return delayed->wait(stopToken);
         });
@@ -237,6 +627,8 @@ void MediaSessionTest::destructionCancelsWorker() {
                 const QString &,
                 const VideoFrameIdentity &,
                 const VideoHardwareDecodeCapability &,
+                int,
+                const FfmpegVideoFrameSink &,
                 std::stop_token stopToken) {
             return blocking->wait(stopToken);
         });
@@ -272,24 +664,30 @@ presentationFailureBecomesSessionError() {
 void MediaSessionTest::
 hardwareImportFailureRetriesSoftware() {
     std::atomic_int attempts = 0;
-    std::atomic_bool sawSoftwareFallback = false;
+    std::atomic_int softwareFallbackAttempts = 0;
     MediaSession session(
         VideoTargetReadback::Disabled,
-        [&attempts, &sawSoftwareFallback](
+        [&attempts, &softwareFallbackAttempts](
                 const QString &path,
                 const VideoFrameIdentity &identity,
                 const VideoHardwareDecodeCapability &capability,
+                int extraHardwareFrames,
+                const FfmpegVideoFrameSink &sink,
                 std::stop_token stopToken) {
-            const int attempt = ++attempts;
-            if (attempt == 2) {
-                sawSoftwareFallback =
-                    !capability.isAvailable()
+            ++attempts;
+            if (!capability.isAvailable()
                     && capability.unavailableReason.contains(
                         QStringLiteral(
-                            "Hardware frame import failed"));
+                            "Hardware frame import failed"))) {
+                ++softwareFallbackAttempts;
             }
-            return decodeFirstVideoFrame(
-                path, identity, capability, stopToken);
+            return decodeVideoFrames(
+                path,
+                identity,
+                capability,
+                extraHardwareFrames,
+                sink,
+                stopToken);
         });
     session.openMedia(
         QUrl::fromLocalFile(fixturePath()));
@@ -311,7 +709,7 @@ hardwareImportFailureRetriesSoftware() {
         session.state(), MediaSession::State::Ready, 5000);
 
     QCOMPARE(attempts.load(), 2);
-    QVERIFY(sawSoftwareFallback.load());
+    QCOMPARE(softwareFallbackAttempts.load(), 1);
     QVERIFY(
         session.playbackGeneration() != firstGeneration);
     QCOMPARE(session.decodePath(), QStringLiteral("Software"));
@@ -319,6 +717,41 @@ hardwareImportFailureRetriesSoftware() {
         session.hardwareFallbackReason().contains(
             QStringLiteral(
                 "Hardware frame import failed")));
+
+    const auto playbackAnchor =
+        std::chrono::steady_clock::now();
+    QTRY_VERIFY_WITH_TIMEOUT(
+        ([&] {
+            session.videoSource().prepareForPresentation(
+                playbackAnchor
+                + std::chrono::seconds(1));
+            return session.ended();
+        }()),
+        5000);
+    const std::uint64_t completedGeneration =
+        session.playbackGeneration();
+
+    session.play();
+    QCOMPARE(session.state(), MediaSession::State::Opening);
+    QTRY_COMPARE_WITH_TIMEOUT(
+        session.state(), MediaSession::State::Ready, 5000);
+    QCOMPARE(attempts.load(), 3);
+    QVERIFY(
+        session.playbackGeneration()
+        != completedGeneration);
+
+    QVERIFY(session.videoSource().reportPresentationFailure(
+        {
+            .kind = VideoFailureKind::
+                HardwareFrameImportUnavailable,
+            .reason = QStringLiteral(
+                "Injected replay hardware import failure"),
+        }));
+    QCOMPARE(session.state(), MediaSession::State::Opening);
+    QTRY_COMPARE_WITH_TIMEOUT(
+        session.state(), MediaSession::State::Ready, 5000);
+    QCOMPARE(attempts.load(), 4);
+    QCOMPARE(softwareFallbackAttempts.load(), 2);
 
     QVERIFY(session.videoSource().reportPresentationFailure(
         {
@@ -328,7 +761,7 @@ hardwareImportFailureRetriesSoftware() {
                 "Injected repeated hardware import failure"),
         }));
     QCOMPARE(session.state(), MediaSession::State::Error);
-    QCOMPARE(attempts.load(), 2);
+    QCOMPARE(attempts.load(), 4);
 }
 
 void MediaSessionTest::
@@ -340,10 +773,17 @@ graphicsRecoveryKeepsReadySoftwareFrame() {
                 const QString &path,
                 const VideoFrameIdentity &identity,
                 const VideoHardwareDecodeCapability &capability,
+                int extraHardwareFrames,
+                const FfmpegVideoFrameSink &sink,
                 std::stop_token stopToken) {
             ++attempts;
-            return decodeFirstVideoFrame(
-                path, identity, capability, stopToken);
+            return decodeVideoFrames(
+                path,
+                identity,
+                capability,
+                extraHardwareFrames,
+                sink,
+                stopToken);
         });
     session.openMedia(
         QUrl::fromLocalFile(fixturePath()));
@@ -386,6 +826,8 @@ graphicsRecoverySupersedesOpening() {
                 const QString &path,
                 const VideoFrameIdentity &identity,
                 const VideoHardwareDecodeCapability &capability,
+                int extraHardwareFrames,
+                const FfmpegVideoFrameSink &sink,
                 std::stop_token stopToken) {
             const int attempt = ++attempts;
             if (attempt == 1)
@@ -394,8 +836,13 @@ graphicsRecoverySupersedesOpening() {
                 capability.unavailableReason
                 == QStringLiteral(
                     "Replacement graphics domain has no hardware");
-            return decodeFirstVideoFrame(
-                path, identity, capability, stopToken);
+            return decodeVideoFrames(
+                path,
+                identity,
+                capability,
+                extraHardwareFrames,
+                sink,
+                stopToken);
         });
     session.openMedia(
         QUrl::fromLocalFile(fixturePath()));

@@ -3,6 +3,7 @@
 #include <cstring>
 #include <memory>
 #include <optional>
+#include <vector>
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -23,7 +24,8 @@
 #include "media/DecodedVideoFrame.h"
 #include "media/FfmpegFirstFrameDecoder.h"
 #include "media/FfmpegHardwareDevice.h"
-#include "media/ffmpeg/FfmpegFirstFrameDecodeFallback.h"
+#include "media/ffmpeg/FfmpegVideoDecodeFallback.h"
+#include "playback/VideoFrameQueue.h"
 #include "presentation/HdrCompositor.h"
 #include "video/DecodedVideoSource.h"
 #include "video/LibplaceboDecodedVideoProducer.h"
@@ -245,7 +247,9 @@ public:
 private slots:
     void realDemuxDecodeImportAndComposition();
     void compressedYuvMetadataAndRendering();
+    void continuousDecodeDrainsEveryFrame();
     void hardwareDecodeFailureRetriesSoftware();
+    void continuousD3d11DecodeRetainsBoundedFrames();
     void d3d11HardwareDecodeDirectImport();
 };
 
@@ -723,6 +727,54 @@ compressedYuvMetadataAndRendering() {
 }
 
 void FfmpegFirstFrameTest::
+continuousDecodeDrainsEveryFrame() {
+    const QString fixture = QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-ffv1.mkv");
+    std::vector<
+        std::shared_ptr<const DecodedVideoFrame>> frames;
+    const FfmpegVideoDecodeResult result =
+        decodeVideoFrames(
+            fixture,
+            {
+                .playbackGeneration = 17,
+                .decoderRevision = 3,
+                .frameId = 40,
+            },
+            {},
+            0,
+            [&frames](
+                    std::shared_ptr<
+                        const DecodedVideoFrame> frame,
+                    const FfmpegVideoStreamDiagnostics &) {
+                frames.push_back(std::move(frame));
+                return true;
+            });
+
+    QVERIFY2(result.isSuccess(), qPrintable(result.error));
+    QVERIFY(result.endOfStream);
+    QVERIFY(!result.stopped);
+    QCOMPARE(result.framesDecoded, 3U);
+    QCOMPARE(frames.size(), 3U);
+    QCOMPARE(frames[0]->identity().frameId, 40U);
+    QCOMPARE(frames[1]->identity().frameId, 41U);
+    QCOMPARE(frames[2]->identity().frameId, 42U);
+    QCOMPARE(
+        frames[0]->timing().ptsMicroseconds(),
+        std::optional<std::int64_t>(0));
+    QCOMPARE(
+        frames[1]->timing().ptsMicroseconds(),
+        std::optional<std::int64_t>(250'000));
+    QCOMPARE(
+        frames[2]->timing().ptsMicroseconds(),
+        std::optional<std::int64_t>(500'000));
+    QCOMPARE(
+        result.diagnostics
+            .nominalFrameDurationMicroseconds,
+        std::optional<std::int64_t>(250'000));
+}
+
+void FfmpegFirstFrameTest::
 hardwareDecodeFailureRetriesSoftware() {
     const QString fixture = QStringLiteral(
         SUNROOM_TEST_FIXTURE_DIR
@@ -734,8 +786,8 @@ hardwareDecodeFailureRetriesSoftware() {
     };
     int attempts = 0;
     bool receivedSoftwareFallback = false;
-    const FfmpegFirstFrameResult result =
-        decodeFirstVideoFrameWithFallback(
+    const FfmpegVideoDecodeResult result =
+        decodeVideoFramesWithFallback(
             {
                 .device = {},
                 .unavailableReason = {},
@@ -745,7 +797,7 @@ hardwareDecodeFailureRetriesSoftware() {
                 ++attempts;
                 if (attempts == 1) {
                     hardwareSelected = true;
-                    FfmpegFirstFrameResult failure;
+                    FfmpegVideoDecodeResult failure;
                     failure.error =
                         QStringLiteral(
                             "Injected post-selection hardware failure");
@@ -757,8 +809,17 @@ hardwareDecodeFailureRetriesSoftware() {
                     && capability.unavailableReason.contains(
                         QStringLiteral(
                             "Injected post-selection hardware failure"));
-                return decodeFirstVideoFrame(
-                    fixture, identity, capability);
+                return decodeVideoFrames(
+                    fixture,
+                    identity,
+                    capability,
+                    2,
+                    [](
+                            std::shared_ptr<
+                                const DecodedVideoFrame>,
+                            const FfmpegVideoStreamDiagnostics &) {
+                        return false;
+                    });
             });
 
     QCOMPARE(attempts, 2);
@@ -772,6 +833,76 @@ hardwareDecodeFailureRetriesSoftware() {
         result.diagnostics.hardwareFallbackReason.contains(
             QStringLiteral(
                 "Injected post-selection hardware failure")));
+}
+
+void FfmpegFirstFrameTest::
+continuousD3d11DecodeRetainsBoundedFrames() {
+#ifndef Q_OS_WIN
+    QSKIP("D3D11VA decoding is Windows-specific");
+#else
+    const QString fixture = QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-h264.mkv");
+    std::unique_ptr<GraphicsDeviceDomain> graphics =
+        GraphicsBackendFactory::createDeviceDomain();
+    QVERIFY2(graphics, "Could not create D3D11 graphics domain");
+    const VideoHardwareDecodeCapability capability =
+        graphics->videoDecodeCapability();
+    if (!capability.isAvailable()) {
+        if (qEnvironmentVariableIntValue(
+                "SUNROOM_REQUIRE_D3D11VA") != 0) {
+            QFAIL(qPrintable(
+                QStringLiteral(
+                    "D3D11VA is required by this test run: %1")
+                    .arg(capability.unavailableReason)));
+        }
+        QSKIP(qPrintable(capability.unavailableReason));
+    }
+
+    std::vector<
+        std::shared_ptr<const DecodedVideoFrame>> frames;
+    const FfmpegVideoDecodeResult result =
+        decodeVideoFrames(
+            fixture,
+            {
+                .playbackGeneration = 29,
+                .decoderRevision = 5,
+                .frameId = 70,
+            },
+            capability,
+            static_cast<int>(
+                VideoFrameQueue::capacity + 2),
+            [&frames](
+                    std::shared_ptr<
+                        const DecodedVideoFrame> frame,
+                    const FfmpegVideoStreamDiagnostics &) {
+                frames.push_back(std::move(frame));
+                return true;
+            });
+
+    QVERIFY2(result.isSuccess(), qPrintable(result.error));
+    QVERIFY(result.endOfStream);
+    QCOMPARE(result.framesDecoded, 3U);
+    QCOMPARE(frames.size(), VideoFrameQueue::capacity);
+    QVERIFY(result.diagnostics.hardwareAccelerated);
+    QCOMPARE(
+        result.diagnostics.decodePath,
+        QStringLiteral("D3D11VA"));
+    for (std::size_t index = 0;
+            index < frames.size();
+            ++index) {
+        QVERIFY(frames[index]->storage().isHardware());
+        QCOMPARE(
+            frames[index]->identity().frameId,
+            70U + index);
+        QCOMPARE(
+            frames[index]
+                ->storage()
+                .graphicsDeviceGeneration,
+            std::optional<std::uint64_t>(
+                graphics->generation()));
+    }
+#endif
 }
 
 void FfmpegFirstFrameTest::

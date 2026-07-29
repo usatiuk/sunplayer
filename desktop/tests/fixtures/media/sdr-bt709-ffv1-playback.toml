@@ -1,0 +1,42 @@
+file = "sdr-bt709-ffv1-playback.mkv"
+sha256 = "771e53aa2f15725d334bb7fcaecdb41cf69707ba2f21918e830a9abfd2dfe19d"
+provenance = "Generated analytically for Sunroom; no external source media"
+generator = "FFmpeg 8.1.2-full_build-www.gyan.dev"
+
+generation_command = """
+ffmpeg -f lavfi -i "nullsrc=size=96x64:rate=4:duration=3,format=yuv420p,geq=lum='if(lt(Y,32),if(lt(X,32),16,if(lt(X,64),126,235)),if(lt(X,32),63,if(lt(X,64),173,32)))':cb='if(lt(Y,16),128,if(lt(X,16),102,if(lt(X,32),42,240)))':cr='if(lt(Y,16),128,if(lt(X,16),240,if(lt(X,32),26,118)))',setparams=range=limited:color_primaries=bt709:color_trc=bt709:colorspace=bt709,setsar=32/27" -frames:v 12 -an -c:v ffv1 -level 3 -coder 1 -context 1 -g 1 -threads 1 -chroma_sample_location left -fflags +bitexact -flags:v +bitexact -map_metadata -1 sdr-bt709-ffv1-playback.mkv
+"""
+
+[expected]
+container = "matroska"
+codec = "ffv1"
+pixel_format = "yuv420p"
+width = 96
+height = 64
+sample_aspect_ratio = "32:27"
+display_aspect_ratio = "16:9"
+frame_rate = "4/1"
+frame_count = 12
+first_pts = 0
+last_pts = 2750
+first_duration = 250
+duration = 3000
+time_base = "1/1000"
+color_primaries = "bt709"
+transfer = "bt709"
+matrix = "bt709"
+range = "tv"
+chroma_location = "left"
+
+[coverage]
+features = [
+    "real-container",
+    "lossless-compressed-video",
+    "software-yuv420p",
+    "limited-range",
+    "bt709",
+    "chroma-subsampling",
+    "non-square-pixels",
+    "bounded-playback-backpressure",
+    "multi-frame-timestamps",
+]

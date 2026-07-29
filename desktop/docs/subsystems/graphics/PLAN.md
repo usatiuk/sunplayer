@@ -180,20 +180,20 @@ playback should prefer the later platform hardware importer when available.
 * [x] Apply decoded sample aspect ratio to an aspect-preserving content
   rectangle.
 * [ ] Capture-validate general display-matrix orientation.
-* [ ] Surface loading and decode errors without terminating the UI.
+* [x] Surface loading and decode errors without terminating the UI.
 * [ ] Display source pixel format, dimensions, color metadata, decode path,
   render path, and copies in diagnostics.
 
 ### Acceptance
 
-* A supported local SDR or HDR file displays its first frame.
+* A supported local SDR or HDR file plays video continuously.
 * The UI remains responsive while the file is opened and decoded.
 * Moving the paused frame to another display rerenders it for the new target.
 * Unsupported media produces a clear error and leaves the presentation shell
   usable.
 
-Playback queues, continuous scheduling, seeking, and audio remain later
-playback/media milestones. The first Windows hardware path is milestone 5.
+Seeking, audio, and position-preserving recovery remain later playback/media
+milestones. The first Windows hardware path is milestone 5.
 
 ## Milestone 5: Windows hardware decode and direct input import
 
@@ -214,8 +214,8 @@ libplacebo producer, or compositor contracts.
   slice at the decoded-frame boundary.
 * [x] Directly wrap NV12, P010, P012, and P016 D3D11 plane views for
   libplacebo with explicit effective depth and storage shift.
-* [x] Retry the entire first-frame operation in software after a configured
-  hardware decode failure and expose the fallback reason.
+* [x] Retry the decode operation in software after a configured hardware
+  failure before the first published frame and expose the fallback reason.
 * [x] Retry once in software when a decoded hardware surface cannot be
   imported, without making that policy part of the native importer.
 * [x] Supersede old-generation decode/frame state and re-decode current media
@@ -223,7 +223,7 @@ libplacebo producer, or compositor contracts.
   generation-independent software frame.
 * [x] Prove real H.264 D3D11VA decode/direct import against a pinned fixture.
 * [ ] Capture P010/P012/P016 and real device-loss behavior.
-* [ ] Measure decoder/render contention during continuous playback.
+* [ ] Measure decoder/render contention during long continuous playback.
 
 ### Acceptance
 

@@ -23,3 +23,4 @@ the newer note or decision rather than silently rewriting the investigation.
 * [2026-07-29: libplacebo Windows dependency build](2026-07-29-libplacebo-windows-dependency-build.md)
 * [2026-07-29: FFmpeg Windows dependency and frame import](2026-07-29-ffmpeg-windows-dependency-and-frame-import.md)
 * [2026-07-29: Deterministic compressed SDR fixture](2026-07-29-compressed-sdr-fixture.md)
+* [2026-07-29: FFmpeg continuous decode and backpressure](2026-07-29-ffmpeg-continuous-decode-and-backpressure.md)

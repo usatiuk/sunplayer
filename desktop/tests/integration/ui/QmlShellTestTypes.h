@@ -149,6 +149,16 @@ class ShellTestMediaSession final : public QObject {
                NOTIFY sessionChanged)
     Q_PROPERTY(QString videoSummary MEMBER m_videoSummary NOTIFY sessionChanged)
     Q_PROPERTY(bool hasFrame READ hasFrame NOTIFY sessionChanged)
+    Q_PROPERTY(bool playing READ playing NOTIFY sessionChanged)
+    Q_PROPERTY(bool ended READ ended NOTIFY sessionChanged)
+    Q_PROPERTY(qulonglong decodedVideoFrames MEMBER m_decodedVideoFrames
+               NOTIFY playbackMetricsChanged)
+    Q_PROPERTY(qulonglong selectedVideoFrames MEMBER m_selectedVideoFrames
+               NOTIFY playbackMetricsChanged)
+    Q_PROPERTY(qulonglong droppedVideoFrames MEMBER m_droppedVideoFrames
+               NOTIFY playbackMetricsChanged)
+    Q_PROPERTY(int queuedVideoFrames MEMBER m_queuedVideoFrames
+               NOTIFY playbackMetricsChanged)
 
 public:
     enum class State {
@@ -164,6 +174,8 @@ public:
 
     State state() const { return m_state; }
     bool hasFrame() const { return m_hasFrame; }
+    bool playing() const { return m_playing; }
+    bool ended() const { return m_ended; }
     int openCount() const { return m_openCount; }
     int cancelCount() const { return m_cancelCount; }
     int retryCount() const { return m_retryCount; }
@@ -171,6 +183,8 @@ public:
     void setState(State state, bool hasFrame = false) {
         m_state = state;
         m_hasFrame = hasFrame;
+        m_playing = state == State::Ready && hasFrame;
+        m_ended = false;
         if (state == State::Ready) {
             m_mediaUrl = QUrl::fromLocalFile(
                 QStringLiteral("test-video.mkv"));
@@ -194,13 +208,29 @@ public:
     Q_INVOKABLE void retry() {
         ++m_retryCount;
     }
+    Q_INVOKABLE void play() {
+        m_playing = true;
+        m_ended = false;
+        emit sessionChanged();
+    }
+    Q_INVOKABLE void pause() {
+        m_playing = false;
+        emit sessionChanged();
+    }
 
 signals:
     void sessionChanged();
+    void playbackMetricsChanged();
 
 private:
     State m_state = State::Empty;
     bool m_hasFrame = false;
+    bool m_playing = false;
+    bool m_ended = false;
+    qulonglong m_decodedVideoFrames = 3;
+    qulonglong m_selectedVideoFrames = 1;
+    qulonglong m_droppedVideoFrames = 0;
+    int m_queuedVideoFrames = 2;
     QUrl m_mediaUrl;
     QString m_displayName;
     QString m_errorMessage;

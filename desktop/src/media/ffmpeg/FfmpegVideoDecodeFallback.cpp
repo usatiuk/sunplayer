@@ -1,18 +1,19 @@
-#include "media/ffmpeg/FfmpegFirstFrameDecodeFallback.h"
+#include "media/ffmpeg/FfmpegVideoDecodeFallback.h"
 
 #include "media/FfmpegHardwareDevice.h"
 
-FfmpegFirstFrameResult decodeFirstVideoFrameWithFallback(
+FfmpegVideoDecodeResult decodeVideoFramesWithFallback(
         const VideoHardwareDecodeCapability &hardwareDecode,
-        const FfmpegFirstFrameDecodeAttempt &attempt) {
+        const FfmpegVideoDecodeAttempt &attempt) {
     Q_ASSERT(attempt);
 
     bool hardwareSelected = false;
-    FfmpegFirstFrameResult result =
+    FfmpegVideoDecodeResult result =
         attempt(hardwareDecode, hardwareSelected);
     if (result.isSuccess()
             || result.isCancelled()
-            || !hardwareSelected) {
+            || !hardwareSelected
+            || result.framesDecoded != 0) {
         return result;
     }
 
@@ -23,7 +24,7 @@ FfmpegFirstFrameResult decodeFirstVideoFrameWithFallback(
         ? hardwareDecode.device->apiName()
         : QStringLiteral("Hardware");
     bool softwareHardwareSelected = false;
-    FfmpegFirstFrameResult softwareResult =
+    FfmpegVideoDecodeResult softwareResult =
         attempt(
             {
                 .device = {},

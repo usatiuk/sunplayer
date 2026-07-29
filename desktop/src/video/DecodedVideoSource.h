@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <memory>
 
 #include "video/RenderedVideoSource.h"
@@ -7,9 +8,21 @@
 
 class DecodedVideoFrame;
 
-// Presentation-thread source for the frame selected by the future playback
-// scheduler. Decoder workers retain AVFrames independently, then publish an
-// immutable DecodedVideoFrame to this source through the application thread.
+// Playback-owned policy queried synchronously on the presentation thread.
+// It selects immutable decoded frames without exposing queues or clocks to
+// the renderer.
+class DecodedVideoFrameSelector {
+public:
+    virtual ~DecodedVideoFrameSelector() = default;
+    virtual std::shared_ptr<const DecodedVideoFrame>
+        selectFrameForPresentation(
+            std::chrono::steady_clock::time_point now) = 0;
+    virtual bool wantsContinuousVideoFrames() const = 0;
+};
+
+// Presentation-thread source for frames selected by playback policy. Decoder
+// workers retain AVFrames independently, while immutable DecodedVideoFrames
+// cross into this source through the application and presentation thread.
 class DecodedVideoSource final : public RenderedVideoSource {
     Q_OBJECT
 
@@ -21,6 +34,9 @@ public:
 
     const std::shared_ptr<const DecodedVideoFrame> &
         currentFrame() const;
+    void setFrameSelector(
+        DecodedVideoFrameSelector *selector);
+    void requestFrameSelection();
     void setFrame(
         std::shared_ptr<const DecodedVideoFrame> frame);
     void clearFrame();
@@ -37,6 +53,7 @@ public:
         const VideoFailure &failure) override;
 
 signals:
+    void frameChanged();
     void presentationFailed(const VideoFailure &failure);
 
 private:
@@ -44,6 +61,7 @@ private:
     void advanceProducerConfigurationRevision();
 
     std::shared_ptr<const DecodedVideoFrame> m_frame;
+    DecodedVideoFrameSelector *m_selector = nullptr;
     VideoTargetReadback m_readback;
     std::uint64_t m_contentRevision = 1;
     std::uint64_t m_producerConfigurationRevision = 1;

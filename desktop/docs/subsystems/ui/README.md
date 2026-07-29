@@ -7,9 +7,11 @@ The QML scene has a thin `AppShell` with a default `PlayerPage` and retained
 navigation, and viewport boundary are production structure; HDR Lab remains
 developer tooling.
 
-Player currently opens a local file and displays one paused decoded frame
-through the production libplacebo path. It intentionally has no play, seek,
-track, subtitle, or volume controls before those commands exist.
+Player opens a local file, starts continuous video-only playback through the
+production libplacebo path, and exposes working play, pause, and replay
+commands. It reports decode path/fallback plus decoded, queued, selected, and
+dropped-frame counts. Seek, track, subtitle, audio, and volume controls remain
+absent until those commands exist.
 
 ## Page structure
 
@@ -53,8 +55,9 @@ UI-facing session contract. `PlayerPage` observes that state and issues
 commands; it does not recreate canonical open, playback, track, timing, or
 error state in page-local properties.
 
-The current seam exposes `Empty`, `Opening`, `Ready`, and `Error`, plus open,
-cancel, retry, and close behavior. Expand it with working behavior rather than
+The current seam exposes `Empty`, `Opening`, `Ready`, and `Error`; playing,
+paused, and ended intent inside `Ready`; and open, cancel, retry, close,
+play/pause, and replay behavior. Expand it with working behavior rather than
 adding disconnected controls.
 
 ## Video viewport
@@ -77,16 +80,17 @@ Inactive pages cannot compete for the viewport.
 
 ## Player page
 
-`PlayerPage` implements the first real file-open/session slice:
+`PlayerPage` implements the initial continuous-video session:
 
 * Empty.
 * Opening.
 * Error.
-* Ready with a displayed frame.
+* Ready with playing, paused, or ended video and a retained displayed frame.
 
-The Ready state labels the view as a paused first frame and exposes only open
-another or close. Add play, seek, track, subtitle, and volume controls only when
-their underlying commands and observable states exist.
+The Ready state exposes play/pause or replay, open another, and close. Queue
+and frame counters provide lightweight pipeline observability. Add seek, track,
+subtitle, and volume controls only when their underlying commands and
+observable states exist.
 
 ## HDR Lab and diagnostics
 
@@ -119,8 +123,8 @@ Focused Qt Test coverage verifies viewport geometry, visibility, notification,
 and renderability. A non-presenting Qt Quick component test creates the real
 QML shell through the same initial-property contract, resizes it, and verifies
 that active-page geometry and visibility reach `VideoViewportState`. It also
-verifies Empty/Opening/Ready/Error visibility, cancel/retry/close command
-wiring, Player/HDR-Lab route and viewport selection, and the diagnostic
+verifies Empty/Opening/Ready/Error visibility, cancel/retry/close and
+play/pause command wiring, Player/HDR-Lab route and viewport selection, and the diagnostic
 renderer switch's default and source binding. The real
 D3D11 capture verifies that zero video geometry and the compositor's fallback
 binding produce the normal background rather than sampling the retained video

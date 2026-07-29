@@ -57,14 +57,14 @@ VideoPage {
 
         Label {
             Layout.alignment: Qt.AlignHCenter
-            text: qsTr("Open a video to inspect its first decoded frame")
+            text: qsTr("Open a video")
             color: "white"
             font.pixelSize: 22
         }
 
         Label {
             Layout.alignment: Qt.AlignHCenter
-            text: qsTr("Playback controls arrive with continuous decoding.")
+            text: qsTr("Video playback is available; audio comes next.")
             color: "#8e97a8"
         }
 
@@ -182,7 +182,12 @@ VideoPage {
 
                 Label {
                     Layout.fillWidth: true
-                    text: qsTr("Paused first frame · %1 · %2 · %3")
+                    text: qsTr("%1 · %2 · %3 · %4")
+                        .arg(root.session.ended
+                            ? qsTr("Ended")
+                            : root.session.playing
+                                ? qsTr("Playing")
+                                : qsTr("Paused"))
                         .arg(root.session.videoSummary)
                         .arg(root.session.decoderName)
                         .arg(root.session.decodePath)
@@ -198,6 +203,29 @@ VideoPage {
                     color: "#d2a85d"
                     elide: Text.ElideRight
                 }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("%1 decoded · %2 selected · %3 dropped · %4 queued")
+                        .arg(root.session.decodedVideoFrames)
+                        .arg(root.session.selectedVideoFrames)
+                        .arg(root.session.droppedVideoFrames)
+                        .arg(root.session.queuedVideoFrames)
+                    color: "#778195"
+                    elide: Text.ElideRight
+                }
+            }
+
+            Button {
+                objectName: "playPauseButton"
+                text: root.session.ended
+                    ? qsTr("Replay")
+                    : root.session.playing
+                        ? qsTr("Pause")
+                        : qsTr("Play")
+                onClicked: root.session.playing
+                    ? root.session.pause()
+                    : root.session.play()
             }
 
             Button {

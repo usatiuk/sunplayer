@@ -172,9 +172,9 @@ disabling Vulkan, OpenGL, and external libdovi.
 
 A separate FFmpeg dependency test verifies the three selected DLLs, pinned
 major versions, D3D11VA availability, native H.264/HEVC decoders, and the
-absence of Vulkan and swscale. The first-frame integration target then
-exercises real image and compressed-video demux, software RGB/YUV decode,
-libplacebo upload, and final QRhi composition. Additional focused targets cover
+absence of Vulkan and swscale. The FFmpeg video integration target then
+exercises real image and continuous compressed-video demux, software and
+D3D11VA decode, libplacebo upload, and final QRhi composition. Additional focused targets cover
 aspect fitting, active-source routing, media-session cancellation/generation,
 and the real Player/HDR-Lab QML shell.
 
@@ -195,7 +195,7 @@ See [../testing/PLAN.md](../testing/PLAN.md).
 
 ## Verification
 
-The manifest configure, complete Debug build, and thirteen registered CTest
+The manifest configure, complete Debug build, and fourteen registered CTest
 targets pass in the current Windows/MSVC/Ninja environment after initializing
 the Visual Studio developer environment. The dependency graph is built under
 the project-local clang-cl triplet; the Sunroom executable remains MSVC-built.

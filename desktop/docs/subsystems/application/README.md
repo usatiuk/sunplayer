@@ -5,8 +5,8 @@
 The application shell is a single-window Windows presentation host with a thin
 QML `AppShell`, default Player page, and retained HDR Lab. It establishes
 startup, object ownership, native presentation events, redirected Qt Quick
-input, the active video-viewport boundary, and asynchronous first-frame local
-file opening. It does not yet provide continuous playback, drag-and-drop,
+input, the active video-viewport boundary, and asynchronous continuous local
+video playback. It does not yet provide audio, seeking, drag-and-drop,
 persistent settings, fullscreen behavior, general structured errors, or
 logging.
 
@@ -68,7 +68,7 @@ lifetime or coordination.
 
 The native window translates:
 
-* Exposure into first-frame handling.
+* Exposure into first presentation and continuous frame handling.
 * `UpdateRequest` into engine rendering.
 * Resize and device-pixel-ratio changes into UI and viewport invalidation.
 * Native surface destruction into swapchain teardown.
@@ -119,8 +119,8 @@ exhausted recovery failures may still terminate through `qFatal`.
 The player still needs:
 
 * Structured subsystem errors.
-* Unified buffering, fallback, recovery, and fatal states beyond first-frame
-  opening.
+* Unified buffering, fallback, recovery, and fatal states beyond the initial
+  continuous local-file pipeline.
 * Logs and diagnostics that remain available after a playback-session failure.
 * Stronger cancellation containment for uninterruptible sources and devices.
 

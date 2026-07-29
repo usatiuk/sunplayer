@@ -74,7 +74,7 @@ Implement alongside graphics milestone 1:
 * [x] Label the GPU test separately so dedicated runs can select it while it
   remains part of the current supported Windows default suite.
 
-## Milestone 2: libplacebo and first-frame coverage
+## Milestone 2: libplacebo and decoded-frame coverage
 
 * [x] Load the pinned libplacebo DLL through CTest and verify its version,
   installed D3D11, Shaderc, and built-in DOVI configuration, disabled Vulkan,
@@ -98,6 +98,8 @@ Implement alongside graphics milestone 1:
 * [x] Cover a pinned H.264 stream through real D3D11VA decode and direct NV12
   plane import, assert zero input and output copies/transfers, and compare its
   capture against software decode.
+* [x] Drain all three FFV1 and H.264 frames through the production continuous
+  send/receive/flush path, including bounded simultaneous D3D11VA retention.
 * [x] Make the registered hardware-decode CTest fail when D3D11VA is missing;
   retain explicit skip reporting only for direct manual execution.
 * [x] Inject a failed post-selection result at the fallback-policy boundary and
@@ -126,10 +128,12 @@ Implement alongside graphics milestone 1:
 * [x] Cover typed hardware-import software retry and current-media re-decode
   after graphics-device invalidation/replacement, including the one-retry
   limit and retention of ready generation-independent software frames.
-* [ ] Add a controlled monotonic clock and audio sink when scheduling requires
-  deterministic advancement.
-* [ ] Cover short playback, pause, end of stream, buffering, and frame
-  selection through real queues.
+* [x] Drive the production clock-source-neutral snapshot and provisional
+  monotonic clock with controlled presentation times.
+* [x] Cover twelve-frame playback, pause/resume/replay, end of stream, hard
+  frame-queue capacity, backpressure, refill, and due/drop selection through
+  real queues.
+* [ ] Add the controlled audio-clock/sink edge with audio output.
 * [ ] Cover seek-generation invalidation without fixed sleeps.
 * [ ] Add subtitle and audio fixtures with the features being implemented.
 * [ ] Add structured completion events and diagnostics with generation IDs.
@@ -148,7 +152,8 @@ Implement alongside graphics milestone 1:
   the production decode attempt; the current deterministic test starts at the
   fallback-policy boundary.
 * [ ] Real operating-system display changes and multi-monitor movement.
-* [x] Controlled first-frame cancellation and stale-completion scenarios.
+* [x] Controlled continuous-pipeline cancellation, queue stop wakeup, and
+  stale-completion scenarios.
 * [ ] Controlled unreliable continuous-source scenarios.
 * [ ] Real SMB/NFS failure scenarios when mounted sources are supported.
 * [ ] Packaged-application UI and clean-machine smoke tests.

@@ -119,19 +119,30 @@ current dependency build as proof of Vulkan readiness.
 
 ## Application and player
 
-### No continuous playback
+### Playback has no seek, audio clock, or unified buffering recovery
 
-The thin QML shell now includes a Player page and an asynchronous local-file
-session that displays one paused decoded frame. There is no persistent
-demux/decoder loop, packet/frame queue, scheduler, seek, audio, subtitles,
-playback controls, buffering model, persistent settings, or general session
-diagnostics view yet. These remain in the root `PLAN.md` and should be
-implemented as coherent vertical slices.
+The thin QML Player now continuously demuxes, decodes, schedules, and presents
+local video with bounded packet/frame channels and working play/pause/replay.
+It does not yet expose position/duration, seek, audio, subtitles, track
+selection, source-stall buffering/recovery, persistent settings, or a general
+diagnostics view.
 
-The local-file open uses FFmpeg's interrupt callback and a bounded persistent
-worker. Cancel and replacement invalidate UI state immediately without joining
-that worker; only the latest pending open is retained. An operation that does
-not observe cancellation can delay the replacement open, and a mounted
-filesystem blocked uninterruptibly inside the kernel can still stall final
-shutdown. Helper-process containment remains the intended stronger boundary
-for unreliable network filesystems.
+Hardware-import fallback and graphics-device recovery restart the current file
+from the beginning. Preserving position requires a shared
+keyframe-anchored seek/decode-to-anchor primitive; restarting an arbitrary
+hardware decoder from the middle of a packet queue would be incorrect.
+
+The local-file operation uses FFmpeg's interrupt callback and stop-aware
+bounded channels. Cancel and replacement invalidate UI state immediately
+without joining the worker; only the latest pending open is retained. A
+mounted filesystem blocked uninterruptibly inside the kernel can still stall
+final shutdown. Helper-process containment remains the intended stronger
+boundary for unreliable network filesystems.
+
+The deterministic session scenario reaches real FFmpeg decode and fills the
+production frame mailbox, but it drives
+`DecodedVideoSource::prepareForPresentation()` directly. A multi-frame
+`RhiPresentationEngine` cadence test and an actual-process open/play/pause
+scenario remain missing. The packet channel's count/byte limits are enforced
+by production code but do not yet have direct saturation diagnostics or a
+fixture large enough to assert demux blocking at that boundary.

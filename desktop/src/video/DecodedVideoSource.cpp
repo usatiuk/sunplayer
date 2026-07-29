@@ -22,6 +22,17 @@ DecodedVideoSource::currentFrame() const {
     return m_frame;
 }
 
+void DecodedVideoSource::setFrameSelector(
+        DecodedVideoFrameSelector *selector) {
+    Q_ASSERT(QThread::currentThread() == thread());
+    m_selector = selector;
+}
+
+void DecodedVideoSource::requestFrameSelection() {
+    Q_ASSERT(QThread::currentThread() == thread());
+    emit updateRequested();
+}
+
 void DecodedVideoSource::setFrame(
         std::shared_ptr<const DecodedVideoFrame> frame) {
     Q_ASSERT(QThread::currentThread() == thread());
@@ -33,6 +44,7 @@ void DecodedVideoSource::setFrame(
         || frame->identity() != m_frame->identity());
     m_frame = std::move(frame);
     advanceContentRevision();
+    emit frameChanged();
     emit updateRequested();
 }
 
@@ -46,6 +58,7 @@ void DecodedVideoSource::clearFrame() {
     // Recreate it at the next render boundary so clearing a session releases
     // that retained media promptly.
     advanceProducerConfigurationRevision();
+    emit frameChanged();
     emit updateRequested();
 }
 
@@ -62,7 +75,15 @@ void DecodedVideoSource::advanceProducerConfigurationRevision() {
 }
 
 void DecodedVideoSource::prepareForPresentation(
-        std::chrono::steady_clock::time_point) {}
+        std::chrono::steady_clock::time_point now) {
+    Q_ASSERT(QThread::currentThread() == thread());
+    if (!m_selector)
+        return;
+    std::shared_ptr<const DecodedVideoFrame> selected =
+        m_selector->selectFrameForPresentation(now);
+    if (selected && selected != m_frame)
+        setFrame(std::move(selected));
+}
 
 std::uint64_t DecodedVideoSource::contentRevision() const {
     return m_contentRevision;
@@ -106,7 +127,8 @@ DecodedVideoSource::displayAspectRatio() const {
 }
 
 bool DecodedVideoSource::wantsContinuousFrames() const {
-    return false;
+    return m_selector
+        && m_selector->wantsContinuousVideoFrames();
 }
 
 std::unique_ptr<RenderedVideoProducer>

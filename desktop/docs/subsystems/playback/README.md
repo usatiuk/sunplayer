@@ -2,38 +2,65 @@
 
 ## Status
 
-`MediaSession` now owns the first playback lifecycle:
+`MediaSession` owns the initial continuous video lifecycle:
 
 * `Empty`.
 * `Opening`.
-* `Ready` with one paused decoded frame.
+* `Ready`, with independently observable playing, paused, or ended intent.
 * `Error`.
 
-Opening happens off the GUI thread. A nonzero playback generation belongs to
-each request; cancellation or a newer request invalidates older completion.
-One persistent worker receives cancellation without a GUI-thread join and
-retains only the latest pending request, keeping repeated replacement bounded.
-The frame is published before `Ready`, and clearing the session releases its
-source and forces any hidden producer retaining that frame to be recreated.
+Opening, demuxing, and decoding happen off the GUI thread. A nonzero playback
+generation belongs to each request; cancellation or a newer request invalidates
+older frames, notifications, and completion. One persistent supervisor retains
+only the latest pending request. Each active operation owns a demux worker,
+byte-bounded packet channel, decoder, and generation-scoped decoded-frame
+mailbox. Cancel/replacement requests stop without joining the GUI thread.
+
+The decoded-frame mailbox has a hard capacity of three because retained
+D3D11VA frames reserve decoder-pool surfaces. Full frame capacity blocks decode;
+the bounded packet channel then backpressures demux. A coalesced
+frames-available notification requests selection without making Qt's event
+queue an unbounded frame queue.
+
+`DecodedVideoSource::prepareForPresentation()` asks a narrow playback-owned
+selector for the frame due at the supplied presentation time. `MediaSession`
+publishes a `MediaClockSnapshot`; `VideoFrameScheduler` applies due/drop/end
+policy to that value and the bounded queue. The source still publishes only
+the selected immutable frame and the renderer still knows nothing about decode
+queues or clock sources.
+Opening becomes `Ready` when the first frame is selected, and local video
+autoplays. Play/pause/replay change user intent without recreating the decoder
+unless replay follows end of stream.
+
+The initial monotonic clock and its snapshots stay in integer microseconds.
+Valid FFmpeg PTS is mapped against the container/stream origin; a missing PTS
+advances by the last positive duration, then the nominal frame-rate estimate.
+Backward timestamps are clamped to the previous scheduled time. Early frames
+remain queued, due frames are selected only at the presentation boundary, and
+if several frames are due only the newest is published while earlier due
+frames are counted as dropped. Decoder wakeups after first-frame bootstrap only
+request a presentation pass. Decoder drain is distinct from demux EOF;
+playback ends only after the queue and final frame duration are consumed, and
+the final frame remains visible.
+
 Presentation failures return to the session as user-visible errors. A typed
-hardware-frame import failure instead causes one software-only reopen; failure
-of that software path or a repeated typed failure becomes the visible error.
-The graphics domain supplies a hardware-decode capability before file open.
-Supported Windows streams report `D3D11VA`; unsupported or failed hardware
-decode reports `Software` plus its fallback reason. This is diagnostic state,
-not a user-selectable renderer or decoder preference.
+hardware-frame import failure instead causes one software-only restart from
+the beginning; failure of that software path or a repeated typed failure
+becomes the visible error. Supported Windows streams report `D3D11VA`;
+unsupported or failed hardware decode reports `Software` plus its fallback
+reason. This is diagnostic state, not a user-selectable renderer or decoder
+preference.
 
 Graphics-device recreation advances the playback generation for an in-flight
-open or ready hardware frame, clears hardware-backed state, and holds the
-session in `Opening` until it can re-decode against the replacement
-capability. A ready software frame remains `Ready` because its storage is
-generation-independent.
+open or ready hardware frame, clears hardware-backed queued/current state, and
+holds the session in `Opening` until it can restart from the beginning against
+the replacement capability. A ready software pipeline remains valid because
+its storage is generation-independent.
 
-There is still no continuous decoder, scheduler, bounded packet/frame queues,
-seek implementation, or audio clock. The decoded-frame boundary carries the
-identity and timing values those components require. This document records the
-intended clock and recovery contract so the first scheduler does not
-accidentally hard-code a wall-clock-only model.
+There is still no seek implementation, position/duration UI, audio clock,
+unified buffering state, or position-preserving graphics recovery. The
+monotonic clock is deliberately one producer of the shared
+`MediaClockSnapshot` value, not a claim of A/V synchronization.
 
 ## Clock ownership
 
@@ -92,24 +119,30 @@ seeks, logs synchronously, or calls into Qt.
 Every decoded frame has a playback generation independent of its PTS. PTS may
 be missing or repeated and is not frame identity.
 
-The video scheduler uses predicted presentation time:
+The initial video-only scheduler uses predicted presentation time:
 
 * Early frame: retain.
-* On-time frame: present.
-* Slightly late frame: present immediately.
-* Materially late frame: drop and report.
+* One due frame: select for presentation.
+* Several due frames: publish the newest and count the preceding due frames as
+  dropped.
 * Old generation: discard regardless of timestamp.
 
-Thresholds remain policy to validate against refresh cadence, renderer latency,
-and hardware. They should not be fixed from intuition before continuous
-playback measurements exist.
+Late thresholds and presentation-latency prediction remain policy to validate
+against refresh cadence, renderer latency, and hardware. They are not fixed
+from intuition in this first scheduler.
 
 ## Verification direction
 
-Focused tests will use a controlled monotonic clock and audio-sink observation
-edge while retaining real queues and scheduling. Required cases include
-pause/resume, underrun, latency changes, device replacement, seek generation,
-missing/repeated timestamps, and large discontinuities.
+Current focused tests drive a real twelve-frame FFmpeg fixture through the
+production session, pause with the three-frame mailbox full, advance controlled
+presentation times, resume, select every frame, replay, and verify drain/end
+behavior and bounded occupancy. Scheduler tests exercise paused snapshots,
+multi-due dropping, and final-duration end policy independently of the clock
+producer. Queue tests cover hard backpressure plus stop/generation wakeups;
+timeline tests cover valid, missing, repeated, and non-monotonic timestamps.
+
+The later audio-clock suite still needs underrun, latency change, device
+replacement, seek generation, and large-discontinuity cases.
 
 Later physical verification uses synchronized audio impulses and visual flashes
 to measure actual speaker-to-display output timing. Software timestamps alone

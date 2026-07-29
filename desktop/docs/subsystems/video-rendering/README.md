@@ -166,7 +166,7 @@ metadata policy, renderer policy, subtitles, and the compositor remain shared.
 9. [ ] Validate MoltenVK presentation on macOS before choosing shared Vulkan or a
    Metal interop backend.
 10. [x] Add the retained FFmpeg `AVFrame` contract, software-plane importer,
-    persistent upload reuse, and real first-frame capture.
+    persistent upload reuse, and real decoded-frame capture.
 11. [x] Make the Windows graphics domain own a video-capable,
     multithread-protected D3D11 device and add direct D3D11VA plane import.
 12. [ ] Add Vulkan/DRM/VAAPI and VideoToolbox platform importers as their
@@ -198,9 +198,11 @@ configuration enables D3D11, Shaderc, and built-in DOVI handling while
 disabling Vulkan, OpenGL, and external libdovi, checks the pinned version, and
 exercises a real log create/destroy lifecycle.
 
-The FFmpeg first-frame test opens pinned, hashed RGB and Matroska/FFV1 fixtures
-through real `avformat`/`avcodec` and destroys decoder contexts after returning
-the retained frame. The RGB case maps through the production software importer
+The FFmpeg video test opens pinned, hashed RGB and Matroska/FFV1 fixtures
+through real `avformat`/`avcodec`. The focused RGB adapter destroys decoder
+contexts after returning the retained frame, while the three-frame FFV1 and
+H.264 cases also exercise continuous drain through the production bounded
+packet/decode path. The RGB case maps through the production software importer
 and captures both the display-targeted surface and final composition. It
 asserts known pixels, one input upload, zero input download/GPU copy, zero
 output copies, and source-upload reuse while rerendering the same SDR frame for

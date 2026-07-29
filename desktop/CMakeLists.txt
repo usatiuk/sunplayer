@@ -102,10 +102,12 @@ add_library(sunroom_media STATIC
         src/media/FfmpegFirstFrameDecoder.h
         src/media/FfmpegHardwareDevice.cpp
         src/media/FfmpegHardwareDevice.h
+        src/media/FfmpegVideoDecoder.cpp
+        src/media/FfmpegVideoDecoder.h
         src/media/ffmpeg/FfmpegFrameMetadata.cpp
         src/media/ffmpeg/FfmpegFrameMetadata.h
-        src/media/ffmpeg/FfmpegFirstFrameDecodeFallback.cpp
-        src/media/ffmpeg/FfmpegFirstFrameDecodeFallback.h
+        src/media/ffmpeg/FfmpegVideoDecodeFallback.cpp
+        src/media/ffmpeg/FfmpegVideoDecodeFallback.h
 )
 target_include_directories(sunroom_media
         PUBLIC
@@ -180,8 +182,13 @@ if (WIN32)
 endif ()
 
 qt_add_executable(sunroom
+        src/playback/CoalescedGenerationWake.h
         src/playback/MediaSession.cpp
         src/playback/MediaSession.h
+        src/playback/VideoFrameQueue.cpp
+        src/playback/VideoFrameQueue.h
+        src/playback/VideoFrameScheduler.cpp
+        src/playback/VideoFrameScheduler.h
         src/app/main.cpp
         src/app/PresentationSettings.cpp
         src/app/PresentationSettings.h

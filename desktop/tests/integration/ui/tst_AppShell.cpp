@@ -114,12 +114,16 @@ void AppShellTest::publishesActiveViewport() {
     QObject *const closeMediaButton =
         rootItem->findChild<QObject *>(
             QStringLiteral("closeMediaButton"));
+    QObject *const playPauseButton =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("playPauseButton"));
     QVERIFY(emptyState);
     QVERIFY(openingState);
     QVERIFY(errorState);
     QVERIFY(cancelOpenButton);
     QVERIFY(retryMediaButton);
     QVERIFY(closeMediaButton);
+    QVERIFY(playPauseButton);
     QCOMPARE(
         rendererSwitch->property("checked").toBool(),
         true);
@@ -164,6 +168,13 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_COMPARE(videoViewport.rect().y(), 128.0);
     QTRY_COMPARE(videoViewport.rect().width(), 1052.0);
     QTRY_COMPARE(videoViewport.rect().height(), 608.0);
+    QVERIFY(mediaSession.playing());
+    QVERIFY(QMetaObject::invokeMethod(
+        playPauseButton, "clicked", Qt::DirectConnection));
+    QVERIFY(!mediaSession.playing());
+    QVERIFY(QMetaObject::invokeMethod(
+        playPauseButton, "clicked", Qt::DirectConnection));
+    QVERIFY(mediaSession.playing());
 
     const qreal originalHeight = videoViewport.rect().height();
     rootItem->setSize({900.0, 650.0});

@@ -31,8 +31,22 @@ qt_add_executable(sunroom_decoded_video_frame_tests
 
 qt_add_executable(sunroom_media_session_tests
         unit/playback/tst_MediaSession.cpp
+        ../src/playback/CoalescedGenerationWake.h
         ../src/playback/MediaSession.cpp
         ../src/playback/MediaSession.h
+        ../src/playback/VideoFrameQueue.cpp
+        ../src/playback/VideoFrameQueue.h
+        ../src/playback/VideoFrameScheduler.cpp
+        ../src/playback/VideoFrameScheduler.h
+)
+
+qt_add_executable(sunroom_video_frame_queue_tests
+        unit/playback/tst_VideoFrameQueue.cpp
+        ../src/playback/CoalescedGenerationWake.h
+        ../src/playback/VideoFrameQueue.cpp
+        ../src/playback/VideoFrameQueue.h
+        ../src/playback/VideoFrameScheduler.cpp
+        ../src/playback/VideoFrameScheduler.h
 )
 
 qt_add_executable(sunroom_active_video_source_tests
@@ -121,6 +135,11 @@ target_include_directories(sunroom_media_session_tests
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
 )
 
+target_include_directories(sunroom_video_frame_queue_tests
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+)
+
 target_include_directories(sunroom_active_video_source_tests
         PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
@@ -179,6 +198,13 @@ target_link_libraries(sunroom_media_session_tests
         sunroom_video_pipeline
 )
 
+target_link_libraries(sunroom_video_frame_queue_tests
+        PRIVATE
+        Qt6::Test
+        sunroom_media
+        sunroom_ffmpeg
+)
+
 target_link_libraries(sunroom_active_video_source_tests
         PRIVATE
         Qt6::Quick
@@ -213,6 +239,7 @@ if (WIN32)
             sunroom_video_viewport_tests
             sunroom_video_presentation_geometry_tests
             sunroom_media_session_tests
+            sunroom_video_frame_queue_tests
             sunroom_active_video_source_tests
             sunroom_qml_shell_tests
             sunroom_libplacebo_dependency_tests)
@@ -261,6 +288,11 @@ add_test(
 )
 
 add_test(
+        NAME video-frame-queue
+        COMMAND sunroom_video_frame_queue_tests
+)
+
+add_test(
         NAME active-video-source
         COMMAND sunroom_active_video_source_tests
 )
@@ -281,6 +313,7 @@ set_tests_properties(
         video-viewport
         video-presentation-geometry
         decoded-video-frame
+        video-frame-queue
         active-video-source
         PROPERTIES LABELS "unit"
 )
@@ -289,6 +322,13 @@ set_tests_properties(
         media-session
         PROPERTIES
         LABELS "concurrency;integration;media"
+        TIMEOUT 30
+)
+
+set_tests_properties(
+        video-frame-queue
+        PROPERTIES
+        LABELS "concurrency;unit"
         TIMEOUT 30
 )
 

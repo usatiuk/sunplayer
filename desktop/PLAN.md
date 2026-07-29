@@ -61,7 +61,7 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 ## Current implementation status
 
 As of 2026-07-29, the repository contains a Windows presentation foundation
-and a first visible media-opening slice, not yet continuous playback:
+and initial continuous, video-only local-file playback:
 
 * A factory-selected graphics-device domain owns the current D3D11 QRhi,
   same-device libplacebo GPU, FFmpeg D3D11VA device, shared immediate-context
@@ -102,11 +102,21 @@ and a first visible media-opening slice, not yet continuous playback:
 * The configured Windows Debug target builds successfully with Qt 6.11.1,
   MSVC, pinned D3D11-only libplacebo 7.360.1, and official minimal FFmpeg
   8.1.2 dependencies built through the project-local vcpkg configuration.
-* `MediaSession` opens a local file and decodes its first video frame on a
-  cooperatively cancellable worker. Nonzero playback generations reject stale
-  completions. Ordinary open/render failures become visible session errors;
-  unsupported hardware-frame import triggers one observable software re-decode
-  before becoming an error.
+* `MediaSession` opens a local file, automatically starts video-only playback,
+  and supports play, pause, and replay. A persistent supervisor gives one
+  `AVFormatContext` to a demux worker and keeps one `AVCodecContext` on the
+  decode worker. A count- and byte-bounded packet channel and a
+  generation-scoped three-frame mailbox propagate backpressure upstream.
+* Frame selection uses integer FFmpeg timestamps, a clock-source-neutral
+  `MediaClockSnapshot`, and a focused `VideoFrameScheduler`; the current clock
+  producer is monotonic and video-only. The presentation thread retains early
+  frames, publishes due frames, collapses multiple due frames to the newest,
+  keeps the drained final frame visible, and stops continuous rendering while
+  paused or ended.
+* Nonzero playback generations reject stale frames, notifications, and
+  completions. Ordinary open/decode/render failures become visible session
+  errors; unsupported hardware-frame import triggers one observable software
+  restart from the beginning before becoming an error.
 * On Windows, supported streams prefer hardware decoding on the graphics
   domain's video-capable D3D11 device. FFmpeg-owned NV12, P010, P012, and P016
   texture-array slices can be mapped directly into libplacebo plane views.
@@ -119,16 +129,17 @@ and a first visible media-opening slice, not yet continuous playback:
   and is uploaded by the recreated producer.
 * A stable active-source router switches the presentation engine between the
   Player's decoded source and HDR Lab at a render boundary. The Player fits the
-  decoded display aspect ratio inside its viewport and shows the resulting
-  paused first frame through the production libplacebo path.
+  selected frame's display aspect ratio inside its viewport, renders through
+  production libplacebo, and reports decoded, queued, selected, and dropped
+  frame counts.
 * Pinned RGB, FFV1, and H.264 fixtures cross real FFmpeg demux/decode and
   libplacebo rendering. The H.264 scenario proves an actual D3D11VA frame,
   direct NV12 plane import, zero input CPU transfers, zero input GPU copies,
   zero output copies/transfers, and tolerant agreement with the software-decode
   result.
 
-libass, continuous decoding, audio, playback scheduling, drag-and-drop,
-subtitles, and persistence are not integrated. CTest/Qt Test coverage exists for pure
+libass, audio, seeking, buffering recovery, drag-and-drop, subtitles, and
+persistence are not integrated. CTest/Qt Test coverage exists for pure
 presentation-target policy, video-viewport state, the real QML shell's
 viewport publication and diagnostic renderer selection, rendered-video surface
 validity/invalidation, decoded-frame ownership, the libplacebo and FFmpeg
@@ -142,13 +153,12 @@ Whole-application playback scenarios, fixed mastered PQ source coverage,
 P010/P012/P016 capture, cross-platform hardware import, and physical-output
 validation do not yet exist.
 
-The next media slice replaces the one-frame operation with a persistent
-demux/decoder loop, bounded packet and decoded-frame queues, normalized stream
-discovery, and scheduler-facing events without changing the
-Player/source/compositor contracts. It should preserve both the proven
-D3D11VA path and observable software fallback while introducing deterministic
-clock and frame-selection tests. Playback uses libplacebo as its video
-renderer; the procedural producer remains HDR-Lab-only diagnostic tooling.
+The next playback slice should add seeking and normalized
+position/duration state, including a keyframe-anchored decoder restart
+primitive reused by seek, hardware-import fallback, and graphics-device
+recovery. Audio decoding, resampling, output, and the audio-backed master clock
+follow that boundary. Playback uses libplacebo as its video renderer; the
+procedural producer remains HDR-Lab-only diagnostic tooling.
 
 ## Subsystems
 
@@ -165,9 +175,9 @@ Documentation: `docs/subsystems/application/`
 
 ### 2. Media sources and file loading
 
-* [x] Cancellable local-file first-frame open
-* [x] Generation invalidation for superseded first-frame opens
-* [ ] Continuous-source cancellation and timeout model
+* [x] Cancellable continuous local-file open/demux/decode
+* [x] Generation invalidation for superseded pipeline work
+* [ ] Network-source cancellation and timeout model
 * [ ] FFmpeg AVIO integration
 * [ ] Bounded read-ahead and byte caching
 * [ ] Unreliable or blocking source isolation model
@@ -179,11 +189,11 @@ Documentation: `docs/subsystems/media-io/`
 
 * [x] Official minimal FFmpeg dependency and runtime deployment
 * [x] Retained decoded-frame ownership/timing/storage contract
-* [x] Asynchronous first local-file frame demux/decode integration
+* [x] Asynchronous continuous local-file video demux/decode integration
 * [x] Initial container open and best-video-stream probing
 * [ ] Stream, chapter, and attachment discovery
-* [ ] Packet demuxing
-* [ ] Video decoding
+* [x] Bounded selected-video packet demuxing
+* [x] Continuous video decoding
 * [ ] Audio decoding
 * [ ] Subtitle decoding
 * [x] Initial Windows D3D11VA device capability and decoder negotiation
@@ -194,11 +204,14 @@ Documentation: `docs/subsystems/media/`
 ### 4. Playback core
 
 * [x] Initial Empty/Opening/Ready/Error session state model
-* [ ] Bounded packet and frame queues
-* [x] First-frame open cancellation and generation invalidation
+* [x] Bounded packet and frame queues
+* [x] Continuous-pipeline cancellation and generation invalidation
 * [ ] Seeking
+* [x] Monotonic video-only clock and timestamp-driven frame selection
+* [x] Clock-source-neutral media snapshot and video scheduler boundary
 * [ ] Audio/video clock and synchronization
-* [ ] Buffering and end-of-stream behavior
+* [ ] Buffering behavior
+* [x] Initial end-of-stream behavior
 * [ ] Track selection and switching
 * [ ] Recovery from source, decoder, audio, and graphics failures
 
@@ -279,19 +292,19 @@ Documentation: `docs/subsystems/subtitles/`
 ### 9. User interface
 
 * [x] Thin application shell and page structure
-* [x] Player page with truthful first-frame session states
+* [x] Player page with truthful continuous-video session states
 * [x] Retained HDR Lab diagnostics page
 * [x] Generic active video-viewport contract
 * [x] Open-file interface
 * [ ] Drag-and-drop interface
-* [ ] Play and pause controls
+* [x] Play and pause controls
 * [ ] Seek bar and timestamps
 * [ ] Jump backward and forward
 * [ ] Audio-track selection
 * [ ] Subtitle-track selection
 * [ ] Volume and mute
 * [ ] Fullscreen
-* [x] First-frame loading and media error presentation
+* [x] Continuous video loading and media error presentation
 * [ ] Continuous buffering presentation
 * [ ] Keyboard shortcuts
 * [ ] Minimal settings surface
@@ -322,15 +335,15 @@ Documentation: `docs/subsystems/diagnostics/`
 * [x] Real D3D11 QRhi compositor capture smoke test
 * [x] Real D3D11 libplacebo SDR/PQ surface and compositor capture
 * [x] Deterministic RGB and compressed-YUV FFmpeg first-frame scenarios
-* [x] First-frame session cancellation and stale-generation tests
-* [ ] Deterministic playback scenarios
-* [ ] Playback and seeking tests
+* [x] Continuous session cancellation and stale-generation tests
+* [x] Initial deterministic video playback scenario
+* [ ] Seeking and audio-master playback tests
 * [ ] Color-metadata normalization tests
 * [ ] Renderer image tests
 * [ ] Subtitle layout tests
 * [x] Windows H.264 D3D11VA decode and zero-copy frame-import integration test
 * [ ] Display-change and multi-monitor tests
-* [x] Cooperative first-frame cancellation tests
+* [x] Cooperative pipeline and queue cancellation tests
 * [ ] Unreliable-source and mounted-filesystem containment tests
 * [ ] Cross-platform performance and power measurements
 * [ ] Physical HDR and A/V output verification
@@ -371,12 +384,15 @@ docs/
         0004-cross-platform-graphics-domain-and-video-interop.md
         0005-retain-ffmpeg-frames-at-the-decoded-frame-boundary.md
         0006-asynchronous-media-session-and-stable-active-video-source.md
+        0007-bound-continuous-video-and-select-on-presentation-thread.md
 
     research/
         README.md
         2026-07-28-testing-tools-and-boundaries.md
+        2026-07-29-libplacebo-windows-dependency-build.md
         2026-07-29-ffmpeg-windows-dependency-and-frame-import.md
         2026-07-29-compressed-sdr-fixture.md
+        2026-07-29-ffmpeg-continuous-decode-and-backpressure.md
 
     subsystems/
         application/

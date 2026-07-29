@@ -9,6 +9,7 @@ extern "C" {
 #include <libavutil/display.h>
 #include <libavutil/frame.h>
 #include <libavutil/hwcontext.h>
+#include <libavutil/mathematics.h>
 #include <libavutil/pixdesc.h>
 }
 
@@ -124,6 +125,29 @@ bool VideoFrameIdentity::isValid() const {
 bool VideoFrameTiming::isValid() const {
     return timeBase.isValid()
         && (!duration || *duration > 0);
+}
+
+std::optional<std::int64_t>
+VideoFrameTiming::ptsMicroseconds() const {
+    if (!isValid() || !pts)
+        return std::nullopt;
+    return av_rescale_q(
+        *pts,
+        {timeBase.numerator, timeBase.denominator},
+        AV_TIME_BASE_Q);
+}
+
+std::optional<std::int64_t>
+VideoFrameTiming::durationMicroseconds() const {
+    if (!isValid() || !duration)
+        return std::nullopt;
+    const std::int64_t converted = av_rescale_q(
+        *duration,
+        {timeBase.numerator, timeBase.denominator},
+        AV_TIME_BASE_Q);
+    return converted > 0
+        ? std::optional<std::int64_t>(converted)
+        : std::nullopt;
 }
 
 bool VideoFrameGeometry::isValid() const {

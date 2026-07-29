@@ -6,20 +6,14 @@
 
 #include <QString>
 
+#include "media/FfmpegVideoDecoder.h"
+
 class DecodedVideoFrame;
 struct VideoHardwareDecodeCapability;
 struct VideoFrameIdentity;
 
-struct FfmpegFirstFrameDiagnostics {
-    QString containerFormat;
-    QString decoderName;
-    QString decodePath;
-    QString hardwareFallbackReason;
-    int videoStreamIndex = -1;
-    bool hardwareAccelerated = false;
-
-    bool isValid() const;
-};
+using FfmpegFirstFrameDiagnostics =
+    FfmpegVideoStreamDiagnostics;
 
 struct FfmpegFirstFrameResult {
     std::shared_ptr<const DecodedVideoFrame> frame;
@@ -31,9 +25,8 @@ struct FfmpegFirstFrameResult {
     bool isCancelled() const;
 };
 
-// Synchronous first-frame boundary used to prove real demux, decode, frame
-// ownership, and rendering. Continuous playback will put the same decode
-// operations behind cancellation and bounded packet/frame queues.
+// Compatibility adapter used by focused frame/import tests. Production
+// playback and this helper share the same continuous decoder implementation.
 FfmpegFirstFrameResult decodeFirstVideoFrame(
     const QString &path,
     const VideoFrameIdentity &identity,

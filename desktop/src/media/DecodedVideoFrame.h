@@ -35,6 +35,8 @@ struct VideoFrameTiming {
     VideoFrameRational timeBase;
 
     bool isValid() const;
+    std::optional<std::int64_t> ptsMicroseconds() const;
+    std::optional<std::int64_t> durationMicroseconds() const;
 };
 
 struct VideoFrameGeometry {
