@@ -15,6 +15,7 @@ class ShellTestPresentationOutputState final : public QObject {
     Q_PROPERTY(QString swapChainFormat MEMBER m_swapChainFormat CONSTANT)
     Q_PROPERTY(QString videoSurfaceFormat MEMBER m_videoSurfaceFormat CONSTANT)
     Q_PROPERTY(QString videoSurfaceProducer MEMBER m_videoSurfaceProducer CONSTANT)
+    Q_PROPERTY(QString videoInputPath MEMBER m_videoInputPath CONSTANT)
     Q_PROPERTY(QString videoOutputPath MEMBER m_videoOutputPath CONSTANT)
     Q_PROPERTY(QString videoSynchronization MEMBER m_videoSynchronization CONSTANT)
     Q_PROPERTY(QString videoCopySummary MEMBER m_videoCopySummary CONSTANT)
@@ -47,6 +48,7 @@ private:
     QString m_swapChainFormat = QStringLiteral("Test swapchain");
     QString m_videoSurfaceFormat = QStringLiteral("Test surface");
     QString m_videoSurfaceProducer = QStringLiteral("Test producer");
+    QString m_videoInputPath = QStringLiteral("Test input");
     QString m_videoOutputPath = QStringLiteral("Test path");
     QString m_videoSynchronization = QStringLiteral("Test synchronization");
     QString m_videoCopySummary = QStringLiteral("No copies");
@@ -100,16 +102,31 @@ class ShellTestDiagnosticVideoSource final : public QObject {
                NOTIFY settingsChanged)
     Q_PROPERTY(bool animatePattern MEMBER m_animatePattern
                NOTIFY settingsChanged)
+    Q_PROPERTY(bool useLibplacebo READ useLibplacebo
+               WRITE setUseLibplacebo NOTIFY rendererChanged)
 
 public:
     explicit ShellTestDiagnosticVideoSource(QObject *parent)
         : QObject(parent) {}
 
+    bool useLibplacebo() const {
+        return m_useLibplacebo;
+    }
+
+    void setUseLibplacebo(bool value) {
+        if (value == m_useLibplacebo)
+            return;
+        m_useLibplacebo = value;
+        emit rendererChanged();
+    }
+
 signals:
     void settingsChanged();
+    void rendererChanged();
 
 private:
     float m_sourcePeakHeadroom = 1.0f;
     bool m_toneMappingEnabled = true;
     bool m_animatePattern = false;
+    bool m_useLibplacebo = true;
 };

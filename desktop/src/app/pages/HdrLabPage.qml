@@ -133,7 +133,14 @@ Item {
                 Label {
                     Layout.fillWidth: true
                     text: root.outputState.videoSurfaceProducer
-                        + " · " + root.outputState.videoSurfaceFormat
+                        + " · " + root.outputState.videoInputPath
+                    color: "#aeb6c5"
+                    elide: Text.ElideRight
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: root.outputState.videoSurfaceFormat
                     color: "#aeb6c5"
                     elide: Text.ElideRight
                 }
@@ -335,6 +342,35 @@ Item {
                         color: "white"
                     }
 
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+
+                    Label {
+                        text: qsTr("Diagnostic renderer")
+                        color: "white"
+                    }
+
+                    Switch {
+                        objectName: "videoRendererSwitch"
+                        text: checked
+                            ? qsTr("libplacebo")
+                            : qsTr("Procedural QRhi")
+                        checked: root.videoSource.useLibplacebo
+                        onToggled:
+                            root.videoSource.useLibplacebo = checked
+                    }
+
+                    Item {
+                        Layout.fillWidth: true
+                    }
+
+                    Label {
+                        text: qsTr("Comparison tool · not a player fallback")
+                        color: "#7f899b"
+                    }
                 }
 
                 Label {

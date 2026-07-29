@@ -4,6 +4,7 @@
 #include <memory>
 
 #include <QString>
+#include <libplacebo/gpu.h>
 
 class QRhi;
 class VideoTargetInterop;
@@ -25,8 +26,16 @@ struct GraphicsDeviceDiagnostics {
     bool isValid() const;
 };
 
-// Owns one native graphics device and the cross-platform QRhi built on it.
-// Backend-native types remain in the factory-selected implementation.
+struct LibplaceboGraphicsContext {
+    pl_log log = nullptr;
+    pl_gpu gpu = nullptr;
+
+    bool isValid() const;
+};
+
+// Owns one native graphics-device domain and its shared QRhi/libplacebo
+// contexts. Backend-native types remain in the factory-selected
+// implementation.
 class GraphicsDeviceDomain {
 public:
     virtual ~GraphicsDeviceDomain();
@@ -36,6 +45,8 @@ public:
 
     virtual QRhi &rhi() const = 0;
     virtual const GraphicsDeviceDiagnostics &diagnostics() const = 0;
+    virtual const LibplaceboGraphicsContext &
+        libplaceboContext() const = 0;
     virtual std::unique_ptr<VideoTargetInterop> createVideoTarget(
         const VideoTargetRequest &request) = 0;
 

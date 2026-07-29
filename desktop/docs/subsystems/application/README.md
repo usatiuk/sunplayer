@@ -87,10 +87,11 @@ logical coordinates and its visibility. `AppShell` publishes the current
 `HdrLabPage` viewport; the presentation engine consumes it without knowing page
 types or QML layout.
 
-`DiagnosticVideoSource` separately owns the procedural pattern peak, diagnostic
-tone-mapping switch, animation state and cadence, and content revision. It
-creates a new producer whenever the graphics device is recreated, keeping
-source-specific state out of the presentation engine.
+`DiagnosticVideoSource` separately owns the pattern peak, diagnostic
+tone-mapping switch, animation state and cadence, content revision, and
+HDR-Lab-only renderer selection. It creates a new producer when the graphics
+device is recreated or that diagnostic selection changes, keeping
+source-specific state and producer choice out of the presentation engine.
 
 None of these values are persisted. They should not be grown into the final
 player settings indiscriminately: player preferences, playback-session state,

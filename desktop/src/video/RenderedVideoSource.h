@@ -22,6 +22,9 @@ public:
     virtual void prepareForPresentation(
         std::chrono::steady_clock::time_point now) = 0;
     virtual std::uint64_t contentRevision() const = 0;
+    virtual std::uint64_t producerConfigurationRevision() const {
+        return 1;
+    }
     virtual bool wantsContinuousFrames() const = 0;
     virtual std::unique_ptr<RenderedVideoProducer> createProducer(
         GraphicsDeviceDomain &graphicsDevice) const = 0;

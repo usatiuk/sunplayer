@@ -42,6 +42,9 @@ struct RenderedVideoSurfaceDescription {
     RenderedVideoAlphaMode alphaMode =
         RenderedVideoAlphaMode::Unknown;
     float referenceWhiteNits = 0.0f;
+    // A measured zero is valid and differs from unavailable metadata.
+    bool targetMinimumLuminanceKnown = false;
+    float targetMinimumLuminanceNits = 0.0f;
     float targetPeakHeadroom = 0.0f;
 
     bool isValid() const;

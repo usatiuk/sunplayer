@@ -101,6 +101,10 @@ QrhiVideoTarget::qrhiRenderPassDescriptor() const {
     return m_renderPassDescriptor.get();
 }
 
+pl_tex QrhiVideoTarget::libplaceboRenderTarget() const {
+    return nullptr;
+}
+
 QRhiTexture &QrhiVideoTarget::textureForComposition() const {
     Q_ASSERT(m_texture);
     return *m_texture;

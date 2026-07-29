@@ -10,10 +10,14 @@ class QRhiTexture;
 
 struct RenderedVideoProducerDiagnostics {
     QString producerName;
+    QString inputPath;
+    std::uint32_t knownInputCpuTransfersPerInputFrame = 0;
     VideoTargetInteropDiagnostics target;
 
     bool isValid() const {
-        return !producerName.isEmpty() && target.isValid();
+        return !producerName.isEmpty()
+            && !inputPath.isEmpty()
+            && target.isValid();
     }
 };
 

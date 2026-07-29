@@ -17,15 +17,19 @@ unimplemented.
 Track under the backend-realization section of
 `docs/subsystems/graphics/PLAN.md`.
 
-### No libplacebo renderer or decoded-video producer
+### No decoded-video importer or effective source-metadata pipeline
 
-The explicit video surface and narrow final compositor now exist, but the
-current producer still renders only a procedural pattern with a simple
-diagnostic tone mapper. This is intentionally not the video color pipeline.
-A pinned D3D11-only libplacebo dependency is available, but its persistent
-renderer, QRhi target bridge, and FFmpeg source metadata normalization are
-still required for SDR, HDR10/PQ, HLG, dynamic HDR, and differing source color
-spaces.
+The explicit video surface, narrow final compositor, persistent libplacebo
+renderer, and direct D3D11 QRhi target bridge now exist. Their analytic input
+proves relative sRGB and target-relative BT.2020/PQ rendering across multiple
+active reference-white values, including the explicit conversion from
+libplacebo's 203-nit linear convention to Sunroom's display-relative surface
+convention. It does not yet prove that one fixed, absolutely mastered PQ frame
+is preserved correctly while the output target changes. This is an offscreen
+numerical result, not physical-display validation. FFmpeg software-plane and
+hardware-surface import plus effective source-metadata normalization are still
+required for real SDR, HDR10/PQ, HLG, dynamic HDR, ranges, chroma layouts, and
+differing source color spaces.
 
 Track under graphics milestones 3–4.
 
@@ -39,12 +43,13 @@ this maintenance cost.
 
 ### Runtime HDR validation and graphics tests
 
-The Debug target builds and a headless D3D11 test captures the RGBA16F producer
-surface plus SDR and extended-linear offscreen composition, but the project has
-no recorded cross-display runtime matrix, extended-linear swapchain capture,
-renderer image corpus, deterministic device-loss test, or automated physical
-HDR validation. Presentation behavior must not be treated as portable or
-colorimetrically verified until those tests exist.
+The Debug target builds and a headless D3D11 test captures both QRhi- and
+libplacebo-produced RGBA16F surfaces plus SDR and extended-linear offscreen
+composition. The project still has no recorded cross-display runtime matrix,
+extended-linear swapchain capture, maintained renderer image corpus,
+deterministic device-loss test, or automated physical HDR validation.
+Presentation behavior must not be treated as portable or colorimetrically
+verified until those tests exist.
 
 ### Flattened translucent Qt Quick content
 

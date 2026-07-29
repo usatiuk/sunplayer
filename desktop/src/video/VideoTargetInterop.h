@@ -6,6 +6,9 @@
 
 #include "video/RenderedVideoSurface.h"
 
+struct pl_tex_t;
+using pl_tex = const pl_tex_t *;
+
 class QRhiCommandBuffer;
 class QRhiRenderPassDescriptor;
 class QRhiTexture;
@@ -50,8 +53,8 @@ struct VideoTargetRequest {
 struct VideoTargetInteropDiagnostics {
     VideoOutputPath outputPath = VideoOutputPath::Unavailable;
     QString synchronizationMode;
-    std::uint32_t knownGpuCopiesPerRender = 0;
-    std::uint32_t knownCpuTransfersPerRender = 0;
+    std::uint32_t knownOutputGpuCopiesPerRender = 0;
+    std::uint32_t knownOutputCpuTransfersPerRender = 0;
     QString fallbackReason;
 
     bool isValid() const;
@@ -85,6 +88,9 @@ public:
     virtual QRhiTextureRenderTarget *qrhiRenderTarget() const = 0;
     virtual QRhiRenderPassDescriptor *
         qrhiRenderPassDescriptor() const = 0;
+    // Libplacebo producers use this cross-platform view. QRhi producers
+    // return null. Backend-native texture handles never cross this boundary.
+    virtual pl_tex libplaceboRenderTarget() const = 0;
     virtual QRhiTexture &textureForComposition() const = 0;
     virtual std::uint64_t compositionTextureRevision() const = 0;
     virtual const VideoTargetInteropDiagnostics &diagnostics() const = 0;

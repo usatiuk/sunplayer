@@ -78,6 +78,13 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY2(object, qPrintable(componentErrorText(component)));
     QQuickItem *const rootItem = qobject_cast<QQuickItem *>(object.get());
     QVERIFY(rootItem);
+    QObject *const rendererSwitch =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("videoRendererSwitch"));
+    QVERIFY(rendererSwitch);
+    QCOMPARE(
+        rendererSwitch->property("checked").toBool(),
+        true);
 
     QQuickWindow quickWindow;
     rootItem->setParentItem(quickWindow.contentItem());
@@ -97,6 +104,11 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_VERIFY(!videoViewport.visible());
     rootItem->setVisible(true);
     QTRY_VERIFY(videoViewport.visible());
+
+    videoSource.setUseLibplacebo(false);
+    QTRY_COMPARE(
+        rendererSwitch->property("checked").toBool(),
+        false);
 }
 
 QTEST_MAIN(AppShellTest)

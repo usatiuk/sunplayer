@@ -63,23 +63,37 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 As of 2026-07-29, the repository contains a Windows presentation foundation,
 not yet a media player:
 
-* A factory-selected graphics-device domain owns the current D3D11 QRhi and
-  device generation; the presentation engine owns its window swapchain.
+* A factory-selected graphics-device domain owns the current D3D11 QRhi,
+  same-device libplacebo GPU, and device generation; the presentation engine
+  owns its window swapchain.
 * Qt Quick renders through `QQuickRenderControl` into an application-owned
   RGBA16F texture.
 * A thin QML application shell hosts the retained HDR Lab page. The active page
   publishes a generic root-coordinate video viewport with explicit visibility.
-* A temporary QRhi producer renders the procedural HDR diagnostic pattern into
-  an explicitly described, viewport-sized RGBA16F video surface through the
-  shared source, producer, and target lifecycle contracts.
+  HDR Lab uses libplacebo by default and can select the retained procedural
+  QRhi producer for diagnostic comparison; that switch is not a playback
+  fallback or player preference.
+* Both diagnostic producers render the same grayscale, color-spectrum, and
+  stepped pattern through the shared source, producer, and target lifecycle
+  contracts. The QRhi implementation uses its temporary diagnostic shader.
+  The libplacebo implementation models a changing software frame with one
+  persistent 640×360 RGBA32F input texture and buffer, one observable CPU
+  upload per changed input frame, cached reuse for target-only rerenders, and
+  GPU scaling through a persistent renderer. Its CPU work and allocation size
+  do not grow with the window.
+* On Windows, libplacebo directly wraps the QRhi-owned RGBA16F D3D11 texture,
+  shares QRhi's immediate context without an output copy, and normalizes its
+  internal 203-nit linear convention to Sunroom's active-reference-white
+  surface convention.
 * A narrow final QRhi pass places that already processed video surface,
   combines it with the UI, and presents extended-linear sRGB/scRGB when
   available, with an SDR fallback. It can also compose UI without an active
   video layer.
 * Qt screen state, QRhi swapchain HDR information, and Windows Advanced Color
   telemetry feed a shared presentation snapshot and diagnostic UI.
-* Diagnostics expose the graphics adapter, producer, output-target path,
-  synchronization mode, known copies/transfers, and fallback reason.
+* Diagnostics distinguish the producer input path and its CPU transfers from
+  output-target GPU copies, output CPU transfers, synchronization, and fallback
+  reason.
 * Rendering is demand-driven outside explicit animation, and the graphics
   foundation handles resize, output changes, surface destruction, swapchain
   invalidation, and bounded device recovery.
@@ -87,19 +101,25 @@ not yet a media player:
   MSVC, and a pinned D3D11-only libplacebo 7.360.1 dependency built through
   the project-local vcpkg configuration.
 
-The libplacebo dependency is integrated, but its renderer and QRhi target
-bridge are not. FFmpeg, libass, decoded video, audio, playback, file opening,
-subtitles, and persistence are not integrated. CTest/Qt Test coverage exists
-for pure presentation-target policy, video-viewport state, the real QML
-shell's viewport publication, rendered-video surface validity/invalidation,
-the libplacebo binary boundary, and a real D3D11 offscreen
-producer/compositor capture. Whole-application scenarios do not yet exist.
+FFmpeg, libass, decoded video, audio, playback, file opening, subtitles, and
+persistence are not integrated. CTest/Qt Test coverage exists for pure
+presentation-target policy, video-viewport state, the real QML shell's
+viewport publication and diagnostic renderer selection, rendered-video surface
+validity/invalidation, the libplacebo binary boundary, and real D3D11 offscreen
+QRhi and libplacebo producer/compositor capture. The GPU capture covers SDR
+targets at 80, 100, and 203 nits and a target-relative PQ diagnostic at 100 and
+203 nits. A sustained headless probe also exercises 60 animated 640×360 frames
+into a 1100×600 target without viewport-sized CPU generation.
+Whole-application scenarios, a fixed mastered PQ source moved between targets,
+and physical-output validation do not yet exist.
 
-The next implementation slice introduces a persistent libplacebo renderer for
-known SDR and HDR software-backed images. The real Player page arrives with the
-file/session model and first FFmpeg-decoded frame rather than as disconnected
-controls. Testing continues alongside that work with real-backend capture and
-the first deterministic frame scenario.
+The next media slice establishes the FFmpeg dependency and a semantic frame
+contract with explicit software-plane and hardware-surface import paths before
+displaying a first decoded frame. Playback prefers platform hardware decoding
+when supported, while keeping software decode observable and functional. The
+real Player page arrives with that file/session model rather than as
+disconnected controls. Playback uses libplacebo as its video renderer; the
+procedural producer remains HDR-Lab-only diagnostic tooling.
 
 ## Subsystems
 
@@ -177,10 +197,12 @@ Documentation: `docs/subsystems/graphics/`
   verification
 * [x] Shared rendered-video producer contract
 * [x] Direct QRhi target lifecycle and output-path diagnostic schema
-* [ ] Native libplacebo target interop and observable copy/fallback paths
-* [ ] Persistent libplacebo renderer lifecycle
+* [x] Native D3D11 libplacebo direct-target interop and observable zero-copy
+  path
+* [ ] Same-device GPU-copy and explicit CPU target fallbacks
+* [x] Persistent libplacebo GPU and renderer lifecycle
 * [ ] Effective FFmpeg metadata mapping
-* [ ] Software-frame upload path
+* [x] Deterministic software-backed RGBA32F diagnostic upload path
 * [ ] Hardware-frame importer abstraction
 * [ ] D3D11 importer
 * [ ] Vulkan, VAAPI, and DRM PRIME importer
@@ -261,6 +283,7 @@ Documentation: `docs/subsystems/diagnostics/`
 * [x] Rendered-surface description and invalidation tests
 * [x] Pinned libplacebo dependency and public-API lifecycle test
 * [x] Real D3D11 QRhi compositor capture smoke test
+* [x] Real D3D11 libplacebo SDR/PQ surface and compositor capture
 * [ ] Deterministic first-frame and playback scenarios
 * [ ] Playback and seeking tests
 * [ ] Color-metadata normalization tests

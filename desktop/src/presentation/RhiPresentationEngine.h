@@ -48,6 +48,7 @@ public:
 private:
     void renderFrame();
     bool initializeDevice();
+    bool refreshVideoProducer();
     bool createSwapChain();
     bool resizeSwapChain(bool force = false);
     bool createOrResizeSwapChain(const char *operation);
@@ -89,5 +90,6 @@ private:
     bool m_recoveringDevice = false;
     bool m_retriedFrameError = false;
     int m_deviceRecoveryAttempts = 0;
+    std::uint64_t m_videoProducerConfigurationRevision = 0;
     std::uint64_t m_boundVideoTextureRevision = 0;
 };

@@ -4,10 +4,41 @@
 
 #include "graphics/GraphicsDeviceDomain.h"
 #include "video/DiagnosticVideoProducer.h"
+#include "video/LibplaceboDiagnosticVideoProducer.h"
+
+namespace {
+constexpr QSize defaultDiagnosticInputFrameSize{640, 360};
+}
 
 DiagnosticVideoSource::DiagnosticVideoSource(
         VideoTargetReadback readback, QObject *parent)
-    : RenderedVideoSource(parent), m_readback(readback) {}
+    : DiagnosticVideoSource(
+        VideoProducerApi::Libplacebo,
+        readback,
+        defaultDiagnosticInputFrameSize,
+        parent) {}
+
+DiagnosticVideoSource::DiagnosticVideoSource(
+        VideoProducerApi producerApi,
+        VideoTargetReadback readback,
+        QObject *parent)
+    : DiagnosticVideoSource(
+        producerApi,
+        readback,
+        defaultDiagnosticInputFrameSize,
+        parent) {}
+
+DiagnosticVideoSource::DiagnosticVideoSource(
+        VideoProducerApi producerApi,
+        VideoTargetReadback readback,
+        const QSize &inputFrameSize,
+        QObject *parent)
+    : RenderedVideoSource(parent),
+      m_producerApi(producerApi),
+      m_readback(readback),
+      m_inputFrameSize(inputFrameSize) {
+    Q_ASSERT(!m_inputFrameSize.isEmpty());
+}
 
 float DiagnosticVideoSource::sourcePeakHeadroom() const {
     return m_sourcePeakHeadroom;
@@ -21,8 +52,16 @@ bool DiagnosticVideoSource::animatePattern() const {
     return m_animatePattern;
 }
 
+bool DiagnosticVideoSource::useLibplacebo() const {
+    return m_producerApi == VideoProducerApi::Libplacebo;
+}
+
 float DiagnosticVideoSource::phase() const {
     return m_phase;
+}
+
+QSize DiagnosticVideoSource::inputFrameSize() const {
+    return m_inputFrameSize;
 }
 
 void DiagnosticVideoSource::setSourcePeakHeadroom(float value) {
@@ -48,6 +87,20 @@ void DiagnosticVideoSource::setAnimatePattern(bool value) {
     markContentChanged();
 }
 
+void DiagnosticVideoSource::setUseLibplacebo(bool value) {
+    const VideoProducerApi producerApi = value
+        ? VideoProducerApi::Libplacebo
+        : VideoProducerApi::Qrhi;
+    if (producerApi == m_producerApi)
+        return;
+    m_producerApi = producerApi;
+    ++m_producerConfigurationRevision;
+    if (m_producerConfigurationRevision == 0)
+        ++m_producerConfigurationRevision;
+    emit rendererChanged();
+    emit updateRequested();
+}
+
 void DiagnosticVideoSource::prepareForPresentation(
         std::chrono::steady_clock::time_point now) {
     if (!m_animatePattern) {
@@ -70,6 +123,11 @@ std::uint64_t DiagnosticVideoSource::contentRevision() const {
     return m_contentRevision;
 }
 
+std::uint64_t
+DiagnosticVideoSource::producerConfigurationRevision() const {
+    return m_producerConfigurationRevision;
+}
+
 bool DiagnosticVideoSource::wantsContinuousFrames() const {
     return m_animatePattern;
 }
@@ -77,8 +135,16 @@ bool DiagnosticVideoSource::wantsContinuousFrames() const {
 std::unique_ptr<RenderedVideoProducer>
 DiagnosticVideoSource::createProducer(
         GraphicsDeviceDomain &graphicsDevice) const {
-    return std::make_unique<DiagnosticVideoProducer>(
-        graphicsDevice, *this, m_readback);
+    switch (m_producerApi) {
+    case VideoProducerApi::Qrhi:
+        return std::make_unique<DiagnosticVideoProducer>(
+            graphicsDevice, *this, m_readback);
+    case VideoProducerApi::Libplacebo:
+        return std::make_unique<
+            LibplaceboDiagnosticVideoProducer>(
+                graphicsDevice, *this, m_readback);
+    }
+    return {};
 }
 
 void DiagnosticVideoSource::markContentChanged() {

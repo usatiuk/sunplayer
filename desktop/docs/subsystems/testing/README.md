@@ -3,8 +3,8 @@
 ## Status
 
 Sunroom has CTest/Qt Test targets for pure presentation-target policy,
-video-viewport state, rendered-video surface validity/reuse, and a real
-headless D3D11 QRhi producer/compositor capture. A non-presenting Qt Quick
+video-viewport state, rendered-video surface validity/reuse, and real
+headless D3D11 QRhi and libplacebo producer/compositor capture. A non-presenting Qt Quick
 component test covers the real QML shell's initial-property and viewport
 publication contract. A dependency integration test verifies the pinned
 installed libplacebo configuration and a real object lifecycle across the
@@ -21,8 +21,9 @@ the whole player:
 * Active video-viewport geometry and visibility.
 * Render-surface device/display-generation validity.
 * A real D3D11 QRhi offscreen composition readback.
-* The real pinned libplacebo DLL, installed feature configuration, and basic
-  lifecycle.
+* The real pinned libplacebo DLL, installed feature configuration, shared
+  D3D11 GPU/texture lifecycle, analytic SDR/PQ rendering, and final
+  composition.
 * A recorded Windows SDR/HDR manual matrix.
 
 As media subsystems arrive, coverage moves outward through real libplacebo,
@@ -70,7 +71,8 @@ noninteractive error mode before application construction.
 
 The libplacebo dependency test also uses `QTEST_APPLESS_MAIN`. It exercises
 public libplacebo API rather than a mock, while remaining intentionally below
-the future GPU-rendering boundary.
+the GPU-rendering boundary. The QRhi integration test's second case crosses
+that boundary with the production D3D11 domain and libplacebo renderer.
 
 The QML shell component test uses `QTEST_MAIN` because Qt Quick Controls and
 its hidden `QQuickWindow` scene require `QGuiApplication`. It never shows a
@@ -100,11 +102,12 @@ Current verified coverage:
 | --- | --- |
 | Configured Windows Debug build | Builds successfully |
 | Focused automated tests | Six CTest targets pass, covering presentation-target policy, video-viewport state, real QML shell publication, rendered-video surface lifecycle, dependency integration, and target-path diagnostic policy |
-| libplacebo dependency boundary | The real DLL loads; pinned version, installed D3D11/Shaderc/built-in-DOVI configuration, disabled Vulkan/OpenGL/external-libdovi features, runtime staging, and log lifecycle pass; no D3D11 GPU creation, renderer, or GPU interop is claimed |
-| Real QRhi capture | Factory-selected D3D11 domain, shared source/producer contracts, direct RGBA16F target, resize/revision rebinding, hidden-video fallback, and final SDR/extended-linear composition readbacks pass |
+| libplacebo dependency boundary | The real DLL loads; pinned version, installed D3D11/Shaderc/built-in-DOVI configuration, disabled Vulkan/OpenGL/external-libdovi features, runtime staging, and log lifecycle pass |
+| Real QRhi/libplacebo capture | Factory-selected D3D11 domain; shared QRhi device and immediate context; persistent libplacebo renderer; fixed-size persistent software input; distinct per-input-frame and per-output-render transfer diagnostics; direct wrapped RGBA16F target; aligned pattern layout; sRGB normalization at 80, 100, and 203 nits; target-relative PQ normalization at 100 and 203 nits; minimum-target value/known-state contract; zero output copies; pixel-validated resize/rewrap and producer rebinding; final composition readbacks; and a non-gating 60-frame throughput probe pass |
 | Built application startup | Automated four-second GUI/device/swapchain liveness smoke passed; not yet a registered scenario |
 | Recorded SDR/HDR runtime matrix | Not implemented |
 | Media pipeline scenarios | Blocked on media pipeline implementation |
+| Fixed mastered PQ source across display targets | Not implemented |
 | Physical output measurement | Deferred |
 
 Missing coverage must remain visible in this table or the active testing plan

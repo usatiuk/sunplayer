@@ -6,11 +6,13 @@ The repository contains a working Windows presentation prototype. It proves the
 application-owned QRhi, redirected Qt Quick, final-compositor, extended-linear
 presentation, display-observation, and recovery model.
 
-It is not yet a media-backed video renderer. A temporary producer renders the
-procedural HDR test pattern into the explicit display-targeted video surface
-that libplacebo will later produce. The pinned D3D11-only libplacebo dependency
-is integrated, but its renderer and QRhi target bridge are not. FFmpeg, decoded
-frames, subtitles, and playback scheduling are not integrated.
+It is not yet a media-backed video renderer. HDR Lab uses the real libplacebo
+renderer and direct D3D11 QRhi target bridge by default, with the retained
+procedural QRhi producer available only for diagnostic A/B comparison. Both
+receive the same analytic pattern layout and nominal samples. Different
+tone-mapping and color-processing results are expected; unrelated pattern
+geometry is not. FFmpeg, decoded frames, subtitles, and playback scheduling are
+not integrated.
 
 The currently accepted implementation is deliberately narrower than the
 cross-platform target:
@@ -18,10 +20,10 @@ cross-platform target:
 | Area | Current state |
 | --- | --- |
 | Operating system | Windows |
-| Graphics domain | Factory-selected D3D11 implementation owning QRhi and device generation |
+| Graphics domain | Factory-selected D3D11 implementation owning QRhi, same-device libplacebo GPU, and device generation |
 | Presentation | Extended-linear sRGB/scRGB when supported, otherwise SDR |
 | Qt Quick | Redirected into an application-owned full-window RGBA16F texture |
-| Video | Active page viewport → shared producer → direct QRhi target → display-targeted RGBA16F surface |
+| Video | Shared QRhi or analytic libplacebo producer → direct target → display-targeted RGBA16F surface |
 | Display telemetry | Qt screen metrics, QRhi swapchain HDR information, and Windows Advanced Color |
 | Rendering cadence | Demand-driven, continuous only while the pattern or UI animates |
 
@@ -62,7 +64,9 @@ PresentationWindow
     ▼
 RhiPresentationEngine
     ├── GraphicsDeviceDomain
-    │       └── D3D11 backend → application-owned QRhi
+    │       └── D3D11 backend
+    │               ├── application-owned QRhi
+    │               └── same-device libplacebo GPU
     ├── QRhi swapchain
     ├── QuickUiLayer
     │       └── QQuickRenderControl → full-window RGBA16F texture
@@ -71,9 +75,13 @@ RhiPresentationEngine
     │       ├── QRhiSwapChainHdrInfo
     │       └── WindowsDisplayStateProvider
     ├── DiagnosticVideoSource
-    │       └── content state + cadence → DiagnosticVideoProducer
-    │               └── pattern + diagnostic tone map
-    │                       → QrhiVideoTarget → RGBA16F video surface
+    │       └── content state + cadence
+    │               ├── DiagnosticVideoProducer
+    │               │       └── QRhi pattern → QrhiVideoTarget
+    │               └── LibplaceboDiagnosticVideoProducer
+    │                       └── sRGB or BT.2020/PQ RGBA32F
+    │                           → D3D11LibplaceboVideoTarget
+    │                           → shared RGBA16F video surface
     └── HdrCompositor
             ├── display-targeted video surface or empty-layer binding
             ├── redirected Qt Quick texture
@@ -90,14 +98,16 @@ thread or playback thread yet.
 | `PresentationWindow` | Owns presentation-facing state, forwards supported input to the redirected Quick window, and translates native window events into engine invalidation or teardown. |
 | `VideoViewportState` | Carries the active QML page's root-logical video rectangle and visibility into presentation code without exposing page types. |
 | `GraphicsBackendFactory` | Selects Qt Quick API, window surface type, and graphics-device implementation without exposing native types to application or presentation code. |
-| `GraphicsDeviceDomain` | Owns QRhi, device generation, backend/adapter diagnostics, and the native implementation's teardown. |
+| `GraphicsDeviceDomain` | Owns QRhi, the same-device libplacebo GPU, device generation, backend/adapter diagnostics, target selection, and native teardown. |
 | `RhiPresentationEngine` | Owns the swapchain, render-pass lifecycle, frame scheduling, output verification, and device recovery around a graphics domain. |
 | `QuickUiLayer` | Creates a `QQuickRenderControl` scene on the engine's QRhi and renders it into a transparent RGBA16F texture. |
 | `RenderedVideoSource` | Device-independent content revision, cadence, invalidation, and producer-factory contract used by the engine. |
-| `DiagnosticVideoSource` | Owns procedural-pattern controls, animation phase and cadence, and diagnostic producer creation. |
+| `DiagnosticVideoSource` | Owns procedural-pattern controls, animation phase and cadence, and explicit QRhi or libplacebo diagnostic producer creation. |
 | `RenderedVideoProducer` | Source-independent lifecycle, render, completion, and composition-texture contract used by the engine. |
 | `VideoTargetInterop` | Owns the renderer-to-compositor texture boundary and reports output path, synchronization, copies, transfers, and fallback reason. |
 | `DiagnosticVideoProducer` | Implements the producer contract with the temporary pattern pipeline and direct `QrhiVideoTarget`. |
+| `LibplaceboDiagnosticVideoProducer` | Owns a persistent renderer and analytic RGBA32F upload texture; describes sRGB or BT.2020/PQ input and a linear BT.709 target to libplacebo. |
+| `D3D11LibplaceboVideoTarget` | Wraps the QRhi-owned RGBA16F D3D11 texture as a `pl_tex` and brackets same-immediate-context work through QRhi external commands. |
 | `RenderedVideoSurfaceState` | Pure description and device/display/content reuse key for a completed display-targeted surface. It does not own a native texture. |
 | `HdrCompositor` | Places an optional already processed video surface, converts and blends the flattened UI layer, applies presentation scaling, and encodes the swapchain. It owns a valid fallback binding for UI-only frames and has no source peak, transfer, metadata, or tone-mapping inputs. |
 | `PresentationOutputState` | Combines screen metrics, operating-system display state, and the successfully created swapchain's properties into one QML-facing presentation snapshot. |
@@ -122,7 +132,8 @@ The current destruction order is an invariant:
 
 1. Destroy the compositor and swapchain resources that depend on the visible
    render-pass descriptor.
-2. Destroy the diagnostic producer and its surface resources.
+2. Destroy the diagnostic producer, its libplacebo renderer/input resources
+   when selected, and its surface resources.
 3. Disconnect and destroy `QuickUiLayer`, allowing it to invalidate its scene
    and release QRhi resources.
 4. Destroy the graphics-device domain and therefore the QRhi device.
@@ -278,10 +289,18 @@ available.
 
 ### Rendered-video surface
 
-`DiagnosticVideoSource` owns the procedural pattern state, revision, and
-animation cadence. Its `DiagnosticVideoProducer` generates the grayscale,
-color-spectrum, and stepped ramps and applies their optional diagnostic tone
-mapper. It writes one opaque, viewport-sized texture with the contract recorded in
+`DiagnosticVideoSource` owns the pattern state, revision, animation cadence,
+and HDR-Lab-only renderer selection. Both producers generate the same
+grayscale, color-spectrum, stepped ramps, and separator bands. The QRhi
+producer applies its temporary diagnostic tone mapper. The libplacebo producer
+keeps a persistent 640×360 software-frame-style RGBA32F input and backing
+buffer, uploads it as sRGB-encoded RGB for SDR or target-relative BT.2020/PQ
+RGB with explicit HDR metadata, and applies libplacebo's real color pipeline.
+The upload is cached by the input-frame values it actually depends on, so a
+target-only resize or display change reuses the source texture. The input size
+is independent of the viewport; libplacebo performs scaling.
+Both producers write one opaque, viewport-sized texture with the contract
+recorded in
 [ADR 0003](../../decisions/0003-display-targeted-video-surface.md):
 
 * RGBA16F linear sRGB/BT.709 D65 with extended floating-point values.
@@ -291,6 +310,23 @@ mapper. It writes one opaque, viewport-sized texture with the contract recorded 
 * RGB `1.0` means the recorded SDR/reference-white luminance.
 * Color processing and tone mapping for the effective display target are
   complete.
+
+Platform display adapters observe native facts such as HDR enablement,
+luminance capabilities, and system SDR white. Shared presentation policy turns
+those facts into one physical display target. The producer renders for that
+target and converts library-internal units into the surface contract:
+libplacebo's linear `1.0 = 203 nits` convention is scaled at pre-output by
+`203 / referenceWhiteNits`, so the stored surface always uses
+`1.0 = active reference white`. SDR diagnostic input remains relative. The
+diagnostic PQ values are derived from target-relative pattern headroom, so the
+100/203-nit comparison validates output normalization but is not a fixed
+mastered-source test. The compositor does not know about libplacebo's 203-nit
+convention.
+
+The surface also preserves minimum target luminance as a value plus a known
+state. Libplacebo treats numeric zero as unknown, so the backend adapter maps a
+known physical zero to `PL_COLOR_HDR_BLACK` only while populating libplacebo's
+target metadata.
 
 The final compositor does not know the source peak, pattern phase, tone-map
 setting, source transfer function, or HDR metadata. It places the video layer,
@@ -302,12 +338,13 @@ composition for that frame. The compositor retains a valid internal texture
 binding but uses zero video geometry, leaving only its background and the
 redirected UI.
 
-The future FFmpeg/libplacebo path will replace the temporary producer, not this
-consumer contract. Effective source metadata can describe SDR, HDR10/PQ, HLG,
-dynamic HDR, different primaries, ranges, chroma locations, and bit depths.
-Supported forms will be normalized and rendered upstream into the same surface;
-unsupported or ambiguous forms must produce observable fallbacks. None of
-those media formats are implemented by the current diagnostic producer.
+The future FFmpeg importer will replace the analytic upload input, not this
+consumer contract or the libplacebo renderer. Effective source metadata can
+describe SDR, HDR10/PQ, HLG, dynamic HDR, different primaries, ranges, chroma
+locations, and bit depths. Supported forms will be normalized and rendered
+upstream into the same surface; unsupported or ambiguous forms must produce
+observable fallbacks. No actual media format is decoded by the diagnostic
+producer.
 
 ### Qt Quick layer
 
@@ -420,15 +457,23 @@ The configured Debug target builds successfully with Qt 6.11.1 and MSVC after
 initializing the Visual Studio developer environment. Pure presentation-target,
 viewport, rendered-surface reuse, and target-diagnostic policy have automated
 coverage. A headless real D3D11 QRhi test creates the production graphics
-domain, drives the diagnostic producer through the shared interface, renders
+domain, drives both diagnostic producers through the shared interface, renders
 into RGBA16F, composes with the production final pass, and reads back both
-boundaries. It checks analytic extended values, orientation, placement, SDR
-encoding, non-unity extended-linear scaling, post-submission surface reuse,
-accepted submissions with committed and discarded rendered states, target
-resize/revision-driven compositor rebinding, hidden-video fallback,
-premultiplied UI blending, and the direct zero-copy target report.
-A renderer image corpus, cross-backend capture, and recorded runtime display
-matrix do not exist yet.
+boundaries. The QRhi case checks analytic extended values, orientation,
+placement, SDR encoding, non-unity extended-linear scaling, post-submission
+surface reuse, accepted submissions with committed and discarded rendered
+states, target resize/revision-driven compositor rebinding, hidden-video
+fallback, and premultiplied UI blending. The libplacebo case checks sRGB and
+BT.2020/PQ input, pattern-layout correspondence, reference-white normalization
+for SDR targets at 80, 100, and 203 nits and a target-relative PQ diagnostic at
+100 and 203 nits, target minimum luminance, tone mapping into declared
+headroom, one explicit software input upload, shared-target synchronization,
+zero output copies, final linear composition, pixel-validated texture rewrap
+after resize, and producer destruction/rebinding. A sustained 60-frame probe
+uses a fixed 640×360 input and a 1100×600 target; it reports local throughput
+without imposing a machine-independent CI threshold. A fixed mastered PQ
+fixture, renderer image corpus, cross-backend capture, and recorded runtime
+display matrix do not exist yet.
 
 The built GUI has also completed an automated four-second startup liveness
 smoke with the configured Qt runtime. It created the normal application path

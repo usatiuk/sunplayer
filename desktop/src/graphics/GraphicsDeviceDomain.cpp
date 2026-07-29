@@ -9,6 +9,10 @@ bool GraphicsDeviceDiagnostics::isValid() const {
         && !adapterName.isEmpty();
 }
 
+bool LibplaceboGraphicsContext::isValid() const {
+    return log && gpu;
+}
+
 GraphicsDeviceDomain::GraphicsDeviceDomain() {
     static std::atomic_uint64_t nextGeneration{1};
     do {

@@ -174,6 +174,8 @@ RenderedVideoProducerDiagnostics
 DiagnosticVideoProducer::diagnostics() const {
     RenderedVideoProducerDiagnostics result;
     result.producerName = QStringLiteral("Diagnostic pattern");
+    result.inputPath =
+        QStringLiteral("GPU-generated procedural pattern");
     result.target = m_target->diagnostics();
     Q_ASSERT(result.isValid());
     return result;

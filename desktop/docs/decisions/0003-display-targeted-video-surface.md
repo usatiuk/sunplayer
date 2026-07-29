@@ -10,8 +10,9 @@ primaries, transfer functions, ranges, bit depths, static metadata, and dynamic
 metadata. Letting those source distinctions reach the final compositor would
 couple presentation, UI composition, and every future media format.
 
-The first concrete producer is only a procedural diagnostic pattern, but it
-needs to cross the same boundary that libplacebo-rendered video will use.
+The first concrete producers render a diagnostic pattern through procedural
+QRhi and libplacebo paths, but both need to cross the same boundary that
+decoded video will use.
 
 ## Decision
 
@@ -41,7 +42,8 @@ device. A completed surface records:
 * The graphics-device generation.
 * The effective display-target revision.
 * The producer-content revision.
-* Its pixel size, reference white, target headroom, and fixed color semantics.
+* Its pixel size, reference white, target minimum-luminance value and known
+  state, target headroom, and fixed color semantics.
 
 Reuse requires an exact match of that state. Swapchain identity is
 intentionally absent, so an equivalent swapchain recreation does not discard a
@@ -56,6 +58,23 @@ mapping, scaling, and dithering as applicable. SDR, HDR10/PQ, HLG, dynamic HDR,
 and other supported source forms therefore converge on this one consumer
 contract. This decision defines the convergence point; it does not claim those
 source formats are implemented yet.
+
+Platform display adapters own native observation and report physical display
+facts. Shared presentation policy resolves those facts into the effective
+target—including minimum luminance when known—supplied to the producer. The
+producer must convert renderer-internal units into this surface contract;
+specifically, libplacebo's linear
+`1.0 = 203 nits` convention is converted so surface `1.0` always means the
+active reference white. The final compositor remains unaware of that
+conversion and of the source format. Platform presentation then maps the final
+composition to the selected OS swapchain convention without tone-mapping the
+video again.
+
+Sunroom preserves the distinction between unknown minimum luminance and a
+known physical zero. Renderer adapters translate that representation at their
+API boundary. In particular, libplacebo reserves numeric zero for unknown
+metadata, so its adapter uses `PL_COLOR_HDR_BLACK` to represent Sunroom's known
+zero without changing the physical value stored in shared state.
 
 ## Consequences
 
@@ -77,8 +96,8 @@ Costs and limitations:
 * Active viewport dimensions are aligned to integer physical pixels, so
   fractional device-pixel ratios can move an edge by less than one pixel
   relative to its logical QML geometry.
-* The current diagnostic producer's tone mapper is temporary and is not a
-  claim of video color correctness.
+* The procedural diagnostic producer's tone mapper is temporary and is not a
+  playback renderer or a claim of video color correctness.
 
 ## Alternatives considered
 

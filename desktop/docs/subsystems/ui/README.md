@@ -89,6 +89,20 @@ The former diagnostic playground now lives in `HdrLabPage` without losing its
 working controls. It remains a developer-facing way to inspect display state,
 tone mapping, surface invalidation, and presentation behavior.
 
+HDR Lab selects libplacebo by default. Its diagnostic renderer switch can
+recreate the producer at a frame boundary and show the retained procedural QRhi
+implementation for A/B inspection. Both implementations receive the same
+pattern layout and nominal samples; renderer and tone-mapping differences may
+remain. This control is explicitly not a playback fallback or a player
+preference. The future Player page uses libplacebo and exposes an actionable
+error if no supported target path is available.
+
+Diagnostics label the input path separately from output interop. The current
+libplacebo lab source reports one fixed-size software-frame CPU upload; the direct
+D3D11 target reports zero output copies or CPU transfers. Future hardware-frame
+import must therefore remain distinguishable rather than making every path
+look “zero-copy.”
+
 Once Player exists, it becomes the default page and HDR Lab remains reachable
 through an explicit diagnostics entry or shortcut. Reusable read-only pipeline
 diagnostics may also appear in a Player drawer or page, but HDR Lab controls do
@@ -99,11 +113,13 @@ not become ordinary player preferences.
 Focused Qt Test coverage verifies viewport geometry, visibility, notification,
 and renderability. A non-presenting Qt Quick component test creates the real
 QML shell through the same initial-property contract, resizes it, and verifies
-that active-page geometry and visibility reach `VideoViewportState`. The real
+that active-page geometry and visibility reach `VideoViewportState`. It also
+verifies the diagnostic renderer switch's default and source binding. The real
 D3D11 capture verifies that zero video geometry and the compositor's fallback
 binding produce the normal background rather than sampling the retained video
-surface. The packaged application also passes the noninteractive hidden
-startup smoke.
+surface. It also destroys a bound diagnostic producer, creates the other
+implementation, rebinds the compositor, and captures the new result. The
+packaged application also passes the noninteractive hidden startup smoke.
 
 Extend Qt Quick component coverage when page selection or page commands create
 new isolated behavior. Use actual-application scenarios for file open,

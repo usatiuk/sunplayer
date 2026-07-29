@@ -118,6 +118,8 @@ void RhiPresentationEngine::renderFrame() {
 
     if (!m_rhi && !initializeDevice())
         return;
+    const bool videoProducerChanged =
+        refreshVideoProducer();
     if (m_recreateSwapChain) {
         releaseSwapChain();
         m_recreateSwapChain = false;
@@ -180,6 +182,15 @@ void RhiPresentationEngine::renderFrame() {
         Q_ASSERT(
             std::isfinite(referenceWhiteNits)
             && referenceWhiteNits > 0.0f);
+        const bool targetMinimumLuminanceKnown =
+            m_outputState.luminanceKnown();
+        const float targetMinimumLuminanceNits =
+            targetMinimumLuminanceKnown
+            ? std::clamp(
+                m_outputState.minLuminanceNits(),
+                0.0f,
+                referenceWhiteNits * targetPeak)
+            : 0.0f;
 
         requestedSurface.emplace();
         requestedSurface->description.pixelSize = videoRect.size();
@@ -193,6 +204,10 @@ void RhiPresentationEngine::renderFrame() {
             RenderedVideoAlphaMode::Opaque;
         requestedSurface->description.referenceWhiteNits =
             referenceWhiteNits;
+        requestedSurface->description.targetMinimumLuminanceKnown =
+            targetMinimumLuminanceKnown;
+        requestedSurface->description.targetMinimumLuminanceNits =
+            targetMinimumLuminanceNits;
         requestedSurface->description.targetPeakHeadroom = targetPeak;
         requestedSurface->graphicsDeviceGeneration =
             m_graphicsDevice->generation();
@@ -232,7 +247,8 @@ void RhiPresentationEngine::renderFrame() {
         }
         m_boundVideoTextureRevision =
             compositionTextureRevision;
-    } else if (targetUpdate
+    } else if (videoProducerChanged
+               || targetUpdate
                    == QuickUiLayer::RenderTargetUpdate::Recreated
                || m_boundVideoTextureRevision
                    != compositionTextureRevision) {
@@ -471,13 +487,31 @@ bool RhiPresentationEngine::initializeDevice() {
         handleDeviceLoss("initializing Qt Quick");
         return false;
     }
-    m_videoProducer =
-        m_videoSource.createProducer(*m_graphicsDevice);
-    if (!m_videoProducer)
-        qFatal("The video source did not create a producer");
+    refreshVideoProducer();
     m_recoveringDevice = false;
     m_deviceRecoveryAttempts = 0;
     m_deviceRecoveryTimer.stop();
+    return true;
+}
+
+bool RhiPresentationEngine::refreshVideoProducer() {
+    Q_ASSERT(m_graphicsDevice);
+    const std::uint64_t requestedRevision =
+        m_videoSource.producerConfigurationRevision();
+    Q_ASSERT(requestedRevision != 0);
+    if (m_videoProducer
+            && m_videoProducerConfigurationRevision
+                == requestedRevision) {
+        return false;
+    }
+
+    std::unique_ptr<RenderedVideoProducer> producer =
+        m_videoSource.createProducer(*m_graphicsDevice);
+    if (!producer)
+        qFatal("The video source did not create a producer");
+    m_videoProducer = std::move(producer);
+    m_videoProducerConfigurationRevision =
+        requestedRevision;
     return true;
 }
 
@@ -546,6 +580,7 @@ void RhiPresentationEngine::releaseDevice() {
     Q_ASSERT(!m_rhi || !m_rhi->isRecordingFrame());
     releaseSwapChain();
     m_videoProducer.reset();
+    m_videoProducerConfigurationRevision = 0;
     // Quick invalidation may emit updateRequested while it tears down.
     if (m_quickUi)
         disconnect(m_quickUi.get(), nullptr, this, nullptr);
@@ -639,14 +674,25 @@ void RhiPresentationEngine::updateBackendState() {
     const RenderedVideoProducerDiagnostics videoDiagnostics =
         m_videoProducer->diagnostics();
     state.videoSurfaceProducer = videoDiagnostics.producerName;
+    state.videoInputPath = videoDiagnostics.inputPath;
     state.videoOutputPath =
         videoOutputPathName(videoDiagnostics.target.outputPath);
     state.videoSynchronization =
         videoDiagnostics.target.synchronizationMode;
     state.videoCopySummary =
-        QStringLiteral("%1 GPU copies · %2 CPU transfers per video render")
-            .arg(videoDiagnostics.target.knownGpuCopiesPerRender)
-            .arg(videoDiagnostics.target.knownCpuTransfersPerRender);
+        QStringLiteral(
+            "%1 input CPU transfers per input frame · "
+            "%2 output GPU copies · "
+            "%3 output CPU transfers per render")
+            .arg(
+                videoDiagnostics
+                    .knownInputCpuTransfersPerInputFrame)
+            .arg(
+                videoDiagnostics.target
+                    .knownOutputGpuCopiesPerRender)
+            .arg(
+                videoDiagnostics.target
+                    .knownOutputCpuTransfersPerRender);
     state.videoFallbackReason =
         videoDiagnostics.target.fallbackReason;
 

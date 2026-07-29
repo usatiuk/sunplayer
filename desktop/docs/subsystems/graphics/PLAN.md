@@ -8,8 +8,8 @@ contracts, one-device composition, demand-driven rendering, and observable
 fallback behavior.
 
 The device, producer, target-interop, and generic active-viewport seams now
-wrap the retained HDR Lab. A libplacebo producer for the explicit offscreen
-video surface is the next milestone and still precedes playback.
+wrap the retained HDR Lab. The first libplacebo producer and direct D3D11
+target are implemented and still precede playback.
 
 ## Completed foundation
 
@@ -90,8 +90,9 @@ code.
 * [x] Define result-bearing target provisioning, producer access, composition
   preparation, submission acceptance/abort, and texture-revision contracts.
 * [x] Implement the direct QRhi target and output-path diagnostic schema.
-* [ ] Implement native libplacebo target selection with direct sharing,
-  same-device GPU copy, and explicit CPU fallback.
+* [x] Implement native D3D11 libplacebo target selection with direct sharing.
+* [ ] Add same-device GPU-copy and explicit CPU target fallbacks when a real
+  unsupported-direct-path case requires them.
 * [x] Keep D3D11, Vulkan, Metal, IOSurface, queue, semaphore, and decoder-native
   types inside backend implementations.
 * [x] Preserve deterministic teardown and device-generation invalidation.
@@ -114,7 +115,8 @@ source and producer through shared interfaces, verify direct-target diagnostics
 with no copies, exercise committed and discarded render states after accepted
 submissions, resize and rebind the native texture, verify UI-only composition
 without sampling video, and load the pinned libplacebo dependency. Native
-libplacebo interop and actual fallback selection remain part of milestone 3.
+libplacebo direct interop is now covered in milestone 3; actual fallback
+selection remains open.
 
 ## Milestone 3: libplacebo renderer
 
@@ -124,14 +126,20 @@ Replace the temporary producer with a persistent libplacebo renderer.
 
 * [x] Add the versioned D3D11-only libplacebo dependency and verify its
   installed feature configuration and public-API lifecycle.
-* [ ] Implement and validate the Windows D3D11 target bridge against the
+* [x] Implement and validate the Windows D3D11 target bridge against the
   application-owned graphics-device domain.
-* [ ] Create persistent libplacebo log, GPU, and renderer objects.
-* [ ] Render a known software-backed test image into the video surface.
-* [ ] Map the display target, SDR white, peak, primaries, and transfer
-  characteristics explicitly.
-* [ ] Reuse the renderer across size, source, and display changes.
-* [ ] Expose backend, render target, copy, fallback, and timing diagnostics.
+* [x] Create persistent libplacebo log, GPU, and renderer objects.
+* [x] Render known sRGB and BT.2020/PQ software-backed images into the video
+  surface.
+* [x] Normalize libplacebo's 203-nit linear convention to the active
+  reference-white surface convention and capture it at 80, 100, and 203 nits.
+* [x] Reuse the renderer across size, source, and display changes.
+* [x] Expose backend, render target, zero-copy, synchronization, and failure
+  diagnostics.
+* [x] Keep the animated diagnostic input at a persistent source-frame size
+  independent of the viewport, report its CPU upload separately from output
+  copies, and exercise sustained submission without a universal timing gate.
+* [ ] Add render timing diagnostics.
 * [ ] Record image-test fixtures for SDR, HDR-to-HDR, and HDR-to-SDR behavior.
 
 ### Acceptance
@@ -139,17 +147,22 @@ Replace the temporary producer with a persistent libplacebo renderer.
 * libplacebo, not the final compositor, performs video color processing.
 * A known input produces repeatable output in SDR and extended-linear modes.
 * The normal test path does not perform an accidental GPU-to-CPU round trip.
+  Its one intentional software-frame CPU-to-GPU upload is reported separately
+  from output-target copies.
 * Unsupported output-target interop produces an explicit same-device GPU-copy
   or CPU-round-trip fallback; software-frame upload remains a separate input
   path.
 
-The exact libplacebo/D3D11 interop approach must be verified against the
-selected library version before its interface is committed.
+The direct D3D11 approach and reference-white normalization are verified
+against the pinned library and Qt versions. Completion of the broader renderer
+milestone still requires a maintained image corpus, render timing, and
+realization of non-direct target paths if supported hardware requires them.
 
 ## Milestone 4: first decoded video frame
 
 Feed one FFmpeg-decoded software frame through libplacebo and keep it displayed
-without a playback clock.
+without a playback clock. This proves the required software path; normal
+playback should prefer the later platform hardware importer when available.
 
 ### Work
 

@@ -13,6 +13,7 @@ struct PresentationBackendState {
     QString swapChainFormat = QStringLiteral("Unavailable");
     QString videoSurfaceFormat = QStringLiteral("Unavailable");
     QString videoSurfaceProducer = QStringLiteral("Unavailable");
+    QString videoInputPath = QStringLiteral("Unavailable");
     QString videoOutputPath = QStringLiteral("Unavailable");
     QString videoSynchronization = QStringLiteral("Unavailable");
     QString videoCopySummary = QStringLiteral("Unavailable");

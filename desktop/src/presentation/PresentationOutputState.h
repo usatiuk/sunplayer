@@ -27,6 +27,8 @@ class PresentationOutputState final : public QObject {
                NOTIFY stateChanged)
     Q_PROPERTY(QString videoSurfaceProducer READ videoSurfaceProducer
                NOTIFY stateChanged)
+    Q_PROPERTY(QString videoInputPath READ videoInputPath
+               NOTIFY stateChanged)
     Q_PROPERTY(QString videoOutputPath READ videoOutputPath
                NOTIFY stateChanged)
     Q_PROPERTY(QString videoSynchronization READ videoSynchronization
@@ -63,6 +65,7 @@ public:
     QString swapChainFormat() const;
     QString videoSurfaceFormat() const;
     QString videoSurfaceProducer() const;
+    QString videoInputPath() const;
     QString videoOutputPath() const;
     QString videoSynchronization() const;
     QString videoCopySummary() const;

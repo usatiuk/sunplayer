@@ -176,12 +176,16 @@ if (WIN32)
             ../src/graphics/GraphicsDeviceDomain.h
             ../src/graphics/backends/D3D11GraphicsDeviceDomain.cpp
             ../src/graphics/backends/D3D11GraphicsDeviceDomain.h
+            ../src/graphics/backends/D3D11LibplaceboVideoTarget.cpp
+            ../src/graphics/backends/D3D11LibplaceboVideoTarget.h
             ../src/presentation/HdrCompositor.cpp
             ../src/presentation/HdrCompositor.h
             ../src/video/DiagnosticVideoProducer.cpp
             ../src/video/DiagnosticVideoProducer.h
             ../src/video/DiagnosticVideoSource.cpp
             ../src/video/DiagnosticVideoSource.h
+            ../src/video/LibplaceboDiagnosticVideoProducer.cpp
+            ../src/video/LibplaceboDiagnosticVideoProducer.h
             ../src/video/QrhiVideoTarget.cpp
             ../src/video/QrhiVideoTarget.h
             ../src/video/RenderedVideoProducer.h
@@ -202,6 +206,7 @@ if (WIN32)
             Qt6::GuiPrivate
             Qt6::Quick
             Qt6::Test
+            libplacebo::libplacebo
     )
 
     qt_add_shaders(

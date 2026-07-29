@@ -19,6 +19,8 @@ RenderedVideoSurfaceDescription canonicalDescription() {
         RenderedVideoLuminance::DisplayTargetedSdrWhiteRelative;
     description.alphaMode = RenderedVideoAlphaMode::Opaque;
     description.referenceWhiteNits = 203.0f;
+    description.targetMinimumLuminanceKnown = true;
+    description.targetMinimumLuminanceNits = 0.005f;
     description.targetPeakHeadroom = 5.0f;
     return description;
 }
@@ -112,6 +114,39 @@ void RenderedVideoSurfaceTest::descriptionRequiresFiniteLuminance() {
 
     for (const float invalid : {
              -1.0f,
+             std::numeric_limits<float>::infinity(),
+             std::numeric_limits<float>::quiet_NaN(),
+         }) {
+        auto description = canonicalDescription();
+        description.targetMinimumLuminanceNits = invalid;
+        QVERIFY(!description.isValid());
+    }
+    {
+        auto description = canonicalDescription();
+        description.targetMinimumLuminanceKnown = false;
+        description.targetMinimumLuminanceNits = 0.0f;
+        QVERIFY(description.isValid());
+    }
+    {
+        auto description = canonicalDescription();
+        description.targetMinimumLuminanceNits = 0.0f;
+        QVERIFY(description.isValid());
+    }
+    {
+        auto description = canonicalDescription();
+        description.targetMinimumLuminanceKnown = false;
+        QVERIFY(!description.isValid());
+    }
+    {
+        auto description = canonicalDescription();
+        description.targetMinimumLuminanceNits =
+            description.referenceWhiteNits
+            * description.targetPeakHeadroom + 1.0f;
+        QVERIFY(!description.isValid());
+    }
+
+    for (const float invalid : {
+             -1.0f,
              0.0f,
              0.99f,
              std::numeric_limits<float>::infinity(),
@@ -181,6 +216,21 @@ void RenderedVideoSurfaceTest::semanticChangesInvalidate() {
         QVERIFY(!completed.isReusableFor(requested));
     }
     {
+        auto completedAtKnownZero = canonicalState();
+        completedAtKnownZero.description
+            .targetMinimumLuminanceNits = 0.0f;
+        auto requested = completedAtKnownZero;
+        requested.description.targetMinimumLuminanceKnown = false;
+        QVERIFY(completedAtKnownZero.isValid());
+        QVERIFY(requested.isValid());
+        QVERIFY(!completedAtKnownZero.isReusableFor(requested));
+    }
+    {
+        auto requested = canonicalState();
+        requested.description.targetMinimumLuminanceNits = 0.01f;
+        QVERIFY(!completed.isReusableFor(requested));
+    }
+    {
         auto requested = canonicalState();
         requested.description.targetPeakHeadroom = 3.0f;
         QVERIFY(!completed.isReusableFor(requested));
@@ -219,9 +269,9 @@ void RenderedVideoSurfaceTest::directTargetDiagnosticsRequireNoCopies() {
         videoOutputPathName(diagnostics.outputPath),
         QStringLiteral("Direct render target"));
 
-    diagnostics.knownGpuCopiesPerRender = 1;
+    diagnostics.knownOutputGpuCopiesPerRender = 1;
     QVERIFY(!diagnostics.isValid());
-    diagnostics.knownGpuCopiesPerRender = 0;
+    diagnostics.knownOutputGpuCopiesPerRender = 0;
     diagnostics.fallbackReason = QStringLiteral("Unexpected");
     QVERIFY(!diagnostics.isValid());
 }
@@ -233,17 +283,17 @@ fallbackDiagnosticsRequireObservableCostsAndReason() {
     diagnostics.synchronizationMode =
         QStringLiteral("Backend fence");
     QVERIFY(!diagnostics.isValid());
-    diagnostics.knownGpuCopiesPerRender = 1;
+    diagnostics.knownOutputGpuCopiesPerRender = 1;
     QVERIFY(!diagnostics.isValid());
     diagnostics.fallbackReason =
         QStringLiteral("Direct target format unavailable");
     QVERIFY(diagnostics.isValid());
 
     diagnostics.outputPath = VideoOutputPath::CpuRoundTrip;
-    diagnostics.knownGpuCopiesPerRender = 0;
-    diagnostics.knownCpuTransfersPerRender = 1;
+    diagnostics.knownOutputGpuCopiesPerRender = 0;
+    diagnostics.knownOutputCpuTransfersPerRender = 1;
     QVERIFY(!diagnostics.isValid());
-    diagnostics.knownCpuTransfersPerRender = 2;
+    diagnostics.knownOutputCpuTransfersPerRender = 2;
     QVERIFY(diagnostics.isValid());
     QCOMPARE(
         videoOutputPathName(diagnostics.outputPath),

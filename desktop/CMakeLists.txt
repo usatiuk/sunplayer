@@ -91,6 +91,8 @@ qt_add_executable(sunroom
         src/video/DiagnosticVideoProducer.h
         src/video/DiagnosticVideoSource.cpp
         src/video/DiagnosticVideoSource.h
+        src/video/LibplaceboDiagnosticVideoProducer.cpp
+        src/video/LibplaceboDiagnosticVideoProducer.h
         src/video/QrhiVideoTarget.cpp
         src/video/QrhiVideoTarget.h
         src/video/RenderedVideoProducer.h
@@ -161,6 +163,8 @@ if (WIN32)
     target_sources(sunroom PRIVATE
             src/graphics/backends/D3D11GraphicsDeviceDomain.cpp
             src/graphics/backends/D3D11GraphicsDeviceDomain.h
+            src/graphics/backends/D3D11LibplaceboVideoTarget.cpp
+            src/graphics/backends/D3D11LibplaceboVideoTarget.h
     )
 
     target_link_libraries(sunroom PRIVATE

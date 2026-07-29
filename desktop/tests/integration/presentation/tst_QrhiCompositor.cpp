@@ -6,7 +6,9 @@
 
 #include <QtTest>
 #include <QCoreApplication>
+#include <QElapsedTimer>
 #include <QtCore/qfloat16.h>
+#include <libplacebo/colorspace.h>
 #include <rhi/qrhi.h>
 
 #include "graphics/GraphicsBackendFactory.h"
@@ -26,6 +28,7 @@ constexpr QSize outputSize{24, 20};
 constexpr int videoOriginX = 4;
 constexpr int videoOriginY = 4;
 constexpr float sourcePeak = 4.0f;
+constexpr float tau = 6.28318530718f;
 
 struct FloatPixel {
     float r = 0.0f;
@@ -52,6 +55,8 @@ RenderedVideoSurfaceState surfaceState() {
         RenderedVideoLuminance::DisplayTargetedSdrWhiteRelative;
     state.description.alphaMode = RenderedVideoAlphaMode::Opaque;
     state.description.referenceWhiteNits = 80.0f;
+    state.description.targetMinimumLuminanceKnown = true;
+    state.description.targetMinimumLuminanceNits = 0.005f;
     state.description.targetPeakHeadroom = sourcePeak;
     state.graphicsDeviceGeneration = 1;
     state.displayTargetRevision = 1;
@@ -117,6 +122,45 @@ float expectedRamp(int x, int width = videoSize.width()) {
     return 0.02f + (sourcePeak - 0.02f) * smoothStep(u);
 }
 
+float analyticRamp(
+        int x,
+        int width,
+        float peakHeadroom) {
+    const float u =
+        (static_cast<float>(x) + 0.5f) / width;
+    return 0.02f
+        + (peakHeadroom - 0.02f) * smoothStep(u);
+}
+
+float analyticStep(
+        int x,
+        int width,
+        float peakHeadroom) {
+    const float u =
+        (static_cast<float>(x) + 0.5f) / width;
+    return std::floor(u * 8.0f) / 7.0f
+        * peakHeadroom;
+}
+
+std::array<float, 3> analyticSpectrum(
+        int x,
+        int width,
+        float peakHeadroom,
+        float phase = 0.0f) {
+    const float u =
+        (static_cast<float>(x) + 0.5f) / width;
+    const float ramp =
+        analyticRamp(x, width, peakHeadroom);
+    return {
+        (0.5f + 0.5f * std::cos(
+            tau * (u + phase))) * ramp,
+        (0.5f + 0.5f * std::cos(
+            tau * (u + phase + 0.33f))) * ramp,
+        (0.5f + 0.5f * std::cos(
+            tau * (u + phase + 0.67f))) * ramp,
+    };
+}
+
 float expectedStep(int x) {
     const float u =
         (static_cast<float>(x) + 0.5f) / videoSize.width();
@@ -172,6 +216,8 @@ public:
 
 private slots:
     void realD3d11ProducerAndCompositionReadback();
+    void libplaceboD3d11SurfaceAndCompositionReadback();
+    void libplaceboAnimatedDiagnosticThroughput();
 };
 
 void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
@@ -195,7 +241,9 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
         << (floatCaptureSupported ? "accepted" : "unavailable");
     QVERIFY(floatCaptureSupported);
 
-    DiagnosticVideoSource source(VideoTargetReadback::Enabled);
+    DiagnosticVideoSource source(
+        VideoProducerApi::Qrhi,
+        VideoTargetReadback::Enabled);
     source.setSourcePeakHeadroom(sourcePeak);
     source.setToneMappingEnabled(false);
     source.setAnimatePattern(false);
@@ -220,8 +268,15 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     QCOMPARE(
         producerDiagnostics.target.outputPath,
         VideoOutputPath::DirectRenderTarget);
-    QCOMPARE(producerDiagnostics.target.knownGpuCopiesPerRender, 0U);
-    QCOMPARE(producerDiagnostics.target.knownCpuTransfersPerRender, 0U);
+    QCOMPARE(
+        producerDiagnostics.knownInputCpuTransfersPerInputFrame,
+        0U);
+    QCOMPARE(
+        producerDiagnostics.target.knownOutputGpuCopiesPerRender,
+        0U);
+    QCOMPARE(
+        producerDiagnostics.target.knownOutputCpuTransfersPerRender,
+        0U);
     QVERIFY(producerDiagnostics.target.fallbackReason.isEmpty());
 
     std::unique_ptr<QRhiTexture> uiTexture(rhi->newTexture(
@@ -723,6 +778,610 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
         resizedComposedPixel.r,
         encodedByte(expectedRamp(
             sampleX, resizedVideoSize.width())));
+#endif
+}
+
+void QrhiCompositorTest::
+libplaceboD3d11SurfaceAndCompositionReadback() {
+#ifndef Q_OS_WIN
+    QSKIP("The current libplacebo integration is Windows D3D11");
+#else
+    std::unique_ptr<GraphicsDeviceDomain> graphicsDevice =
+        GraphicsBackendFactory::createDeviceDomain();
+    QVERIFY2(
+        graphicsDevice,
+        "Could not create the shared QRhi/libplacebo D3D11 domain");
+    QVERIFY(graphicsDevice->libplaceboContext().isValid());
+    QRhi &rhi = graphicsDevice->rhi();
+
+    DiagnosticVideoSource source(
+        VideoProducerApi::Libplacebo,
+        VideoTargetReadback::Enabled,
+        videoSize);
+    QVERIFY(source.useLibplacebo());
+    const std::uint64_t libplaceboRevision =
+        source.producerConfigurationRevision();
+    source.setUseLibplacebo(false);
+    QVERIFY(!source.useLibplacebo());
+    QVERIFY(
+        source.producerConfigurationRevision()
+        != libplaceboRevision);
+    std::unique_ptr<RenderedVideoProducer> comparisonProducer =
+        source.createProducer(*graphicsDevice);
+    QVERIFY(comparisonProducer);
+    const RenderedVideoProducerDiagnostics comparisonDiagnostics =
+        comparisonProducer->diagnostics();
+    QCOMPARE(
+        comparisonDiagnostics.producerName,
+        QStringLiteral("Diagnostic pattern"));
+    comparisonProducer.reset();
+    const std::uint64_t proceduralRevision =
+        source.producerConfigurationRevision();
+    source.setUseLibplacebo(true);
+    QVERIFY(source.useLibplacebo());
+    QVERIFY(
+        source.producerConfigurationRevision()
+        != proceduralRevision);
+    source.setSourcePeakHeadroom(1.0f);
+    source.setToneMappingEnabled(false);
+    source.setAnimatePattern(false);
+    std::unique_ptr<RenderedVideoProducer> producer =
+        source.createProducer(*graphicsDevice);
+    QVERIFY(producer);
+
+    RenderedVideoSurfaceState sdrState = surfaceState();
+    sdrState.graphicsDeviceGeneration =
+        graphicsDevice->generation();
+    sdrState.contentRevision = source.contentRevision();
+    QRhiCommandBuffer *commandBuffer = nullptr;
+    constexpr int centerX = 8;
+    constexpr int grayscaleY = 1;
+    constexpr int spectrumY = 5;
+    constexpr int steppedY = 10;
+    const float expectedSdr =
+        analyticRamp(centerX, videoSize.width(), 1.0f);
+
+    const auto captureProducerSurface =
+        [&](const RenderedVideoSurfaceState &state,
+            QRhiReadbackResult &readback) -> QString {
+        if (producer->ensureSurface(state)
+                != VideoOperationResult::Ready) {
+            return QStringLiteral(
+                "Could not provision the producer surface");
+        }
+        if (rhi.beginOffscreenFrame(&commandBuffer)
+                != QRhi::FrameOpSuccess
+                || !commandBuffer) {
+            return QStringLiteral(
+                "Could not begin the producer capture frame");
+        }
+        if (producer->render(*commandBuffer, state)
+                != VideoOperationResult::Ready
+                || producer->prepareForComposition(*commandBuffer)
+                    != VideoOperationResult::Ready) {
+            rhi.endOffscreenFrame(QRhi::SkipPresent);
+            producer->submissionAborted();
+            producer->discardPendingRender();
+            return QStringLiteral(
+                "Could not render the producer surface");
+        }
+
+        bool completed = false;
+        readback.completed = [&completed] {
+            completed = true;
+        };
+        QRhiResourceUpdateBatch *captureUpdates =
+            rhi.nextResourceUpdateBatch();
+        captureUpdates->readBackTexture(
+            QRhiReadbackDescription(
+                &producer->textureForComposition()),
+            &readback);
+        commandBuffer->resourceUpdate(captureUpdates);
+        const QRhi::FrameOpResult frameResult =
+            rhi.endOffscreenFrame();
+        if (frameResult == QRhi::FrameOpSuccess) {
+            producer->submissionAccepted();
+            producer->commitPendingRender();
+        } else {
+            producer->submissionAborted();
+            producer->discardPendingRender();
+        }
+        if (frameResult != QRhi::FrameOpSuccess
+                || !completed) {
+            return QStringLiteral(
+                "Could not complete the producer readback");
+        }
+        return {};
+    };
+
+    const std::array<float, 3> referenceWhites{
+        80.0f,
+        100.0f,
+        PL_COLOR_SDR_WHITE,
+    };
+    for (const float referenceWhite : referenceWhites) {
+        sdrState.description.referenceWhiteNits =
+            referenceWhite;
+        sdrState.description.targetPeakHeadroom = 4.0f;
+        ++sdrState.displayTargetRevision;
+
+        QRhiReadbackResult sdrReadback;
+        const QString captureError =
+            captureProducerSurface(sdrState, sdrReadback);
+        QVERIFY2(captureError.isEmpty(), qPrintable(captureError));
+        QCOMPARE(sdrReadback.format, QRhiTexture::RGBA16F);
+        QCOMPARE(sdrReadback.pixelSize, videoSize);
+        QVERIFY(!producer->needsRender(sdrState));
+
+        const FloatPixel sdrNeutral = readFloatPixel(
+            sdrReadback, rhi, centerX, grayscaleY);
+        compareNear(sdrNeutral.r, expectedSdr, 0.01f);
+        compareNear(sdrNeutral.g, expectedSdr, 0.01f);
+        compareNear(sdrNeutral.b, expectedSdr, 0.01f);
+        compareNear(sdrNeutral.a, 1.0f, 0.002f);
+
+        const FloatPixel sdrSpectrum = readFloatPixel(
+            sdrReadback, rhi, centerX, spectrumY);
+        const std::array<float, 3> expectedSdrSpectrum =
+            analyticSpectrum(
+                centerX, videoSize.width(), 1.0f);
+        compareNear(
+            sdrSpectrum.r, expectedSdrSpectrum[0], 0.015f);
+        compareNear(
+            sdrSpectrum.g, expectedSdrSpectrum[1], 0.015f);
+        compareNear(
+            sdrSpectrum.b, expectedSdrSpectrum[2], 0.015f);
+        const FloatPixel sdrStep = readFloatPixel(
+            sdrReadback, rhi, centerX, steppedY);
+        const float expectedSdrStep =
+            analyticStep(
+                centerX, videoSize.width(), 1.0f);
+        compareNear(sdrStep.r, expectedSdrStep, 0.01f);
+        compareNear(sdrStep.g, expectedSdrStep, 0.01f);
+        compareNear(sdrStep.b, expectedSdrStep, 0.01f);
+    }
+
+    const RenderedVideoProducerDiagnostics diagnostics =
+        producer->diagnostics();
+    QVERIFY(diagnostics.isValid());
+    QVERIFY(diagnostics.producerName.contains(
+        QStringLiteral("libplacebo")));
+    QCOMPARE(
+        diagnostics.target.outputPath,
+        VideoOutputPath::DirectRenderTarget);
+    QCOMPARE(
+        diagnostics.knownInputCpuTransfersPerInputFrame,
+        1U);
+    QCOMPARE(
+        diagnostics.target.knownOutputGpuCopiesPerRender,
+        0U);
+    QCOMPARE(
+        diagnostics.target.knownOutputCpuTransfersPerRender,
+        0U);
+    QVERIFY(diagnostics.target.synchronizationMode.contains(
+        QStringLiteral("D3D11")));
+    QVERIFY(diagnostics.target.synchronizationMode.contains(
+        QStringLiteral("external commands")));
+    QVERIFY(diagnostics.target.synchronizationMode.contains(
+        QStringLiteral("rgba16"),
+        Qt::CaseInsensitive));
+    QVERIFY(diagnostics.target.fallbackReason.isEmpty());
+
+    std::unique_ptr<QRhiTexture> uiTexture(rhi.newTexture(
+        QRhiTexture::RGBA8, {1, 1}, 1));
+    QVERIFY(uiTexture->create());
+    std::unique_ptr<QRhiTexture> outputTexture(rhi.newTexture(
+        QRhiTexture::RGBA16F,
+        videoSize,
+        1,
+        QRhiTexture::RenderTarget
+            | QRhiTexture::UsedAsTransferSource));
+    QVERIFY(outputTexture->create());
+    const QRhiTextureRenderTargetDescription outputDescription(
+        QRhiColorAttachment(outputTexture.get()));
+    std::unique_ptr<QRhiTextureRenderTarget> outputTarget(
+        rhi.newTextureRenderTarget(outputDescription));
+    std::unique_ptr<QRhiRenderPassDescriptor> outputPass(
+        outputTarget->newCompatibleRenderPassDescriptor());
+    outputTarget->setRenderPassDescriptor(outputPass.get());
+    QVERIFY(outputTarget->create());
+
+    HdrCompositor compositor(rhi);
+    QCOMPARE(
+        compositor.initialize(
+            *outputPass,
+            &producer->textureForComposition(),
+            *uiTexture),
+        HdrCompositor::ResourceResult::Ready);
+
+    source.setSourcePeakHeadroom(sourcePeak);
+    source.setToneMappingEnabled(true);
+    // This diagnostic source defines peak in active-reference-white units, so
+    // changing reference white also regenerates its absolute PQ signal. The
+    // comparison validates Sunroom's output normalization, not preservation
+    // of one fixed mastered source across displays.
+    RenderedVideoSurfaceState hdr100State = sdrState;
+    hdr100State.description.referenceWhiteNits = 100.0f;
+    hdr100State.description.targetPeakHeadroom = 2.0f;
+    ++hdr100State.displayTargetRevision;
+    hdr100State.contentRevision = source.contentRevision();
+    QRhiReadbackResult hdr100Readback;
+    const QString hdr100CaptureError =
+        captureProducerSurface(
+            hdr100State, hdr100Readback);
+    QVERIFY2(
+        hdr100CaptureError.isEmpty(),
+        qPrintable(hdr100CaptureError));
+    const FloatPixel hdr100Right = readFloatPixel(
+        hdr100Readback, rhi, 13, grayscaleY);
+    QVERIFY(hdr100Right.r > 1.0f);
+    QVERIFY(hdr100Right.r <= 2.05f);
+
+    RenderedVideoSurfaceState hdrState = hdr100State;
+    hdrState.description.referenceWhiteNits =
+        PL_COLOR_SDR_WHITE;
+    ++hdrState.displayTargetRevision;
+    QCOMPARE(
+        producer->ensureSurface(hdrState),
+        VideoOperationResult::Ready);
+    QVERIFY(producer->needsRender(hdrState));
+
+    QCOMPARE(
+        rhi.beginOffscreenFrame(&commandBuffer),
+        QRhi::FrameOpSuccess);
+    const QByteArray transparentUi(4, '\0');
+    QRhiResourceUpdateBatch *updates =
+        rhi.nextResourceUpdateBatch();
+    updates->uploadTexture(
+        uiTexture.get(),
+        QRhiTextureUploadDescription(
+            QRhiTextureUploadEntry(
+                0,
+                0,
+                QRhiTextureSubresourceUploadDescription(
+                    transparentUi))));
+    commandBuffer->resourceUpdate(updates);
+    QCOMPARE(
+        producer->render(*commandBuffer, hdrState),
+        VideoOperationResult::Ready);
+    QCOMPARE(
+        producer->prepareForComposition(*commandBuffer),
+        VideoOperationResult::Ready);
+
+    HdrCompositorParameters parameters;
+    parameters.viewportSize = {
+        static_cast<float>(videoSize.width()),
+        static_cast<float>(videoSize.height()),
+    };
+    parameters.videoOrigin = {0.0f, 0.0f};
+    parameters.videoSize = parameters.viewportSize;
+    parameters.sdrScale = 1.0f;
+    parameters.ndcYUp =
+        rhi.isYUpInNDC() ? 1.0f : 0.0f;
+    parameters.linearOutput = 1.0f;
+    compositor.render(
+        *commandBuffer,
+        *outputTarget,
+        videoSize,
+        parameters);
+
+    bool hdrReadbackCompleted = false;
+    bool compositionReadbackCompleted = false;
+    QRhiReadbackResult hdrReadback;
+    QRhiReadbackResult compositionReadback;
+    hdrReadback.completed = [&hdrReadbackCompleted] {
+        hdrReadbackCompleted = true;
+    };
+    compositionReadback.completed =
+        [&compositionReadbackCompleted] {
+            compositionReadbackCompleted = true;
+        };
+    updates = rhi.nextResourceUpdateBatch();
+    updates->readBackTexture(
+        QRhiReadbackDescription(
+            &producer->textureForComposition()),
+        &hdrReadback);
+    updates->readBackTexture(
+        QRhiReadbackDescription(outputTexture.get()),
+        &compositionReadback);
+    commandBuffer->resourceUpdate(updates);
+    const QRhi::FrameOpResult hdrFrameResult =
+        rhi.endOffscreenFrame();
+    if (hdrFrameResult == QRhi::FrameOpSuccess) {
+        producer->submissionAccepted();
+        producer->commitPendingRender();
+    } else {
+        producer->submissionAborted();
+        producer->discardPendingRender();
+    }
+    QCOMPARE(hdrFrameResult, QRhi::FrameOpSuccess);
+    QVERIFY(hdrReadbackCompleted);
+    QVERIFY(compositionReadbackCompleted);
+    QCOMPARE(hdrReadback.format, QRhiTexture::RGBA16F);
+    QCOMPARE(compositionReadback.format, QRhiTexture::RGBA16F);
+    QVERIFY(!producer->needsRender(hdrState));
+
+    const FloatPixel hdrLeft = readFloatPixel(
+        hdrReadback, rhi, 2, grayscaleY);
+    const FloatPixel hdrRight = readFloatPixel(
+        hdrReadback, rhi, 13, grayscaleY);
+    QVERIFY(std::isfinite(hdrLeft.r));
+    QVERIFY(std::isfinite(hdrRight.r));
+    QVERIFY(hdrRight.r > hdrLeft.r);
+    QVERIFY(hdrRight.r > 1.0f);
+    QVERIFY(hdrRight.r <= 2.05f);
+    compareNear(hdrRight.r, hdr100Right.r, 0.03f);
+    compareNear(hdrRight.g, hdr100Right.g, 0.03f);
+    compareNear(hdrRight.b, hdr100Right.b, 0.03f);
+    compareNear(hdrRight.r, hdrRight.g, 0.02f);
+    compareNear(hdrRight.g, hdrRight.b, 0.02f);
+    compareNear(hdrRight.a, 1.0f, 0.002f);
+
+    const FloatPixel hdrSpectrum = readFloatPixel(
+        hdrReadback, rhi, centerX, spectrumY);
+    QVERIFY(
+        std::abs(hdrSpectrum.r - hdrSpectrum.g) > 0.01f
+        || std::abs(hdrSpectrum.g - hdrSpectrum.b) > 0.01f);
+    const FloatPixel hdrStep = readFloatPixel(
+        hdrReadback, rhi, centerX, steppedY);
+    compareNear(hdrStep.r, hdrStep.g, 0.02f);
+    compareNear(hdrStep.g, hdrStep.b, 0.02f);
+
+    const FloatPixel composed = readFloatPixel(
+        compositionReadback, rhi, 13, grayscaleY);
+    compareNear(composed.r, hdrRight.r, 0.02f);
+    compareNear(composed.g, hdrRight.g, 0.02f);
+    compareNear(composed.b, hdrRight.b, 0.02f);
+    compareNear(composed.a, 1.0f, 0.002f);
+
+    source.setSourcePeakHeadroom(1.0f);
+    source.setToneMappingEnabled(false);
+    RenderedVideoSurfaceState resizedState = hdrState;
+    resizedState.description.pixelSize = {8, 6};
+    resizedState.contentRevision = source.contentRevision();
+    const std::uint64_t previousRevision =
+        producer->compositionTextureRevision();
+    QCOMPARE(
+        producer->ensureSurface(resizedState),
+        VideoOperationResult::Ready);
+    QVERIFY(
+        producer->compositionTextureRevision()
+        > previousRevision);
+    QCOMPARE(
+        producer->textureForComposition().pixelSize(),
+        QSize(8, 6));
+    QCOMPARE(
+        rhi.beginOffscreenFrame(&commandBuffer),
+        QRhi::FrameOpSuccess);
+    QCOMPARE(
+        producer->render(*commandBuffer, resizedState),
+        VideoOperationResult::Ready);
+    QCOMPARE(
+        producer->prepareForComposition(*commandBuffer),
+        VideoOperationResult::Ready);
+    bool resizedReadbackCompleted = false;
+    QRhiReadbackResult resizedReadback;
+    resizedReadback.completed = [&resizedReadbackCompleted] {
+        resizedReadbackCompleted = true;
+    };
+    updates = rhi.nextResourceUpdateBatch();
+    updates->readBackTexture(
+        QRhiReadbackDescription(
+            &producer->textureForComposition()),
+        &resizedReadback);
+    commandBuffer->resourceUpdate(updates);
+    const QRhi::FrameOpResult resizedFrameResult =
+        rhi.endOffscreenFrame();
+    QCOMPARE(resizedFrameResult, QRhi::FrameOpSuccess);
+    producer->submissionAccepted();
+    producer->commitPendingRender();
+    QVERIFY(resizedReadbackCompleted);
+    QCOMPARE(resizedReadback.pixelSize, QSize(8, 6));
+    const FloatPixel resizedPixel = readFloatPixel(
+        resizedReadback, rhi, 6, 0);
+    QVERIFY(resizedPixel.r > 0.5f);
+    QVERIFY(resizedPixel.r <= 1.02f);
+    compareNear(resizedPixel.r, resizedPixel.g, 0.08f);
+    compareNear(resizedPixel.g, resizedPixel.b, 0.08f);
+    compareNear(resizedPixel.a, 1.0f, 0.002f);
+    QVERIFY(!producer->needsRender(resizedState));
+
+    // Reproduce the engine's live diagnostic switch boundary: destroy a
+    // producer whose texture is still referenced by the compositor, create
+    // the other implementation, and replace the bindings before rendering.
+    producer.reset();
+    source.setUseLibplacebo(false);
+    QVERIFY(!source.useLibplacebo());
+    producer = source.createProducer(*graphicsDevice);
+    QVERIFY(producer);
+
+    RenderedVideoSurfaceState switchedState = resizedState;
+    switchedState.description.pixelSize = videoSize;
+    QCOMPARE(
+        producer->ensureSurface(switchedState),
+        VideoOperationResult::Ready);
+    QCOMPARE(
+        rhi.beginOffscreenFrame(&commandBuffer),
+        QRhi::FrameOpSuccess);
+    QCOMPARE(
+        producer->render(*commandBuffer, switchedState),
+        VideoOperationResult::Ready);
+    QCOMPARE(
+        producer->prepareForComposition(*commandBuffer),
+        VideoOperationResult::Ready);
+    QCOMPARE(
+        compositor.setTextures(
+            &producer->textureForComposition(),
+            *uiTexture),
+        HdrCompositor::ResourceResult::Ready);
+    compositor.render(
+        *commandBuffer,
+        *outputTarget,
+        videoSize,
+        parameters);
+
+    bool switchedSurfaceCompleted = false;
+    bool switchedCompositionCompleted = false;
+    QRhiReadbackResult switchedSurfaceReadback;
+    QRhiReadbackResult switchedCompositionReadback;
+    switchedSurfaceReadback.completed =
+        [&switchedSurfaceCompleted] {
+            switchedSurfaceCompleted = true;
+        };
+    switchedCompositionReadback.completed =
+        [&switchedCompositionCompleted] {
+            switchedCompositionCompleted = true;
+        };
+    updates = rhi.nextResourceUpdateBatch();
+    updates->readBackTexture(
+        QRhiReadbackDescription(
+            &producer->textureForComposition()),
+        &switchedSurfaceReadback);
+    updates->readBackTexture(
+        QRhiReadbackDescription(outputTexture.get()),
+        &switchedCompositionReadback);
+    commandBuffer->resourceUpdate(updates);
+    const QRhi::FrameOpResult switchedFrameResult =
+        rhi.endOffscreenFrame();
+    QCOMPARE(switchedFrameResult, QRhi::FrameOpSuccess);
+    producer->submissionAccepted();
+    producer->commitPendingRender();
+    QVERIFY(switchedSurfaceCompleted);
+    QVERIFY(switchedCompositionCompleted);
+
+    const RenderedVideoProducerDiagnostics switchedDiagnostics =
+        producer->diagnostics();
+    QCOMPARE(
+        switchedDiagnostics.producerName,
+        QStringLiteral("Diagnostic pattern"));
+    QCOMPARE(
+        switchedDiagnostics.knownInputCpuTransfersPerInputFrame,
+        0U);
+    const FloatPixel switchedSurface = readFloatPixel(
+        switchedSurfaceReadback, rhi, 13, grayscaleY);
+    const FloatPixel switchedComposition = readFloatPixel(
+        switchedCompositionReadback, rhi, 13, grayscaleY);
+    const float expectedSwitched =
+        analyticRamp(13, videoSize.width(), 1.0f);
+    compareNear(
+        switchedSurface.r, expectedSwitched, 0.015f);
+    compareNear(
+        switchedComposition.r,
+        switchedSurface.r,
+        0.02f);
+    compareNear(
+        switchedComposition.g,
+        switchedSurface.g,
+        0.02f);
+    compareNear(
+        switchedComposition.b,
+        switchedSurface.b,
+        0.02f);
+#endif
+}
+
+void QrhiCompositorTest::
+libplaceboAnimatedDiagnosticThroughput() {
+#ifndef Q_OS_WIN
+    QSKIP("The current libplacebo integration is Windows D3D11");
+#else
+    constexpr QSize inputFrameSize{640, 360};
+    constexpr QSize targetSize{1100, 600};
+    constexpr int measuredFrames = 60;
+
+    std::unique_ptr<GraphicsDeviceDomain> graphicsDevice =
+        GraphicsBackendFactory::createDeviceDomain();
+    QVERIFY(graphicsDevice);
+    QRhi &rhi = graphicsDevice->rhi();
+    DiagnosticVideoSource source(
+        VideoProducerApi::Libplacebo,
+        VideoTargetReadback::Disabled,
+        inputFrameSize);
+    source.setSourcePeakHeadroom(12.5f);
+    source.setToneMappingEnabled(true);
+    source.setAnimatePattern(true);
+    std::unique_ptr<RenderedVideoProducer> producer =
+        source.createProducer(*graphicsDevice);
+    QVERIFY(producer);
+
+    RenderedVideoSurfaceState state = surfaceState();
+    state.description.pixelSize = targetSize;
+    state.description.referenceWhiteNits = 203.0f;
+    state.description.targetMinimumLuminanceKnown = true;
+    state.description.targetMinimumLuminanceNits = 0.005f;
+    state.description.targetPeakHeadroom = 4.0f;
+    state.graphicsDeviceGeneration =
+        graphicsDevice->generation();
+    state.contentRevision = source.contentRevision();
+
+    auto timestamp = std::chrono::steady_clock::now();
+    const auto renderFrame = [&]() {
+        timestamp += std::chrono::milliseconds(16);
+        source.prepareForPresentation(timestamp);
+        state.contentRevision = source.contentRevision();
+        if (producer->ensureSurface(state)
+                != VideoOperationResult::Ready) {
+            return false;
+        }
+        QRhiCommandBuffer *commandBuffer = nullptr;
+        if (rhi.beginOffscreenFrame(&commandBuffer)
+                != QRhi::FrameOpSuccess
+                || !commandBuffer) {
+            return false;
+        }
+        if (producer->render(*commandBuffer, state)
+                != VideoOperationResult::Ready
+                || producer->prepareForComposition(*commandBuffer)
+                    != VideoOperationResult::Ready) {
+            rhi.endOffscreenFrame(QRhi::SkipPresent);
+            producer->submissionAborted();
+            producer->discardPendingRender();
+            return false;
+        }
+        const QRhi::FrameOpResult result =
+            rhi.endOffscreenFrame();
+        if (result != QRhi::FrameOpSuccess) {
+            producer->submissionAborted();
+            producer->discardPendingRender();
+            return false;
+        }
+        producer->submissionAccepted();
+        producer->commitPendingRender();
+        return true;
+    };
+
+    for (int i = 0; i < 3; ++i)
+        QVERIFY(renderFrame());
+
+    QElapsedTimer timer;
+    timer.start();
+    for (int i = 0; i < measuredFrames; ++i)
+        QVERIFY(renderFrame());
+    const qint64 elapsedNanoseconds = timer.nsecsElapsed();
+    const double millisecondsPerFrame =
+        static_cast<double>(elapsedNanoseconds)
+        / 1'000'000.0
+        / measuredFrames;
+    const double framesPerSecond =
+        1000.0 / millisecondsPerFrame;
+    qInfo().nospace()
+        << "libplacebo diagnostic throughput: "
+        << QString::number(framesPerSecond, 'f', 1)
+        << " FPS CPU submission ("
+        << QString::number(millisecondsPerFrame, 'f', 2)
+        << " ms/frame), "
+        << inputFrameSize.width() << "x"
+        << inputFrameSize.height() << " input -> "
+        << targetSize.width() << "x"
+        << targetSize.height() << " target";
+
+    const RenderedVideoProducerDiagnostics diagnostics =
+        producer->diagnostics();
+    QCOMPARE(
+        diagnostics.knownInputCpuTransfersPerInputFrame,
+        1U);
+    QVERIFY(diagnostics.inputPath.contains(
+        QStringLiteral("640×360")));
 #endif
 }
 

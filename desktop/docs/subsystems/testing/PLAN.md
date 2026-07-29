@@ -82,14 +82,24 @@ Implement alongside graphics milestone 1:
   lifecycle.
 * [ ] Run the pinned libplacebo upstream suite as dependency validation where
   practical.
-* [ ] Render a known software-backed frame through real libplacebo.
+* [x] Render known sRGB and BT.2020/PQ software-backed frames through real
+  libplacebo.
 * [ ] Assert effective input metadata, target description, plane mapping,
   lifetime, synchronization, and copy path.
 * [ ] Add one pinned SDR media container and manifest.
 * [ ] Add one pinned HDR10 media container and manifest.
 * [ ] Decode the first frame with real FFmpeg and render it with real
   libplacebo.
-* [ ] Capture the display-targeted video surface and final composition.
+* [x] Capture the display-targeted video surface and final composition for the
+  analytic libplacebo path.
+* [x] Capture-validate reference-white normalization for SDR at 80, 100, and
+  203 nits and a target-relative PQ diagnostic at 100 and 203 nits.
+* [ ] Move one fixed, absolutely mastered PQ frame between different
+  reference-white and peak targets without changing the source signal.
+* [x] Keep the procedural and libplacebo diagnostic inputs aligned to the same
+  pattern layout so their output differences exercise rendering policy.
+* [x] Exercise a persistent 640×360 animated diagnostic input into a 1100×600
+  target for 60 frames and report throughput without a shared-CI timing gate.
 * [ ] Decide whether the growing corpus justifies OpenEXR/OpenImageIO.
 * [ ] Treat FATE as optional pinned-FFmpeg dependency validation, not Sunroom
   integration coverage.
