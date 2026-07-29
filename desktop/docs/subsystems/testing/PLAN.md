@@ -95,6 +95,15 @@ Implement alongside graphics milestone 1:
 * [x] Cover an analytically generated Matroska/FFV1 YUV420P stream with
   BT.709 limited-range metadata, timestamps, non-square pixels, exact decoded
   plane samples, and tolerant linear-RGB capture.
+* [x] Cover a pinned H.264 stream through real D3D11VA decode and direct NV12
+  plane import, assert zero input and output copies/transfers, and compare its
+  capture against software decode.
+* [x] Make the registered hardware-decode CTest fail when D3D11VA is missing;
+  retain explicit skip reporting only for direct manual execution.
+* [x] Inject a failed post-selection result at the fallback-policy boundary and
+  prove it retries in software while retaining the fallback reason.
+* [x] Reject a real retained hardware frame in a replacement graphics
+  generation and assert the producer emits the typed software-retry failure.
 * [x] Capture the display-targeted video surface and final composition for the
   analytic libplacebo path.
 * [x] Capture-validate reference-white normalization for SDR at 80, 100, and
@@ -114,6 +123,9 @@ Implement alongside graphics milestone 1:
 * [x] Cover initial Empty/Opening/Ready/Error session state, nonblocking
   cancellation and replacement, superseding generations, worker destruction,
   and presentation failure without fixed sleeps.
+* [x] Cover typed hardware-import software retry and current-media re-decode
+  after graphics-device invalidation/replacement, including the one-retry
+  limit and retention of ready generation-independent software frames.
 * [ ] Add a controlled monotonic clock and audio sink when scheduling requires
   deterministic advancement.
 * [ ] Cover short playback, pause, end of stream, buffering, and frame
@@ -128,9 +140,13 @@ Implement alongside graphics milestone 1:
 
 ## Milestone 4: dedicated systems coverage
 
-* [ ] Real supported GPU and hardware-decode/import configurations.
+* [x] First real supported GPU and D3D11VA decode/import configuration.
+* [ ] Broader GPU, codec, bit-depth, and hardware-decode/import configurations.
 * [ ] D3D, Vulkan, and Metal validation modes where applicable.
 * [ ] Device loss, allocation failure, and long resource-lifecycle stress.
+* [ ] Inject a failure after the real D3D11VA `get_format` selection inside
+  the production decode attempt; the current deterministic test starts at the
+  fallback-policy boundary.
 * [ ] Real operating-system display changes and multi-monitor movement.
 * [x] Controlled first-frame cancellation and stale-completion scenarios.
 * [ ] Controlled unreliable continuous-source scenarios.

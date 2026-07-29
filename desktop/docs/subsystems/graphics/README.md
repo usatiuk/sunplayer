@@ -6,13 +6,14 @@ The repository contains a working Windows presentation prototype. It proves the
 application-owned QRhi, redirected Qt Quick, final-compositor, extended-linear
 presentation, display-observation, and recovery model.
 
-The production decoded-frame/render boundary now exists and is capture-tested
-headlessly: a retained FFmpeg software `AVFrame` maps through libplacebo into
-the same direct D3D11 QRhi target and final compositor. It is not yet wired into
-the application shell as a player, continuous decoder, or file-open session.
+The production decoded-frame/render boundary is wired into the Player and
+capture-tested headlessly. Software `AVFrame` planes upload through
+libplacebo; supported H.264 input decodes into a retained D3D11VA texture slice
+on the same device and maps directly into libplacebo without an input copy.
 HDR Lab still uses the analytic libplacebo producer by default, with the
 retained procedural QRhi producer available only for diagnostic A/B
-comparison. Subtitles and playback scheduling are not integrated.
+comparison. Continuous decoding, subtitles, and playback scheduling are not
+integrated.
 
 The currently accepted implementation is deliberately narrower than the
 cross-platform target:
@@ -20,7 +21,7 @@ cross-platform target:
 | Area | Current state |
 | --- | --- |
 | Operating system | Windows |
-| Graphics domain | Factory-selected D3D11 implementation owning QRhi, same-device libplacebo GPU, and device generation |
+| Graphics domain | Factory-selected D3D11 implementation owning a video-capable native device, QRhi, same-device libplacebo/FFmpeg contexts, execution synchronization, and device generation |
 | Presentation | Extended-linear sRGB/scRGB when supported, otherwise SDR |
 | Qt Quick | Redirected into an application-owned full-window RGBA16F texture |
 | Video | Shared QRhi diagnostic, analytic libplacebo, or FFmpeg-frame libplacebo producer → direct target → display-targeted RGBA16F surface |
@@ -37,6 +38,7 @@ The subsystem currently owns:
 
 * Native presentation-window lifecycle.
 * Factory-selected QRhi device-domain and presentation swapchain ownership.
+* Backend graphics/decode execution synchronization and native frame import.
 * Redirected Qt Quick rendering.
 * The rendered-video surface, producer, and target-interop contracts plus the
   temporary diagnostic implementation.
@@ -49,7 +51,7 @@ The future subsystem boundary also includes:
 
 * A display-targeted video surface produced by libplacebo.
 * Subtitle and diagnostic layers.
-* Backend-specific native texture import hidden behind shared interfaces.
+* Non-Windows native texture import hidden behind shared interfaces.
 * Platform graphics and display adapters for macOS and Linux.
 
 It does not own demuxing, decoding, media clocks, frame scheduling, audio, or
@@ -65,8 +67,11 @@ PresentationWindow
 RhiPresentationEngine
     ├── GraphicsDeviceDomain
     │       └── D3D11 backend
+    │               ├── video-capable native device + execution guard
     │               ├── application-owned QRhi
-    │               └── same-device libplacebo GPU
+    │               ├── same-device libplacebo GPU
+    │               ├── same-device FFmpeg D3D11VA context
+    │               └── native libplacebo frame importer
     ├── QRhi swapchain
     ├── QuickUiLayer
     │       └── QQuickRenderControl → full-window RGBA16F texture
@@ -88,8 +93,12 @@ RhiPresentationEngine
             └── layer composition + extended-linear or SDR encoding
 ```
 
-All current objects and GPU work run on the GUI thread. There is no render
-thread or playback thread yet.
+QRhi, libplacebo rendering, and presentation still run on the GUI thread.
+First-frame FFmpeg demux/decode runs on `MediaSession`'s worker. The D3D11
+backend serializes that decoder's device callbacks with the engine's QRhi and
+libplacebo resource/command phases and also enables native D3D11 multithread
+protection. Device-independent source selection, geometry, and display policy
+remain outside the native execution scope.
 
 ### Component map
 
@@ -98,7 +107,7 @@ thread or playback thread yet.
 | `PresentationWindow` | Owns presentation-facing state, forwards supported input to the redirected Quick window, and translates native window events into engine invalidation or teardown. |
 | `VideoViewportState` | Carries the active QML page's root-logical video rectangle and visibility into presentation code without exposing page types. |
 | `GraphicsBackendFactory` | Selects Qt Quick API, window surface type, and graphics-device implementation without exposing native types to application or presentation code. |
-| `GraphicsDeviceDomain` | Owns QRhi, the same-device libplacebo GPU, device generation, backend/adapter diagnostics, target selection, and native teardown. |
+| `GraphicsDeviceDomain` | Owns the native device, QRhi, same-device libplacebo and FFmpeg hardware contexts, execution synchronization, device generation, backend/adapter diagnostics, target/importer selection, and native teardown. |
 | `RhiPresentationEngine` | Owns the swapchain, render-pass lifecycle, frame scheduling, output verification, and device recovery around a graphics domain. |
 | `QuickUiLayer` | Creates a `QQuickRenderControl` scene on the engine's QRhi and renders it into a transparent RGBA16F texture. |
 | `RenderedVideoSource` | Device-independent content revision, cadence, invalidation, and producer-factory contract used by the engine. |
@@ -108,6 +117,7 @@ thread or playback thread yet.
 | `DiagnosticVideoProducer` | Implements the producer contract with the temporary pattern pipeline and direct `QrhiVideoTarget`. |
 | `LibplaceboDiagnosticVideoProducer` | Owns a persistent renderer and analytic RGBA32F upload texture; describes sRGB or BT.2020/PQ input and a linear BT.709 target to libplacebo. |
 | `D3D11LibplaceboVideoTarget` | Wraps the QRhi-owned RGBA16F D3D11 texture as a `pl_tex` and brackets same-immediate-context work through QRhi external commands. |
+| `D3D11LibplaceboFrameImporter` | Validates a retained D3D11VA texture/slice and maps NV12/P010/P012/P016 plane views into libplacebo without copying the frame. |
 | `RenderedVideoSurfaceState` | Pure description and device/display/content reuse key for a completed display-targeted surface. It does not own a native texture. |
 | `HdrCompositor` | Places an optional already processed video surface, converts and blends the flattened UI layer, applies presentation scaling, and encodes the swapchain. It owns a valid fallback binding for UI-only frames and has no source peak, transfer, metadata, or tone-mapping inputs. |
 | `PresentationOutputState` | Combines screen metrics, operating-system display state, and the successfully created swapchain's properties into one QML-facing presentation snapshot. |
@@ -123,6 +133,13 @@ generation. Qt Quick adopts that QRhi with
 producer, final compositor, and visible swapchain therefore use the same native
 D3D11 device.
 
+The domain creates that D3D11 device with video support before media can open,
+then imports its device and immediate context into QRhi and gives the same
+device to libplacebo and FFmpeg. An immutable hardware-decode capability can be
+snapshotted by a worker request without exposing D3D11 types. FFmpeg references
+the device through its own `AVBufferRef`, while a published hardware
+`DecodedVideoFrame` keeps the decoder pool and texture-array slice alive.
+
 The engine owns the final presentation loop rather than injecting rendering
 into a Qt-owned onscreen scene graph. Qt Quick renders through
 `QQuickRenderControl` into an application-provided texture, and the engine then
@@ -132,11 +149,18 @@ The current destruction order is an invariant:
 
 1. Destroy the compositor and swapchain resources that depend on the visible
    render-pass descriptor.
-2. Destroy the diagnostic producer, its libplacebo renderer/input resources
-   when selected, and its surface resources.
+2. Destroy the active producer, its libplacebo renderer/input resources, and
+   its surface resources.
 3. Disconnect and destroy `QuickUiLayer`, allowing it to invalidate its scene
    and release QRhi resources.
-4. Destroy the graphics-device domain and therefore the QRhi device.
+4. Before device teardown, supersede the media session's in-flight decode and
+   clear any published hardware frame. A ready software frame remains valid.
+   Destroy the graphics-device domain and QRhi while holding the shared
+   execution scope.
+5. Once the replacement domain publishes its decode capability, re-decode
+   superseded media work. A retained worker reference may keep an old native
+   allocation alive temporarily, but stale completion cannot be published or
+   imported.
 
 The Quick render target and diagnostic video producer intentionally survive
 swapchain-only recreation. Resizing the video target changes its composition
@@ -148,7 +172,8 @@ rebuilt.
 
 For a visible, non-empty window, one engine frame proceeds as follows:
 
-1. Lazily create the QRhi device and redirected Quick scene.
+1. Reuse the graphics domain created before media open; lazily create the
+   redirected Quick scene.
 2. Recreate the swapchain if an output change requested it.
 3. Create or resize the swapchain.
 4. Ensure the Quick RGBA16F target matches the swapchain pixel size.
@@ -209,7 +234,10 @@ The native surface and graphics device have different lifetimes:
 * The video texture survives swapchain-only teardown because it depends on the
   QRhi device, not the swapchain render-pass descriptor.
 * Device loss tears down compositor, swapchain, diagnostic producer, Quick,
-  and QRhi resources in ownership order.
+  and QRhi resources in ownership order. It supersedes an in-flight media open
+  or clears a ready hardware frame, then re-decodes against the replacement
+  graphics capability. Ready software frames survive and are uploaded by the
+  recreated producer.
 * Device recovery is bounded to eight attempts, spaced 250 milliseconds apart.
 * An otherwise unexpected QRhi frame error triggers one complete rebuild. A
   second consecutive frame error is fatal.
@@ -340,8 +368,8 @@ composition for that frame. The compositor retains a valid internal texture
 binding but uses zero video geometry, leaving only its background and the
 redirected UI.
 
-The future FFmpeg importer will replace the analytic upload input, not this
-consumer contract or the libplacebo renderer. Effective source metadata can
+The FFmpeg importer replaces the analytic upload input, not this consumer
+contract or the libplacebo renderer. Effective source metadata can
 describe SDR, HDR10/PQ, HLG, dynamic HDR, different primaries, ranges, chroma
 locations, and bit depths. Supported forms will be normalized and rendered
 upstream into the same surface; unsupported or ambiguous forms must produce
@@ -445,13 +473,14 @@ src/
         backends/
     media/          retained decoded frames and FFmpeg integration
         ffmpeg/
+    playback/       media-session lifecycle and active request worker
     platform/       operating-system display observation
     presentation/   output policy, QRhi orchestration, layers, and compositor
         shaders/
     video/          rendered surfaces, producers, and target interop
 ```
 
-Future playback, audio, subtitle, and diagnostics source directories should be
+Future audio, subtitle, and diagnostics source directories should be
 added when those subsystems have concrete code. Cross-directory includes use
 the responsibility-qualified path so dependencies remain visible.
 
@@ -482,10 +511,15 @@ through real FFmpeg demux/decode and retains immutable frames after decoder
 teardown. The RGB case captures both video and composition output and verifies
 copy diagnostics plus target-only rerender reuse. The compressed YUV case
 verifies exact decoded plane samples, BT.709 limited-range conversion, timing,
-and non-square-pixel metadata. This is first-frame software integration, not
-continuous playback or hardware decode. A fixed mastered PQ fixture, renderer
-image corpus, cross-backend capture, and recorded runtime display matrix do not
-exist yet.
+and non-square-pixel metadata. A third pinned H.264 scenario decodes a real
+D3D11VA NV12 frame on the graphics-domain device, imports the retained texture
+slice directly, asserts zero input CPU transfers/GPU copies and zero output
+copies/transfers, and compares captured output against software decode. CTest
+requires D3D11VA for this target rather than treating a missing capability as
+green coverage. This remains first-frame integration, not continuous playback.
+A fixed mastered PQ fixture, P010/P012/P016 capture,
+renderer image corpus, cross-backend capture, and recorded runtime display
+matrix do not exist yet.
 
 The built GUI has also completed an automated four-second startup liveness
 smoke with the configured Qt runtime. It created the normal application path

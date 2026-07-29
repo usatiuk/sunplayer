@@ -118,7 +118,8 @@ DecodedVideoSource::createProducer(
 }
 
 bool DecodedVideoSource::reportPresentationFailure(
-        const QString &reason) {
-    emit presentationFailed(reason);
+        const VideoFailure &failure) {
+    Q_ASSERT(failure.isValid());
+    emit presentationFailed(failure);
     return true;
 }

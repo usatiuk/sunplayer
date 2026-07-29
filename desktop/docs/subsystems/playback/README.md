@@ -15,7 +15,19 @@ One persistent worker receives cancellation without a GUI-thread join and
 retains only the latest pending request, keeping repeated replacement bounded.
 The frame is published before `Ready`, and clearing the session releases its
 source and forces any hidden producer retaining that frame to be recreated.
-Presentation/import failures return to the session as user-visible errors.
+Presentation failures return to the session as user-visible errors. A typed
+hardware-frame import failure instead causes one software-only reopen; failure
+of that software path or a repeated typed failure becomes the visible error.
+The graphics domain supplies a hardware-decode capability before file open.
+Supported Windows streams report `D3D11VA`; unsupported or failed hardware
+decode reports `Software` plus its fallback reason. This is diagnostic state,
+not a user-selectable renderer or decoder preference.
+
+Graphics-device recreation advances the playback generation for an in-flight
+open or ready hardware frame, clears hardware-backed state, and holds the
+session in `Opening` until it can re-decode against the replacement
+capability. A ready software frame remains `Ready` because its storage is
+generation-independent.
 
 There is still no continuous decoder, scheduler, bounded packet/frame queues,
 seek implementation, or audio clock. The decoded-frame boundary carries the

@@ -83,8 +83,8 @@ ActiveVideoSource::createProducer(
 }
 
 bool ActiveVideoSource::reportPresentationFailure(
-        const QString &reason) {
-    return activeDelegate().reportPresentationFailure(reason);
+        const VideoFailure &failure) {
+    return activeDelegate().reportPresentationFailure(failure);
 }
 
 RenderedVideoSource &

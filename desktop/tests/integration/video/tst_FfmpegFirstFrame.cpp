@@ -2,10 +2,12 @@
 #include <cmath>
 #include <cstring>
 #include <memory>
+#include <optional>
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QFile>
+#include <QPoint>
 #include <QRegularExpression>
 #include <QtCore/qfloat16.h>
 #include <QtTest>
@@ -20,6 +22,8 @@
 #include "graphics/GraphicsDeviceDomain.h"
 #include "media/DecodedVideoFrame.h"
 #include "media/FfmpegFirstFrameDecoder.h"
+#include "media/FfmpegHardwareDevice.h"
+#include "media/ffmpeg/FfmpegFirstFrameDecodeFallback.h"
 #include "presentation/HdrCompositor.h"
 #include "video/DecodedVideoSource.h"
 #include "video/LibplaceboDecodedVideoProducer.h"
@@ -124,6 +128,105 @@ RenderedVideoSurfaceState surfaceState(
         .contentRevision = contentRevision,
     };
 }
+
+struct DecodedFrameCapture {
+    QString error;
+    QRhiReadbackResult readback;
+    VideoFrameImportDiagnostics input;
+    RenderedVideoProducerDiagnostics producer;
+
+    bool isSuccess() const {
+        return error.isEmpty()
+            && input.isValid()
+            && producer.isValid()
+            && !readback.data.isEmpty();
+    }
+};
+
+DecodedFrameCapture captureDecodedFrame(
+        GraphicsDeviceDomain &graphics,
+        std::shared_ptr<const DecodedVideoFrame> frame) {
+    DecodedFrameCapture result;
+    GraphicsDeviceExecutionScope execution =
+        graphics.acquireExecutionScope();
+    QRhi &rhi = graphics.rhi();
+    DecodedVideoSource source(
+        std::move(frame), VideoTargetReadback::Enabled);
+    LibplaceboDecodedVideoProducer producer(
+        graphics, source, VideoTargetReadback::Enabled);
+    const RenderedVideoSurfaceState state =
+        surfaceState(
+            graphics,
+            source.contentRevision(),
+            203.0f,
+            source.currentFrame()->geometry().visibleSize);
+    if (producer.ensureSurface(state)
+            != VideoOperationResult::Ready) {
+        result.error =
+            producer.diagnostics().target.fallbackReason;
+        return result;
+    }
+
+    QRhiCommandBuffer *commandBuffer = nullptr;
+    if (rhi.beginOffscreenFrame(&commandBuffer)
+            != QRhi::FrameOpSuccess
+            || !commandBuffer) {
+        result.error =
+            QStringLiteral("Could not begin offscreen frame");
+        return result;
+    }
+
+    const auto abortFrame = [&] {
+        rhi.endOffscreenFrame(QRhi::SkipPresent);
+        producer.submissionAborted();
+        producer.discardPendingRender();
+    };
+    if (producer.render(*commandBuffer, state)
+            != VideoOperationResult::Ready
+            || producer.prepareForComposition(*commandBuffer)
+                != VideoOperationResult::Ready) {
+        result.error =
+            producer.diagnostics().target.fallbackReason;
+        abortFrame();
+        result.input =
+            producer.frameImportDiagnostics();
+        result.producer = producer.diagnostics();
+        return result;
+    }
+
+    bool readbackCompleted = false;
+    result.readback.completed = [&readbackCompleted] {
+        readbackCompleted = true;
+    };
+    QRhiResourceUpdateBatch *updates =
+        rhi.nextResourceUpdateBatch();
+    updates->readBackTexture(
+        QRhiReadbackDescription(
+            &producer.textureForComposition()),
+        &result.readback);
+    commandBuffer->resourceUpdate(updates);
+
+    const QRhi::FrameOpResult frameResult =
+        rhi.endOffscreenFrame();
+    if (frameResult == QRhi::FrameOpSuccess) {
+        producer.submissionAccepted();
+        producer.commitPendingRender();
+    } else {
+        producer.submissionAborted();
+        producer.discardPendingRender();
+        result.error =
+            QStringLiteral("Could not finish offscreen frame");
+        return result;
+    }
+    if (!readbackCompleted) {
+        result.error =
+            QStringLiteral("Decoded-frame readback did not complete");
+        return result;
+    }
+    result.input = producer.frameImportDiagnostics();
+    result.producer = producer.diagnostics();
+    return result;
+}
 }
 
 class FfmpegFirstFrameTest final : public QObject {
@@ -142,6 +245,8 @@ public:
 private slots:
     void realDemuxDecodeImportAndComposition();
     void compressedYuvMetadataAndRendering();
+    void hardwareDecodeFailureRetriesSoftware();
+    void d3d11HardwareDecodeDirectImport();
 };
 
 void FfmpegFirstFrameTest::
@@ -433,6 +538,9 @@ compressedYuvMetadataAndRendering() {
         "Fixture manifest has no valid SHA-256");
     QCOMPARE(fixtureHash(fixture), declaredHash);
 
+    std::unique_ptr<GraphicsDeviceDomain> graphics =
+        GraphicsBackendFactory::createDeviceDomain();
+    QVERIFY2(graphics, "Could not create D3D11 graphics domain");
     const FfmpegFirstFrameResult decoded =
         decodeFirstVideoFrame(
             fixture,
@@ -440,13 +548,21 @@ compressedYuvMetadataAndRendering() {
                 .playbackGeneration = 13,
                 .decoderRevision = 1,
                 .frameId = 1,
-            });
+            },
+            graphics->videoDecodeCapability());
     QVERIFY2(decoded.isSuccess(), qPrintable(decoded.error));
     QVERIFY(decoded.diagnostics.containerFormat.contains(
         QStringLiteral("matroska")));
     QCOMPARE(
         decoded.diagnostics.decoderName,
         QStringLiteral("ffv1"));
+    QVERIFY(!decoded.diagnostics.hardwareAccelerated);
+    QCOMPARE(
+        decoded.diagnostics.decodePath,
+        QStringLiteral("Software"));
+    QVERIFY2(
+        !decoded.diagnostics.hardwareFallbackReason.isEmpty(),
+        "Software fallback must explain why hardware was unavailable");
 
     const DecodedVideoFrame &frame = *decoded.frame;
     QCOMPARE(frame.geometry().codedSize, QSize(96, 64));
@@ -518,9 +634,6 @@ compressedYuvMetadataAndRendering() {
             sample.chromaRed);
     }
 
-    std::unique_ptr<GraphicsDeviceDomain> graphics =
-        GraphicsBackendFactory::createDeviceDomain();
-    QVERIFY2(graphics, "Could not create D3D11 graphics domain");
     QRhi &rhi = graphics->rhi();
     DecodedVideoSource source(
         decoded.frame, VideoTargetReadback::Enabled);
@@ -606,6 +719,307 @@ compressedYuvMetadataAndRendering() {
     QCOMPARE(
         producer.frameImportDiagnostics().path,
         VideoFrameImportPath::SoftwareUpload);
+#endif
+}
+
+void FfmpegFirstFrameTest::
+hardwareDecodeFailureRetriesSoftware() {
+    const QString fixture = QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-ffv1.mkv");
+    const VideoFrameIdentity identity{
+        .playbackGeneration = 19,
+        .decoderRevision = 1,
+        .frameId = 1,
+    };
+    int attempts = 0;
+    bool receivedSoftwareFallback = false;
+    const FfmpegFirstFrameResult result =
+        decodeFirstVideoFrameWithFallback(
+            {
+                .device = {},
+                .unavailableReason = {},
+            },
+            [&](const VideoHardwareDecodeCapability &capability,
+                bool &hardwareSelected) {
+                ++attempts;
+                if (attempts == 1) {
+                    hardwareSelected = true;
+                    FfmpegFirstFrameResult failure;
+                    failure.error =
+                        QStringLiteral(
+                            "Injected post-selection hardware failure");
+                    return failure;
+                }
+                hardwareSelected = false;
+                receivedSoftwareFallback =
+                    !capability.isAvailable()
+                    && capability.unavailableReason.contains(
+                        QStringLiteral(
+                            "Injected post-selection hardware failure"));
+                return decodeFirstVideoFrame(
+                    fixture, identity, capability);
+            });
+
+    QCOMPARE(attempts, 2);
+    QVERIFY(receivedSoftwareFallback);
+    QVERIFY2(result.isSuccess(), qPrintable(result.error));
+    QVERIFY(!result.diagnostics.hardwareAccelerated);
+    QCOMPARE(
+        result.diagnostics.decodePath,
+        QStringLiteral("Software"));
+    QVERIFY(
+        result.diagnostics.hardwareFallbackReason.contains(
+            QStringLiteral(
+                "Injected post-selection hardware failure")));
+}
+
+void FfmpegFirstFrameTest::
+d3d11HardwareDecodeDirectImport() {
+#ifndef Q_OS_WIN
+    QSKIP("D3D11VA direct import is Windows-specific");
+#else
+    const QString fixture = QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-h264.mkv");
+    const QString manifest = QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-h264.toml");
+    const QByteArray declaredHash =
+        expectedFixtureHash(manifest);
+    QVERIFY2(
+        !declaredHash.isEmpty(),
+        "Fixture manifest has no valid SHA-256");
+    QCOMPARE(fixtureHash(fixture), declaredHash);
+
+    std::unique_ptr<GraphicsDeviceDomain> graphics =
+        GraphicsBackendFactory::createDeviceDomain();
+    QVERIFY2(graphics, "Could not create D3D11 graphics domain");
+    const VideoHardwareDecodeCapability &hardwareDecode =
+        graphics->videoDecodeCapability();
+    if (!hardwareDecode.isAvailable()) {
+        const QString reason = QStringLiteral(
+            "D3D11VA unavailable: %1")
+            .arg(hardwareDecode.unavailableReason);
+        if (qEnvironmentVariableIntValue(
+                "SUNROOM_REQUIRE_D3D11VA") != 0) {
+            QFAIL(qPrintable(reason));
+        }
+        QSKIP(qPrintable(reason));
+    }
+
+    const FfmpegFirstFrameResult hardware =
+        decodeFirstVideoFrame(
+            fixture,
+            {
+                .playbackGeneration = 21,
+                .decoderRevision = 1,
+                .frameId = 1,
+            },
+            hardwareDecode);
+    QVERIFY2(
+        hardware.isSuccess(),
+        qPrintable(hardware.error));
+    QVERIFY(hardware.diagnostics.hardwareAccelerated);
+    QCOMPARE(
+        hardware.diagnostics.decodePath,
+        QStringLiteral("D3D11VA"));
+    QVERIFY(
+        hardware.diagnostics.hardwareFallbackReason.isEmpty());
+    QVERIFY(
+        hardware.diagnostics.containerFormat.contains(
+            QStringLiteral("matroska")));
+    QCOMPARE(
+        hardware.diagnostics.decoderName,
+        QStringLiteral("h264"));
+    QCOMPARE(
+        hardware.frame->storage().kind,
+        VideoFrameStorageKind::D3D11Surface);
+    QCOMPARE(
+        hardware.frame->storage().hardwareFormat,
+        QStringLiteral("d3d11"));
+    QCOMPARE(
+        hardware.frame->storage().softwareFormat,
+        QStringLiteral("nv12"));
+    QCOMPARE(
+        hardware.frame->storage().graphicsDeviceGeneration,
+        std::optional<std::uint64_t>(graphics->generation()));
+    QCOMPARE(
+        hardware.frame->geometry().visibleSize,
+        QSize(640, 360));
+    QVERIFY(
+        hardware.frame->geometry().sampleAspectRatioKnown);
+    QCOMPARE(
+        hardware.frame->geometry().sampleAspectRatio.numerator,
+        1);
+    QCOMPARE(
+        hardware.frame->geometry().sampleAspectRatio.denominator,
+        1);
+    QVERIFY(hardware.frame->timing().pts);
+    QCOMPARE(*hardware.frame->timing().pts, 0);
+    QVERIFY(hardware.frame->timing().duration);
+    QCOMPARE(*hardware.frame->timing().duration, 250);
+    QCOMPARE(
+        hardware.frame->timing().timeBase.numerator,
+        1);
+    QCOMPARE(
+        hardware.frame->timing().timeBase.denominator,
+        1000);
+    QCOMPARE(
+        hardware.frame->timing().timeBase.denominator
+            / *hardware.frame->timing().duration,
+        4);
+    QCOMPARE(hardware.frame->signal().componentDepth, 8);
+    QCOMPARE(
+        hardware.frame->signal().colorPrimaries,
+        QStringLiteral("bt709"));
+    QCOMPARE(
+        hardware.frame->signal().transferFunction,
+        QStringLiteral("bt709"));
+    QCOMPARE(
+        hardware.frame->signal().matrixCoefficients,
+        QStringLiteral("bt709"));
+    QCOMPARE(
+        hardware.frame->signal().colorRange,
+        QStringLiteral("tv"));
+    QCOMPARE(
+        hardware.frame->signal().chromaLocation,
+        QStringLiteral("left"));
+
+    const FfmpegFirstFrameResult software =
+        decodeFirstVideoFrame(
+            fixture,
+            {
+                .playbackGeneration = 22,
+                .decoderRevision = 1,
+                .frameId = 1,
+            });
+    QVERIFY2(
+        software.isSuccess(),
+        qPrintable(software.error));
+    QVERIFY(!software.diagnostics.hardwareAccelerated);
+    QCOMPARE(
+        software.diagnostics.decodePath,
+        QStringLiteral("Software"));
+    QCOMPARE(
+        software.frame->storage().kind,
+        VideoFrameStorageKind::SoftwarePlanes);
+    QCOMPARE(
+        software.frame->storage().softwareFormat,
+        QStringLiteral("yuv420p"));
+
+    DecodedFrameCapture hardwareCapture =
+        captureDecodedFrame(
+            *graphics, hardware.frame);
+    QVERIFY2(
+        hardwareCapture.isSuccess(),
+        qPrintable(hardwareCapture.error));
+    DecodedFrameCapture softwareCapture =
+        captureDecodedFrame(
+            *graphics, software.frame);
+    QVERIFY2(
+        softwareCapture.isSuccess(),
+        qPrintable(softwareCapture.error));
+    QCOMPARE(
+        hardwareCapture.readback.format,
+        QRhiTexture::RGBA16F);
+    QCOMPARE(
+        hardwareCapture.readback.pixelSize,
+        QSize(640, 360));
+    QCOMPARE(
+        softwareCapture.readback.pixelSize,
+        hardwareCapture.readback.pixelSize);
+
+    QCOMPARE(
+        hardwareCapture.input.path,
+        VideoFrameImportPath::DirectHardwareSurface);
+    QCOMPARE(
+        hardwareCapture.input.knownCpuDownloadsPerFrame,
+        0U);
+    QCOMPARE(
+        hardwareCapture.input.knownCpuUploadsPerFrame,
+        0U);
+    QCOMPARE(
+        hardwareCapture.input.knownGpuCopiesPerFrame,
+        0U);
+    QVERIFY(
+        hardwareCapture.input.nativeResource.contains(
+            QStringLiteral("NV12")));
+    QVERIFY(
+        hardwareCapture.producer.inputPath.contains(
+            QStringLiteral("direct libplacebo import")));
+    QCOMPARE(
+        hardwareCapture.producer
+            .knownInputCpuTransfersPerInputFrame,
+        0U);
+    QCOMPARE(
+        hardwareCapture.producer
+            .knownInputGpuCopiesPerInputFrame,
+        0U);
+    QCOMPARE(
+        hardwareCapture.producer.target.outputPath,
+        VideoOutputPath::DirectRenderTarget);
+    QCOMPARE(
+        hardwareCapture.producer.target
+            .knownOutputGpuCopiesPerRender,
+        0U);
+    QCOMPARE(
+        hardwareCapture.producer.target
+            .knownOutputCpuTransfersPerRender,
+        0U);
+    QVERIFY(
+        !hardwareCapture.producer.target
+            .synchronizationMode.isEmpty());
+
+    std::unique_ptr<GraphicsDeviceDomain>
+        incompatibleGraphics =
+            GraphicsBackendFactory::createDeviceDomain();
+    QVERIFY2(
+        incompatibleGraphics,
+        "Could not create second D3D11 graphics domain");
+    const DecodedFrameCapture incompatibleCapture =
+        captureDecodedFrame(
+            *incompatibleGraphics, hardware.frame);
+    QVERIFY(!incompatibleCapture.isSuccess());
+    QCOMPARE(
+        incompatibleCapture.input.path,
+        VideoFrameImportPath::Unavailable);
+    QCOMPARE(
+        incompatibleCapture.producer.failureKind,
+        VideoFailureKind::
+            HardwareFrameImportUnavailable);
+    QVERIFY(
+        incompatibleCapture.error.contains(
+            QStringLiteral(
+                "stale graphics-device generation")));
+
+    constexpr std::array samplePoints{
+        QPoint{100, 90},
+        QPoint{320, 90},
+        QPoint{540, 90},
+        QPoint{100, 270},
+        QPoint{320, 270},
+        QPoint{540, 270},
+    };
+    for (const QPoint &sample : samplePoints) {
+        const FloatPixel hardwarePixel =
+            pixel(
+                hardwareCapture.readback,
+                sample.x(),
+                sample.y());
+        const FloatPixel softwarePixel =
+            pixel(
+                softwareCapture.readback,
+                sample.x(),
+                sample.y());
+        compareNear(
+            hardwarePixel.red, softwarePixel.red, 0.03f);
+        compareNear(
+            hardwarePixel.green, softwarePixel.green, 0.03f);
+        compareNear(
+            hardwarePixel.blue, softwarePixel.blue, 0.03f);
+        compareNear(hardwarePixel.alpha, 1.0f, 0.002f);
+    }
 #endif
 }
 

@@ -291,7 +291,11 @@ Initial additions should be narrowly tied to milestones:
 * A tiny lossless RGB image for the first real demux/decode/import boundary.
 * One small SDR container for first-frame integration. The current
   Matroska/FFV1 fixture covers deterministic compressed software YUV, limited
-  range, BT.709 metadata, timestamps, and non-square pixels.
+  range, BT.709 metadata, timestamps, and non-square pixels. A pinned
+  Matroska/H.264 fixture covers D3D11VA decode, retained NV12 import, complete
+  BT.709 signal metadata plus PTS, duration, time-base, derived frame-rate, and
+  SAR assertions, hardware/software output comparison, and zero-copy
+  input/output diagnostics.
 * One small HDR10 container with explicit mastering and content-light
   metadata.
 * Timeline, subtitle, audio, corruption, dynamic-HDR, and unusual-format

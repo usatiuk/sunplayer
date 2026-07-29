@@ -3,6 +3,7 @@
 #include <QString>
 
 #include "video/RenderedVideoSurface.h"
+#include "video/VideoFailure.h"
 #include "video/VideoTargetInterop.h"
 
 class QRhiCommandBuffer;
@@ -12,6 +13,8 @@ struct RenderedVideoProducerDiagnostics {
     QString producerName;
     QString inputPath;
     std::uint32_t knownInputCpuTransfersPerInputFrame = 0;
+    std::uint32_t knownInputGpuCopiesPerInputFrame = 0;
+    VideoFailureKind failureKind = VideoFailureKind::None;
     VideoTargetInteropDiagnostics target;
 
     bool isValid() const {

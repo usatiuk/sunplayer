@@ -7,12 +7,46 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/error.h>
+#include <libavutil/hwcontext.h>
 }
 
 #include "media/DecodedVideoFrame.h"
+#include "media/FfmpegHardwareDevice.h"
+#include "media/ffmpeg/FfmpegFirstFrameDecodeFallback.h"
 #include "media/ffmpeg/FfmpegFrameMetadata.h"
 
 namespace {
+struct HardwareDecodeState {
+    enum AVPixelFormat pixelFormat = AV_PIX_FMT_NONE;
+    std::optional<std::uint64_t> graphicsDeviceGeneration;
+    QString apiName;
+    QString fallbackReason;
+    bool *hardwareSelected = nullptr;
+};
+
+enum AVPixelFormat selectHardwareFormat(
+        AVCodecContext *context,
+        const enum AVPixelFormat *formats) {
+    auto &state =
+        *static_cast<HardwareDecodeState *>(
+            context->opaque);
+    for (const enum AVPixelFormat *format = formats;
+            *format != AV_PIX_FMT_NONE;
+            ++format) {
+        if (*format == state.pixelFormat) {
+            Q_ASSERT(state.hardwareSelected);
+            *state.hardwareSelected = true;
+            return *format;
+        }
+    }
+    if (state.fallbackReason.isEmpty()) {
+        state.fallbackReason = QStringLiteral(
+            "The decoder did not offer the requested %1 format")
+            .arg(state.apiName);
+    }
+    return avcodec_default_get_format(context, formats);
+}
+
 struct FormatContextDeleter {
     void operator()(AVFormatContext *context) const {
         avformat_close_input(&context);
@@ -81,7 +115,8 @@ FfmpegFirstFrameResult decodedResult(
         const AVCodec &decoder,
         AVFormatContext &formatContext,
         int streamIndex,
-        const VideoFrameIdentity &identity) {
+        const VideoFrameIdentity &identity,
+        HardwareDecodeState &hardwareState) {
     if (!mergeStreamVideoMetadata(
             frame, *stream.codecpar)) {
         return failure(QStringLiteral(
@@ -97,6 +132,9 @@ FfmpegFirstFrameResult decodedResult(
     }
 
     QString frameError;
+    const bool hardwareFrame =
+        frame.format == hardwareState.pixelFormat
+        && frame.hw_frames_ctx;
     std::shared_ptr<const DecodedVideoFrame> decoded =
         DecodedVideoFrame::clone(
             frame,
@@ -105,13 +143,14 @@ FfmpegFirstFrameResult decodedResult(
                 stream.time_base.num,
                 stream.time_base.den,
             },
-            std::nullopt,
+            hardwareFrame
+                ? hardwareState.graphicsDeviceGeneration
+                : std::nullopt,
             &frameError);
     if (!decoded)
         return failure(frameError);
 
     FfmpegFirstFrameResult result;
-    result.frame = std::move(decoded);
     result.diagnostics.containerFormat =
         formatContext.iformat && formatContext.iformat->name
         ? QString::fromLatin1(formatContext.iformat->name)
@@ -120,14 +159,47 @@ FfmpegFirstFrameResult decodedResult(
         decoder.name
         ? QString::fromLatin1(decoder.name)
         : QStringLiteral("unknown");
+    result.diagnostics.hardwareAccelerated =
+        decoded->storage().isHardware();
+    result.diagnostics.decodePath =
+        result.diagnostics.hardwareAccelerated
+        ? hardwareState.apiName
+        : QStringLiteral("Software");
+    if (!result.diagnostics.hardwareAccelerated)
+        result.diagnostics.hardwareFallbackReason =
+            hardwareState.fallbackReason;
     result.diagnostics.videoStreamIndex = streamIndex;
+    result.frame = std::move(decoded);
     return result;
+}
+
+const AVCodecHWConfig *hardwareConfiguration(
+        const AVCodec &decoder,
+        enum AVHWDeviceType deviceType) {
+    for (int index = 0;; ++index) {
+        const AVCodecHWConfig *configuration =
+            avcodec_get_hw_config(&decoder, index);
+        if (!configuration)
+            return nullptr;
+        if (configuration->device_type == deviceType
+                && configuration->pix_fmt
+                    != AV_PIX_FMT_NONE
+                && (configuration->methods
+                    & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX)) {
+            return configuration;
+        }
+    }
 }
 }
 
 bool FfmpegFirstFrameDiagnostics::isValid() const {
     return !containerFormat.isEmpty()
         && !decoderName.isEmpty()
+        && !decodePath.isEmpty()
+        && (hardwareAccelerated
+            ? decodePath != QStringLiteral("Software")
+                && hardwareFallbackReason.isEmpty()
+            : decodePath == QStringLiteral("Software"))
         && videoStreamIndex >= 0;
 }
 
@@ -144,10 +216,20 @@ bool FfmpegFirstFrameResult::isCancelled() const {
         && error.isEmpty();
 }
 
-FfmpegFirstFrameResult decodeFirstVideoFrame(
+namespace {
+FfmpegFirstFrameResult decodeFirstVideoFrameAttempt(
         const QString &path,
         const VideoFrameIdentity &identity,
-        std::stop_token stopToken) {
+        const VideoHardwareDecodeCapability &hardwareDecode,
+        std::stop_token stopToken,
+        bool *hardwareSelected) {
+    Q_ASSERT(hardwareSelected);
+    *hardwareSelected = false;
+    HardwareDecodeState hardwareState;
+    hardwareState.hardwareSelected = hardwareSelected;
+    hardwareState.fallbackReason =
+        hardwareDecode.unavailableReason;
+
     if (stopToken.stop_requested())
         return cancellation();
     if (path.isEmpty())
@@ -228,6 +310,52 @@ FfmpegFirstFrameResult decodeFirstVideoFrame(
             .arg(ffmpegError(status)));
     }
     codecContext->pkt_timebase = stream.time_base;
+
+    if (hardwareDecode.device) {
+        AVBufferRef *deviceReference =
+            hardwareDecode.device
+                ->referenceDeviceContext();
+        if (!deviceReference) {
+            hardwareState.fallbackReason =
+                QStringLiteral(
+                    "Could not retain the %1 device")
+                    .arg(hardwareDecode.device->apiName());
+        } else {
+            const auto *const deviceContext =
+                reinterpret_cast<const AVHWDeviceContext *>(
+                    deviceReference->data);
+            const AVCodecHWConfig *configuration =
+                deviceContext
+                ? hardwareConfiguration(
+                    *decoder, deviceContext->type)
+                : nullptr;
+            if (!configuration) {
+                hardwareState.fallbackReason =
+                    QStringLiteral(
+                        "Decoder %1 does not support %2")
+                        .arg(
+                            QString::fromLatin1(decoder->name),
+                            hardwareDecode.device->apiName());
+                av_buffer_unref(&deviceReference);
+            } else {
+                hardwareState.pixelFormat =
+                    configuration->pix_fmt;
+                hardwareState.graphicsDeviceGeneration =
+                    hardwareDecode.device
+                        ->graphicsDeviceGeneration();
+                hardwareState.apiName =
+                    hardwareDecode.device->apiName();
+                codecContext->opaque = &hardwareState;
+                codecContext->get_format =
+                    selectHardwareFormat;
+                codecContext->hw_device_ctx =
+                    deviceReference;
+                // One published first frame plus a small bounded margin.
+                codecContext->extra_hw_frames = 2;
+            }
+        }
+    }
+
     status = avcodec_open2(
         codecContext.get(), decoder, nullptr);
     if (status < 0) {
@@ -273,7 +401,8 @@ FfmpegFirstFrameResult decodeFirstVideoFrame(
             *decoder,
             *formatContext,
             streamIndex,
-            identity);
+            identity,
+            hardwareState);
     };
 
     while ((status = av_read_frame(
@@ -333,4 +462,34 @@ FfmpegFirstFrameResult decodeFirstVideoFrame(
         return cancellation();
     return failure(QStringLiteral(
         "The selected video stream produced no decoded frame"));
+}
+}
+
+FfmpegFirstFrameResult decodeFirstVideoFrame(
+        const QString &path,
+        const VideoFrameIdentity &identity,
+        std::stop_token stopToken) {
+    return decodeFirstVideoFrame(
+        path,
+        identity,
+        VideoHardwareDecodeCapability{},
+        stopToken);
+}
+
+FfmpegFirstFrameResult decodeFirstVideoFrame(
+        const QString &path,
+        const VideoFrameIdentity &identity,
+        const VideoHardwareDecodeCapability &hardwareDecode,
+        std::stop_token stopToken) {
+    return decodeFirstVideoFrameWithFallback(
+        hardwareDecode,
+        [&](const VideoHardwareDecodeCapability &capability,
+            bool &hardwareSelected) {
+            return decodeFirstVideoFrameAttempt(
+                path,
+                identity,
+                capability,
+                stopToken,
+                &hardwareSelected);
+        });
 }

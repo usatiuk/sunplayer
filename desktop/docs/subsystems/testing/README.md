@@ -88,6 +88,12 @@ The media-session test uses `QTEST_GUILESS_MAIN` because worker completion is
 delivered through queued Qt events and therefore needs `QCoreApplication`,
 without loading a GUI platform plugin.
 
+The first-frame integration target is labeled `hardware-decode` in addition to
+its FFmpeg/GPU/Windows labels. Direct manual execution reports an explicit Qt
+Test skip when the machine lacks that capability. The registered CTest target
+sets `SUNROOM_REQUIRE_D3D11VA=1`, so a missing capability fails instead of
+silently appearing as covered.
+
 The QML shell component test uses `QTEST_MAIN` because Qt Quick Controls and
 its hidden `QQuickWindow` scene require `QGuiApplication`. It selects and
 stages Qt's offscreen platform plugin before application construction and
@@ -125,11 +131,11 @@ Current verified coverage:
 | libplacebo dependency boundary | The real DLL loads; pinned version, installed D3D11/Shaderc/built-in-DOVI configuration, disabled Vulkan/OpenGL/external-libdovi features, runtime staging, and log lifecycle pass |
 | FFmpeg dependency boundary | The three selected DLLs load; pinned major versions, D3D11VA, native H.264/HEVC decoders, disabled Vulkan/swscale configuration, and explicit runtime staging pass |
 | Real QRhi/libplacebo capture | Factory-selected D3D11 domain; shared QRhi device and immediate context; persistent libplacebo renderer; fixed-size persistent software input; distinct per-input-frame and per-output-render transfer diagnostics; direct wrapped RGBA16F target; aligned pattern layout; sRGB normalization at 80, 100, and 203 nits; target-relative PQ normalization at 100 and 203 nits; minimum-target value/known-state contract; zero output copies; pixel-validated resize/rewrap and producer rebinding; final composition readbacks; and a non-gating 60-frame throughput probe pass |
-| First decoded frame | Manifest-enforced SHA-256 for pinned PPM and Matroska/FFV1 fixtures; caller-owned unique identities; real demux/decode; retained AVFrame and side-data lifetime; stream/frame metadata precedence; hardware-plane description and generation compatibility; RGB24 and limited-range BT.709 YUV420P software upload; exact YUV and tolerant linear-RGB capture; final RGB composition; one input upload reused across 203/100-nit target rerender; zero input download/GPU copy and zero output copy |
-| First media session | Real off-thread local open plus controlled Opening/Ready/Error, nonblocking cancellation/replacement, superseding generation, shutdown, and nonfatal presentation-failure behavior |
+| First decoded frame | Manifest-enforced SHA-256 for pinned PPM, Matroska/FFV1, and Matroska/H.264 fixtures; caller-owned unique identities; real demux/decode; retained AVFrame and side-data lifetime; stream/frame metadata precedence; hardware-plane description and generation compatibility; RGB24 and limited-range BT.709 YUV420P software upload; required D3D11VA NV12 direct import on the shared device; stale-generation import classified for software retry; exact YUV and tolerant linear-RGB capture; hardware/software differential capture; final RGB composition; zero hardware input transfer/copy and zero output copy/transfer; deterministic post-selection fallback-policy test |
+| First media session | Real off-thread local open plus controlled Opening/Ready/Error, nonblocking cancellation/replacement, superseding generation, shutdown, nonfatal presentation failure, one-shot typed hardware-import software retry, repeated-failure rejection, in-flight graphics-recovery re-decode, and ready-software-frame retention |
 | Built application startup | The built Player executable has a registered no-window check for packaged QML and production type registration. A prior diagnostic build passed a four-second GUI/device/swapchain liveness smoke; a full Player process scenario remains missing |
 | Recorded SDR/HDR runtime matrix | Not implemented |
-| Representative compressed-media scenarios | Deterministic software Matroska/FFV1 YUV fixture implemented; H.264/HEVC hardware-decode coverage remains missing |
+| Representative compressed-media scenarios | Deterministic Matroska/FFV1 software YUV and Matroska/H.264 D3D11VA NV12 fixtures implemented; HEVC, P010/P012/P016, HDR metadata, and other hardware backends remain missing |
 | Fixed mastered PQ source across display targets | Not implemented |
 | Physical output measurement | Deferred |
 

@@ -50,7 +50,10 @@ public:
 
 private:
     bool deviceLost() const;
-    VideoOperationResult unavailable(const QString &reason);
+    VideoOperationResult unavailable(
+        const QString &reason,
+        VideoFailureKind failureKind =
+            VideoFailureKind::General);
 
     QRhi &m_rhi;
     pl_gpu m_gpu = nullptr;
@@ -61,6 +64,7 @@ private:
     std::unique_ptr<LibplaceboFrameImporter::Mapping> m_mapping;
     std::shared_ptr<const DecodedVideoFrame> m_mappedSourceFrame;
     QString m_failureReason;
+    VideoFailureKind m_failureKind = VideoFailureKind::None;
     std::optional<RenderedVideoSurfaceState> m_completedState;
     std::optional<RenderedVideoSurfaceState> m_pendingState;
 };

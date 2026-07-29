@@ -63,6 +63,17 @@ download a hardware frame.
 * A hardware frame from an old graphics-device generation must be rejected.
 * Backend synchronization must prove when GPU reads have been ordered before a
   retained hardware frame is released.
+* Device recreation supersedes in-flight old-generation decoding and
+  hardware-backed frames, then re-decodes after the replacement capability is
+  available. Ready software frames remain valid across device generations.
+* A native import rejection is a typed presentation failure; playback may
+  consume one retry with software decoding without teaching the importer
+  session policy. Repeated typed failures become session errors.
 
-The initial implementation exercises software `AVFrame` retention and upload.
-D3D11VA direct import remains the next backend implementation.
+The implementation exercises software `AVFrame` retention/upload and Windows
+D3D11VA retention/direct import. A pinned H.264 scenario proves that a retained
+NV12 texture-array slice can be rendered after decoder teardown without an
+input CPU transfer or GPU copy. The session tests cover typed software
+re-decode after import rejection and generation replacement after graphics
+invalidation. Other platform importers and non-direct GPU/CPU copy fallbacks
+remain future implementations.

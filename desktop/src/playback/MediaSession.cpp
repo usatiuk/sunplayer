@@ -12,8 +12,10 @@ namespace {
 FfmpegFirstFrameResult decodeFirstFrame(
         const QString &path,
         const VideoFrameIdentity &identity,
+        const VideoHardwareDecodeCapability &hardwareDecode,
         std::stop_token stopToken) {
-    return decodeFirstVideoFrame(path, identity, stopToken);
+    return decodeFirstVideoFrame(
+        path, identity, hardwareDecode, stopToken);
 }
 }
 
@@ -71,6 +73,14 @@ QString MediaSession::decoderName() const {
     return m_decoderName;
 }
 
+QString MediaSession::decodePath() const {
+    return m_decodePath;
+}
+
+QString MediaSession::hardwareFallbackReason() const {
+    return m_hardwareFallbackReason;
+}
+
 QString MediaSession::videoSummary() const {
     return m_videoSummary;
 }
@@ -91,6 +101,56 @@ const DecodedVideoSource &MediaSession::videoSource() const {
     return m_videoSource;
 }
 
+void MediaSession::invalidateGraphicsDevice() {
+    Q_ASSERT(QThread::currentThread() == thread());
+    m_videoDecodeCapability = {
+        .device = {},
+        .unavailableReason = QStringLiteral(
+            "The graphics device is being recreated"),
+    };
+    if (m_state != State::Opening
+            && m_state != State::Ready) {
+        return;
+    }
+    if (m_state == State::Ready) {
+        const std::shared_ptr<const DecodedVideoFrame> frame =
+            m_videoSource.currentFrame();
+        if (frame && !frame->storage().isHardware())
+            return;
+    }
+
+    const QString path = m_mediaUrl.toLocalFile();
+    if (path.isEmpty())
+        return;
+
+    advanceGeneration();
+    cancelOpen();
+    m_videoSource.clearFrame();
+    m_state = State::Opening;
+    m_errorMessage.clear();
+    resetDiagnostics();
+    m_reopenAfterGraphicsRecovery = true;
+    m_hardwareImportFallbackConsumed = false;
+    emit sessionChanged();
+}
+
+void MediaSession::setVideoDecodeCapability(
+        VideoHardwareDecodeCapability capability) {
+    Q_ASSERT(QThread::currentThread() == thread());
+    m_videoDecodeCapability = std::move(capability);
+    if (!m_reopenAfterGraphicsRecovery)
+        return;
+
+    m_reopenAfterGraphicsRecovery = false;
+    const QString path = m_mediaUrl.toLocalFile();
+    if (!path.isEmpty()) {
+        startOpen(
+            m_mediaUrl,
+            path,
+            m_videoDecodeCapability);
+    }
+}
+
 void MediaSession::openMedia(const QUrl &url) {
     Q_ASSERT(QThread::currentThread() == thread());
     if (!url.isValid() || !url.isLocalFile()) {
@@ -107,7 +167,9 @@ void MediaSession::openMedia(const QUrl &url) {
             tr("The selected media path is empty."));
         return;
     }
-    startOpen(url, path);
+    m_reopenAfterGraphicsRecovery = false;
+    m_hardwareImportFallbackConsumed = false;
+    startOpen(url, path, m_videoDecodeCapability);
 }
 
 void MediaSession::cancel() {
@@ -115,6 +177,8 @@ void MediaSession::cancel() {
     advanceGeneration();
     cancelOpen();
     m_videoSource.clearFrame();
+    m_reopenAfterGraphicsRecovery = false;
+    m_hardwareImportFallbackConsumed = false;
     m_state = State::Empty;
     m_mediaUrl = {};
     m_displayName.clear();
@@ -132,7 +196,8 @@ void MediaSession::retry() {
 
 void MediaSession::startOpen(
         const QUrl &url,
-        const QString &path) {
+        const QString &path,
+        VideoHardwareDecodeCapability hardwareDecode) {
     advanceGeneration();
     m_videoSource.clearFrame();
     m_state = State::Opening;
@@ -153,6 +218,7 @@ void MediaSession::startOpen(
         .generation = generation,
         .path = path,
         .identity = identity,
+        .hardwareDecode = std::move(hardwareDecode),
     });
 }
 
@@ -201,6 +267,7 @@ void MediaSession::workerLoop(
             m_decodeOperation(
                 request.path,
                 request.identity,
+                request.hardwareDecode,
                 operationStopToken);
         if (workerStopToken.stop_requested())
             return;
@@ -244,6 +311,9 @@ void MediaSession::completeOpen(
     m_containerFormat =
         result.diagnostics.containerFormat;
     m_decoderName = result.diagnostics.decoderName;
+    m_decodePath = result.diagnostics.decodePath;
+    m_hardwareFallbackReason =
+        result.diagnostics.hardwareFallbackReason;
     const VideoFrameGeometry &geometry =
         result.frame->geometry();
     const VideoSignalDescription &signal =
@@ -264,6 +334,8 @@ void MediaSession::failWithoutWorker(
     advanceGeneration();
     cancelOpen();
     m_videoSource.clearFrame();
+    m_reopenAfterGraphicsRecovery = false;
+    m_hardwareImportFallbackConsumed = false;
     m_state = State::Error;
     m_mediaUrl = url;
     m_displayName = url.fileName();
@@ -273,15 +345,35 @@ void MediaSession::failWithoutWorker(
 }
 
 void MediaSession::handlePresentationFailure(
-        const QString &reason) {
+        const VideoFailure &failure) {
     Q_ASSERT(QThread::currentThread() == thread());
+    Q_ASSERT(failure.isValid());
     if (m_state != State::Ready)
         return;
+    if (failure.kind
+            == VideoFailureKind::
+                HardwareFrameImportUnavailable
+            && !m_hardwareImportFallbackConsumed) {
+        const QString path = m_mediaUrl.toLocalFile();
+        if (!path.isEmpty()) {
+            m_hardwareImportFallbackConsumed = true;
+            startOpen(
+                m_mediaUrl,
+                path,
+                {
+                    .device = {},
+                    .unavailableReason =
+                        tr("Hardware frame import failed; "
+                           "using software decode: %1")
+                            .arg(failure.reason),
+                });
+            return;
+        }
+    }
+
     m_videoSource.clearFrame();
     m_state = State::Error;
-    m_errorMessage = reason.isEmpty()
-        ? tr("The decoded video frame could not be displayed.")
-        : reason;
+    m_errorMessage = failure.reason;
     emit sessionChanged();
 }
 
@@ -307,5 +399,7 @@ void MediaSession::advanceGeneration() {
 void MediaSession::resetDiagnostics() {
     m_containerFormat.clear();
     m_decoderName.clear();
+    m_decodePath.clear();
+    m_hardwareFallbackReason.clear();
     m_videoSummary.clear();
 }

@@ -64,8 +64,9 @@ As of 2026-07-29, the repository contains a Windows presentation foundation
 and a first visible media-opening slice, not yet continuous playback:
 
 * A factory-selected graphics-device domain owns the current D3D11 QRhi,
-  same-device libplacebo GPU, and device generation; the presentation engine
-  owns its window swapchain.
+  same-device libplacebo GPU, FFmpeg D3D11VA device, shared immediate-context
+  execution guard, and device generation; the presentation engine owns its
+  window swapchain.
 * Qt Quick renders through `QQuickRenderControl` into an application-owned
   RGBA16F texture.
 * A thin QML application shell defaults to a truthful Player page and keeps the
@@ -103,15 +104,28 @@ and a first visible media-opening slice, not yet continuous playback:
   8.1.2 dependencies built through the project-local vcpkg configuration.
 * `MediaSession` opens a local file and decodes its first video frame on a
   cooperatively cancellable worker. Nonzero playback generations reject stale
-  completions, and ordinary open/import/render failures become visible session
-  errors instead of terminating the process.
+  completions. Ordinary open/render failures become visible session errors;
+  unsupported hardware-frame import triggers one observable software re-decode
+  before becoming an error.
+* On Windows, supported streams prefer hardware decoding on the graphics
+  domain's video-capable D3D11 device. FFmpeg-owned NV12, P010, P012, and P016
+  texture-array slices can be mapped directly into libplacebo plane views.
+  The retained `AVFrame` reserves the decoder surface; the decode and render
+  paths share explicit GPU-phase execution serialization and D3D11 multithread
+  protection. Unsupported or failed hardware decoding reopens through the
+  software decoder and records the reason. Graphics-device recreation
+  supersedes in-flight or hardware-backed old-generation work and re-decodes
+  it against the replacement capability; a ready software frame remains valid
+  and is uploaded by the recreated producer.
 * A stable active-source router switches the presentation engine between the
   Player's decoded source and HDR Lab at a render boundary. The Player fits the
   decoded display aspect ratio inside its viewport and shows the resulting
   paused first frame through the production libplacebo path.
-* Pinned RGB and compressed BT.709 limited-range YUV fixtures cross real FFmpeg
-  demux/decode and libplacebo upload. The YUV fixture is a three-frame
-  Matroska/FFV1 stream with non-square pixels and known signal/timing values.
+* Pinned RGB, FFV1, and H.264 fixtures cross real FFmpeg demux/decode and
+  libplacebo rendering. The H.264 scenario proves an actual D3D11VA frame,
+  direct NV12 plane import, zero input CPU transfers, zero input GPU copies,
+  zero output copies/transfers, and tolerant agreement with the software-decode
+  result.
 
 libass, continuous decoding, audio, playback scheduling, drag-and-drop,
 subtitles, and persistence are not integrated. CTest/Qt Test coverage exists for pure
@@ -124,18 +138,17 @@ targets at 80, 100, and 203 nits and a target-relative PQ diagnostic at 100 and
 203 nits, plus known pixels from the first FFmpeg-decoded frame at two SDR-white
 targets. A sustained headless probe also exercises 60 animated 640×360 frames
 into a 1100×600 target without viewport-sized CPU generation.
-Whole-application scenarios, hardware decode, a fixed mastered PQ source moved
-between targets, and physical-output validation do not yet exist.
+Whole-application playback scenarios, fixed mastered PQ source coverage,
+P010/P012/P016 capture, cross-platform hardware import, and physical-output
+validation do not yet exist.
 
-The next media slice makes the Windows graphics domain own a video-capable,
-multithread-protected D3D11 device, supplies that same device to FFmpeg,
-implements direct D3D11VA NV12/P010 plane import, and proves zero CPU transfers
-against a representative H.264 or HEVC fixture. Playback prefers that path
-when supported while keeping software decode observable and functional.
-Continuous packet/frame queues and scheduling then replace the one-frame open
-operation without changing the Player/source/compositor contracts. Playback
-uses libplacebo as its video renderer; the procedural producer remains
-HDR-Lab-only diagnostic tooling.
+The next media slice replaces the one-frame operation with a persistent
+demux/decoder loop, bounded packet and decoded-frame queues, normalized stream
+discovery, and scheduler-facing events without changing the
+Player/source/compositor contracts. It should preserve both the proven
+D3D11VA path and observable software fallback while introducing deterministic
+clock and frame-selection tests. Playback uses libplacebo as its video
+renderer; the procedural producer remains HDR-Lab-only diagnostic tooling.
 
 ## Subsystems
 
@@ -173,7 +186,7 @@ Documentation: `docs/subsystems/media-io/`
 * [ ] Video decoding
 * [ ] Audio decoding
 * [ ] Subtitle decoding
-* [ ] Hardware-device capability discovery
+* [x] Initial Windows D3D11VA device capability and decoder negotiation
 * [ ] Metadata and timestamp normalization
 
 Documentation: `docs/subsystems/media/`
@@ -226,7 +239,7 @@ Documentation: `docs/subsystems/graphics/`
 * [x] Deterministic software-backed RGBA32F diagnostic upload path
 * [x] FFmpeg software-frame importer and persistent upload reuse
 * [x] Shared hardware-frame import result/diagnostic contract
-* [ ] D3D11 importer
+* [x] D3D11VA NV12/P010/P012/P016 direct importer
 * [ ] Vulkan, VAAPI, and DRM PRIME importer
 * [ ] VideoToolbox, IOSurface, and MoltenVK importer
 * [x] Offscreen HDR render-target contract and temporary QRhi producer
@@ -315,7 +328,7 @@ Documentation: `docs/subsystems/diagnostics/`
 * [ ] Color-metadata normalization tests
 * [ ] Renderer image tests
 * [ ] Subtitle layout tests
-* [ ] Hardware decode and frame-import integration tests
+* [x] Windows H.264 D3D11VA decode and zero-copy frame-import integration test
 * [ ] Display-change and multi-monitor tests
 * [x] Cooperative first-frame cancellation tests
 * [ ] Unreliable-source and mounted-filesystem containment tests

@@ -7,12 +7,16 @@
 #include <QString>
 
 class DecodedVideoFrame;
+struct VideoHardwareDecodeCapability;
 struct VideoFrameIdentity;
 
 struct FfmpegFirstFrameDiagnostics {
     QString containerFormat;
     QString decoderName;
+    QString decodePath;
+    QString hardwareFallbackReason;
     int videoStreamIndex = -1;
+    bool hardwareAccelerated = false;
 
     bool isValid() const;
 };
@@ -33,4 +37,10 @@ struct FfmpegFirstFrameResult {
 FfmpegFirstFrameResult decodeFirstVideoFrame(
     const QString &path,
     const VideoFrameIdentity &identity,
+    std::stop_token stopToken = {});
+
+FfmpegFirstFrameResult decodeFirstVideoFrame(
+    const QString &path,
+    const VideoFrameIdentity &identity,
+    const VideoHardwareDecodeCapability &hardwareDecode,
     std::stop_token stopToken = {});

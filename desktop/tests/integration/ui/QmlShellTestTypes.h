@@ -144,6 +144,9 @@ class ShellTestMediaSession final : public QObject {
     Q_PROPERTY(QString containerFormat MEMBER m_containerFormat
                NOTIFY sessionChanged)
     Q_PROPERTY(QString decoderName MEMBER m_decoderName NOTIFY sessionChanged)
+    Q_PROPERTY(QString decodePath MEMBER m_decodePath NOTIFY sessionChanged)
+    Q_PROPERTY(QString hardwareFallbackReason MEMBER m_hardwareFallbackReason
+               NOTIFY sessionChanged)
     Q_PROPERTY(QString videoSummary MEMBER m_videoSummary NOTIFY sessionChanged)
     Q_PROPERTY(bool hasFrame READ hasFrame NOTIFY sessionChanged)
 
@@ -174,6 +177,7 @@ public:
             m_displayName =
                 QStringLiteral("test-video.mkv");
             m_decoderName = QStringLiteral("ffv1");
+            m_decodePath = QStringLiteral("Software");
             m_videoSummary =
                 QStringLiteral("96×64 · yuv420p · 8-bit");
         }
@@ -202,6 +206,8 @@ private:
     QString m_errorMessage;
     QString m_containerFormat;
     QString m_decoderName;
+    QString m_decodePath;
+    QString m_hardwareFallbackReason;
     QString m_videoSummary;
     int m_openCount = 0;
     int m_cancelCount = 0;

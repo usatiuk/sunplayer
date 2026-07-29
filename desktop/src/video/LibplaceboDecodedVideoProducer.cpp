@@ -47,7 +47,9 @@ LibplaceboDecodedVideoProducer(
     }
     m_importer =
         std::make_unique<LibplaceboFrameImporter>(
-            m_gpu, graphicsDevice.generation());
+            m_gpu,
+            graphicsDevice.generation(),
+            graphicsDevice.createHardwareFrameImporter());
 }
 
 LibplaceboDecodedVideoProducer::
@@ -86,6 +88,7 @@ LibplaceboDecodedVideoProducer::ensureSurface(
     }
 
     m_failureReason.clear();
+    m_failureKind = VideoFailureKind::None;
     return VideoOperationResult::Ready;
 }
 
@@ -118,13 +121,18 @@ LibplaceboDecodedVideoProducer::render(
         return beginResult;
 
     QString renderError;
+    bool hardwareImportUnavailable = false;
     if (!m_mapping || m_mappedSourceFrame != frame) {
         m_mapping.reset();
         m_mappedSourceFrame.reset();
         m_mapping = m_importer->map(
             *frame, &renderError);
-        if (m_mapping)
+        if (m_mapping) {
             m_mappedSourceFrame = frame;
+        } else {
+            hardwareImportUnavailable =
+                frame->storage().isHardware();
+        }
     }
 
     const bool rendered =
@@ -153,10 +161,15 @@ LibplaceboDecodedVideoProducer::render(
         return unavailable(renderError.isEmpty()
             ? QStringLiteral(
                 "Could not import or render decoded video frame")
-            : renderError);
+            : renderError,
+            hardwareImportUnavailable
+                ? VideoFailureKind::
+                    HardwareFrameImportUnavailable
+                : VideoFailureKind::General);
     }
 
     m_failureReason.clear();
+    m_failureKind = VideoFailureKind::None;
     m_pendingState = requestedState;
     return VideoOperationResult::Ready;
 }
@@ -221,9 +234,15 @@ LibplaceboDecodedVideoProducer::diagnostics() const {
                 .arg(input.softwareFormat);
             break;
         case VideoFrameImportPath::DirectHardwareSurface:
-            result.inputPath = QStringLiteral(
-                "FFmpeg %1 surface → direct libplacebo import")
-                .arg(input.hardwareFormat);
+            result.inputPath = input.nativeResource.isEmpty()
+                ? QStringLiteral(
+                    "FFmpeg %1 surface → direct libplacebo import")
+                    .arg(input.hardwareFormat)
+                : QStringLiteral(
+                    "FFmpeg %1 surface → direct libplacebo import · %2")
+                    .arg(
+                        input.hardwareFormat,
+                        input.nativeResource);
             break;
         case VideoFrameImportPath::SameDeviceGpuCopy:
             result.inputPath = QStringLiteral(
@@ -243,6 +262,8 @@ LibplaceboDecodedVideoProducer::diagnostics() const {
         result.knownInputCpuTransfersPerInputFrame =
             input.knownCpuDownloadsPerFrame
             + input.knownCpuUploadsPerFrame;
+        result.knownInputGpuCopiesPerInputFrame =
+            input.knownGpuCopiesPerFrame;
     } else {
         result.inputPath =
             QStringLiteral("Awaiting decoded frame import");
@@ -267,6 +288,7 @@ LibplaceboDecodedVideoProducer::diagnostics() const {
             QStringLiteral("Not active");
         result.target.fallbackReason = m_failureReason;
     }
+    result.failureKind = m_failureKind;
     Q_ASSERT(result.isValid());
     return result;
 }
@@ -292,11 +314,14 @@ bool LibplaceboDecodedVideoProducer::deviceLost() const {
 
 VideoOperationResult
 LibplaceboDecodedVideoProducer::unavailable(
-        const QString &reason) {
+        const QString &reason,
+        VideoFailureKind failureKind) {
+    Q_ASSERT(failureKind != VideoFailureKind::None);
     m_failureReason = reason.isEmpty()
         ? QStringLiteral(
             "Decoded libplacebo video path is unavailable")
         : reason;
+    m_failureKind = failureKind;
     qWarning().noquote() << m_failureReason;
     return VideoOperationResult::Unavailable;
 }

@@ -97,6 +97,9 @@ private slots:
     void cancelReturnsBeforeWorkerExit();
     void destructionCancelsWorker();
     void presentationFailureBecomesSessionError();
+    void hardwareImportFailureRetriesSoftware();
+    void graphicsRecoveryKeepsReadySoftwareFrame();
+    void graphicsRecoverySupersedesOpening();
 };
 
 void MediaSessionTest::opensRealMediaOffThread() {
@@ -108,6 +111,7 @@ void MediaSessionTest::opensRealMediaOffThread() {
         [ownerThread, &decodedOffOwnerThread](
                 const QString &path,
                 const VideoFrameIdentity &identity,
+                const VideoHardwareDecodeCapability &,
                 std::stop_token stopToken) {
             decodedOffOwnerThread =
                 QThread::currentThread() != ownerThread;
@@ -128,6 +132,8 @@ void MediaSessionTest::opensRealMediaOffThread() {
     QVERIFY(decodedOffOwnerThread.load());
     QVERIFY(changes.count() >= 2);
     QCOMPARE(session.decoderName(), QStringLiteral("ffv1"));
+    QCOMPARE(session.decodePath(), QStringLiteral("Software"));
+    QVERIFY(session.hardwareFallbackReason().isEmpty());
     QVERIFY(!session.containerFormat().isEmpty());
     QVERIFY(session.videoSummary().contains(
         QStringLiteral("yuv420p")));
@@ -157,6 +163,7 @@ void MediaSessionTest::newerOpenRejectsStaleCompletion() {
         [delayed](
                 const QString &path,
                 const VideoFrameIdentity &identity,
+                const VideoHardwareDecodeCapability &,
                 std::stop_token stopToken) {
             if (path.endsWith(
                     QStringLiteral("blocked.mkv"))) {
@@ -202,6 +209,7 @@ void MediaSessionTest::cancelReturnsBeforeWorkerExit() {
         [delayed](
                 const QString &,
                 const VideoFrameIdentity &,
+                const VideoHardwareDecodeCapability &,
                 std::stop_token stopToken) {
             return delayed->wait(stopToken);
         });
@@ -228,6 +236,7 @@ void MediaSessionTest::destructionCancelsWorker() {
         [blocking](
                 const QString &,
                 const VideoFrameIdentity &,
+                const VideoHardwareDecodeCapability &,
                 std::stop_token stopToken) {
             return blocking->wait(stopToken);
         });
@@ -248,12 +257,176 @@ presentationFailureBecomesSessionError() {
         session.state(), MediaSession::State::Ready, 5000);
 
     QVERIFY(session.videoSource().reportPresentationFailure(
-        QStringLiteral("unsupported mapped surface")));
+        {
+            .kind = VideoFailureKind::General,
+            .reason =
+                QStringLiteral("unsupported mapped surface"),
+        }));
     QCOMPARE(session.state(), MediaSession::State::Error);
     QVERIFY(!session.hasFrame());
     QCOMPARE(
         session.errorMessage(),
         QStringLiteral("unsupported mapped surface"));
+}
+
+void MediaSessionTest::
+hardwareImportFailureRetriesSoftware() {
+    std::atomic_int attempts = 0;
+    std::atomic_bool sawSoftwareFallback = false;
+    MediaSession session(
+        VideoTargetReadback::Disabled,
+        [&attempts, &sawSoftwareFallback](
+                const QString &path,
+                const VideoFrameIdentity &identity,
+                const VideoHardwareDecodeCapability &capability,
+                std::stop_token stopToken) {
+            const int attempt = ++attempts;
+            if (attempt == 2) {
+                sawSoftwareFallback =
+                    !capability.isAvailable()
+                    && capability.unavailableReason.contains(
+                        QStringLiteral(
+                            "Hardware frame import failed"));
+            }
+            return decodeFirstVideoFrame(
+                path, identity, capability, stopToken);
+        });
+    session.openMedia(
+        QUrl::fromLocalFile(fixturePath()));
+    QTRY_COMPARE_WITH_TIMEOUT(
+        session.state(), MediaSession::State::Ready, 5000);
+    const std::uint64_t firstGeneration =
+        session.playbackGeneration();
+
+    QVERIFY(session.videoSource().reportPresentationFailure(
+        {
+            .kind = VideoFailureKind::
+                HardwareFrameImportUnavailable,
+            .reason = QStringLiteral(
+                "Injected unsupported hardware surface"),
+        }));
+    QCOMPARE(session.state(), MediaSession::State::Opening);
+    QVERIFY(!session.hasFrame());
+    QTRY_COMPARE_WITH_TIMEOUT(
+        session.state(), MediaSession::State::Ready, 5000);
+
+    QCOMPARE(attempts.load(), 2);
+    QVERIFY(sawSoftwareFallback.load());
+    QVERIFY(
+        session.playbackGeneration() != firstGeneration);
+    QCOMPARE(session.decodePath(), QStringLiteral("Software"));
+    QVERIFY(
+        session.hardwareFallbackReason().contains(
+            QStringLiteral(
+                "Hardware frame import failed")));
+
+    QVERIFY(session.videoSource().reportPresentationFailure(
+        {
+            .kind = VideoFailureKind::
+                HardwareFrameImportUnavailable,
+            .reason = QStringLiteral(
+                "Injected repeated hardware import failure"),
+        }));
+    QCOMPARE(session.state(), MediaSession::State::Error);
+    QCOMPARE(attempts.load(), 2);
+}
+
+void MediaSessionTest::
+graphicsRecoveryKeepsReadySoftwareFrame() {
+    std::atomic_int attempts = 0;
+    MediaSession session(
+        VideoTargetReadback::Disabled,
+        [&attempts](
+                const QString &path,
+                const VideoFrameIdentity &identity,
+                const VideoHardwareDecodeCapability &capability,
+                std::stop_token stopToken) {
+            ++attempts;
+            return decodeFirstVideoFrame(
+                path, identity, capability, stopToken);
+        });
+    session.openMedia(
+        QUrl::fromLocalFile(fixturePath()));
+    QTRY_COMPARE_WITH_TIMEOUT(
+        session.state(), MediaSession::State::Ready, 5000);
+    const std::uint64_t firstGeneration =
+        session.playbackGeneration();
+    const std::shared_ptr<const DecodedVideoFrame> firstFrame =
+        session.videoSource().currentFrame();
+    QVERIFY(firstFrame);
+    QVERIFY(!firstFrame->storage().isHardware());
+
+    session.invalidateGraphicsDevice();
+    QCOMPARE(session.state(), MediaSession::State::Ready);
+    QVERIFY(session.hasFrame());
+    QCOMPARE(session.playbackGeneration(), firstGeneration);
+    QCOMPARE(session.videoSource().currentFrame(), firstFrame);
+    session.setVideoDecodeCapability({
+        .device = {},
+        .unavailableReason = QStringLiteral(
+            "Replacement graphics domain has no hardware"),
+    });
+
+    QCOMPARE(attempts.load(), 1);
+    QCOMPARE(session.state(), MediaSession::State::Ready);
+    QCOMPARE(
+        session.videoSource().currentFrame(),
+        firstFrame);
+}
+
+void MediaSessionTest::
+graphicsRecoverySupersedesOpening() {
+    auto delayed =
+        std::make_shared<DelayedStopOperation>();
+    std::atomic_int attempts = 0;
+    std::atomic_bool sawReplacementCapability = false;
+    MediaSession session(
+        VideoTargetReadback::Disabled,
+        [delayed, &attempts, &sawReplacementCapability](
+                const QString &path,
+                const VideoFrameIdentity &identity,
+                const VideoHardwareDecodeCapability &capability,
+                std::stop_token stopToken) {
+            const int attempt = ++attempts;
+            if (attempt == 1)
+                return delayed->wait(stopToken);
+            sawReplacementCapability =
+                capability.unavailableReason
+                == QStringLiteral(
+                    "Replacement graphics domain has no hardware");
+            return decodeFirstVideoFrame(
+                path, identity, capability, stopToken);
+        });
+    session.openMedia(
+        QUrl::fromLocalFile(fixturePath()));
+    QTRY_VERIFY_WITH_TIMEOUT(delayed->started.load(), 2000);
+    const std::uint64_t firstGeneration =
+        session.playbackGeneration();
+
+    session.invalidateGraphicsDevice();
+    QCOMPARE(session.state(), MediaSession::State::Opening);
+    QVERIFY(!session.hasFrame());
+    QVERIFY(
+        session.playbackGeneration() != firstGeneration);
+    QTRY_VERIFY_WITH_TIMEOUT(
+        delayed->stopObserved.load(), 2000);
+    session.setVideoDecodeCapability({
+        .device = {},
+        .unavailableReason = QStringLiteral(
+            "Replacement graphics domain has no hardware"),
+    });
+    delayed->allowExit();
+    QTRY_COMPARE_WITH_TIMEOUT(
+        session.state(), MediaSession::State::Ready, 5000);
+
+    QCOMPARE(attempts.load(), 2);
+    QVERIFY(sawReplacementCapability.load());
+    QCOMPARE(
+        session.videoSource()
+            .currentFrame()
+            ->identity()
+            .playbackGeneration,
+        session.playbackGeneration());
 }
 
 // Worker results are delivered through queued Qt events, so this test needs

@@ -7,6 +7,8 @@
 #include <libplacebo/gpu.h>
 
 class QRhi;
+class LibplaceboHardwareFrameImporter;
+struct VideoHardwareDecodeCapability;
 class VideoTargetInterop;
 struct VideoTargetRequest;
 
@@ -33,6 +35,33 @@ struct LibplaceboGraphicsContext {
     bool isValid() const;
 };
 
+// Keeps one backend-defined GPU command sequence mutually exclusive with
+// decoder command submission without exposing native synchronization types.
+// The shared state outlives the graphics domain when teardown occurs inside
+// a protected operation.
+class GraphicsDeviceExecutionScope final {
+public:
+    using UnlockOperation = void (*)(void *);
+
+    GraphicsDeviceExecutionScope(
+        std::shared_ptr<void> state,
+        UnlockOperation unlock);
+    ~GraphicsDeviceExecutionScope();
+
+    GraphicsDeviceExecutionScope(
+        const GraphicsDeviceExecutionScope &) = delete;
+    GraphicsDeviceExecutionScope &operator=(
+        const GraphicsDeviceExecutionScope &) = delete;
+    GraphicsDeviceExecutionScope(
+        GraphicsDeviceExecutionScope &&other) noexcept;
+    GraphicsDeviceExecutionScope &operator=(
+        GraphicsDeviceExecutionScope &&) = delete;
+
+private:
+    std::shared_ptr<void> m_state;
+    UnlockOperation m_unlock = nullptr;
+};
+
 // Owns one native graphics-device domain and its shared QRhi/libplacebo
 // contexts. Backend-native types remain in the factory-selected
 // implementation.
@@ -47,8 +76,14 @@ public:
     virtual const GraphicsDeviceDiagnostics &diagnostics() const = 0;
     virtual const LibplaceboGraphicsContext &
         libplaceboContext() const = 0;
+    virtual const VideoHardwareDecodeCapability &
+        videoDecodeCapability() const = 0;
+    virtual GraphicsDeviceExecutionScope
+        acquireExecutionScope() = 0;
     virtual std::unique_ptr<VideoTargetInterop> createVideoTarget(
         const VideoTargetRequest &request) = 0;
+    virtual std::unique_ptr<LibplaceboHardwareFrameImporter>
+        createHardwareFrameImporter() = 0;
 
     GraphicsBackend backend() const;
     std::uint64_t generation() const;

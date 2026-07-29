@@ -101,6 +101,9 @@ RhiPresentationEngine::RhiPresentationEngine(
             this, &RhiPresentationEngine::verifyOutput);
     connect(&m_deviceRecoveryTimer, &QTimer::timeout,
             this, &RhiPresentationEngine::requestFrame);
+
+    if (!initializeGraphicsDevice())
+        qFatal("Could not create the QRhi backend");
 }
 
 RhiPresentationEngine::~RhiPresentationEngine() {
@@ -124,35 +127,46 @@ void RhiPresentationEngine::renderFrame() {
     if (!m_window.isExposed() || m_window.size().isEmpty())
         return;
 
-    if (!m_rhi && !initializeDevice())
+    if (!m_graphicsDevice && !initializeGraphicsDevice()) {
+        scheduleDeviceRecovery();
         return;
-    bool videoProducerChanged = false;
-    if (m_recreateSwapChain) {
-        releaseSwapChain();
-        m_recreateSwapChain = false;
     }
-    if (!m_swapChain && !createSwapChain())
-        return;
-    if (!resizeSwapChain())
-        return;
+    QSize pixelSize;
+    QuickUiLayer::RenderTargetUpdate targetUpdate =
+        QuickUiLayer::RenderTargetUpdate::Unchanged;
+    {
+        GraphicsDeviceExecutionScope execution =
+            m_graphicsDevice->acquireExecutionScope();
+        if (!m_quickUi && !initializeDevice())
+            return;
+        if (m_recreateSwapChain) {
+            releaseSwapChainResources();
+            m_recreateSwapChain = false;
+        }
+        if (!m_swapChain && !createSwapChain())
+            return;
+        if (!resizeSwapChain())
+            return;
 
-    m_quickUi->setLogicalSize(m_window.size());
-    const QSize pixelSize = m_swapChain->currentPixelSize();
-    const QuickUiLayer::RenderTargetUpdate targetUpdate =
-        m_quickUi->ensureRenderTarget(
+        m_quickUi->setLogicalSize(m_window.size());
+        pixelSize = m_swapChain->currentPixelSize();
+        targetUpdate = m_quickUi->ensureRenderTarget(
             pixelSize, m_window.devicePixelRatio());
-    if (targetUpdate == QuickUiLayer::RenderTargetUpdate::DeviceLost) {
-        handleDeviceLoss("creating the Qt Quick render target");
-        return;
+        if (targetUpdate
+                == QuickUiLayer::RenderTargetUpdate::DeviceLost) {
+            handleDeviceLoss("creating the Qt Quick render target");
+            return;
+        }
+
+        // QQuickRenderControl uses a separate offscreen QRhi frame. It must
+        // complete before the visible swapchain frame starts.
+        m_quickUi->renderIfDirty();
+        if (m_rhi->isDeviceLost()) {
+            handleDeviceLoss("rendering the Qt Quick layer");
+            return;
+        }
     }
 
-    // QQuickRenderControl uses a separate offscreen QRhi frame. It must be
-    // completed before beginning the visible swapchain frame.
-    m_quickUi->renderIfDirty();
-    if (m_rhi->isDeviceLost()) {
-        handleDeviceLoss("rendering the Qt Quick layer");
-        return;
-    }
     // QML synchronization can switch the active page/source. Let a visible
     // source select its frame first because preparation may change producer
     // configuration, content, or display geometry.
@@ -162,9 +176,6 @@ void RhiPresentationEngine::renderFrame() {
         m_videoSource.prepareForPresentation(
             std::chrono::steady_clock::now());
     }
-    // Rebind only after the page route and prepared source state are coherent.
-    // Hidden route changes still replace the producer promptly.
-    videoProducerChanged = refreshVideoProducer();
 
     const float scaleX = static_cast<float>(pixelSize.width())
         / static_cast<float>(m_window.width());
@@ -173,7 +184,6 @@ void RhiPresentationEngine::renderFrame() {
     Q_ASSERT(std::isfinite(scaleX) && scaleX > 0.0f);
     Q_ASSERT(std::isfinite(scaleY) && scaleY > 0.0f);
 
-    Q_ASSERT(m_videoProducer);
     QRect videoRect;
     std::optional<RenderedVideoSurfaceState> requestedSurface;
     if (videoLayerRenderable) {
@@ -234,7 +244,16 @@ void RhiPresentationEngine::renderFrame() {
         requestedSurface->contentRevision =
             m_videoSource.contentRevision();
         Q_ASSERT(requestedSurface->isValid());
+    }
 
+    GraphicsDeviceExecutionScope execution =
+        m_graphicsDevice->acquireExecutionScope();
+    // Rebind only after the page route and prepared source state are coherent.
+    // Hidden route changes still replace the producer promptly.
+    const bool videoProducerChanged = refreshVideoProducer();
+    Q_ASSERT(m_videoProducer);
+
+    if (requestedSurface) {
         const VideoOperationResult ensureResult =
             m_videoProducer->ensureSurface(*requestedSurface);
         if (!handleVideoOperationResult(
@@ -461,6 +480,15 @@ void RhiPresentationEngine::markPresentationDirty() {
 }
 
 void RhiPresentationEngine::releaseSwapChain() {
+    std::optional<GraphicsDeviceExecutionScope> execution;
+    if (m_graphicsDevice) {
+        execution.emplace(
+            m_graphicsDevice->acquireExecutionScope());
+    }
+    releaseSwapChainResources();
+}
+
+void RhiPresentationEngine::releaseSwapChainResources() {
     m_framePending = false;
     // The pipeline and swapchain depend on this render-pass descriptor.
     // The independent Quick and video textures intentionally survive it.
@@ -478,18 +506,9 @@ QQuickWindow *RhiPresentationEngine::quickWindow() const {
 }
 
 bool RhiPresentationEngine::initializeDevice() {
-    Q_ASSERT(!m_graphicsDevice);
-    Q_ASSERT(!m_rhi);
     Q_ASSERT(!m_quickUi);
-    m_graphicsDevice =
-        GraphicsBackendFactory::createDeviceDomain();
-    if (!m_graphicsDevice && !m_recoveringDevice)
-        qFatal("Could not create the QRhi backend");
-    if (!m_graphicsDevice) {
-        scheduleDeviceRecovery();
-        return false;
-    }
-    m_rhi = &m_graphicsDevice->rhi();
+    Q_ASSERT(m_graphicsDevice);
+    Q_ASSERT(m_rhi);
 
     m_quickUi = std::make_unique<QuickUiLayer>(
         m_window,
@@ -511,6 +530,19 @@ bool RhiPresentationEngine::initializeDevice() {
     m_recoveringDevice = false;
     m_deviceRecoveryAttempts = 0;
     m_deviceRecoveryTimer.stop();
+    return true;
+}
+
+bool RhiPresentationEngine::initializeGraphicsDevice() {
+    Q_ASSERT(!m_graphicsDevice);
+    Q_ASSERT(!m_rhi);
+    m_graphicsDevice =
+        GraphicsBackendFactory::createDeviceDomain();
+    if (!m_graphicsDevice)
+        return false;
+    m_rhi = &m_graphicsDevice->rhi();
+    m_mediaSession.setVideoDecodeCapability(
+        m_graphicsDevice->videoDecodeCapability());
     return true;
 }
 
@@ -590,15 +622,20 @@ bool RhiPresentationEngine::createOrResizeSwapChain(const char *operation) {
     } else {
         qWarning("Could not %s the QRhi swapchain; waiting for another window update",
                  operation);
-        releaseSwapChain();
+        releaseSwapChainResources();
     }
     return false;
 }
 
 void RhiPresentationEngine::releaseDevice() {
+    std::optional<GraphicsDeviceExecutionScope> execution;
+    if (m_graphicsDevice) {
+        execution.emplace(
+            m_graphicsDevice->acquireExecutionScope());
+    }
     // Every child resource must be gone before destroying the QRhi.
     Q_ASSERT(!m_rhi || !m_rhi->isRecordingFrame());
-    releaseSwapChain();
+    releaseSwapChainResources();
     m_videoProducer.reset();
     m_videoProducerConfigurationRevision = 0;
     // Quick invalidation may emit updateRequested while it tears down.
@@ -615,6 +652,7 @@ void RhiPresentationEngine::handleDeviceLoss(const char *operation) {
     if (!m_recoveringDevice)
         m_deviceRecoveryAttempts = 0;
     m_recoveringDevice = true;
+    m_mediaSession.invalidateGraphicsDevice();
     releaseDevice();
     scheduleDeviceRecovery();
 }
@@ -629,6 +667,7 @@ void RhiPresentationEngine::handleFrameError(
     m_retriedFrameError = true;
     m_recoveringDevice = true;
     m_deviceRecoveryAttempts = 0;
+    m_mediaSession.invalidateGraphicsDevice();
     releaseDevice();
     scheduleDeviceRecovery();
 }
@@ -643,13 +682,21 @@ bool RhiPresentationEngine::handleVideoOperationResult(
     }
 
     updateBackendState();
+    const RenderedVideoProducerDiagnostics diagnostics =
+        m_videoProducer->diagnostics();
     const QString reason =
-        m_videoProducer->diagnostics().target.fallbackReason;
+        diagnostics.target.fallbackReason;
     const QString effectiveReason = reason.isEmpty()
         ? QStringLiteral("No supported video path is available")
         : reason;
     if (m_videoSource.reportPresentationFailure(
-            effectiveReason)) {
+            {
+                .kind = diagnostics.failureKind
+                    == VideoFailureKind::None
+                    ? VideoFailureKind::General
+                    : diagnostics.failureKind,
+                .reason = effectiveReason,
+            })) {
         qWarning(
             "Video path unavailable while %s: %s",
             operation,
@@ -712,11 +759,15 @@ void RhiPresentationEngine::updateBackendState() {
     state.videoCopySummary =
         QStringLiteral(
             "%1 input CPU transfers per input frame · "
-            "%2 output GPU copies · "
-            "%3 output CPU transfers per render")
+            "%2 input GPU copies per input frame · "
+            "%3 output GPU copies · "
+            "%4 output CPU transfers per render")
             .arg(
                 videoDiagnostics
                     .knownInputCpuTransfersPerInputFrame)
+            .arg(
+                videoDiagnostics
+                    .knownInputGpuCopiesPerInputFrame)
             .arg(
                 videoDiagnostics.target
                     .knownOutputGpuCopiesPerRender)

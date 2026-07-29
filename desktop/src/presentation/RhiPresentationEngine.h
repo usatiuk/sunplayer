@@ -52,10 +52,12 @@ public:
 private:
     void renderFrame();
     bool initializeDevice();
+    bool initializeGraphicsDevice();
     bool refreshVideoProducer();
     bool createSwapChain();
     bool resizeSwapChain(bool force = false);
     bool createOrResizeSwapChain(const char *operation);
+    void releaseSwapChainResources();
     void releaseDevice();
     void handleDeviceLoss(const char *operation);
     void handleFrameError(const char *operation, int result);

@@ -100,8 +100,12 @@ add_library(sunroom_media STATIC
         src/media/DecodedVideoFrame.h
         src/media/FfmpegFirstFrameDecoder.cpp
         src/media/FfmpegFirstFrameDecoder.h
+        src/media/FfmpegHardwareDevice.cpp
+        src/media/FfmpegHardwareDevice.h
         src/media/ffmpeg/FfmpegFrameMetadata.cpp
         src/media/ffmpeg/FfmpegFrameMetadata.h
+        src/media/ffmpeg/FfmpegFirstFrameDecodeFallback.cpp
+        src/media/ffmpeg/FfmpegFirstFrameDecodeFallback.h
 )
 target_include_directories(sunroom_media
         PUBLIC
@@ -140,6 +144,7 @@ add_library(sunroom_video_pipeline STATIC
         src/video/RenderedVideoSource.h
         src/video/VideoTargetInterop.cpp
         src/video/VideoTargetInterop.h
+        src/video/VideoFailure.h
         src/video/libplacebo/LibplaceboFfmpegInterop.c
         src/video/libplacebo/LibplaceboFrameImporter.cpp
         src/video/libplacebo/LibplaceboFrameImporter.h
@@ -164,8 +169,13 @@ if (WIN32)
     target_sources(sunroom_video_pipeline PRIVATE
             src/graphics/backends/D3D11GraphicsDeviceDomain.cpp
             src/graphics/backends/D3D11GraphicsDeviceDomain.h
+            src/graphics/backends/D3D11LibplaceboFrameImporter.cpp
+            src/graphics/backends/D3D11LibplaceboFrameImporter.h
             src/graphics/backends/D3D11LibplaceboVideoTarget.cpp
             src/graphics/backends/D3D11LibplaceboVideoTarget.h
+    )
+    target_link_libraries(sunroom_video_pipeline PRIVATE
+            d3d11
     )
 endif ()
 

@@ -24,6 +24,7 @@ struct VideoFrameImportDiagnostics {
         VideoFrameImportPath::Unavailable;
     QString hardwareFormat;
     QString softwareFormat;
+    QString nativeResource;
     QString synchronizationMode;
     std::uint32_t knownCpuDownloadsPerFrame = 0;
     std::uint32_t knownCpuUploadsPerFrame = 0;
@@ -33,9 +34,23 @@ struct VideoFrameImportDiagnostics {
     bool isValid() const;
 };
 
+// Backend implementation for native decoded surfaces. It maps one retained
+// hardware AVFrame into libplacebo planes without defining fallback policy.
+class LibplaceboHardwareFrameImporter {
+public:
+    virtual ~LibplaceboHardwareFrameImporter() = default;
+
+    virtual bool map(
+        const DecodedVideoFrame &frame,
+        pl_frame &mappedFrame,
+        VideoFrameImportDiagnostics &diagnostics,
+        QString *error) = 0;
+    virtual void unmap(pl_frame &mappedFrame) = 0;
+};
+
 // Maps one retained decoded frame into libplacebo input planes. The importer
-// owns reusable software-upload textures; a Mapping owns the transient
-// pl_frame state and guarantees pl_unmap_avframe() on every path.
+// owns reusable software-upload textures; a Mapping owns and releases the
+// transient pl_frame state through the matching software or native path.
 class LibplaceboFrameImporter final {
 public:
     class Mapping final {
@@ -59,7 +74,9 @@ public:
 
     LibplaceboFrameImporter(
         pl_gpu gpu,
-        std::uint64_t graphicsDeviceGeneration);
+        std::uint64_t graphicsDeviceGeneration,
+        std::unique_ptr<LibplaceboHardwareFrameImporter>
+            hardwareImporter);
     ~LibplaceboFrameImporter();
 
     LibplaceboFrameImporter(
@@ -83,8 +100,11 @@ private:
 
     pl_gpu m_gpu = nullptr;
     std::uint64_t m_graphicsDeviceGeneration = 0;
+    std::unique_ptr<LibplaceboHardwareFrameImporter>
+        m_hardwareImporter;
     std::array<pl_tex, 4> m_softwareTextures{};
     pl_frame m_mappedFrame{};
+    bool m_hardwareMapping = false;
     bool m_mappingActive = false;
     std::uint64_t m_successfulImportCount = 0;
     VideoFrameImportDiagnostics m_lastDiagnostics;

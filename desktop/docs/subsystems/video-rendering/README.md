@@ -11,8 +11,11 @@ can be created. On Windows, libplacebo shares the QRhi D3D11 device and
 immediate context, wraps the QRhi-owned RGBA16F texture, and renders directly
 without an output copy. A real FFmpeg software `AVFrame` now maps through
 libplacebo with one reusable input upload and retains its source across
-target-only rerenders. Hardware-frame import and real copy/CPU target paths are
-not implemented.
+target-only rerenders. Supported D3D11VA frames map their retained NV12, P010,
+P012, or P016 texture-array slice directly into libplacebo plane views with no
+input copy or CPU transfer. Dolby Vision side data is explicitly mapped into
+mapping-owned libplacebo metadata. Same-device-copy and CPU target fallbacks, and
+non-Windows native importers, are not implemented.
 
 The broad investigation in
 [../../ARCHITECTURE_NOTES.md](../../ARCHITECTURE_NOTES.md) is non-binding
@@ -36,8 +39,8 @@ shared QRhi compositor
 The known seams are established with their first implementations:
 
 * The graphics-device domain owns QRhi, native backend state, the same-device
-  libplacebo GPU, device generation, backend/adapter diagnostics, and teardown
-  order.
+  libplacebo GPU and FFmpeg hardware device, device generation, execution
+  synchronization, backend/adapter diagnostics, and teardown order.
 * The rendered-video source owns source-specific state, content revision,
   cadence, update requests, and device-recreatable producer creation.
 * The rendered-video producer owns invalidation, submission reporting, and
@@ -53,12 +56,17 @@ The known seams are established with their first implementations:
   target-only rerenders; the work does not scale with the viewport.
 * The decoded-frame importer uses libplacebo's FFmpeg helper for software
   planes, retains the referenced `AVFrame`, and reuses its plane textures for
-  target-only rerenders. Its typed path diagnostics already include direct
-  hardware, GPU-copy, CPU-round-trip, and unavailable outcomes; only software
-  upload is implemented. Shared policy rejects a hardware frame whose recorded
-  graphics-device generation differs from the active domain.
-* Future native importers map platform hardware surfaces into the same
-  libplacebo frame boundary while retaining lifetime and synchronization state.
+  target-only rerenders. The D3D11 backend maps decoder-owned
+  NV12/P010/P012/P016 texture-array slices through `pl_d3d11_wrap`; the retained frame reserves
+  that slice. Its typed diagnostics distinguish direct hardware, software
+  upload, future GPU-copy/CPU-round-trip, and unavailable outcomes. Shared
+  policy rejects a hardware frame whose recorded graphics-device generation
+  differs from the active domain. An unavailable hardware mapping is reported
+  as a typed failure so playback can perform one software re-decode; the
+  importer itself does not own fallback policy.
+* Future platform importers map Vulkan/DRM/VAAPI or VideoToolbox surfaces into
+  the same libplacebo boundary while retaining their native lifetime and
+  synchronization state.
 
 These are purpose-specific boundaries, not another general graphics API.
 
@@ -130,7 +138,7 @@ Neither one reinterprets source video metadata or tone-maps the video again.
 
 | Platform | Intended first path | Main unresolved risk |
 | --- | --- | --- |
-| Windows | Shared D3D11 device and RGBA16F texture | Immediate-context ordering and driver format support |
+| Windows | Shared video-capable D3D11 device; D3D11VA plane import and direct RGBA16F target | P010/P012/P016 capture, real device-loss injection, and GPU/CPU copy fallbacks |
 | Linux | Shared Vulkan device and image | Layout, queue, and semaphore ownership |
 | macOS | Shared Vulkan/MoltenVK domain, with Metal interop if required | EDR behavior, IOSurface formats, and cross-API synchronization |
 
@@ -159,7 +167,7 @@ metadata policy, renderer policy, subtitles, and the compositor remain shared.
    Metal interop backend.
 10. [x] Add the retained FFmpeg `AVFrame` contract, software-plane importer,
     persistent upload reuse, and real first-frame capture.
-11. [ ] Make the Windows graphics domain own a video-capable,
+11. [x] Make the Windows graphics domain own a video-capable,
     multithread-protected D3D11 device and add direct D3D11VA plane import.
 12. [ ] Add Vulkan/DRM/VAAPI and VideoToolbox platform importers as their
     backends are implemented.
@@ -201,6 +209,10 @@ output copies, and source-upload reuse while rerendering the same SDR frame for
 The FFV1 case proves real compressed-video demux, timestamp and metadata
 retention, exact limited-range BT.709 YUV420P samples, and tolerant
 libplacebo-converted linear RGB. Its SAR 32:27 produces a 16:9 Player content
-rectangle. Physical display correctness, fixed mastered HDR input, general
-display-matrix rotation, macOS EDR viability, Vulkan synchronization, and
-hardware-decoder zero-copy behavior remain unproven.
+rectangle. A pinned H.264 case uses the production shared-device D3D11VA
+decoder and direct NV12 plane importer, asserts no input download/upload or GPU
+copy and no output copy/transfer, captures its display-targeted output, and
+compares representative pixels against the software decode. Physical display
+correctness, fixed mastered HDR input, P010/P012/P016 capture, general
+display-matrix rotation, macOS EDR viability,
+and Vulkan synchronization remain unproven.

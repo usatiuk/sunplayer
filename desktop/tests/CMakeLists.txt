@@ -422,7 +422,9 @@ if (WIN32)
     set_tests_properties(
             ffmpeg-first-frame
             PROPERTIES
-            LABELS "ffmpeg;gpu;integration;windows"
+            LABELS "ffmpeg;gpu;hardware-decode;integration;windows"
             TIMEOUT 30
+            ENVIRONMENT
+                "SUNROOM_REQUIRE_D3D11VA=1"
     )
 endif ()

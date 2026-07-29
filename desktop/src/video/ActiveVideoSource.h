@@ -39,7 +39,8 @@ public:
     bool wantsContinuousFrames() const override;
     std::unique_ptr<RenderedVideoProducer> createProducer(
         GraphicsDeviceDomain &graphicsDevice) const override;
-    bool reportPresentationFailure(const QString &reason) override;
+    bool reportPresentationFailure(
+        const VideoFailure &failure) override;
 
 signals:
     void routeChanged();

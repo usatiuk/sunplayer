@@ -81,10 +81,13 @@ LibplaceboFrameImporter::Mapping::diagnostics() const {
 
 LibplaceboFrameImporter::LibplaceboFrameImporter(
         pl_gpu gpu,
-        std::uint64_t graphicsDeviceGeneration)
+        std::uint64_t graphicsDeviceGeneration,
+        std::unique_ptr<LibplaceboHardwareFrameImporter>
+            hardwareImporter)
     : m_gpu(gpu),
       m_graphicsDeviceGeneration(
-          graphicsDeviceGeneration) {
+          graphicsDeviceGeneration),
+      m_hardwareImporter(std::move(hardwareImporter)) {
     Q_ASSERT(m_gpu);
     Q_ASSERT(m_graphicsDeviceGeneration != 0);
 }
@@ -115,11 +118,27 @@ LibplaceboFrameImporter::map(
 
     if (frame.storage().kind
             != VideoFrameStorageKind::SoftwarePlanes) {
+        QString hardwareError;
+        if (m_hardwareImporter
+                && m_hardwareImporter->map(
+                    frame,
+                    m_mappedFrame,
+                    m_lastDiagnostics,
+                    &hardwareError)) {
+            m_mappingActive = true;
+            m_hardwareMapping = true;
+            ++m_successfulImportCount;
+            Q_ASSERT(m_lastDiagnostics.isValid());
+            return std::unique_ptr<Mapping>(
+                new Mapping(*this));
+        }
         return unavailable(
             frame,
-            QStringLiteral(
-                "No native importer is implemented for %1 frames")
-                .arg(frame.storage().hardwareFormat),
+            !hardwareError.isEmpty()
+                ? hardwareError
+                : QStringLiteral(
+                    "No native importer is implemented for %1 frames")
+                    .arg(frame.storage().hardwareFormat),
             error);
     }
 
@@ -156,6 +175,7 @@ LibplaceboFrameImporter::map(
         .hardwareFormat = {},
         .softwareFormat =
             frame.storage().softwareFormat,
+        .nativeResource = {},
         .synchronizationMode =
             QStringLiteral(
                 "libplacebo-managed software-plane upload"),
@@ -182,9 +202,15 @@ LibplaceboFrameImporter::successfulImportCount() const {
 void LibplaceboFrameImporter::releaseMapping() {
     if (!m_mappingActive)
         return;
-    pl_unmap_avframe(m_gpu, &m_mappedFrame);
+    if (m_hardwareMapping) {
+        Q_ASSERT(m_hardwareImporter);
+        m_hardwareImporter->unmap(m_mappedFrame);
+    } else {
+        pl_unmap_avframe(m_gpu, &m_mappedFrame);
+    }
     m_mappedFrame = {};
     m_mappingActive = false;
+    m_hardwareMapping = false;
 }
 
 std::unique_ptr<LibplaceboFrameImporter::Mapping>
@@ -201,6 +227,7 @@ LibplaceboFrameImporter::unavailable(
             : QString(),
         .softwareFormat =
             frame.storage().softwareFormat,
+        .nativeResource = {},
         .synchronizationMode =
             QStringLiteral("Not active"),
         .knownCpuDownloadsPerFrame = 0,

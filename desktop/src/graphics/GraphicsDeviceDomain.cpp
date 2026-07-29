@@ -1,6 +1,26 @@
 #include "graphics/GraphicsDeviceDomain.h"
 
 #include <atomic>
+#include <utility>
+
+GraphicsDeviceExecutionScope::GraphicsDeviceExecutionScope(
+        std::shared_ptr<void> state,
+        UnlockOperation unlock)
+    : m_state(std::move(state)),
+      m_unlock(unlock) {
+    Q_ASSERT(m_state);
+    Q_ASSERT(m_unlock);
+}
+
+GraphicsDeviceExecutionScope::~GraphicsDeviceExecutionScope() {
+    if (m_unlock)
+        m_unlock(m_state.get());
+}
+
+GraphicsDeviceExecutionScope::GraphicsDeviceExecutionScope(
+        GraphicsDeviceExecutionScope &&other) noexcept
+    : m_state(std::move(other.m_state)),
+      m_unlock(std::exchange(other.m_unlock, nullptr)) {}
 
 bool GraphicsDeviceDiagnostics::isValid() const {
     return backend != GraphicsBackend::Unknown

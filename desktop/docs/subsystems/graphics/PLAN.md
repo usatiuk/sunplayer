@@ -192,8 +192,46 @@ playback should prefer the later platform hardware importer when available.
 * Unsupported media produces a clear error and leaves the presentation shell
   usable.
 
-Playback queues, continuous scheduling, seeking, audio, and hardware decoding
-remain later playback/media milestones.
+Playback queues, continuous scheduling, seeking, and audio remain later
+playback/media milestones. The first Windows hardware path is milestone 5.
+
+## Milestone 5: Windows hardware decode and direct input import
+
+Prefer the native decoder path without changing the decoded-frame, source,
+libplacebo producer, or compositor contracts.
+
+### Work
+
+* [x] Create the Windows D3D11 device with video support and import that exact
+  device/context into QRhi and libplacebo.
+* [x] Give FFmpeg a referenced D3D11VA hardware-device context with
+  shader-resource decoder surfaces.
+* [x] Enable D3D11 multithread protection and serialize FFmpeg device callbacks
+  with QRhi/libplacebo GPU resource and command phases.
+* [x] Negotiate decoder hardware formats through FFmpeg's public codec
+  configuration API.
+* [x] Retain the hardware `AVFrame`, device generation, texture array, and
+  slice at the decoded-frame boundary.
+* [x] Directly wrap NV12, P010, P012, and P016 D3D11 plane views for
+  libplacebo with explicit effective depth and storage shift.
+* [x] Retry the entire first-frame operation in software after a configured
+  hardware decode failure and expose the fallback reason.
+* [x] Retry once in software when a decoded hardware surface cannot be
+  imported, without making that policy part of the native importer.
+* [x] Supersede old-generation decode/frame state and re-decode current media
+  after graphics-device recreation while retaining a ready
+  generation-independent software frame.
+* [x] Prove real H.264 D3D11VA decode/direct import against a pinned fixture.
+* [ ] Capture P010/P012/P016 and real device-loss behavior.
+* [ ] Measure decoder/render contention during continuous playback.
+
+### Acceptance
+
+The real H.264 scenario returns D3D11 storage belonging to the active graphics
+generation, renders through the production libplacebo target, reports zero
+input CPU transfers and GPU copies, and agrees with software decode within
+declared floating-point tolerances. The unsupported FFV1 hardware path falls
+back to software with an explicit reason.
 
 ## Backend realization
 

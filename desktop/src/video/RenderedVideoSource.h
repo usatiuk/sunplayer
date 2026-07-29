@@ -9,6 +9,8 @@
 #include <QString>
 #include <QtQml/qqmlregistration.h>
 
+#include "video/VideoFailure.h"
+
 class GraphicsDeviceDomain;
 class RenderedVideoProducer;
 
@@ -35,8 +37,9 @@ public:
     virtual bool wantsContinuousFrames() const = 0;
     virtual std::unique_ptr<RenderedVideoProducer> createProducer(
         GraphicsDeviceDomain &graphicsDevice) const = 0;
-    virtual bool reportPresentationFailure(const QString &reason) {
-        Q_UNUSED(reason);
+    virtual bool reportPresentationFailure(
+            const VideoFailure &failure) {
+        Q_UNUSED(failure);
         return false;
     }
 

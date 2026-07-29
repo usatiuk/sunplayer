@@ -4,9 +4,8 @@
 
 Sunroom integrates the official vcpkg FFmpeg 8.1.2 package with `avformat`,
 `avcodec`, and core `avutil`. The Windows package includes D3D11VA, D3D12VA,
-DXVA2, and Media Foundation support; the application currently exercises only
-software decoding. Hardware-device creation and D3D11 frame import are the next
-media/video-rendering slice.
+DXVA2, and Media Foundation support. Sunroom now exercises D3D11VA for
+supported streams and keeps software decoding as an explicit fallback.
 
 The synchronous `decodeFirstVideoFrame()` operation opens a local file,
 discovers the best video stream, decodes the first presentable frame, makes its
@@ -15,6 +14,24 @@ stream metadata self-contained, and returns an immutable
 `std::stop_token`; an FFmpeg interrupt callback and decode-loop checks make
 ordinary local-file work cooperatively cancellable. The caller still supplies
 the complete frame identity.
+
+The Windows graphics domain creates an initialized FFmpeg D3D11VA context from
+the same application-owned D3D11 device used by QRhi and libplacebo. The
+first-frame operation enumerates the selected decoder's hardware
+configurations, requests the matching hardware pixel format, and records the
+graphics-device generation on returned hardware frames. If configuration or
+post-selection decoding fails, it retries the entire open/decode operation in
+software and preserves the fallback reason in session diagnostics. Failures
+before the hardware format is actually selected are not misreported as
+hardware-decode failures.
+
+If the retained hardware surface later cannot be imported by the active
+graphics backend, `MediaSession` consumes at most one software-only re-decode
+for that open and records the import reason. A repeated typed failure becomes a
+session error. Graphics-device recreation cancels or supersedes in-flight work
+and published hardware frames, then re-decodes after the replacement domain
+supplies its capability. Ready software frames are generation-independent and
+remain published for the recreated producer.
 
 This is an integration slice, not the eventual continuous decoder: it has no
 packet queue, seeking, track discovery model, or source-stall recovery.
@@ -90,10 +107,11 @@ Continuous decoding will reuse this frame contract while adding:
 
 1. Persistent demux/decoder worker ownership and bounded packet/frame queues.
 2. Complete stream discovery and normalized session metadata.
-3. Standard FFmpeg hardware-config negotiation.
-4. A D3D11VA hardware context created from Sunroom's video-capable shared
-   D3D11 device.
-5. Explicit hardware rejection and software-decoder fallback diagnostics.
+3. Reuse of the proven D3D11VA negotiation and software retry across decoder
+   lifetime, stream changes, flushes, and device recreation.
+4. Per-frame completion events and queue diagnostics for scheduling.
+5. Equivalent native hardware-device negotiation on Linux and macOS when
+   their graphics domains are implemented.
 
 The first-frame operation is already owned by `MediaSession` through one
 persistent, latest-request worker. Continuous decoding should evolve that
@@ -114,4 +132,12 @@ second analytically generated fixture is a three-frame Matroska/FFV1 stream
 with `yuv420p`, BT.709 primaries/transfer/matrix, limited range, left chroma
 location, 4 fps timing, and SAR 32:27. Tests verify its exact decoded YUV
 samples and tolerant linear-RGB libplacebo output. It proves deterministic
-compressed software decode and YUV conversion, not hardware decoding.
+compressed software decode and YUV conversion. A third pinned 640×360
+Matroska/H.264 fixture runs on the real D3D11VA decoder, returns a retained NV12
+texture-array slice from the shared graphics device, and is compared against
+software decode after production libplacebo rendering. The test asserts that
+the hardware input path performs no CPU transfer or GPU copy and that the
+direct output target performs no copy or CPU transfer. A controlled failed
+post-selection result at the fallback-policy boundary verifies software retry
+and preserved reason; session tests verify the corresponding import-failure
+retry and graphics-recovery generation replacement.

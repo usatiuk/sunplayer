@@ -45,8 +45,8 @@ public:
     }
 
     bool reportPresentationFailure(
-            const QString &reason) override {
-        m_lastFailure = reason;
+            const VideoFailure &failure) override {
+        m_lastFailure = failure.reason;
         return m_handlesFailures;
     }
 
@@ -181,7 +181,10 @@ observesPrepareAndFailurePolicy() {
     QCOMPARE(*source.displayAspectRatio(), 9.0 / 16.0);
 
     QVERIFY(source.reportPresentationFailure(
-        QStringLiteral("cannot import frame")));
+        {
+            .kind = VideoFailureKind::General,
+            .reason = QStringLiteral("cannot import frame"),
+        }));
     QCOMPARE(
         player.lastFailure(),
         QStringLiteral("cannot import frame"));

@@ -1,7 +1,7 @@
 # FFmpeg Windows dependency and frame-import research
 
 * Date: 2026-07-29
-* Status: Dependency/software findings validated; D3D11VA import pending
+* Status: Dependency, software mapping, and D3D11VA direct import validated
 
 ## Official vcpkg package
 
@@ -58,30 +58,30 @@ For an FFmpeg D3D11 frame:
 * `AVFrame::data[0]` identifies the `ID3D11Texture2D`.
 * `AVFrame::data[1]` identifies its texture-array slice.
 * `hw_frames_ctx` retains the pool and reports the software plane format,
-  normally NV12, P010, or P016.
+  normally NV12, P010, P012, or P016.
 
-The D3D11VA hardware context should use Sunroom's existing graphics-domain
-device rather than creating a second adapter/device. Decoder frame pools must
-request shader-resource binding.
+The implemented D3D11VA hardware context uses Sunroom's graphics-domain device
+rather than creating a second adapter/device. Decoder frame pools request
+shader-resource binding.
 
-The future native importer can wrap each plane and array slice through
+The native importer wraps each plane and array slice through
 `pl_d3d11_wrap()`:
 
 | Storage | Luma view | Chroma view |
 | --- | --- | --- |
 | NV12 | R8_UNORM | R8G8_UNORM |
-| P010/P016 | R16_UNORM | R16G16_UNORM |
+| P010/P012/P016 | R16_UNORM | R16G16_UNORM |
 
-P010 also requires correct 10-bit color depth and six-bit storage shift
-metadata.
+P010, P012, and P016 require explicit 10-, 12-, and 16-bit effective color
+depth. P010 and P012 use six- and four-bit high-bit storage shifts.
 
-## Shared-device synchronization risk
+## Validated shared-device synchronization
 
 QRhi, libplacebo, and FFmpeg will share one D3D11 immediate context. FFmpeg's
 hardware-context lock callbacks protect FFmpeg calls only; they do not
 automatically serialize Qt or libplacebo.
 
-The intended first Windows policy is:
+The implemented Windows policy is:
 
 1. The graphics domain creates the D3D11 device with video support.
 2. It enables `ID3D11Multithread` protection on the immediate context.
@@ -92,10 +92,19 @@ The intended first Windows policy is:
 6. The frame reference is released only after those reads are ordered on the
    shared context.
 
-Multithread protection adds per-call overhead and must be measured with real
-playback. If device identity, shader-resource binding, or ordering cannot be
-proved, the backend must report an explicit same-device copy or reject the
-hardware path. It must not silently download to the CPU on the render thread.
+The graphics domain also exposes one recursive execution scope used by
+FFmpeg's hardware-context callbacks and the engine's QRhi/libplacebo resource,
+command, and teardown phases. Device-independent source selection, geometry,
+and display policy execute outside that scope. This provides explicit
+sequence-level ordering on top of D3D11's per-call multithread protection. The
+retained `AVFrame` keeps the texture-array slice reserved while cached
+libplacebo plane views refer to it.
+
+A pinned 640×360 H.264 scenario has validated D3D11VA NV12 decode, device and
+slice checks, `R8_UNORM`/`R8G8_UNORM` plane wrapping, direct libplacebo
+rendering, zero input CPU transfers, zero input GPU copies, and tolerant output
+agreement with software decode. P010/P012/P016 capture, continuous decode
+contention, and device-loss recovery still require verification.
 
 ## Sources
 

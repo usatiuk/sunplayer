@@ -1,18 +1,129 @@
 #include "graphics/backends/D3D11GraphicsDeviceDomain.h"
 
+#include <array>
 #include <memory>
+#include <mutex>
+#include <utility>
 
+#include <d3d11.h>
+#include <d3d11_4.h>
+#include <wrl/client.h>
 #include <QtCore/qlogging.h>
 #include <libplacebo/d3d11.h>
 #include <rhi/qrhi.h>
 #include <rhi/qrhi_platform.h>
 
+extern "C" {
+#include <libavutil/error.h>
+#include <libavutil/hwcontext.h>
+#include <libavutil/hwcontext_d3d11va.h>
+}
+
 #include "graphics/GraphicsDeviceDomain.h"
+#include "graphics/backends/D3D11LibplaceboFrameImporter.h"
 #include "graphics/backends/D3D11LibplaceboVideoTarget.h"
+#include "media/FfmpegHardwareDevice.h"
 #include "video/QrhiVideoTarget.h"
 #include "video/VideoTargetInterop.h"
+#include "video/libplacebo/LibplaceboFrameImporter.h"
 
 namespace {
+using Microsoft::WRL::ComPtr;
+
+struct D3D11ExecutionState {
+    std::recursive_mutex mutex;
+};
+
+void lockFfmpegDevice(void *opaque) {
+    static_cast<D3D11ExecutionState *>(opaque)
+        ->mutex.lock();
+}
+
+void unlockFfmpegDevice(void *opaque) {
+    static_cast<D3D11ExecutionState *>(opaque)
+        ->mutex.unlock();
+}
+
+void unlockGraphicsExecution(void *opaque) {
+    unlockFfmpegDevice(opaque);
+}
+
+void freeFfmpegDevice(AVHWDeviceContext *context) {
+    delete static_cast<std::shared_ptr<D3D11ExecutionState> *>(
+        context->user_opaque);
+    context->user_opaque = nullptr;
+}
+
+QString ffmpegError(int code) {
+    char buffer[AV_ERROR_MAX_STRING_SIZE]{};
+    if (av_strerror(code, buffer, sizeof(buffer)) < 0)
+        return QStringLiteral("FFmpeg error %1").arg(code);
+    return QString::fromUtf8(buffer);
+}
+
+VideoHardwareDecodeCapability createVideoDecodeCapability(
+        ID3D11Device &device,
+        std::uint64_t graphicsDeviceGeneration,
+        const std::shared_ptr<D3D11ExecutionState> &executionState) {
+    AVBufferRef *deviceReference =
+        av_hwdevice_ctx_alloc(AV_HWDEVICE_TYPE_D3D11VA);
+    if (!deviceReference) {
+        return {
+            .device = {},
+            .unavailableReason = QStringLiteral(
+                "FFmpeg could not allocate a D3D11VA device context"),
+        };
+    }
+
+    auto *const context =
+        reinterpret_cast<AVHWDeviceContext *>(
+            deviceReference->data);
+    auto *const d3d11 =
+        reinterpret_cast<AVD3D11VADeviceContext *>(
+            context->hwctx);
+    auto *const opaque = new std::shared_ptr<D3D11ExecutionState>(
+        executionState);
+    context->user_opaque = opaque;
+    context->free = freeFfmpegDevice;
+    d3d11->device = &device;
+    d3d11->device->AddRef();
+    d3d11->lock = lockFfmpegDevice;
+    d3d11->unlock = unlockFfmpegDevice;
+    d3d11->lock_ctx = executionState.get();
+    d3d11->BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+
+    const int status =
+        av_hwdevice_ctx_init(deviceReference);
+    if (status < 0) {
+        const QString reason = QStringLiteral(
+            "FFmpeg could not initialize the shared "
+            "D3D11VA device: %1")
+            .arg(ffmpegError(status));
+        av_buffer_unref(&deviceReference);
+        return {
+            .device = {},
+            .unavailableReason = reason,
+        };
+    }
+
+    std::shared_ptr<const FfmpegHardwareDevice> hardwareDevice =
+        FfmpegHardwareDevice::adopt(
+            deviceReference,
+            graphicsDeviceGeneration,
+            QStringLiteral("D3D11VA"));
+    if (!hardwareDevice) {
+        return {
+            .device = {},
+            .unavailableReason = QStringLiteral(
+                "The shared D3D11VA device description was invalid"),
+        };
+    }
+    return {
+        .device = std::move(hardwareDevice),
+        .unavailableReason = {},
+    };
+}
+
 void logLibplacebo(
         void *,
         enum pl_log_level level,
@@ -44,8 +155,112 @@ void logLibplacebo(
 class D3D11GraphicsDeviceDomain final : public GraphicsDeviceDomain {
 public:
     D3D11GraphicsDeviceDomain() {
+        constexpr std::array featureLevels{
+            D3D_FEATURE_LEVEL_11_1,
+            D3D_FEATURE_LEVEL_11_0,
+            D3D_FEATURE_LEVEL_10_1,
+            D3D_FEATURE_LEVEL_10_0,
+        };
+        const auto createNativeDevice =
+            [this, &featureLevels](UINT flags) {
+            m_context.Reset();
+            m_device.Reset();
+            D3D_FEATURE_LEVEL selectedFeatureLevel{};
+            HRESULT result = D3D11CreateDevice(
+                nullptr,
+                D3D_DRIVER_TYPE_HARDWARE,
+                nullptr,
+                flags,
+                featureLevels.data(),
+                static_cast<UINT>(featureLevels.size()),
+                D3D11_SDK_VERSION,
+                &m_device,
+                &selectedFeatureLevel,
+                &m_context);
+            if (result == E_INVALIDARG) {
+                result = D3D11CreateDevice(
+                    nullptr,
+                    D3D_DRIVER_TYPE_HARDWARE,
+                    nullptr,
+                    flags,
+                    featureLevels.data() + 1,
+                    static_cast<UINT>(
+                        featureLevels.size() - 1),
+                    D3D11_SDK_VERSION,
+                    &m_device,
+                    &selectedFeatureLevel,
+                    &m_context);
+            }
+            return result;
+        };
+
+        QString hardwareDecodeUnavailableReason;
+        HRESULT createResult = createNativeDevice(
+            D3D11_CREATE_DEVICE_BGRA_SUPPORT
+            | D3D11_CREATE_DEVICE_VIDEO_SUPPORT);
+        if (FAILED(createResult)) {
+            hardwareDecodeUnavailableReason =
+                QStringLiteral(
+                    "Could not create a video-capable D3D11 device "
+                    "(0x%1)")
+                    .arg(
+                        static_cast<unsigned long>(createResult),
+                        8,
+                        16,
+                        QLatin1Char('0'));
+            createResult = createNativeDevice(
+                D3D11_CREATE_DEVICE_BGRA_SUPPORT);
+        }
+        if (FAILED(createResult)
+                || !m_device
+                || !m_context) {
+            qCritical(
+                "Could not create the video-capable D3D11 device: 0x%08lx",
+                static_cast<unsigned long>(createResult));
+            return;
+        }
+
+        ComPtr<ID3D11DeviceContext1> context1;
+        if (FAILED(m_context.As(&context1))) {
+            qCritical(
+                "The D3D11 immediate context does not provide "
+                "ID3D11DeviceContext1");
+            return;
+        }
+        ComPtr<ID3D11VideoDevice> videoDevice;
+        if (hardwareDecodeUnavailableReason.isEmpty()
+                && FAILED(m_device.As(&videoDevice))) {
+            hardwareDecodeUnavailableReason =
+                QStringLiteral(
+                    "The D3D11 device does not provide video decoding");
+        }
+        ComPtr<ID3D11Multithread> multithread;
+        if (hardwareDecodeUnavailableReason.isEmpty()) {
+            if (FAILED(m_context.As(&multithread))) {
+                hardwareDecodeUnavailableReason =
+                    QStringLiteral(
+                        "The D3D11 device does not expose "
+                        "multithread protection");
+            } else {
+                multithread->SetMultithreadProtected(TRUE);
+                if (!multithread->GetMultithreadProtected()) {
+                    hardwareDecodeUnavailableReason =
+                        QStringLiteral(
+                            "Could not enable D3D11 "
+                            "multithread protection");
+                }
+            }
+        }
+
         QRhiD3D11InitParams parameters;
-        m_rhi.reset(QRhi::create(QRhi::D3D11, &parameters));
+        QRhiD3D11NativeHandles importedDevice;
+        importedDevice.dev = m_device.Get();
+        importedDevice.context = m_context.Get();
+        m_rhi.reset(QRhi::create(
+            QRhi::D3D11,
+            &parameters,
+            {},
+            &importedDevice));
         if (!m_rhi)
             return;
 
@@ -63,6 +278,12 @@ public:
                 || !nativeHandles->context) {
             qCritical(
                 "QRhi did not expose its D3D11 device and immediate context");
+            return;
+        }
+        if (nativeHandles->dev != m_device.Get()
+                || nativeHandles->context != m_context.Get()) {
+            qCritical(
+                "QRhi did not retain the imported D3D11 device domain");
             return;
         }
 
@@ -90,6 +311,22 @@ public:
             .log = m_log,
             .gpu = m_d3d11->gpu,
         };
+        m_videoDecode =
+            hardwareDecodeUnavailableReason.isEmpty()
+            ? createVideoDecodeCapability(
+                *m_device.Get(),
+                generation(),
+                m_executionState)
+            : VideoHardwareDecodeCapability{
+                .device = {},
+                .unavailableReason =
+                    std::move(
+                        hardwareDecodeUnavailableReason),
+            };
+        if (!m_videoDecode.isAvailable()) {
+            qWarning().noquote()
+                << m_videoDecode.unavailableReason;
+        }
 
         m_diagnostics.backend = GraphicsBackend::D3D11;
         m_diagnostics.backendName =
@@ -123,6 +360,19 @@ public:
         return m_libplacebo;
     }
 
+    const VideoHardwareDecodeCapability &
+    videoDecodeCapability() const override {
+        return m_videoDecode;
+    }
+
+    GraphicsDeviceExecutionScope
+    acquireExecutionScope() override {
+        m_executionState->mutex.lock();
+        return GraphicsDeviceExecutionScope(
+            m_executionState,
+            unlockGraphicsExecution);
+    }
+
     std::unique_ptr<VideoTargetInterop> createVideoTarget(
             const VideoTargetRequest &request) override {
         switch (request.producerApi) {
@@ -139,6 +389,12 @@ public:
         return {};
     }
 
+    std::unique_ptr<LibplaceboHardwareFrameImporter>
+    createHardwareFrameImporter() override {
+        return createD3D11LibplaceboFrameImporter(
+            m_libplacebo.gpu);
+    }
+
     bool isValid() const {
         return m_rhi
             && m_diagnostics.isValid()
@@ -146,10 +402,15 @@ public:
     }
 
 private:
+    std::shared_ptr<D3D11ExecutionState> m_executionState =
+        std::make_shared<D3D11ExecutionState>();
+    ComPtr<ID3D11Device> m_device;
+    ComPtr<ID3D11DeviceContext> m_context;
     std::unique_ptr<QRhi> m_rhi;
     pl_log m_log = nullptr;
     pl_d3d11 m_d3d11 = nullptr;
     LibplaceboGraphicsContext m_libplacebo;
+    VideoHardwareDecodeCapability m_videoDecode;
     GraphicsDeviceDiagnostics m_diagnostics;
 };
 }

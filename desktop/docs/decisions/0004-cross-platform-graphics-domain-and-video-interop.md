@@ -66,7 +66,10 @@ The initial intended paths are:
 
 * Windows: QRhi D3D11 and libplacebo D3D11 share one device; libplacebo wraps
   the QRhi-owned RGBA16F texture and native commands are bracketed through
-  QRhi's external-command mechanism.
+  QRhi's external-command mechanism. The domain also gives that video-capable
+  device to FFmpeg, enables immediate-context multithread protection, and
+  serializes decoder callbacks with QRhi/libplacebo GPU resource, command, and
+  teardown phases through one backend scope.
 * Linux: QRhi and libplacebo share one Vulkan device; image layout,
   queue-family ownership, and semaphore state are explicit in the Vulkan
   backend.
@@ -129,4 +132,6 @@ bridge between them.
   single window owns one domain.
 * The final Vulkan queue and semaphore strategy.
 * Whether shared MoltenVK presentation satisfies macOS EDR and energy goals.
-* Hardware-decoder input import details for each platform.
+* Hardware-decoder input import details for Linux and macOS.
+* Which direct-import failures justify same-device GPU-copy or CPU fallback
+  instead of the implemented one-shot software re-decode.

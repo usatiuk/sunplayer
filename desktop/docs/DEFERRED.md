@@ -17,7 +17,7 @@ unimplemented.
 Track under the backend-realization section of
 `docs/subsystems/graphics/PLAN.md`.
 
-### Incomplete decoded-video metadata and hardware import
+### Incomplete decoded-video metadata and cross-platform hardware import
 
 The explicit video surface, narrow final compositor, persistent libplacebo
 renderer, and direct D3D11 QRhi target bridge now exist. Their analytic input
@@ -30,12 +30,15 @@ white across target changes. It does not yet prove one fixed, absolutely
 mastered PQ frame, representative YUV/chroma/range combinations, or full
 metadata provenance. A deterministic FFV1 fixture now covers compressed
 limited-range BT.709 YUV420P and non-square-pixel aspect fitting, but not a
-fixed absolutely mastered PQ frame. D3D11VA device creation, direct
-hardware-plane import, immediate-context multithread protection, hardware
-fallback diagnostics, and the other platform importers remain required.
-General display-matrix rotation still lacks a dedicated render capture.
+fixed absolutely mastered PQ frame. The Windows graphics domain now owns a
+video-capable, multithread-protected D3D11 device; an H.264 scenario proves
+D3D11VA NV12 direct plane import, zero input copies/transfers, and observable
+software fallback. P010/P012/P016 capture, same-device-copy and CPU fallback
+paths, real device-loss injection, and the other platform
+importers remain required. General display-matrix rotation still lacks a
+dedicated render capture.
 
-Track under graphics milestones 3–4.
+Track under graphics milestone 5 and the active testing plan.
 
 ### Qt private API compatibility
 

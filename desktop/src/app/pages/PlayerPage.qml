@@ -182,10 +182,20 @@ VideoPage {
 
                 Label {
                     Layout.fillWidth: true
-                    text: qsTr("Paused first frame · %1 · %2")
+                    text: qsTr("Paused first frame · %1 · %2 · %3")
                         .arg(root.session.videoSummary)
                         .arg(root.session.decoderName)
+                        .arg(root.session.decodePath)
                     color: "#9ca6b8"
+                    elide: Text.ElideRight
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    visible: root.session.hardwareFallbackReason.length > 0
+                    text: qsTr("Hardware decode fallback: %1")
+                        .arg(root.session.hardwareFallbackReason)
+                    color: "#d2a85d"
                     elide: Text.ElideRight
                 }
             }

@@ -1,0 +1,40 @@
+file = "sdr-bt709-h264.mkv"
+sha256 = "93f534e17d30a6b9436afa8a2f0ea60ec98a299bd8a1dfcb1e99c75e40ea30c2"
+provenance = "Generated analytically for Sunroom; no external source media"
+generator = "FFmpeg 8.1.2-full_build-www.gyan.dev"
+
+generation_command = """
+ffmpeg -f lavfi -i "nullsrc=size=640x360:rate=4:duration=0.75,format=yuv420p,geq=lum='if(lt(Y,180),if(lt(X,213),16,if(lt(X,426),126,235)),if(lt(X,213),63,if(lt(X,426),173,32)))':cb='if(lt(Y,90),128,if(lt(X,107),102,if(lt(X,213),42,240)))':cr='if(lt(Y,90),128,if(lt(X,107),240,if(lt(X,213),26,118)))',setparams=range=limited:color_primaries=bt709:color_trc=bt709:colorspace=bt709,setsar=1" -frames:v 3 -an -c:v libx264 -profile:v high -level:v 4.0 -pix_fmt yuv420p -preset veryslow -crf 10 -g 12 -bf 2 -threads 1 -x264-params "lookahead_threads=1:sync_lookahead=0" -chroma_sample_location left -fflags +bitexact -flags:v +bitexact -map_metadata -1 sdr-bt709-h264.mkv
+"""
+
+[expected]
+container = "matroska"
+codec = "h264"
+pixel_format = "yuv420p"
+hardware_pixel_format = "d3d11"
+width = 640
+height = 360
+sample_aspect_ratio = "1:1"
+display_aspect_ratio = "16:9"
+frame_rate = "4/1"
+first_pts = 0
+first_duration = 250
+time_base = "1/1000"
+color_primaries = "bt709"
+transfer = "bt709"
+matrix = "bt709"
+range = "tv"
+chroma_location = "left"
+
+[coverage]
+features = [
+    "real-container",
+    "lossy-compressed-video",
+    "d3d11va-hardware-decode",
+    "direct-native-surface-import",
+    "zero-cpu-transfer",
+    "yuv420p",
+    "limited-range",
+    "bt709",
+    "chroma-subsampling",
+]
