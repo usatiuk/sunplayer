@@ -8,6 +8,7 @@
 #include <QPalette>
 #include <QQmlComponent>
 #include <QQmlEngine>
+#include <QStyleHints>
 #include <QUrl>
 
 #include "app/PresentationWindow.h"
@@ -17,6 +18,7 @@
 
 int main(int argc, char *argv[]) {
     QGuiApplication app(argc, argv);
+    app.styleHints()->setColorScheme(Qt::ColorScheme::Dark);
     QCoreApplication::setApplicationName(
         QStringLiteral("Sunroom"));
     QCoreApplication::setApplicationVersion(
