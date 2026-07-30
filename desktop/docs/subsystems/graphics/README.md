@@ -324,8 +324,9 @@ and HDR-Lab-only renderer selection. Both producers generate the same
 grayscale, color-spectrum, stepped ramps, and separator bands. The QRhi
 producer applies its temporary diagnostic tone mapper. The libplacebo producer
 keeps a persistent 640×360 software-frame-style RGBA32F input and backing
-buffer, uploads it as sRGB-encoded RGB for SDR or target-relative BT.2020/PQ
-RGB with explicit HDR metadata, and applies libplacebo's real color pipeline.
+buffer, uploads it as sRGB-encoded RGB for SDR or a fixed-reference
+BT.2020/PQ signal with explicit HDR metadata, and applies libplacebo's real
+color pipeline.
 The upload is cached by the input-frame values it actually depends on, so a
 target-only resize or display change reuses the source texture. The input size
 is independent of the viewport; libplacebo performs scaling.
@@ -343,20 +344,25 @@ recorded in
 
 Platform display adapters observe native facts such as HDR enablement,
 luminance capabilities, and system SDR white. Shared presentation policy turns
-those facts into one physical display target. The producer renders for that
-target and converts library-internal units into the surface contract:
-libplacebo's linear `1.0 = 203 nits` convention is scaled at pre-output by
-`203 / referenceWhiteNits`, so the stored surface always uses
-`1.0 = active reference white`. SDR diagnostic input remains relative. The
-diagnostic PQ values are derived from target-relative pattern headroom, so the
-100/203-nit comparison validates output normalization but is not a fixed
-mastered-source test. The compositor does not know about libplacebo's 203-nit
-convention.
+those facts into one display-relative target. The producer expresses available
+headroom in libplacebo's fixed 203-nit coordinate system:
+`max_luma = 203 * physicalPeak / referenceWhite`. The resulting linear samples
+therefore use `1.0 = active reference white` directly; no custom post-map scale
+is required. SDR diagnostic input remains relative, while the PQ diagnostic is
+one fixed mastered signal independent of target changes. The compositor does
+not know about libplacebo's coordinate system.
 
 The surface also preserves minimum target luminance as a value plus a known
-state. Libplacebo treats numeric zero as unknown, so the backend adapter maps a
-known physical zero to `PL_COLOR_HDR_BLACK` only while populating libplacebo's
-target metadata.
+state. The backend converts a positive physical minimum into the same virtual
+coordinate system. Libplacebo treats numeric zero as unknown and otherwise
+infers a linear-target contrast ratio, so the adapter uses
+`PL_COLOR_HDR_BLACK` for an unknown or known-zero minimum.
+
+The texture's BT.709 primaries define its extended-linear RGB coordinate basis,
+not necessarily the physical target gamut. Sunroom does not yet propagate
+actual display primaries into libplacebo's separate target-gamut metadata, so
+the current target gamut is inferred as BT.709 and wide-gamut output is not yet
+claimed.
 
 The final compositor does not know the source peak, pattern phase, tone-map
 setting, source transfer function, or HDR metadata. It places the video layer,
@@ -421,6 +427,11 @@ The current HDR Lab page displays:
 It also exposes a manual reprobe and controls for source peak, target peak,
 tone mapping, and pattern animation. These controls validate presentation
 behavior; they are not the planned player settings surface.
+
+The HDR pattern peak is defined relative to the fixed 203-nit HDR reference
+white. The target peak is defined relative to the active platform reference
+white. This lets a display-target-only change preserve one source signal and
+exercise real display mapping.
 
 Render timings, device-loss history, and decoded-frame import diagnostics do
 not exist yet.
@@ -498,11 +509,14 @@ surface reuse, accepted submissions with committed and discarded rendered
 states, target resize/revision-driven compositor rebinding, hidden-video
 fallback, and premultiplied UI blending. The libplacebo case checks sRGB and
 BT.2020/PQ input, pattern-layout correspondence, reference-white normalization
-for SDR targets at 80, 100, and 203 nits and a target-relative PQ diagnostic at
-100 and 203 nits, target minimum luminance, tone mapping into declared
-headroom, one explicit software input upload, shared-target synchronization,
-zero output copies, final linear composition, pixel-validated texture rewrap
-after resize, and producer destruction/rebinding. A sustained 60-frame probe
+for SDR targets at 80, 100, and 203 nits, an exact 203-nit PQ patch at surface
+`1.0`, and one fixed 1000-nit PQ signal against a 600-nit display target at
+those same reference whites. It verifies unchanged surface-relative values
+while the signal fits, highlight compression when available headroom falls
+below the source, target minimum luminance, one explicit software input upload,
+shared-target synchronization, zero output copies, exactly one final
+presentation scale, pixel-validated texture rewrap after resize, and producer
+destruction/rebinding. A sustained 60-frame probe
 uses a fixed 640×360 input and a 1100×600 target; it reports local throughput
 without imposing a machine-independent CI threshold.
 

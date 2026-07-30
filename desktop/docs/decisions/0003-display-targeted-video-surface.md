@@ -2,6 +2,8 @@
 
 * Status: Accepted
 * Date: 2026-07-28
+* Amended by:
+  [0008: Anchor normal HDR playback to the platform reference white](0008-reference-white-adaptive-hdr-display-mapping.md)
 
 ## Context
 
@@ -62,19 +64,22 @@ source formats are implemented yet.
 Platform display adapters own native observation and report physical display
 facts. Shared presentation policy resolves those facts into the effective
 target—including minimum luminance when known—supplied to the producer. The
-producer must convert renderer-internal units into this surface contract;
-specifically, libplacebo's linear
-`1.0 = 203 nits` convention is converted so surface `1.0` always means the
-active reference white. The final compositor remains unaware of that
-conversion and of the source format. Platform presentation then maps the final
-composition to the selected OS swapchain convention without tone-mapping the
-video again.
+producer must describe the destination so renderer output already satisfies
+this surface contract. For libplacebo, the target range is expressed in its
+fixed 203-nit normalized coordinate system: target maximum is
+`203 * targetPeakHeadroom`, and target minimum is converted by the same
+reference-white-relative relationship. No video-only normalization runs after
+the display map. The final compositor remains unaware of libplacebo's internal
+coordinate system and of the source format. Platform presentation then maps
+the complete final composition to the selected OS swapchain convention without
+tone-mapping video again.
 
 Sunroom preserves the distinction between unknown minimum luminance and a
 known physical zero. Renderer adapters translate that representation at their
 API boundary. In particular, libplacebo reserves numeric zero for unknown
-metadata, so its adapter uses `PL_COLOR_HDR_BLACK` to represent Sunroom's known
-zero without changing the physical value stored in shared state.
+metadata and otherwise infers a linear-target contrast ratio, so its adapter
+uses `PL_COLOR_HDR_BLACK` when the minimum is unknown or physically zero. This
+does not change the value or known state stored in shared presentation state.
 
 ## Consequences
 

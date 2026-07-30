@@ -103,18 +103,25 @@ the libplacebo producer then own source transfer, primaries, range, tone
 mapping, and the conversion into Sunroom's platform-neutral surface contract.
 
 libplacebo's linear convention uses `1.0 = 203 nits`. Sunroom's rendered-video
-surface uses `1.0 = active reference white`. The producer applies
-`203 / referenceWhiteNits` at libplacebo's pre-output stage so this internal
-library convention does not leak into composition. SDR input remains relative;
-the target-relative diagnostic pattern encodes PQ samples from its chosen
-absolute luminance. A real decoded PQ signal remains source-absolute and does
-not change when the output target changes.
+surface uses `1.0 = active reference white`. The producer expresses the target
+in libplacebo's coordinate system as
+`max_luma = 203 * targetPeakHeadroom`, so libplacebo's numerical output already
+has Sunroom's required meaning. Source pixels and HDR-transfer metadata remain
+unchanged, and no custom pre-output multiplier runs after tone mapping. A
+render-local color-space copy anchors relative SDR transfers to libplacebo's
+203-nit normalized white even when decoded mastering metadata reports a
+different physical maximum. It preserves source mastering primaries but
+removes absolute mastering, HDR10+, and CIE-Y luminance candidates so stale
+metadata cannot override the relative transfer. The fixed diagnostic PQ signal
+uses 203-nit HDR reference white and does not change when the output target
+changes.
 
 Minimum target luminance and whether it is known are also part of the surface
 description supplied to libplacebo. Sunroom preserves a measured physical zero
 as distinct from unavailable metadata. Because libplacebo reserves numeric
-zero for unknown minimum luminance, the adapter passes `PL_COLOR_HDR_BLACK`
-only at that API boundary for a known zero; shared physical state remains zero.
+zero for unknown minimum luminance and otherwise infers a linear-target
+contrast ratio, the adapter uses `PL_COLOR_HDR_BLACK` at that API boundary for
+an unknown or known-zero minimum; shared physical state remains unchanged.
 
 Software and hardware decoded frames share semantic metadata and scheduling
 contracts, but not storage behavior. Software planes require observable
@@ -122,11 +129,12 @@ uploads. Hardware frames require backend-native import, synchronization, and
 lifetime retention and should be the normal playback path when supported.
 
 Before rendering, shared policy resolves unspecified source color fields
-through libplacebo. A source that remains relative SDR is anchored to the
-active target SDR white; PQ, HLG, or another effectively HDR source retains its
-absolute signal and mastering metadata. This prevents the same SDR frame from
-changing composition-relative brightness when the platform SDR-white value
-changes.
+through libplacebo. Relative SDR white and the 203-nit HDR reference-white
+anchor both map to surface `1.0`; PQ source values and mastering metadata remain
+source truth. The physical luminance of surface `1.0` follows the platform
+reference white at presentation. HLG is target-dependent in libplacebo and
+still requires dedicated multi-target capture before equivalent correctness is
+claimed.
 
 The final QRhi compositor only places the resulting linear BT.709 surface,
 blends other described layers in the same reference-white-relative convention,
@@ -157,9 +165,10 @@ metadata policy, renderer policy, subtitles, and the compositor remain shared.
    direct implementation.
 5. [x] Render known SDR and BT.2020/PQ software-backed images and capture both
    the video surface and final composition.
-6. [x] Normalize libplacebo output to arbitrary active reference white and
-   capture SDR at 80, 100, and 203 nits plus a target-relative PQ diagnostic at
-   100 and 203 nits.
+6. [x] Express arbitrary active reference white and headroom through
+   libplacebo's target, capture SDR at 80, 100, and 203 nits, and hold one
+   fixed 1000-nit PQ signal across 80-, 100-, and 203-nit reference whites on a
+   constant 600-nit target.
 7. [x] Make libplacebo the HDR Lab default while retaining procedural QRhi as
    an explicit diagnostic comparison only.
 8. [ ] Add the Vulkan implementation and exercise it on Linux.
@@ -183,14 +192,18 @@ asserts pattern layout, reference-white normalization, minimum-target
 contract validity, orientation, alpha, extended values, one explicit input
 upload per changed frame, and zero output copies, then destroys and rewraps
 the native target after resize and validates its pixels. SDR captures cover
-80, 100, and 203 nits; the
-target-relative PQ diagnostic covers 100 and 203 nits. The test also destroys
-the bound producer, creates the other implementation, rebinds the compositor,
-and captures the result. A sustained probe submits 60 animated 640×360 frames
-into a 1100×600 target and reports local throughput without a universal timing
-threshold. The QRhi case retains its broader compositor, submission, and
-UI-layer coverage. Each future native libplacebo backend requires equivalent
-real-GPU coverage. Cross-backend output comparisons use declared tolerances.
+80, 100, and 203 nits. The PQ capture first maps an exact 203-nit patch to
+surface `1.0`, then keeps a 1000-nit source fixed against a 600-nit physical
+target. It verifies uncompressed agreement when the source fits at 80- and
+100-nit white, highlight compression when 203-nit white reduces available
+headroom, and one final `referenceWhite / 80` composition scale. The
+test also destroys the bound producer, creates the other implementation,
+rebinds the compositor, and captures the result. A sustained probe submits 60
+animated 640×360 frames into a 1100×600 target and reports local throughput
+without a universal timing threshold. The QRhi case retains its broader
+compositor, submission, and UI-layer coverage. Each future native libplacebo
+backend requires equivalent real-GPU coverage. Cross-backend output
+comparisons use declared tolerances.
 
 The separate dependency integration test links the MSVC-built test process to the
 clang-cl-built libplacebo DLL, checks that the installed generated
@@ -215,6 +228,6 @@ rectangle. A pinned H.264 case uses the production shared-device D3D11VA
 decoder and direct NV12 plane importer, asserts no input download/upload or GPU
 copy and no output copy/transfer, captures its display-targeted output, and
 compares representative pixels against the software decode. Physical display
-correctness, fixed mastered HDR input, P010/P012/P016 capture, general
-display-matrix rotation, macOS EDR viability,
+correctness, HLG/dynamic-HDR mapping, actual display-gamut propagation,
+P010/P012/P016 capture, general display-matrix rotation, macOS EDR viability,
 and Vulkan synchronization remain unproven.

@@ -15,7 +15,8 @@
 
 namespace {
 struct alignas(16) DiagnosticVideoParameters {
-    // Headroom values are multiples of SDR white, not absolute nits.
+    // Source values are multiples of the 203-nit HDR reference white. Target
+    // values are multiples of the active display's SDR/reference white.
     float sourcePeak = 12.5f;
     float targetPeak = 1.0f;
     float phase = 0.0f;

@@ -60,7 +60,7 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 
 ## Current implementation status
 
-As of 2026-07-29, the repository contains a Windows presentation foundation
+As of 2026-07-30, the repository contains a Windows presentation foundation
 and initial continuous, video-only local-file playback:
 
 * A factory-selected graphics-device domain owns the current D3D11 QRhi,
@@ -84,9 +84,10 @@ and initial continuous, video-only local-file playback:
   GPU scaling through a persistent renderer. Its CPU work and allocation size
   do not grow with the window.
 * On Windows, libplacebo directly wraps the QRhi-owned RGBA16F D3D11 texture,
-  shares QRhi's immediate context without an output copy, and normalizes its
-  internal 203-nit linear convention to Sunroom's active-reference-white
-  surface convention.
+  shares QRhi's immediate context without an output copy, and receives a
+  reference-white-relative virtual target in its fixed 203-nit coordinate
+  system. Source HDR values remain unchanged; no custom post-map normalization
+  runs.
 * A narrow final QRhi pass places that already processed video surface,
   combines it with the UI, and presents extended-linear sRGB/scRGB when
   available, with an SDR fallback. It can also compose UI without an active
@@ -145,13 +146,17 @@ viewport publication and diagnostic renderer selection, rendered-video surface
 validity/invalidation, decoded-frame ownership, the libplacebo and FFmpeg
 binary boundaries, and real D3D11 offscreen QRhi/libplacebo
 producer/compositor capture. The GPU capture covers SDR
-targets at 80, 100, and 203 nits and a target-relative PQ diagnostic at 100 and
-203 nits, plus known pixels from the first FFmpeg-decoded frame at two SDR-white
-targets. A sustained headless probe also exercises 60 animated 640×360 frames
-into a 1100×600 target without viewport-sized CPU generation.
-Whole-application playback scenarios, fixed mastered PQ source coverage,
-P010/P012/P016 capture, cross-platform hardware import, and physical-output
-validation do not yet exist.
+targets at 80, 100, and 203 nits and holds one fixed analytic 1000-nit PQ signal
+against one physical 600-nit target at all three reference-white levels. It
+proves unchanged surface-relative output while the source fits, highlight
+compression when available headroom falls below the source, and one final
+Windows scRGB scale. It also covers known pixels from the first
+FFmpeg-decoded frame at two SDR-white targets. A sustained headless probe
+exercises 60 animated 640×360 frames into a 1100×600 target without
+viewport-sized CPU generation. Whole-application playback scenarios, a pinned
+FFmpeg-decoded mastered-PQ fixture, HLG/dynamic-HDR mapping, actual display
+gamut propagation, P010/P012/P016 capture, cross-platform hardware import, and
+physical-output validation do not yet exist.
 
 The next playback slice should add seeking and normalized
 position/duration state, including a keyframe-anchored decoder restart
@@ -257,6 +262,9 @@ Documentation: `docs/subsystems/graphics/`
 * [ ] VideoToolbox, IOSurface, and MoltenVK importer
 * [x] Offscreen HDR render-target contract and temporary QRhi producer
 * [x] Display-target and SDR-white updates
+* [x] Reference-white-adaptive SDR/PQ display mapping without a post-map
+  video scale
+* [ ] Actual display-gamut propagation and fixed-source HLG validation
 * [ ] HDR10, HLG, HDR10+, and Dolby Vision capability reporting
 * [ ] Quality and energy profiles
 * [x] Initial rendering-path and copy/transfer diagnostics
@@ -385,6 +393,7 @@ docs/
         0005-retain-ffmpeg-frames-at-the-decoded-frame-boundary.md
         0006-asynchronous-media-session-and-stable-active-video-source.md
         0007-bound-continuous-video-and-select-on-presentation-thread.md
+        0008-reference-white-adaptive-hdr-display-mapping.md
 
     research/
         README.md
@@ -393,6 +402,7 @@ docs/
         2026-07-29-ffmpeg-windows-dependency-and-frame-import.md
         2026-07-29-compressed-sdr-fixture.md
         2026-07-29-ffmpeg-continuous-decode-and-backpressure.md
+        2026-07-30-reference-white-adaptive-hdr-mapping.md
 
     subsystems/
         application/

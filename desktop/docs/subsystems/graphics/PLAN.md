@@ -131,8 +131,9 @@ Replace the temporary producer with a persistent libplacebo renderer.
 * [x] Create persistent libplacebo log, GPU, and renderer objects.
 * [x] Render known sRGB and BT.2020/PQ software-backed images into the video
   surface.
-* [x] Normalize libplacebo's 203-nit linear convention to the active
-  reference-white surface convention and capture it at 80, 100, and 203 nits.
+* [x] Express active reference white and physical headroom through
+  libplacebo's 203-nit target coordinate, remove the cancelling pre-output
+  normalization, and capture one fixed PQ signal at 80, 100, and 203 nits.
 * [x] Reuse the renderer across size, source, and display changes.
 * [x] Expose backend, render target, zero-copy, synchronization, and failure
   diagnostics.

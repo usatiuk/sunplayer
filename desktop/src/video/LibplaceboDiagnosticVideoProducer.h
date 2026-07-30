@@ -48,6 +48,7 @@ public:
     QRhiTexture &textureForComposition() const override;
     std::uint64_t compositionTextureRevision() const override;
     RenderedVideoProducerDiagnostics diagnostics() const override;
+    std::uint64_t sourceUploadCount() const;
 
 private:
     struct SourceUploadKey {
@@ -56,12 +57,11 @@ private:
         QSize pixelSize;
         float sourcePeakHeadroom = 0.0f;
         float phase = 0.0f;
-        float encodingReferenceWhiteNits = 0.0f;
     };
 
     bool createSourceTexture(const QSize &sourceSize);
-    void updateSourcePixels(float referenceWhiteNits);
-    SourceUploadKey sourceUploadKey(float referenceWhiteNits) const;
+    void updateSourcePixels();
+    SourceUploadKey sourceUploadKey() const;
     bool deviceLost() const;
     VideoOperationResult unavailable(const QString &reason);
 
@@ -76,6 +76,7 @@ private:
         m_encodedPatternColumns;
     std::vector<float> m_sourcePixels;
     std::optional<SourceUploadKey> m_uploadedSourceKey;
+    std::uint64_t m_sourceUploadCount = 0;
     QString m_failureReason;
     std::optional<RenderedVideoSurfaceState> m_completedState;
     std::optional<RenderedVideoSurfaceState> m_pendingState;

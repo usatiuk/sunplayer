@@ -21,22 +21,29 @@ Track under the backend-realization section of
 
 The explicit video surface, narrow final compositor, persistent libplacebo
 renderer, and direct D3D11 QRhi target bridge now exist. Their analytic input
-proves relative sRGB and target-relative BT.2020/PQ rendering across multiple
-active reference-white values, including the explicit conversion from
-libplacebo's 203-nit linear convention to Sunroom's display-relative surface
-convention. A retained software `AVFrame` path now demuxes and decodes a pinned
+proves relative sRGB plus one fixed 1000-nit BT.2020/PQ signal across 80-, 100-,
+and 203-nit reference-white values on a constant 600-nit target. This covers
+the reference-white-relative target conversion from libplacebo's fixed
+203-nit coordinate system, no-expansion behavior while the source fits,
+highlight compression when it does not, and exactly one final Windows scRGB
+scale. A retained software `AVFrame` path now demuxes and decodes a pinned
 lossless RGB fixture, uploads it through libplacebo, and preserves relative SDR
-white across target changes. It does not yet prove one fixed, absolutely
-mastered PQ frame, representative YUV/chroma/range combinations, or full
-metadata provenance. A deterministic FFV1 fixture now covers compressed
-limited-range BT.709 YUV420P and non-square-pixel aspect fitting, but not a
-fixed absolutely mastered PQ frame. The Windows graphics domain now owns a
-video-capable, multithread-protected D3D11 device; an H.264 scenario proves
-D3D11VA NV12 direct plane import, zero input copies/transfers, and observable
-software fallback. P010/P012/P016 capture, same-device-copy and CPU fallback
-paths, real device-loss injection, and the other platform
-importers remain required. General display-matrix rotation still lacks a
-dedicated render capture.
+white across target changes. It does not yet cover an FFmpeg-decoded mastered
+PQ fixture, HLG's target-dependent OOTF, dynamic HDR metadata, representative
+HDR YUV/chroma/range combinations, or full metadata provenance. A deterministic
+FFV1 fixture covers compressed limited-range BT.709 YUV420P and non-square-pixel
+aspect fitting. The Windows graphics domain owns a video-capable,
+multithread-protected D3D11 device; an H.264 scenario proves D3D11VA NV12 direct
+plane import, zero input copies/transfers, and observable software fallback.
+P010/P012/P016 capture, same-device-copy and CPU fallback paths, real
+device-loss injection, and the other platform importers remain required.
+General display-matrix rotation still lacks a dedicated render capture.
+
+Sunroom also does not yet propagate actual target display primaries to
+libplacebo. The extended-linear BT.709 surface can encode wide-gamut
+chromaticities, but the current unset `target.color.hdr.prim` is inferred as a
+BT.709 target gamut. Platform target-gamut observation and shared propagation
+are required before claiming wide-gamut output.
 
 Track under graphics milestone 5 and the active testing plan.
 

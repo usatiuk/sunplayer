@@ -15,6 +15,11 @@
 namespace {
 constexpr float libplaceboReferenceWhiteNits =
     PL_COLOR_SDR_WHITE;
+constexpr float diagnosticSdrMasteringPeakNits = 100.0f;
+constexpr float staleDiagnosticSdrDynamicPeakNits =
+    1000.0f;
+constexpr float staleDiagnosticSdrDynamicAverageNits =
+    200.0f;
 constexpr float tau = 6.28318530718f;
 
 float smoothStep(float value) {
@@ -142,14 +147,12 @@ LibplaceboDiagnosticVideoProducer::render(
     if (beginResult != VideoOperationResult::Ready)
         return beginResult;
 
-    const float referenceWhiteNits =
-        requestedState.description.referenceWhiteNits;
     const SourceUploadKey uploadKey =
-        sourceUploadKey(referenceWhiteNits);
+        sourceUploadKey();
     bool sourceReady = true;
     if (!m_uploadedSourceKey
             || *m_uploadedSourceKey != uploadKey) {
-        updateSourcePixels(referenceWhiteNits);
+        updateSourcePixels();
         pl_tex_transfer_params transfer{};
         transfer.tex = m_sourceTexture;
         transfer.row_pitch =
@@ -157,8 +160,10 @@ LibplaceboDiagnosticVideoProducer::render(
             * 4 * sizeof(float);
         transfer.ptr = m_sourcePixels.data();
         sourceReady = pl_tex_upload(m_gpu, &transfer);
-        if (sourceReady)
+        if (sourceReady) {
             m_uploadedSourceKey = uploadKey;
+            ++m_sourceUploadCount;
+        }
     }
 
     bool rendered = false;
@@ -182,7 +187,7 @@ LibplaceboDiagnosticVideoProducer::render(
             image.color.hdr = pl_hdr_metadata_hdr10;
             image.color.hdr.min_luma = PL_COLOR_HDR_BLACK;
             image.color.hdr.max_luma =
-                sourcePeak * referenceWhiteNits;
+                sourcePeak * libplaceboReferenceWhiteNits;
             image.color.hdr.max_cll =
                 image.color.hdr.max_luma;
             image.color.hdr.max_fall =
@@ -191,8 +196,29 @@ LibplaceboDiagnosticVideoProducer::render(
             image.color = pl_color_space_srgb;
             image.color.hdr.min_luma =
                 PL_COLOR_HDR_BLACK;
+            // Exercise the production relative-SDR policy with common
+            // explicit mastering luminance instead of pre-normalizing this
+            // diagnostic metadata to libplacebo's 203-nit convention. Stale
+            // dynamic HDR values verify that the relative SDR transfer wins
+            // over every absolute-luminance metadata candidate.
             image.color.hdr.max_luma =
-                referenceWhiteNits;
+                diagnosticSdrMasteringPeakNits;
+            image.color.hdr.scene_max[0] =
+                staleDiagnosticSdrDynamicPeakNits;
+            image.color.hdr.scene_max[1] =
+                staleDiagnosticSdrDynamicPeakNits;
+            image.color.hdr.scene_max[2] =
+                staleDiagnosticSdrDynamicPeakNits;
+            image.color.hdr.scene_avg =
+                staleDiagnosticSdrDynamicAverageNits;
+            image.color.hdr.max_pq_y = pl_hdr_rescale(
+                PL_HDR_NITS,
+                PL_HDR_PQ,
+                staleDiagnosticSdrDynamicPeakNits);
+            image.color.hdr.avg_pq_y = pl_hdr_rescale(
+                PL_HDR_NITS,
+                PL_HDR_PQ,
+                staleDiagnosticSdrDynamicAverageNits);
         }
 
         rendered = m_renderContext->render(
@@ -280,7 +306,7 @@ LibplaceboDiagnosticVideoProducer::diagnostics() const {
     result.producerName =
         m_source.sourcePeakHeadroom() > 1.0f
         ? QStringLiteral(
-            "libplacebo target-relative BT.2020 / PQ")
+            "libplacebo fixed-reference BT.2020 / PQ")
         : QStringLiteral(
             "libplacebo analytic sRGB");
     result.inputPath =
@@ -311,6 +337,11 @@ LibplaceboDiagnosticVideoProducer::diagnostics() const {
     }
     Q_ASSERT(result.isValid());
     return result;
+}
+
+std::uint64_t
+LibplaceboDiagnosticVideoProducer::sourceUploadCount() const {
+    return m_sourceUploadCount;
 }
 
 bool LibplaceboDiagnosticVideoProducer::createSourceTexture(
@@ -352,23 +383,17 @@ bool LibplaceboDiagnosticVideoProducer::createSourceTexture(
 }
 
 LibplaceboDiagnosticVideoProducer::SourceUploadKey
-LibplaceboDiagnosticVideoProducer::sourceUploadKey(
-        float referenceWhiteNits) const {
+LibplaceboDiagnosticVideoProducer::sourceUploadKey() const {
     const float sourcePeak =
         m_source.sourcePeakHeadroom();
     return {
         .pixelSize = m_sourceSize,
         .sourcePeakHeadroom = sourcePeak,
         .phase = m_source.phase(),
-        // Only the target-relative PQ diagnostic encodes its active reference
-        // white into the source signal. SDR input pixels remain unchanged.
-        .encodingReferenceWhiteNits =
-            sourcePeak > 1.0f ? referenceWhiteNits : 0.0f,
     };
 }
 
-void LibplaceboDiagnosticVideoProducer::updateSourcePixels(
-        float referenceWhiteNits) {
+void LibplaceboDiagnosticVideoProducer::updateSourcePixels() {
     Q_ASSERT(!m_sourceSize.isEmpty());
     const int width = m_sourceSize.width();
     const int height = m_sourceSize.height();
@@ -383,18 +408,16 @@ void LibplaceboDiagnosticVideoProducer::updateSourcePixels(
         == static_cast<std::size_t>(width));
 
     const auto encode =
-        [hdr, referenceWhiteNits](float value) {
+        [hdr](float value) {
         const float nonNegative = std::max(0.0f, value);
-        // Diagnostic pattern values are defined in active-reference-white
-        // units. A decoded PQ frame will instead retain its fixed absolute
-        // source signal when the display target changes.
+        // The HDR diagnostic is one fixed mastered PQ signal. Its normalized
+        // values use libplacebo's 203-nit reference white and never depend on
+        // the active display target.
         return hdr
             ? pl_hdr_rescale(
                 PL_HDR_NORM,
                 PL_HDR_PQ,
-                nonNegative
-                    * referenceWhiteNits
-                    / libplaceboReferenceWhiteNits)
+                nonNegative)
             : linearToSrgb(
                 std::clamp(
                     nonNegative,

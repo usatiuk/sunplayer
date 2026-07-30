@@ -15,6 +15,7 @@
 #include "graphics/GraphicsDeviceDomain.h"
 #include "presentation/HdrCompositor.h"
 #include "video/DiagnosticVideoSource.h"
+#include "video/LibplaceboDiagnosticVideoProducer.h"
 #include "video/RenderedVideoProducer.h"
 #include "video/RenderedVideoSurface.h"
 
@@ -27,7 +28,11 @@ constexpr QSize videoSize{16, 12};
 constexpr QSize outputSize{24, 20};
 constexpr int videoOriginX = 4;
 constexpr int videoOriginY = 4;
-constexpr float sourcePeak = 4.0f;
+constexpr float physicalTargetPeakNits = 600.0f;
+constexpr float masteredSourcePeakNits = 1000.0f;
+constexpr float sourcePeak =
+    masteredSourcePeakNits / PL_COLOR_SDR_WHITE;
+constexpr float exactReferenceWhitePatternPeak = 7.0f;
 constexpr float tau = 6.28318530718f;
 
 struct FloatPixel {
@@ -828,6 +833,10 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
     std::unique_ptr<RenderedVideoProducer> producer =
         source.createProducer(*graphicsDevice);
     QVERIFY(producer);
+    auto *const libplaceboProducer =
+        dynamic_cast<LibplaceboDiagnosticVideoProducer *>(
+            producer.get());
+    QVERIFY(libplaceboProducer);
 
     RenderedVideoSurfaceState sdrState = surfaceState();
     sdrState.graphicsDeviceGeneration =
@@ -994,15 +1003,62 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
             *uiTexture),
         HdrCompositor::ResourceResult::Ready);
 
-    source.setSourcePeakHeadroom(sourcePeak);
+    // With a 7x pattern peak, the first nonzero step is exactly 1.0 in
+    // libplacebo's PQ normalization: one 203-nit HDR reference-white patch.
+    // Leave target minimum unknown here to isolate the white anchor from
+    // black-point adaptation, which the surrounding captures cover.
+    source.setSourcePeakHeadroom(
+        exactReferenceWhitePatternPeak);
     source.setToneMappingEnabled(true);
-    // This diagnostic source defines peak in active-reference-white units, so
-    // changing reference white also regenerates its absolute PQ signal. The
-    // comparison validates Sunroom's output normalization, not preservation
-    // of one fixed mastered source across displays.
+    RenderedVideoSurfaceState referenceWhiteState = sdrState;
+    referenceWhiteState.description.referenceWhiteNits =
+        100.0f;
+    referenceWhiteState.description.targetMinimumLuminanceKnown =
+        false;
+    referenceWhiteState.description.targetMinimumLuminanceNits =
+        0.0f;
+    referenceWhiteState.description.targetPeakHeadroom =
+        10.0f;
+    ++referenceWhiteState.displayTargetRevision;
+    referenceWhiteState.contentRevision =
+        source.contentRevision();
+    QRhiReadbackResult referenceWhiteReadback;
+    const QString referenceWhiteCaptureError =
+        captureProducerSurface(
+            referenceWhiteState,
+            referenceWhiteReadback);
+    QVERIFY2(
+        referenceWhiteCaptureError.isEmpty(),
+        qPrintable(referenceWhiteCaptureError));
+    constexpr int referenceWhiteX = 2;
+    compareNear(
+        analyticStep(
+            referenceWhiteX,
+            videoSize.width(),
+            exactReferenceWhitePatternPeak),
+        1.0f,
+        0.0001f);
+    const FloatPixel referenceWhitePatch =
+        readFloatPixel(
+            referenceWhiteReadback,
+            rhi,
+            referenceWhiteX,
+            steppedY);
+    compareNear(referenceWhitePatch.r, 1.0f, 0.02f);
+    compareNear(referenceWhitePatch.g, 1.0f, 0.02f);
+    compareNear(referenceWhitePatch.b, 1.0f, 0.02f);
+
+    const std::uint64_t referencePatchUploadCount =
+        libplaceboProducer->sourceUploadCount();
+    source.setSourcePeakHeadroom(sourcePeak);
+    // Hold one 1000-nit PQ signal fixed while changing only the output
+    // reference white. A 600-nit display has 6x headroom at 100-nit white, so
+    // the source fits without highlight compression.
     RenderedVideoSurfaceState hdr100State = sdrState;
     hdr100State.description.referenceWhiteNits = 100.0f;
-    hdr100State.description.targetPeakHeadroom = 2.0f;
+    hdr100State.description.targetPeakHeadroom =
+        physicalTargetPeakNits
+        / hdr100State.description.referenceWhiteNits;
     ++hdr100State.displayTargetRevision;
     hdr100State.contentRevision = source.contentRevision();
     QRhiReadbackResult hdr100Readback;
@@ -1014,12 +1070,52 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
         qPrintable(hdr100CaptureError));
     const FloatPixel hdr100Right = readFloatPixel(
         hdr100Readback, rhi, 13, grayscaleY);
+    const std::uint64_t fixedPqUploadCount =
+        libplaceboProducer->sourceUploadCount();
+    QCOMPARE(
+        fixedPqUploadCount,
+        referencePatchUploadCount + 1);
     QVERIFY(hdr100Right.r > 1.0f);
-    QVERIFY(hdr100Right.r <= 2.05f);
+    QVERIFY(hdr100Right.r < sourcePeak);
+    compareNear(
+        hdr100Right.r,
+        analyticRamp(13, videoSize.width(), sourcePeak),
+        0.04f);
 
-    RenderedVideoSurfaceState hdrState = hdr100State;
+    // The same fixed source also fits at 80-nit white. The rendered-video
+    // surface remains reference-white-relative, so its samples stay stable;
+    // platform presentation changes their physical luminance later.
+    RenderedVideoSurfaceState hdr80State = hdr100State;
+    hdr80State.description.referenceWhiteNits = 80.0f;
+    hdr80State.description.targetPeakHeadroom =
+        physicalTargetPeakNits
+        / hdr80State.description.referenceWhiteNits;
+    ++hdr80State.displayTargetRevision;
+    QRhiReadbackResult hdr80Readback;
+    const QString hdr80CaptureError =
+        captureProducerSurface(
+            hdr80State, hdr80Readback);
+    QVERIFY2(
+        hdr80CaptureError.isEmpty(),
+        qPrintable(hdr80CaptureError));
+    const FloatPixel hdr80Right = readFloatPixel(
+        hdr80Readback, rhi, 13, grayscaleY);
+    QCOMPARE(
+        libplaceboProducer->sourceUploadCount(),
+        fixedPqUploadCount);
+    compareNear(hdr80Right.r, hdr100Right.r, 0.03f);
+    compareNear(hdr80Right.g, hdr100Right.g, 0.03f);
+    compareNear(hdr80Right.b, hdr100Right.b, 0.03f);
+
+    // Raising reference white to 203 nits reduces the same physical display
+    // to less than 3x headroom. The 1000-nit source no longer fits, so
+    // libplacebo must compress highlights into the declared target.
+    RenderedVideoSurfaceState hdrState = hdr80State;
     hdrState.description.referenceWhiteNits =
         PL_COLOR_SDR_WHITE;
+    hdrState.description.targetPeakHeadroom =
+        physicalTargetPeakNits
+        / hdrState.description.referenceWhiteNits;
     ++hdrState.displayTargetRevision;
     QCOMPARE(
         producer->ensureSurface(hdrState),
@@ -1055,7 +1151,8 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
     };
     parameters.videoOrigin = {0.0f, 0.0f};
     parameters.videoSize = parameters.viewportSize;
-    parameters.sdrScale = 1.0f;
+    parameters.sdrScale =
+        hdrState.description.referenceWhiteNits / 80.0f;
     parameters.ndcYUp =
         rhi.isYUpInNDC() ? 1.0f : 0.0f;
     parameters.linearOutput = 1.0f;
@@ -1095,6 +1192,9 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
         producer->discardPendingRender();
     }
     QCOMPARE(hdrFrameResult, QRhi::FrameOpSuccess);
+    QCOMPARE(
+        libplaceboProducer->sourceUploadCount(),
+        fixedPqUploadCount);
     QVERIFY(hdrReadbackCompleted);
     QVERIFY(compositionReadbackCompleted);
     QCOMPARE(hdrReadback.format, QRhiTexture::RGBA16F);
@@ -1109,10 +1209,10 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
     QVERIFY(std::isfinite(hdrRight.r));
     QVERIFY(hdrRight.r > hdrLeft.r);
     QVERIFY(hdrRight.r > 1.0f);
-    QVERIFY(hdrRight.r <= 2.05f);
-    compareNear(hdrRight.r, hdr100Right.r, 0.03f);
-    compareNear(hdrRight.g, hdr100Right.g, 0.03f);
-    compareNear(hdrRight.b, hdr100Right.b, 0.03f);
+    QVERIFY(
+        hdrRight.r
+        <= hdrState.description.targetPeakHeadroom + 0.03f);
+    QVERIFY(hdrRight.r < hdr100Right.r - 0.05f);
     compareNear(hdrRight.r, hdrRight.g, 0.02f);
     compareNear(hdrRight.g, hdrRight.b, 0.02f);
     compareNear(hdrRight.a, 1.0f, 0.002f);
@@ -1129,9 +1229,18 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
 
     const FloatPixel composed = readFloatPixel(
         compositionReadback, rhi, 13, grayscaleY);
-    compareNear(composed.r, hdrRight.r, 0.02f);
-    compareNear(composed.g, hdrRight.g, 0.02f);
-    compareNear(composed.b, hdrRight.b, 0.02f);
+    compareNear(
+        composed.r,
+        hdrRight.r * parameters.sdrScale,
+        0.03f);
+    compareNear(
+        composed.g,
+        hdrRight.g * parameters.sdrScale,
+        0.03f);
+    compareNear(
+        composed.b,
+        hdrRight.b * parameters.sdrScale,
+        0.03f);
     compareNear(composed.a, 1.0f, 0.002f);
 
     source.setSourcePeakHeadroom(1.0f);
@@ -1267,16 +1376,16 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
         switchedSurface.r, expectedSwitched, 0.015f);
     compareNear(
         switchedComposition.r,
-        switchedSurface.r,
-        0.02f);
+        switchedSurface.r * parameters.sdrScale,
+        0.03f);
     compareNear(
         switchedComposition.g,
-        switchedSurface.g,
-        0.02f);
+        switchedSurface.g * parameters.sdrScale,
+        0.03f);
     compareNear(
         switchedComposition.b,
-        switchedSurface.b,
-        0.02f);
+        switchedSurface.b * parameters.sdrScale,
+        0.03f);
 #endif
 }
 

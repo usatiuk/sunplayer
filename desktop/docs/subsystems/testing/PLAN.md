@@ -109,9 +109,16 @@ Implement alongside graphics milestone 1:
 * [x] Capture the display-targeted video surface and final composition for the
   analytic libplacebo path.
 * [x] Capture-validate reference-white normalization for SDR at 80, 100, and
-  203 nits and a target-relative PQ diagnostic at 100 and 203 nits.
-* [ ] Move one fixed, absolutely mastered PQ frame between different
-  reference-white and peak targets without changing the source signal.
+  203 nits.
+* [x] Move one fixed 1000-nit analytic PQ signal across 80-, 100-, and 203-nit
+  reference whites on a constant 600-nit target without changing the source;
+  verify an exact 203-nit patch at surface `1.0`, no expansion while the source
+  fits, highlight compression when it does not, and the final Windows scRGB
+  scale.
+* [ ] Repeat the fixed mastered-PQ scenario with a pinned FFmpeg-decoded HDR
+  fixture and effective source metadata.
+* [ ] Validate a fixed HLG source across the same physical targets because its
+  libplacebo OOTF is target-dependent.
 * [x] Keep the procedural and libplacebo diagnostic inputs aligned to the same
   pattern layout so their output differences exercise rendering policy.
 * [x] Exercise a persistent 640×360 animated diagnostic input into a 1100×600

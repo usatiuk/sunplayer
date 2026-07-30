@@ -106,6 +106,11 @@ remain. This control is explicitly not a playback fallback or a player
 preference. Player uses libplacebo and exposes an actionable session error if
 no supported target path is available.
 
+For HDR diagnostics, pattern peak is a fixed multiple of the 203-nit HDR
+reference white and is labeled with its mastered nit value. Target peak remains
+a multiple of the active platform reference white. This deliberately lets an
+SDR-white/display change rerender one unchanged PQ signal.
+
 Diagnostics label the input path separately from output interop. The current
 libplacebo lab source reports one fixed-size software-frame CPU upload; the direct
 D3D11 target reports zero output copies or CPU transfers. Future hardware-frame

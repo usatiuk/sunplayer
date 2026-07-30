@@ -17,13 +17,22 @@ VideoPage {
         root.presentationSettings.automaticTargetPeak
         ? root.outputState.effectiveTargetHeadroom
         : root.presentationSettings.manualTargetHeadroom
+    readonly property real hdrReferenceWhiteNits: 203
     readonly property real canvasX: 24
     readonly property real canvasY: 112
     readonly property real canvasWidth: Math.max(1, width - 48)
     readonly property real canvasHeight: Math.max(
         1, height - canvasY - footer.height - 40)
 
-    function headroomLabel(value) {
+    function sourcePeakLabel(value) {
+        return value <= 1
+            ? qsTr("SDR white · 1.0× white")
+            : Math.round(value * root.hdrReferenceWhiteNits)
+                + qsTr(" nits · ") + value.toFixed(1)
+                + qsTr("× HDR reference white")
+    }
+
+    function targetHeadroomLabel(value) {
         return root.outputState.sdrWhiteKnown
             ? Math.round(value * root.outputState.sdrWhiteNits)
                 + qsTr(" nits · ") + value.toFixed(1) + qsTr("× white")
@@ -284,7 +293,7 @@ VideoPage {
                     Label {
                         Layout.minimumWidth: 140
                         horizontalAlignment: Text.AlignRight
-                        text: root.headroomLabel(
+                        text: root.sourcePeakLabel(
                             root.videoSource.sourcePeakHeadroom)
                         color: "white"
                     }
@@ -338,7 +347,8 @@ VideoPage {
                     Label {
                         Layout.minimumWidth: 140
                         horizontalAlignment: Text.AlignRight
-                        text: root.headroomLabel(root.effectiveTargetHeadroom)
+                        text: root.targetHeadroomLabel(
+                            root.effectiveTargetHeadroom)
                         color: "white"
                     }
 
