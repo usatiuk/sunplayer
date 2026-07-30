@@ -95,6 +95,21 @@ endif ()
 
 qt_standard_project_setup(REQUIRES 6.11.1)
 
+add_library(sunroom_diagnostics STATIC
+        src/diagnostics/ApplicationLog.cpp
+        src/diagnostics/ApplicationLog.h
+        src/diagnostics/LogCategories.cpp
+        src/diagnostics/LogCategories.h
+)
+target_include_directories(sunroom_diagnostics
+        PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+)
+target_link_libraries(sunroom_diagnostics
+        PUBLIC
+        Qt6::Core
+)
+
 add_library(sunroom_media STATIC
         src/media/DecodedVideoFrame.cpp
         src/media/DecodedVideoFrame.h
@@ -116,6 +131,7 @@ target_include_directories(sunroom_media
 target_link_libraries(sunroom_media
         PRIVATE
         Qt6::Core
+        sunroom_diagnostics
         sunroom_ffmpeg
 )
 
@@ -163,6 +179,7 @@ target_link_libraries(sunroom_video_pipeline
         PRIVATE
         Qt6::GuiPrivate
         Qt6::Quick
+        sunroom_diagnostics
         sunroom_ffmpeg
         sunroom_media
 )
@@ -259,6 +276,7 @@ target_link_libraries(sunroom
         Qt6::Quick
         Qt6::QuickControls2
         Qt6::QuickDialogs2
+        sunroom_diagnostics
         sunroom_video_pipeline
 )
 
@@ -271,6 +289,11 @@ target_include_directories(sunroom
         "${CMAKE_CURRENT_SOURCE_DIR}/src/playback"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/presentation"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/video"
+)
+
+target_compile_definitions(sunroom
+        PRIVATE
+        SUNROOM_VERSION="${PROJECT_VERSION}"
 )
 
 set_target_properties(sunroom PROPERTIES

@@ -11,10 +11,98 @@
 #include <QUrl>
 
 #include "app/PresentationWindow.h"
+#include "diagnostics/ApplicationLog.h"
+#include "diagnostics/LogCategories.h"
 #include "graphics/GraphicsBackendFactory.h"
 
 int main(int argc, char *argv[]) {
     QGuiApplication app(argc, argv);
+    QCoreApplication::setApplicationName(
+        QStringLiteral("Sunroom"));
+    QCoreApplication::setApplicationVersion(
+        QStringLiteral(SUNROOM_VERSION));
+
+    QCommandLineParser parser;
+    parser.setApplicationDescription(
+        QStringLiteral("Sunroom HDR video player"));
+    parser.addHelpOption();
+    parser.addVersionOption();
+    parser.addPositionalArgument(
+        QStringLiteral("media"),
+        QStringLiteral("Local media file to open."),
+        QStringLiteral("[media]"));
+    const QCommandLineOption verifyQmlOption(
+        QStringLiteral("verify-qml"),
+        QStringLiteral(
+            "Load the packaged QML module and exit without opening a window."));
+    parser.addOption(verifyQmlOption);
+    const QCommandLineOption debugLogOption(
+        QStringLiteral("debug-log"),
+        QStringLiteral(
+            "Enable Sunroom debug logging in the session log."));
+    parser.addOption(debugLogOption);
+    const QCommandLineOption logFileOption(
+        QStringLiteral("log-file"),
+        QStringLiteral(
+            "Write the session log to local <path> instead of the temporary "
+            "Sunroom log directory."),
+        QStringLiteral("path"));
+    parser.addOption(logFileOption);
+    const QCommandLineOption noLogFileOption(
+        QStringLiteral("no-log-file"),
+        QStringLiteral(
+            "Disable the session log file; console/debugger logging remains."));
+    parser.addOption(noLogFileOption);
+    parser.process(app);
+
+    if (parser.isSet(logFileOption)
+            && parser.isSet(noLogFileOption)) {
+        qCCritical(sunroomLogApplication).noquote()
+            << "--log-file and --no-log-file cannot be used together.";
+        return EXIT_FAILURE;
+    }
+
+    ApplicationLogOptions logOptions{
+        .fileEnabled = !parser.isSet(noLogFileOption),
+        .debugEnabled = parser.isSet(debugLogOption),
+        .filePath = parser.value(logFileOption),
+    };
+    QString logError;
+    std::unique_ptr<ApplicationLog> applicationLog =
+        ApplicationLog::install(logOptions, &logError);
+    if (!applicationLog && logOptions.fileEnabled) {
+        qCWarning(sunroomLogApplication).noquote()
+            << logError
+            << "- continuing without a session log file.";
+        logOptions.fileEnabled = false;
+        logOptions.filePath.clear();
+        applicationLog =
+            ApplicationLog::install(logOptions, &logError);
+    }
+    if (!applicationLog) {
+        qCWarning(sunroomLogApplication).noquote()
+            << "Could not initialize application logging:"
+            << logError;
+    } else {
+        qCInfo(sunroomLogApplication).noquote()
+            << "event=application.start"
+            << "version=" + QCoreApplication::applicationVersion()
+            << "debug=" + QString(
+                applicationLog->debugEnabled()
+                ? QStringLiteral("true")
+                : QStringLiteral("false"))
+            << "file=" + (
+                applicationLog->filePath().isEmpty()
+                ? QStringLiteral("disabled")
+                : QStringLiteral("enabled"));
+        if (!applicationLog->filePath().isEmpty()) {
+            qCDebug(
+                sunroomLogApplication).noquote()
+                << "event=application.log_file"
+                << "path="
+                    + applicationLog->filePath();
+        }
+    }
 
     GraphicsBackendFactory::configureQtQuick();
 
@@ -33,22 +121,6 @@ int main(int argc, char *argv[]) {
     palette.setColor(QPalette::ToolTipText, QColor(QStringLiteral("#f2f4f8")));
     app.setPalette(palette);
 
-    QCommandLineParser parser;
-    parser.setApplicationDescription(
-        QStringLiteral("Sunroom HDR video player"));
-    parser.addHelpOption();
-    parser.addVersionOption();
-    parser.addPositionalArgument(
-        QStringLiteral("media"),
-        QStringLiteral("Local media file to open."),
-        QStringLiteral("[media]"));
-    const QCommandLineOption verifyQmlOption(
-        QStringLiteral("verify-qml"),
-        QStringLiteral(
-            "Load the packaged QML module and exit without opening a window."));
-    parser.addOption(verifyQmlOption);
-    parser.process(app);
-
     if (parser.isSet(verifyQmlOption)) {
         const QString applicationDirectory =
             QCoreApplication::applicationDirPath();
@@ -57,7 +129,7 @@ int main(int argc, char *argv[]) {
             QDir(applicationDirectory).filePath(
                 QStringLiteral("qml"));
         if (!QFileInfo(deployedQmlPath).isDir()) {
-            qCritical().noquote()
+            qCCritical(sunroomLogApplication).noquote()
                 << "Missing deployed QML directory:"
                 << deployedQmlPath;
             return EXIT_FAILURE;
@@ -77,9 +149,12 @@ int main(int argc, char *argv[]) {
         component.loadFromModule(
             QStringLiteral("Sunroom"), QStringLiteral("Main"));
         if (component.isError()) {
-            qCritical().noquote() << component.errorString();
+            qCCritical(sunroomLogApplication).noquote()
+                << component.errorString();
             return EXIT_FAILURE;
         }
+        qCInfo(sunroomLogApplication).noquote()
+            << "event=application.verify_qml_complete";
         return EXIT_SUCCESS;
     }
 
@@ -94,5 +169,9 @@ int main(int argc, char *argv[]) {
     }
     window.show();
 
-    return app.exec();
+    const int exitCode = app.exec();
+    qCInfo(sunroomLogApplication).noquote()
+        << "event=application.stop"
+        << "exitCode=" + QString::number(exitCode);
+    return exitCode;
 }

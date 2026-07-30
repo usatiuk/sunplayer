@@ -250,6 +250,7 @@ private slots:
     void compressedYuvMetadataAndRendering();
     void continuousDecodeDrainsEveryFrame();
     void seekDecodesInterFramePreroll();
+    void longTimelineSeekUses64BitTarget();
     void hardwareDecodeFailureRetriesSoftware();
     void continuousD3d11DecodeRetainsBoundedFrames();
     void d3d11HardwareDecodeDirectImport();
@@ -837,7 +838,7 @@ seekDecodesInterFramePreroll() {
 
     QVERIFY2(sought.isSuccess(), qPrintable(sought.error));
     QVERIFY(sought.stopped);
-    QVERIFY(decodedPts.size() > 1);
+    QCOMPARE(decodedPts.size(), 6U);
     QCOMPARE(decodedPts.front(), 2'000'000);
     QCOMPARE(decodedPts.back(), 3'250'000);
     QVERIFY(std::is_sorted(
@@ -853,6 +854,73 @@ seekDecodesInterFramePreroll() {
     QCOMPARE(
         decodedSignal->matrixCoefficients,
         QStringLiteral("bt709"));
+}
+
+void FfmpegFirstFrameTest::
+longTimelineSeekUses64BitTarget() {
+    const QString fixture = QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-ffv1-long-timeline.mkv");
+    const QString manifest = QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-ffv1-long-timeline.toml");
+    const QByteArray declaredHash =
+        expectedFixtureHash(manifest);
+    QVERIFY2(
+        !declaredHash.isEmpty(),
+        "Fixture manifest has no valid SHA-256");
+    QCOMPARE(fixtureHash(fixture), declaredHash);
+
+    const FfmpegFirstFrameResult initial =
+        decodeFirstVideoFrame(
+            fixture,
+            {
+                .playbackGeneration = 20,
+                .decoderRevision = 1,
+                .frameId = 1,
+            });
+    QVERIFY2(initial.isSuccess(), qPrintable(initial.error));
+    QVERIFY(initial.diagnostics.seekable);
+    QVERIFY(initial.diagnostics.timelineOrigin);
+    QCOMPARE(
+        initial.diagnostics.durationMicroseconds,
+        std::optional<std::int64_t>(
+            3'001'000'000LL));
+
+    std::optional<std::int64_t> firstSoughtPts;
+    const FfmpegVideoDecodeResult sought =
+        decodeVideoFrames(
+            {
+                .path = fixture,
+                .firstFrameIdentity = {
+                    .playbackGeneration = 21,
+                    .decoderRevision = 1,
+                    .frameId = 1,
+                },
+                .start = {
+                    .targetPositionMicroseconds =
+                        3'000'000'000LL,
+                    .timelineOrigin =
+                        initial.diagnostics.timelineOrigin,
+                    .performDemuxSeek = true,
+                },
+            },
+            [&firstSoughtPts](
+                    std::shared_ptr<
+                        const DecodedVideoFrame> frame,
+                    const FfmpegVideoStreamDiagnostics &) {
+                firstSoughtPts =
+                    frame->timing().ptsMicroseconds();
+                return false;
+            });
+
+    QVERIFY2(sought.isSuccess(), qPrintable(sought.error));
+    QVERIFY(sought.stopped);
+    QCOMPARE(sought.framesDecoded, 1U);
+    QCOMPARE(
+        firstSoughtPts,
+        std::optional<std::int64_t>(
+            3'000'000'000LL));
 }
 
 void FfmpegFirstFrameTest::

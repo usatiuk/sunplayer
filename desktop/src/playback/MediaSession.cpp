@@ -1,6 +1,7 @@
 #include "playback/MediaSession.h"
 
 #include <algorithm>
+#include <chrono>
 #include <utility>
 
 #include <QFileInfo>
@@ -8,6 +9,7 @@
 #include <QThread>
 
 #include "media/DecodedVideoFrame.h"
+#include "diagnostics/LogCategories.h"
 
 namespace {
 FfmpegVideoDecodeResult decodeVideo(
@@ -446,6 +448,21 @@ void MediaSession::startDecode(
     resetPlayback(requestedPositionMicroseconds);
     m_seeking = seeking;
 
+    qCInfo(sunroomLogPlayback).noquote()
+        << (
+            newMedia
+            ? "event=playback.open_start"
+            : seeking
+                ? "event=playback.seek_start"
+                : "event=playback.restart_start")
+        << "generation=" + QString::number(generation)
+        << "positionUs=" + QString::number(
+            requestedPositionMicroseconds);
+    qCDebug(sunroomLogPlayback).noquote()
+        << "event=playback.decode_request"
+        << "generation=" + QString::number(generation)
+        << "path=" + path;
+
     std::int64_t decodePosition =
         requestedPositionMicroseconds;
     if (m_durationMicroseconds
@@ -533,13 +550,26 @@ void MediaSession::workerLoop(
         VideoSeekPrerollGate preroll(
             request.decode.start
                 .targetPositionMicroseconds);
+        const auto operationStarted =
+            std::chrono::steady_clock::now();
+        std::uint64_t seekPrerollFrames = 0;
+        std::optional<std::int64_t>
+            firstSeekTimelineMicroseconds;
+        bool seekAdmissionLogged = false;
         FfmpegVideoDecodeResult result =
             m_decodeOperation(
                 request.decode,
                 [this,
                  generation = request.generation,
+                 targetPosition =
+                    request.decode.start
+                        .targetPositionMicroseconds,
                  &timeline,
                  &preroll,
+                 &seekPrerollFrames,
+                 &firstSeekTimelineMicroseconds,
+                 &seekAdmissionLogged,
+                 operationStarted,
                  operationStopToken](
                         std::shared_ptr<
                             const DecodedVideoFrame> frame,
@@ -551,8 +581,74 @@ void MediaSession::workerLoop(
                     QueuedVideoFrame queued =
                         timeline.schedule(
                             std::move(frame), diagnostics);
+                    if (targetPosition
+                            && !seekAdmissionLogged) {
+                        ++seekPrerollFrames;
+                        if (!firstSeekTimelineMicroseconds) {
+                            firstSeekTimelineMicroseconds =
+                                queued.timelineTimeMicroseconds;
+                            qCDebug(sunroomLogPlayback).noquote()
+                                << "event=playback.seek_first_frame"
+                                << "generation="
+                                    + QString::number(generation)
+                                << "targetUs=" + QString::number(
+                                    *targetPosition)
+                                << "timelineUs=" + QString::number(
+                                    queued.timelineTimeMicroseconds)
+                                << "rawPts=" + (
+                                    queued.frame->timing().pts
+                                    ? QString::number(
+                                        *queued.frame
+                                            ->timing().pts)
+                                    : QStringLiteral("none"));
+                        }
+                    }
                     VideoSeekPrerollAdmission admitted =
                         preroll.admit(std::move(queued));
+                    if (targetPosition
+                            && !seekAdmissionLogged
+                            && (admitted.first
+                                || admitted.second)) {
+                        seekAdmissionLogged = true;
+                        const QueuedVideoFrame &firstAdmitted =
+                            admitted.first
+                            ? *admitted.first
+                            : *admitted.second;
+                        const auto elapsed =
+                            std::chrono::duration_cast<
+                                std::chrono::milliseconds>(
+                                    std::chrono::steady_clock::now()
+                                    - operationStarted)
+                                .count();
+                        qCInfo(sunroomLogPlayback).noquote()
+                            << "event=playback.seek_preroll_complete"
+                            << "generation="
+                                + QString::number(generation)
+                            << "targetUs=" + QString::number(
+                                *targetPosition)
+                            << "firstTimelineUs=" + QString::number(
+                                firstSeekTimelineMicroseconds
+                                    .value_or(0))
+                            << "admittedTimelineUs="
+                                + QString::number(
+                                    firstAdmitted
+                                        .timelineTimeMicroseconds)
+                            << "decodedFrames=" + QString::number(
+                                seekPrerollFrames)
+                            << "elapsedMs=" + QString::number(
+                                elapsed);
+                    } else if (targetPosition
+                            && !seekAdmissionLogged
+                            && seekPrerollFrames % 64 == 0) {
+                        qCDebug(sunroomLogPlayback).noquote()
+                            << "event=playback.seek_preroll_progress"
+                            << "generation="
+                                + QString::number(generation)
+                            << "targetUs=" + QString::number(
+                                *targetPosition)
+                            << "decodedFrames=" + QString::number(
+                                seekPrerollFrames);
+                    }
                     const auto publish =
                         [this,
                          generation,
@@ -574,16 +670,108 @@ void MediaSession::workerLoop(
                         && publish(admitted.second);
                 },
                 operationStopToken);
+        const auto operationElapsed =
+            std::chrono::duration_cast<
+                std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now()
+                    - operationStarted)
+                .count();
         if (result.isSuccess()) {
             std::optional<QueuedVideoFrame> endFallback =
                 preroll.finish();
-            if (endFallback
-                    && m_frameQueue.push(
+            if (endFallback) {
+                const std::int64_t fallbackTimeline =
+                    endFallback
+                        ->timelineTimeMicroseconds;
+                if (m_frameQueue.push(
                         request.generation,
                         std::move(*endFallback),
                         operationStopToken)) {
-                postFramesAvailable(request.generation);
+                    postFramesAvailable(
+                        request.generation);
+                    if (request.decode.start
+                                .targetPositionMicroseconds
+                            && !seekAdmissionLogged) {
+                        seekAdmissionLogged = true;
+                        qCInfo(
+                            sunroomLogPlayback).noquote()
+                            << "event=playback.seek_preroll_fallback_complete"
+                            << "generation="
+                                + QString::number(
+                                    request.generation)
+                            << "targetUs=" + QString::number(
+                                *request.decode.start
+                                    .targetPositionMicroseconds)
+                            << "fallbackTimelineUs="
+                                + QString::number(
+                                    fallbackTimeline)
+                            << "decodedFrames="
+                                + QString::number(
+                                    seekPrerollFrames)
+                            << "elapsedMs="
+                                + QString::number(
+                                    operationElapsed);
+                    }
+                }
             }
+        }
+        if (request.decode.start.targetPositionMicroseconds
+                && !seekAdmissionLogged
+                && result.isSuccess()
+                && !operationStopToken.stop_requested()) {
+            qCWarning(sunroomLogPlayback).noquote()
+                << "event=playback.seek_no_admitted_frame"
+                << "generation="
+                    + QString::number(request.generation)
+                << "targetUs=" + QString::number(
+                    *request.decode.start
+                        .targetPositionMicroseconds)
+                << "firstTimelineUs=" + (
+                    firstSeekTimelineMicroseconds
+                    ? QString::number(
+                        *firstSeekTimelineMicroseconds)
+                    : QStringLiteral("none"))
+                << "decodedFrames=" + QString::number(
+                    seekPrerollFrames)
+                << "elapsedMs=" + QString::number(
+                    operationElapsed);
+        }
+        if (result.isCancelled()) {
+            qCDebug(sunroomLogPlayback).noquote()
+                << "event=playback.decode_cancelled"
+                << "generation="
+                    + QString::number(request.generation)
+                << "frames=" + QString::number(
+                    result.framesDecoded)
+                << "elapsedMs=" + QString::number(
+                    operationElapsed);
+        } else if (result.isSuccess()) {
+            qCInfo(sunroomLogPlayback).noquote()
+                << "event=playback.decode_complete"
+                << "generation="
+                    + QString::number(request.generation)
+                << "frames=" + QString::number(
+                    result.framesDecoded)
+                << "elapsedMs=" + QString::number(
+                    operationElapsed)
+                << "endOfStream=" + QString(
+                    result.endOfStream
+                    ? QStringLiteral("true")
+                    : QStringLiteral("false"))
+                << "stopped=" + QString(
+                    result.stopped
+                    ? QStringLiteral("true")
+                    : QStringLiteral("false"));
+        } else {
+            qCWarning(sunroomLogPlayback).noquote()
+                << "event=playback.decode_failed"
+                << "generation="
+                    + QString::number(request.generation)
+                << "frames=" + QString::number(
+                    result.framesDecoded)
+                << "elapsedMs=" + QString::number(
+                    operationElapsed)
+                << "error=" + result.error;
         }
         if (workerStopToken.stop_requested())
             return;

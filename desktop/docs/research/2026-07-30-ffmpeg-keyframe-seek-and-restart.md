@@ -42,8 +42,14 @@ or flush protocol.
 FFmpeg stream timestamps use the stream time base, while container start time
 uses `AV_TIME_BASE`. A stable origin must retain both timestamp and time base.
 Converting the origin to rounded microseconds and back can move a boundary by
-a stream tick. `av_add_stable()` adds the normalized microsecond position to
-the exact origin in the selected stream's time base.
+a stream tick. The implementation therefore rescales the retained origin and
+the absolute normalized offset directly into the selected stream's time base,
+then combines them with checked 64-bit addition.
+
+The later large-file investigation found that `av_add_stable()` is unsuitable
+for this absolute conversion: its incremental-rational path narrows a
+microsecond increment through a 32-bit `AVRational` numerator. See
+[the long-timeline investigation](2026-07-30-large-network-matroska-seek-observability.md).
 
 ## Findings
 
@@ -84,4 +90,5 @@ tests cover a pinned closed-GOP H.264/B-frame seek, stable-origin reuse,
 duration-aware and PTS-lookahead preroll filtering, exact-zero and end seeking,
 nonseekable replay, rapid replacement and cancellation, session intent, seek
 failure, position-preserving fallback, and a pending seek across graphics
-recovery.
+recovery. A second real-container regression crosses the 32-bit-microsecond
+boundary and verifies the production seek target remains 64-bit.

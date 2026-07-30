@@ -1,0 +1,38 @@
+file = "sdr-bt709-ffv1-long-timeline.mkv"
+sha256 = "d6f7621962af4845e19c8d8fa2f76a04072b484dc572fcc75983f8fad9586e60"
+provenance = "Generated analytically for Sunroom; no external source media"
+generator = "FFmpeg 8.1.2-full_build-www.gyan.dev"
+
+generation_command = """
+ffmpeg -f lavfi -i "testsrc2=size=96x64:rate=1:duration=2" -vf "setpts=N*3000/TB,setparams=range=limited:color_primaries=bt709:color_trc=bt709:colorspace=bt709" -frames:v 2 -fps_mode vfr -an -c:v ffv1 -level 3 -coder 1 -context 1 -g 1 -threads 1 -chroma_sample_location left -fflags +bitexact -flags:v +bitexact -map_metadata -1 sdr-bt709-ffv1-long-timeline.mkv
+"""
+
+[expected]
+container = "matroska"
+codec = "ffv1"
+pixel_format = "yuv420p"
+width = 96
+height = 64
+frame_count = 2
+first_pts = 0
+second_pts = 3000000
+duration = 3001000
+time_base = "1/1000"
+color_primaries = "bt709"
+transfer = "bt709"
+matrix = "bt709"
+range = "tv"
+chroma_location = "left"
+
+[coverage]
+features = [
+    "real-container",
+    "lossless-compressed-video",
+    "sparse-timeline",
+    "long-duration",
+    "seek-beyond-int32-microseconds",
+    "keyframe-anchored-seek",
+    "software-yuv420p",
+    "limited-range",
+    "bt709",
+]

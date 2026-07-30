@@ -10,6 +10,7 @@
 #include <rhi/qshader.h>
 #include <rhi/qrhi.h>
 
+#include "diagnostics/LogCategories.h"
 #include "graphics/GraphicsDeviceDomain.h"
 #include "video/DiagnosticVideoSource.h"
 
@@ -32,10 +33,16 @@ static_assert(offsetof(DiagnosticVideoParameters, canonicalYFlip) == 16);
 QShader loadShader(const QString &path) {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly))
-        qFatal("Could not open packaged shader: %s", qPrintable(path));
+        qCFatal(
+            sunroomLogVideo,
+            "Could not open packaged shader: %s",
+            qPrintable(path));
     QShader shader = QShader::fromSerialized(file.readAll());
     if (!shader.isValid())
-        qFatal("Packaged shader is invalid: %s", qPrintable(path));
+        qCFatal(
+            sunroomLogVideo,
+            "Packaged shader is invalid: %s",
+            qPrintable(path));
     return shader;
 }
 }
@@ -51,7 +58,9 @@ DiagnosticVideoProducer::DiagnosticVideoProducer(
           .readback = readback,
       })) {
     if (!m_target)
-        qFatal("The graphics backend does not provide a QRhi video target");
+        qCFatal(
+            sunroomLogVideo,
+            "The graphics backend does not provide a QRhi video target");
 }
 DiagnosticVideoProducer::~DiagnosticVideoProducer() = default;
 
@@ -202,7 +211,9 @@ DiagnosticVideoProducer::createResources() {
     if (!m_uniformBuffer->create()) {
         if (m_rhi.isDeviceLost())
             return VideoOperationResult::DeviceLost;
-        qFatal("Could not create the diagnostic video uniform buffer");
+        qCFatal(
+            sunroomLogVideo,
+            "Could not create the diagnostic video uniform buffer");
     }
 
     m_bindings.reset(m_rhi.newShaderResourceBindings());
@@ -214,7 +225,9 @@ DiagnosticVideoProducer::createResources() {
     if (!m_bindings->create()) {
         if (m_rhi.isDeviceLost())
             return VideoOperationResult::DeviceLost;
-        qFatal("Could not create the diagnostic video resource bindings");
+        qCFatal(
+            sunroomLogVideo,
+            "Could not create the diagnostic video resource bindings");
     }
 
     const QShader vertexShader =
@@ -234,7 +247,9 @@ DiagnosticVideoProducer::createResources() {
     if (!m_pipeline->create()) {
         if (m_rhi.isDeviceLost())
             return VideoOperationResult::DeviceLost;
-        qFatal("Could not create the diagnostic video graphics pipeline");
+        qCFatal(
+            sunroomLogVideo,
+            "Could not create the diagnostic video graphics pipeline");
     }
     return VideoOperationResult::Ready;
 }

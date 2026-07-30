@@ -5,6 +5,10 @@ qt_add_executable(sunroom_presentation_target_tests
         ../src/platform/DisplayState.h
 )
 
+qt_add_executable(sunroom_application_log_tests
+        unit/diagnostics/tst_ApplicationLog.cpp
+)
+
 qt_add_executable(sunroom_rendered_video_surface_tests
         unit/video/tst_RenderedVideoSurface.cpp
         ../src/video/RenderedVideoSurface.cpp
@@ -27,6 +31,10 @@ qt_add_executable(sunroom_video_presentation_geometry_tests
 
 qt_add_executable(sunroom_decoded_video_frame_tests
         unit/media/tst_DecodedVideoFrame.cpp
+)
+
+qt_add_executable(sunroom_ffmpeg_video_timeline_tests
+        unit/media/tst_FfmpegVideoTimeline.cpp
 )
 
 qt_add_executable(sunroom_media_session_tests
@@ -109,6 +117,11 @@ target_include_directories(sunroom_presentation_target_tests
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
 )
 
+target_include_directories(sunroom_application_log_tests
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+)
+
 target_include_directories(sunroom_rendered_video_surface_tests
         PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
@@ -120,6 +133,11 @@ target_include_directories(sunroom_video_viewport_tests
 )
 
 target_include_directories(sunroom_decoded_video_frame_tests
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+)
+
+target_include_directories(sunroom_ffmpeg_video_timeline_tests
         PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
 )
@@ -163,6 +181,12 @@ target_link_libraries(sunroom_presentation_target_tests
         Qt6::Test
 )
 
+target_link_libraries(sunroom_application_log_tests
+        PRIVATE
+        Qt6::Test
+        sunroom_diagnostics
+)
+
 target_link_libraries(sunroom_rendered_video_surface_tests
         PRIVATE
         Qt6::Test
@@ -174,6 +198,13 @@ target_link_libraries(sunroom_video_viewport_tests
 )
 
 target_link_libraries(sunroom_decoded_video_frame_tests
+        PRIVATE
+        Qt6::Test
+        sunroom_media
+        sunroom_ffmpeg
+)
+
+target_link_libraries(sunroom_ffmpeg_video_timeline_tests
         PRIVATE
         Qt6::Test
         sunroom_media
@@ -235,9 +266,11 @@ if (WIN32)
 
     foreach (test_target IN ITEMS
             sunroom_presentation_target_tests
+            sunroom_application_log_tests
             sunroom_rendered_video_surface_tests
             sunroom_video_viewport_tests
             sunroom_video_presentation_geometry_tests
+            sunroom_ffmpeg_video_timeline_tests
             sunroom_media_session_tests
             sunroom_video_frame_queue_tests
             sunroom_active_video_source_tests
@@ -263,6 +296,11 @@ add_test(
 )
 
 add_test(
+        NAME application-log
+        COMMAND sunroom_application_log_tests
+)
+
+add_test(
         NAME rendered-video-surface
         COMMAND sunroom_rendered_video_surface_tests
 )
@@ -275,6 +313,11 @@ add_test(
 add_test(
         NAME decoded-video-frame
         COMMAND sunroom_decoded_video_frame_tests
+)
+
+add_test(
+        NAME ffmpeg-video-timeline
+        COMMAND sunroom_ffmpeg_video_timeline_tests
 )
 
 add_test(
@@ -309,10 +352,12 @@ add_test(
 
 set_tests_properties(
         presentation-target
+        application-log
         rendered-video-surface
         video-viewport
         video-presentation-geometry
         decoded-video-frame
+        ffmpeg-video-timeline
         video-frame-queue
         active-video-source
         PROPERTIES LABELS "unit"

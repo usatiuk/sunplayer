@@ -157,6 +157,8 @@ presentation times, resume, select every frame, replay, seek while paused and
 playing, seek to end, and verify drain/end behavior and bounded occupancy. A
 real sparse-GOP H.264 seek test verifies decode from a preceding keyframe,
 B-frame presentation order, and publication at the requested position.
+An additional two-frame, 3000-second sparse-timeline Matroska fixture verifies
+the real FFmpeg seek call does not narrow an absolute microsecond target.
 Timeline and preroll tests verify stable-origin reuse, authoritative-duration
 intervals, one-frame PTS lookahead for missing durations, and that frames
 ending before the target do not enter the bounded mailbox. A fallback scenario

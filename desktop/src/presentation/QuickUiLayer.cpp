@@ -15,6 +15,7 @@
 
 #include "app/PresentationSettings.h"
 #include "app/VideoViewportState.h"
+#include "diagnostics/LogCategories.h"
 #include "playback/MediaSession.h"
 #include "presentation/PresentationOutputState.h"
 #include "video/ActiveVideoSource.h"
@@ -90,8 +91,10 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
     QQmlComponent component(m_qmlEngine.get());
     component.loadFromModule(QStringLiteral("Sunroom"), QStringLiteral("Main"));
     if (component.isError()) {
-        qFatal("Could not load the packaged Sunroom QML component:\n%s",
-               qPrintable(component.errorString()));
+        qCFatal(
+            sunroomLogPresentation,
+            "Could not load the packaged Sunroom QML component:\n%s",
+            qPrintable(component.errorString()));
     }
 
     const QVariantMap initialProperties{
@@ -125,8 +128,10 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
     m_rootItem.reset(qobject_cast<QQuickItem *>(object));
     if (!m_rootItem) {
         delete object;
-        qFatal("Sunroom Main.qml must create a QQuickItem root:\n%s",
-               qPrintable(component.errorString()));
+        qCFatal(
+            sunroomLogPresentation,
+            "Sunroom Main.qml must create a QQuickItem root:\n%s",
+            qPrintable(component.errorString()));
     }
 
     m_rootItem->setParentItem(m_quickWindow->contentItem());
@@ -134,7 +139,9 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
     if (!m_renderControl->initialize()) {
         if (m_rhi.isDeviceLost())
             return InitializationResult::DeviceLost;
-        qFatal("Could not initialize redirected Qt Quick rendering");
+        qCFatal(
+            sunroomLogPresentation,
+            "Could not initialize redirected Qt Quick rendering");
     }
     return InitializationResult::Ready;
 }
@@ -175,7 +182,9 @@ QuickUiLayer::RenderTargetUpdate QuickUiLayer::ensureRenderTarget(
             releaseRenderTarget();
             return RenderTargetUpdate::DeviceLost;
         }
-        qFatal("Could not create the Qt Quick FP16 texture");
+        qCFatal(
+            sunroomLogPresentation,
+            "Could not create the Qt Quick FP16 texture");
     }
 
     const QRhiTextureRenderTargetDescription description(
@@ -189,7 +198,9 @@ QuickUiLayer::RenderTargetUpdate QuickUiLayer::ensureRenderTarget(
             releaseRenderTarget();
             return RenderTargetUpdate::DeviceLost;
         }
-        qFatal("Could not create the Qt Quick FP16 render target");
+        qCFatal(
+            sunroomLogPresentation,
+            "Could not create the Qt Quick FP16 render target");
     }
 
     m_pixelSize = pixelSize;

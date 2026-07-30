@@ -21,6 +21,13 @@ struct VideoTimelineOrigin {
     std::optional<std::int64_t> microseconds() const;
 };
 
+// Converts a normalized playback position into one absolute selected-stream
+// timestamp. This is a single 64-bit rescale, not an incremental clock update.
+std::optional<std::int64_t> videoStreamTimestampForPosition(
+    const VideoTimelineOrigin &origin,
+    const VideoFrameRational &streamTimeBase,
+    std::int64_t targetPositionMicroseconds);
+
 struct VideoDecodeStart {
     std::optional<std::int64_t> targetPositionMicroseconds;
     std::optional<VideoTimelineOrigin> timelineOrigin;

@@ -61,6 +61,8 @@ preroll is still filtered. Positioning occurs after probing and stream
 selection but before `AVFormatContext` moves to the demux worker. Fresh
 demux/codec contexts need no explicit flush. Decoded preroll is retained
 through codec dependency processing and filtered at the playback boundary.
+The absolute target uses one checked 64-bit rescale and addition; it is not
+passed through an incremental rational clock helper.
 
 Uninterruptible mounted-filesystem kernel waits remain outside the guarantee
 and may require helper-process containment.
@@ -176,4 +178,6 @@ fallback. A separate pinned H.264 fixture has closed sparse GOPs and B-frames;
 it proves that FFmpeg starts at the preceding keyframe and the session decodes
 dependencies without publishing preroll. Pure timeline tests prove that an
 inferred first-frame origin survives restart and use one-frame PTS lookahead
-when a frame duration is not authoritative.
+when a frame duration is not authoritative. A two-frame sparse-timeline FFV1
+fixture places its second keyframe at 3000 seconds and proves the production
+demux seek retains positions beyond the 32-bit-microsecond boundary.

@@ -5,6 +5,7 @@
 #include <QtCore/qlogging.h>
 #include <rhi/qrhi.h>
 
+#include "diagnostics/LogCategories.h"
 #include "graphics/GraphicsDeviceDomain.h"
 #include "video/DecodedVideoSource.h"
 #include "video/libplacebo/LibplaceboRenderContext.h"
@@ -322,6 +323,7 @@ LibplaceboDecodedVideoProducer::unavailable(
             "Decoded libplacebo video path is unavailable")
         : reason;
     m_failureKind = failureKind;
-    qWarning().noquote() << m_failureReason;
+    qCWarning(sunroomLogVideo).noquote()
+        << m_failureReason;
     return VideoOperationResult::Unavailable;
 }

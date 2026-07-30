@@ -14,6 +14,7 @@
 
 #include "app/PresentationSettings.h"
 #include "app/VideoViewportState.h"
+#include "diagnostics/LogCategories.h"
 #include "graphics/GraphicsBackendFactory.h"
 #include "graphics/GraphicsDeviceDomain.h"
 #include "playback/MediaSession.h"
@@ -34,16 +35,23 @@ constexpr float scRgbReferenceWhiteNits = 80.0f;
 float positiveOrFallback(float value, float fallback, const char *name) {
     if (std::isfinite(value) && value > 0.0f)
         return value;
-    qWarning("QRhi reported invalid %s: %g; using %g",
-             name, value, fallback);
+    qCWarning(
+        sunroomLogPresentation,
+        "QRhi reported invalid %s: %g; using %g",
+        name,
+        value,
+        fallback);
     return fallback;
 }
 
 float nonNegativeOrZero(float value, const char *name) {
     if (std::isfinite(value) && value >= 0.0f)
         return value;
-    qWarning("QRhi reported invalid %s: %g; using 0",
-             name, value);
+    qCWarning(
+        sunroomLogPresentation,
+        "QRhi reported invalid %s: %g; using 0",
+        name,
+        value);
     return 0.0f;
 }
 
@@ -103,7 +111,9 @@ RhiPresentationEngine::RhiPresentationEngine(
             this, &RhiPresentationEngine::requestFrame);
 
     if (!initializeGraphicsDevice())
-        qFatal("Could not create the QRhi backend");
+        qCFatal(
+            sunroomLogPresentation,
+            "Could not create the QRhi backend");
 }
 
 RhiPresentationEngine::~RhiPresentationEngine() {
@@ -352,7 +362,8 @@ void RhiPresentationEngine::renderFrame() {
                 finishFrame(QRhi::SkipPresent, false);
             if (abandonedResult != QRhi::FrameOpSuccess
                     && abandonedResult != QRhi::FrameOpDeviceLost) {
-                qWarning(
+                qCWarning(
+                    sunroomLogPresentation,
                     "QRhi returned %d while abandoning an unfinished frame",
                     static_cast<int>(abandonedResult));
             }
@@ -560,7 +571,9 @@ bool RhiPresentationEngine::refreshVideoProducer() {
     std::unique_ptr<RenderedVideoProducer> producer =
         m_videoSource.createProducer(*m_graphicsDevice);
     if (!producer)
-        qFatal("The video source did not create a producer");
+        qCFatal(
+            sunroomLogPresentation,
+            "The video source did not create a producer");
     m_videoProducer = std::move(producer);
     m_videoProducerConfigurationRevision =
         requestedRevision;
@@ -591,7 +604,10 @@ bool RhiPresentationEngine::createSwapChain() {
         if (deviceLost)
             handleDeviceLoss("creating the swapchain");
         else
-            qWarning("Could not create the QRhi swapchain; waiting for another window update");
+            qCWarning(
+                sunroomLogPresentation,
+                "Could not create the QRhi swapchain; "
+                "waiting for another window update");
         return false;
     }
     updateBackendState();
@@ -620,8 +636,11 @@ bool RhiPresentationEngine::createOrResizeSwapChain(const char *operation) {
     if (m_rhi->isDeviceLost()) {
         handleDeviceLoss(operation);
     } else {
-        qWarning("Could not %s the QRhi swapchain; waiting for another window update",
-                 operation);
+        qCWarning(
+            sunroomLogPresentation,
+            "Could not %s the QRhi swapchain; "
+            "waiting for another window update",
+            operation);
         releaseSwapChainResources();
     }
     return false;
@@ -648,7 +667,10 @@ void RhiPresentationEngine::releaseDevice() {
 }
 
 void RhiPresentationEngine::handleDeviceLoss(const char *operation) {
-    qWarning("QRhi device was lost while %s; retrying", operation);
+    qCWarning(
+        sunroomLogPresentation,
+        "QRhi device was lost while %s; retrying",
+        operation);
     if (!m_recoveringDevice)
         m_deviceRecoveryAttempts = 0;
     m_recoveringDevice = true;
@@ -660,10 +682,17 @@ void RhiPresentationEngine::handleDeviceLoss(const char *operation) {
 void RhiPresentationEngine::handleFrameError(
         const char *operation, int result) {
     if (m_retriedFrameError) {
-        qFatal("QRhi failed twice while %s: %d", operation, result);
+        qCFatal(
+            sunroomLogPresentation,
+            "QRhi failed twice while %s: %d",
+            operation,
+            result);
     }
-    qWarning("QRhi failed while %s: %d; rebuilding once",
-             operation, result);
+    qCWarning(
+        sunroomLogPresentation,
+        "QRhi failed while %s: %d; rebuilding once",
+        operation,
+        result);
     m_retriedFrameError = true;
     m_recoveringDevice = true;
     m_deviceRecoveryAttempts = 0;
@@ -697,14 +726,16 @@ bool RhiPresentationEngine::handleVideoOperationResult(
                     : diagnostics.failureKind,
                 .reason = effectiveReason,
             })) {
-        qWarning(
+        qCWarning(
+            sunroomLogPresentation,
             "Video path unavailable while %s: %s",
             operation,
             qPrintable(effectiveReason));
         requestFrame();
         return false;
     }
-    qFatal(
+    qCFatal(
+        sunroomLogPresentation,
         "Video path unavailable while %s: %s",
         operation,
         qPrintable(effectiveReason));
@@ -716,13 +747,18 @@ void RhiPresentationEngine::scheduleDeviceRecovery() {
     constexpr auto retryDelay = std::chrono::milliseconds(250);
 
     if (m_deviceRecoveryAttempts >= maximumAttempts) {
-        qFatal("QRhi device recovery failed after %d attempts",
-               maximumAttempts);
+        qCFatal(
+            sunroomLogPresentation,
+            "QRhi device recovery failed after %d attempts",
+            maximumAttempts);
     }
 
     ++m_deviceRecoveryAttempts;
-    qWarning("Retrying QRhi device recovery (%d/%d)",
-             m_deviceRecoveryAttempts, maximumAttempts);
+    qCWarning(
+        sunroomLogPresentation,
+        "Retrying QRhi device recovery (%d/%d)",
+        m_deviceRecoveryAttempts,
+        maximumAttempts);
     m_deviceRecoveryTimer.start(retryDelay);
 }
 

@@ -303,6 +303,9 @@ Initial additions should be narrowly tied to milestones:
   input/output diagnostics. A second pinned Matroska/H.264 fixture contains
   closed sparse GOPs and B-frames for dependency-safe keyframe seek,
   presentation-order preroll, and exact requested-frame publication.
+  A two-frame Matroska/FFV1 fixture places its second intra frame at 3000
+  seconds and catches narrowing of long absolute seek positions through the
+  real demux/decode boundary without requiring a large media file.
 * One small HDR10 container with explicit mastering and content-light
   metadata.
 * Timeline, subtitle, audio, corruption, dynamic-HDR, and unusual-format

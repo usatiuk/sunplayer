@@ -3,6 +3,8 @@
 #include <QtCore/qlogging.h>
 #include <rhi/qrhi.h>
 
+#include "diagnostics/LogCategories.h"
+
 QrhiVideoTarget::QrhiVideoTarget(
         QRhi &rhi, VideoTargetReadback readback)
     : m_rhi(rhi), m_readback(readback) {
@@ -133,7 +135,10 @@ VideoTargetUpdate QrhiVideoTarget::createTarget(const QSize &pixelSize) {
             QRhiTexture::RGBA16F, textureFlags)) {
         setUnavailableDiagnostics(QStringLiteral(
             "RGBA16F render target is unsupported"));
-        qWarning("The active QRhi backend cannot create the requested RGBA16F video target");
+        qCWarning(
+            sunroomLogVideo,
+            "The active QRhi backend cannot create the requested "
+            "RGBA16F video target");
         return VideoTargetUpdate::Unavailable;
     }
 
@@ -148,7 +153,9 @@ VideoTargetUpdate QrhiVideoTarget::createTarget(const QSize &pixelSize) {
         }
         setUnavailableDiagnostics(
             QStringLiteral("Could not create the video texture"));
-        qWarning("Could not create the video texture");
+        qCWarning(
+            sunroomLogVideo,
+            "Could not create the video texture");
         return VideoTargetUpdate::Unavailable;
     }
 
@@ -169,7 +176,9 @@ VideoTargetUpdate QrhiVideoTarget::createTarget(const QSize &pixelSize) {
         }
         setUnavailableDiagnostics(
             QStringLiteral("Could not create the video render target"));
-        qWarning("Could not create the video render target");
+        qCWarning(
+            sunroomLogVideo,
+            "Could not create the video render target");
         return VideoTargetUpdate::Unavailable;
     }
 
@@ -194,7 +203,9 @@ VideoTargetUpdate QrhiVideoTarget::resizeTarget(const QSize &pixelSize) {
         }
         setUnavailableDiagnostics(
             QStringLiteral("Could not resize the video texture"));
-        qWarning("Could not resize the video texture");
+        qCWarning(
+            sunroomLogVideo,
+            "Could not resize the video texture");
         return VideoTargetUpdate::Unavailable;
     }
     setDirectDiagnostics();

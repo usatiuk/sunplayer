@@ -4,6 +4,8 @@
 
 #include <QWindow>
 
+#include "diagnostics/LogCategories.h"
+
 #ifdef Q_OS_WIN
 
 #include <Windows.h>
@@ -24,7 +26,11 @@ namespace {
 float nonNegativeOrUnknown(float value, const char *name) {
     if (std::isfinite(value) && value >= 0.0f)
         return value;
-    qWarning("Windows reported invalid %s: %g", name, value);
+    qCWarning(
+        sunroomLogPlatform,
+        "Windows reported invalid %s: %g",
+        name,
+        value);
     return 0.0f;
 }
 
@@ -77,9 +83,12 @@ public:
             m_hasChangeToken = true;
             publishCurrentState();
         } catch (const winrt::hresult_error &error) {
-            qWarning("Windows HDR display monitoring is unavailable: 0x%08X %ls",
-                     static_cast<unsigned int>(error.code().value),
-                     error.message().c_str());
+            qCWarning(
+                sunroomLogPlatform,
+                "Windows HDR display monitoring is unavailable: "
+                "0x%08X %ls",
+                static_cast<unsigned int>(error.code().value),
+                error.message().c_str());
             detach();
             publishInvalidState();
         }
@@ -119,8 +128,10 @@ private:
             return true;
         }
 
-        qWarning("Could not initialize the Windows Runtime: 0x%08X",
-                 static_cast<unsigned int>(result));
+        qCWarning(
+            sunroomLogPlatform,
+            "Could not initialize the Windows Runtime: 0x%08X",
+            static_cast<unsigned int>(result));
         return false;
     }
 
@@ -129,9 +140,12 @@ private:
             if (DispatcherQueue::GetForCurrentThread())
                 return true;
         } catch (const winrt::hresult_error &error) {
-            qWarning("Could not query the Windows DispatcherQueue: 0x%08X %ls",
-                     static_cast<unsigned int>(error.code().value),
-                     error.message().c_str());
+            qCWarning(
+                sunroomLogPlatform,
+                "Could not query the Windows DispatcherQueue: "
+                "0x%08X %ls",
+                static_cast<unsigned int>(error.code().value),
+                error.message().c_str());
             return false;
         }
 
@@ -143,8 +157,10 @@ private:
         ABI::Windows::System::IDispatcherQueueController *controller = nullptr;
         const HRESULT result = CreateDispatcherQueueController(options, &controller);
         if (FAILED(result)) {
-            qWarning("Could not create a Windows DispatcherQueue: 0x%08X",
-                     static_cast<unsigned int>(result));
+            qCWarning(
+                sunroomLogPlatform,
+                "Could not create a Windows DispatcherQueue: 0x%08X",
+                static_cast<unsigned int>(result));
             return false;
         }
         m_dispatcherController = {controller, winrt::take_ownership_from_abi};
@@ -168,9 +184,12 @@ private:
                 colorInfo.MaxLuminanceInNits(), "maximum luminance");
             emit stateChanged(state);
         } catch (const winrt::hresult_error &error) {
-            qWarning("Could not refresh Windows HDR display information: 0x%08X %ls",
-                     static_cast<unsigned int>(error.code().value),
-                     error.message().c_str());
+            qCWarning(
+                sunroomLogPlatform,
+                "Could not refresh Windows HDR display information: "
+                "0x%08X %ls",
+                static_cast<unsigned int>(error.code().value),
+                error.message().c_str());
             publishInvalidState();
         }
     }

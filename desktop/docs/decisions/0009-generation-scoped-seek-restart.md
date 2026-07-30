@@ -58,6 +58,11 @@ named millisecond properties and issues a millisecond seek command. Duration,
 seekability, and stable origin are discovered once and retained across
 same-media restarts.
 
+The normalized target is converted to the selected stream's absolute timestamp
+with one 64-bit `av_rescale_q` operation plus checked addition to the stable
+origin. Incremental clock helpers that narrow through `AVRational` are not used
+for an arbitrary absolute playback position.
+
 ## Consequences
 
 Benefits:

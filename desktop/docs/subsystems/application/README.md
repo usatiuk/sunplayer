@@ -8,7 +8,8 @@ startup, object ownership, native presentation events, redirected Qt Quick
 input, the active video-viewport boundary, and asynchronous continuous local
 video playback with a position/duration seek timeline. It does not yet provide
 audio, drag-and-drop, persistent settings, fullscreen behavior, general
-structured errors, or logging.
+structured errors, or a user-facing support-report interface. It now installs
+the shared Qt category logger and bounded session-file sink.
 
 Graphics details belong to
 [../graphics/README.md](../graphics/README.md). The current diagnostic QML is
@@ -29,15 +30,24 @@ does not live in the application window or QML page.
 `main.cpp` currently:
 
 1. Creates `QGuiApplication`.
-2. Asks `GraphicsBackendFactory` to configure Qt Quick for the selected
+2. Parses command-line options and installs the application logger.
+3. Asks `GraphicsBackendFactory` to configure Qt Quick for the selected
    backend; the current factory selects D3D11.
-3. Installs one dark application palette used by the diagnostic interface.
-4. Constructs and shows one `PresentationWindow`.
-5. Enters the Qt event loop.
+4. Installs one dark application palette used by the diagnostic interface.
+5. Constructs and shows one `PresentationWindow`.
+6. Enters the Qt event loop.
 
 One optional positional command-line path opens local media after construction.
 There is no full command-line model, single-instance policy, recent-file state,
 settings store, or application service container.
+
+Application logging is installed after `QGuiApplication` construction and
+command-line parsing, but before Qt Quick backend selection, QML, graphics,
+media, or window construction. Info and higher records are mirrored to a
+bounded temporary session file by default. `--debug-log`,
+`--log-file <path>`, and `--no-log-file` control the sink; Qt logging rules
+remain available. Detailed policy and the observability roadmap live in
+[../diagnostics/README.md](../diagnostics/README.md).
 
 ## Window ownership
 

@@ -126,6 +126,15 @@ current dependency build as proof of Vulkan readiness.
 
 ## Application and player
 
+### Pre-Qt startup diagnostics
+
+The bounded session logger is installed after `QGuiApplication` exists and
+command-line options have been parsed. A missing or unloadable Qt platform
+plugin can therefore fail before the session file is available. The packaged
+application test covers the normal deployed runtime, but a future early
+bootstrap or launcher should capture loader/platform initialization failures
+without duplicating Sunroom's command-line and logging policy.
+
 ### Playback has no audio clock or unified buffering recovery
 
 The thin QML Player now continuously demuxes, decodes, schedules, and presents

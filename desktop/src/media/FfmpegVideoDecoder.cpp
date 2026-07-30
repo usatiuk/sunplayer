@@ -1,6 +1,7 @@
 #include "media/FfmpegVideoDecoder.h"
 
 #include <algorithm>
+#include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <limits>
@@ -9,6 +10,8 @@
 #include <optional>
 #include <thread>
 #include <utility>
+
+#include <QElapsedTimer>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -19,6 +22,7 @@ extern "C" {
 }
 
 #include "media/DecodedVideoFrame.h"
+#include "diagnostics/LogCategories.h"
 #include "media/FfmpegHardwareDevice.h"
 #include "media/ffmpeg/FfmpegFrameMetadata.h"
 #include "media/ffmpeg/FfmpegVideoDecodeFallback.h"
@@ -74,6 +78,18 @@ QString ffmpegError(int code) {
     if (av_strerror(code, buffer, sizeof(buffer)) < 0)
         return QStringLiteral("FFmpeg error %1").arg(code);
     return QString::fromUtf8(buffer);
+}
+
+qint64 ioBytesRead(const AVFormatContext &context) {
+    return context.pb
+        ? context.pb->bytes_read
+        : -1;
+}
+
+qint64 ioPosition(AVFormatContext &context) {
+    return context.pb
+        ? avio_tell(context.pb)
+        : -1;
 }
 
 struct HardwareDecodeState {
@@ -353,6 +369,46 @@ VideoTimelineOrigin::microseconds() const {
     }.ptsMicroseconds();
 }
 
+std::optional<std::int64_t>
+videoStreamTimestampForPosition(
+        const VideoTimelineOrigin &origin,
+        const VideoFrameRational &streamTimeBase,
+        std::int64_t targetPositionMicroseconds) {
+    if (!origin.isValid()
+            || !streamTimeBase.isValid()
+            || targetPositionMicroseconds < 0
+            || origin.timestamp == AV_NOPTS_VALUE) {
+        return std::nullopt;
+    }
+
+    const AVRational originTimeBase{
+        origin.timeBase.numerator,
+        origin.timeBase.denominator,
+    };
+    const AVRational targetTimeBase{
+        streamTimeBase.numerator,
+        streamTimeBase.denominator,
+    };
+    const std::int64_t originTimestamp =
+        av_rescale_q(
+            origin.timestamp,
+            originTimeBase,
+            targetTimeBase);
+    const std::int64_t offsetTimestamp =
+        av_rescale_q(
+            targetPositionMicroseconds,
+            AV_TIME_BASE_Q,
+            targetTimeBase);
+    if (originTimestamp == AV_NOPTS_VALUE
+            || offsetTimestamp < 0
+            || originTimestamp
+                > std::numeric_limits<std::int64_t>::max()
+                    - offsetTimestamp) {
+        return std::nullopt;
+    }
+    return originTimestamp + offsetTimestamp;
+}
+
 bool VideoDecodeStart::isValid() const {
     return (!targetPositionMicroseconds
             || *targetPositionMicroseconds >= 0)
@@ -412,6 +468,10 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
     Q_ASSERT(hardwareSelected);
     Q_ASSERT(sink);
     *hardwareSelected = false;
+    const std::uint64_t generation =
+        request.firstFrameIdentity.playbackGeneration;
+    QElapsedTimer operationTimer;
+    operationTimer.start();
 
     FfmpegVideoDecodeResult result;
     const auto fail = [&result](QString message) {
@@ -437,6 +497,20 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
         return cancel();
     if (!request.isValid())
         return fail(QStringLiteral("Video decode request is invalid"));
+
+    qCDebug(sunroomLogMediaDecode).noquote()
+        << "event=decode.attempt_start"
+        << "generation=" + QString::number(generation)
+        << "targetUs=" + (
+            request.start.targetPositionMicroseconds
+            ? QString::number(
+                *request.start.targetPositionMicroseconds)
+            : QStringLiteral("none"))
+        << "demuxSeek=" + QString(
+            request.start.performDemuxSeek
+            ? QStringLiteral("true")
+            : QStringLiteral("false"))
+        << "path=" + request.path;
 
     // AVCodecContext::opaque points here, so this state must outlive codec
     // teardown as well as every get_format callback.
@@ -476,6 +550,13 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
             .arg(ffmpegError(status)));
     }
     FormatContextPtr formatContext(rawFormatContext);
+    qCDebug(sunroomLogMediaIo).noquote()
+        << "event=media.open_complete"
+        << "generation=" + QString::number(generation)
+        << "elapsedMs=" + QString::number(
+            operationTimer.elapsed())
+        << "bytesRead=" + QString::number(
+            ioBytesRead(*formatContext));
 
     status = avformat_find_stream_info(
         formatContext.get(), nullptr);
@@ -486,6 +567,13 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
             "Could not discover media streams: %1")
             .arg(ffmpegError(status)));
     }
+    qCDebug(sunroomLogMediaIo).noquote()
+        << "event=media.probe_complete"
+        << "generation=" + QString::number(generation)
+        << "elapsedMs=" + QString::number(
+            operationTimer.elapsed())
+        << "bytesRead=" + QString::number(
+            ioBytesRead(*formatContext));
 
     const AVCodec *decoder = nullptr;
     const int streamIndex = av_find_best_stream(
@@ -534,28 +622,43 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
 
         const VideoTimelineOrigin &origin =
             *request.start.timelineOrigin;
-        const AVRational originTimeBase{
-            origin.timeBase.numerator,
-            origin.timeBase.denominator,
-        };
-        const std::int64_t originInStreamTimeBase =
-            av_rescale_q(
-                origin.timestamp,
-                originTimeBase,
-                streamTimeBase);
-        const std::int64_t targetTimestamp =
-            av_add_stable(
-                streamTimeBase,
-                originInStreamTimeBase,
-                AV_TIME_BASE_Q,
+        const auto targetTimestamp =
+            videoStreamTimestampForPosition(
+                origin,
+                {
+                    streamTimeBase.num,
+                    streamTimeBase.den,
+                },
                 *request.start
                     .targetPositionMicroseconds);
+        if (!targetTimestamp) {
+            return fail(QStringLiteral(
+                "The requested video seek timestamp "
+                "cannot be represented"));
+        }
+        qCDebug(sunroomLogMediaIo).noquote()
+            << "event=media.seek_request"
+            << "generation=" + QString::number(generation)
+            << "stream=" + QString::number(streamIndex)
+            << "originTs=" + QString::number(origin.timestamp)
+            << "originTimeBase="
+                + QStringLiteral("%1/%2")
+                    .arg(origin.timeBase.numerator)
+                    .arg(origin.timeBase.denominator)
+            << "streamTimeBase="
+                + QStringLiteral("%1/%2")
+                    .arg(streamTimeBase.num)
+                    .arg(streamTimeBase.den)
+            << "targetUs=" + QString::number(
+                *request.start.targetPositionMicroseconds)
+            << "targetTs=" + QString::number(
+                *targetTimestamp);
         status = avformat_seek_file(
             formatContext.get(),
             streamIndex,
             std::numeric_limits<std::int64_t>::min(),
-            targetTimestamp,
-            targetTimestamp,
+            *targetTimestamp,
+            *targetTimestamp,
             0);
         if (status < 0) {
             if (stopToken.stop_requested())
@@ -568,6 +671,15 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
                         / 1'000)
                 .arg(ffmpegError(status)));
         }
+        qCDebug(sunroomLogMediaIo).noquote()
+            << "event=media.seek_complete"
+            << "generation=" + QString::number(generation)
+            << "elapsedMs=" + QString::number(
+                operationTimer.elapsed())
+            << "bytesRead=" + QString::number(
+                ioBytesRead(*formatContext))
+            << "bytePosition=" + QString::number(
+                ioPosition(*formatContext));
     }
 
     CodecParametersPtr streamParameters(
@@ -688,6 +800,7 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
         : softwareDiagnostics.timelineOrigin;
 
     BoundedPacketChannel packets;
+    std::atomic_bool firstSelectedPacket = true;
     std::jthread demuxWorker(
         [&](std::stop_token demuxStopToken) {
             // openingInterrupt was declared before formatContext and
@@ -726,6 +839,26 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
                 }
                 if (packet->stream_index != streamIndex)
                     continue;
+                if (firstSelectedPacket.exchange(
+                        false,
+                        std::memory_order_relaxed)) {
+                    qCDebug(sunroomLogMediaIo).noquote()
+                        << "event=demux.first_video_packet"
+                        << "generation="
+                            + QString::number(generation)
+                        << "pts=" + QString::number(packet->pts)
+                        << "dts=" + QString::number(packet->dts)
+                        << "duration="
+                            + QString::number(packet->duration)
+                        << "position="
+                            + QString::number(packet->pos)
+                        << "key=" + QString(
+                            packet->flags & AV_PKT_FLAG_KEY
+                            ? QStringLiteral("true")
+                            : QStringLiteral("false"))
+                        << "bytesRead=" + QString::number(
+                            ioBytesRead(*formatContext));
+                }
                 if (!packets.push(
                         std::move(packet),
                         demuxStopToken)) {
@@ -841,6 +974,39 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
                 if (!result.diagnostics.isValid())
                     result.diagnostics = diagnostics;
                 ++result.framesDecoded;
+                if (result.framesDecoded == 1
+                        || (request.start
+                                .targetPositionMicroseconds
+                            && result.framesDecoded % 64 == 0)) {
+                    qCDebug(sunroomLogMediaDecode).noquote()
+                        << (
+                            result.framesDecoded == 1
+                            ? "event=decode.first_frame"
+                            : "event=decode.seek_progress")
+                        << "generation="
+                            + QString::number(generation)
+                        << "frames="
+                            + QString::number(
+                                result.framesDecoded)
+                        << "pts=" + (
+                            decoded->timing().pts
+                            ? QString::number(
+                                *decoded->timing().pts)
+                            : QStringLiteral("none"))
+                        << "ptsUs=" + (
+                            decoded->timing()
+                                .ptsMicroseconds()
+                            ? QString::number(
+                                *decoded->timing()
+                                    .ptsMicroseconds())
+                            : QStringLiteral("none"))
+                        << "hardware=" + QString(
+                            hardwareFrame
+                            ? QStringLiteral("true")
+                            : QStringLiteral("false"))
+                        << "elapsedMs=" + QString::number(
+                            operationTimer.elapsed());
+                }
                 if (!sink(
                         std::move(decoded),
                         diagnostics)) {

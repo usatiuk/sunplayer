@@ -8,6 +8,7 @@
 #include <libplacebo/colorspace.h>
 #include <rhi/qrhi.h>
 
+#include "diagnostics/LogCategories.h"
 #include "graphics/GraphicsDeviceDomain.h"
 #include "video/DiagnosticVideoSource.h"
 #include "video/libplacebo/LibplaceboRenderContext.h"
@@ -505,6 +506,7 @@ LibplaceboDiagnosticVideoProducer::unavailable(
     m_failureReason = reason.isEmpty()
         ? QStringLiteral("Libplacebo video path is unavailable")
         : reason;
-    qWarning().noquote() << m_failureReason;
+    qCWarning(sunroomLogVideo).noquote()
+        << m_failureReason;
     return VideoOperationResult::Unavailable;
 }

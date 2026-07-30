@@ -324,6 +324,8 @@ Documentation: `docs/subsystems/ui/`
 
 ### 10. Reliability and diagnostics
 
+* [x] Qt category logging with bounded default session files
+* [x] Initial generation-scoped open/seek causal trace
 * [ ] Structured subsystem errors
 * [ ] Pipeline capability and fallback report
 * [ ] Queue, buffering, and stall telemetry

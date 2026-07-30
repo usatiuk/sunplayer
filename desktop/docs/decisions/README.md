@@ -24,3 +24,4 @@ with a new decision when the accepted choice changes materially.
 * [0007: Bound continuous video and select frames on the presentation thread](0007-bound-continuous-video-and-select-on-presentation-thread.md)
 * [0008: Anchor normal HDR playback to the platform reference white](0008-reference-white-adaptive-hdr-display-mapping.md)
 * [0009: Use generation-scoped decode restarts for seeking and recovery](0009-generation-scoped-seek-restart.md)
+* [0010: Use Qt category logging with bounded session files](0010-qt-category-logging-and-bounded-session-files.md)

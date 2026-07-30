@@ -1,0 +1,12 @@
+#pragma once
+
+#include <QLoggingCategory>
+
+Q_DECLARE_LOGGING_CATEGORY(sunroomLogApplication)
+Q_DECLARE_LOGGING_CATEGORY(sunroomLogMediaIo)
+Q_DECLARE_LOGGING_CATEGORY(sunroomLogMediaDecode)
+Q_DECLARE_LOGGING_CATEGORY(sunroomLogPlayback)
+Q_DECLARE_LOGGING_CATEGORY(sunroomLogGraphics)
+Q_DECLARE_LOGGING_CATEGORY(sunroomLogVideo)
+Q_DECLARE_LOGGING_CATEGORY(sunroomLogPresentation)
+Q_DECLARE_LOGGING_CATEGORY(sunroomLogPlatform)

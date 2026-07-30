@@ -19,6 +19,7 @@ extern "C" {
 #include <libavutil/hwcontext_d3d11va.h>
 }
 
+#include "diagnostics/LogCategories.h"
 #include "graphics/GraphicsDeviceDomain.h"
 #include "graphics/backends/D3D11LibplaceboFrameImporter.h"
 #include "graphics/backends/D3D11LibplaceboVideoTarget.h"
@@ -131,20 +132,20 @@ void logLibplacebo(
     switch (level) {
     case PL_LOG_FATAL:
     case PL_LOG_ERR:
-        qCritical().noquote()
+        qCCritical(sunroomLogGraphics).noquote()
             << "libplacebo:" << message;
         break;
     case PL_LOG_WARN:
-        qWarning().noquote()
+        qCWarning(sunroomLogGraphics).noquote()
             << "libplacebo:" << message;
         break;
     case PL_LOG_INFO:
-        qInfo().noquote()
+        qCInfo(sunroomLogGraphics).noquote()
             << "libplacebo:" << message;
         break;
     case PL_LOG_DEBUG:
     case PL_LOG_TRACE:
-        qDebug().noquote()
+        qCDebug(sunroomLogGraphics).noquote()
             << "libplacebo:" << message;
         break;
     case PL_LOG_NONE:
@@ -214,7 +215,8 @@ public:
         if (FAILED(createResult)
                 || !m_device
                 || !m_context) {
-            qCritical(
+            qCCritical(
+                sunroomLogGraphics,
                 "Could not create the video-capable D3D11 device: 0x%08lx",
                 static_cast<unsigned long>(createResult));
             return;
@@ -222,7 +224,8 @@ public:
 
         ComPtr<ID3D11DeviceContext1> context1;
         if (FAILED(m_context.As(&context1))) {
-            qCritical(
+            qCCritical(
+                sunroomLogGraphics,
                 "The D3D11 immediate context does not provide "
                 "ID3D11DeviceContext1");
             return;
@@ -276,13 +279,15 @@ public:
                 m_rhi->nativeHandles());
         if (!nativeHandles || !nativeHandles->dev
                 || !nativeHandles->context) {
-            qCritical(
+            qCCritical(
+                sunroomLogGraphics,
                 "QRhi did not expose its D3D11 device and immediate context");
             return;
         }
         if (nativeHandles->dev != m_device.Get()
                 || nativeHandles->context != m_context.Get()) {
-            qCritical(
+            qCCritical(
+                sunroomLogGraphics,
                 "QRhi did not retain the imported D3D11 device domain");
             return;
         }
@@ -303,7 +308,8 @@ public:
         if (libplaceboContext)
             libplaceboContext->Release();
         if (!sharedImmediateContext) {
-            qCritical(
+            qCCritical(
+                sunroomLogGraphics,
                 "QRhi and libplacebo did not resolve the same D3D11 immediate context");
             return;
         }
@@ -324,7 +330,7 @@ public:
                         hardwareDecodeUnavailableReason),
             };
         if (!m_videoDecode.isAvailable()) {
-            qWarning().noquote()
+            qCWarning(sunroomLogGraphics).noquote()
                 << m_videoDecode.unavailableReason;
         }
 
