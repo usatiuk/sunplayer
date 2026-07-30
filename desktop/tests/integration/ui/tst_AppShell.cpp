@@ -1,5 +1,6 @@
 #include <memory>
 
+#include <QColor>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQuickItem>
@@ -140,6 +141,13 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(seekSlider);
     QVERIFY(positionLabel);
     QVERIFY(durationLabel);
+    QObject *const rendererSwitchContent =
+        qvariant_cast<QObject *>(
+            rendererSwitch->property("contentItem"));
+    QVERIFY(rendererSwitchContent);
+    QCOMPARE(
+        rendererSwitchContent->property("color").value<QColor>(),
+        QColor(QStringLiteral("#f2f4f8")));
     QCOMPARE(
         rendererSwitch->property("checked").toBool(),
         true);
