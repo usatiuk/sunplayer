@@ -9,8 +9,10 @@ developer tooling.
 
 Player opens a local file, starts continuous video-only playback through the
 production libplacebo path, and exposes working play, pause, and replay
-commands. It reports decode path/fallback plus decoded, queued, selected, and
-dropped-frame counts. Seek, track, subtitle, audio, and volume controls remain
+commands. A position/duration timeline performs seek through the session's
+generation-scoped restart boundary and reports truthful seeking state. It
+reports decode path/fallback plus decoded, queued, selected, and dropped-frame
+counts. Track, subtitle, audio, and volume controls remain
 absent until those commands exist.
 
 ## Page structure
@@ -56,8 +58,9 @@ commands; it does not recreate canonical open, playback, track, timing, or
 error state in page-local properties.
 
 The current seam exposes `Empty`, `Opening`, `Ready`, and `Error`; playing,
-paused, and ended intent inside `Ready`; and open, cancel, retry, close,
-play/pause, and replay behavior. Expand it with working behavior rather than
+paused, ended, seekable, and seeking state; integer-millisecond position and
+duration; and open, cancel, retry, close, play/pause, replay, and seek
+behavior. Expand it with working behavior rather than
 adding disconnected controls.
 
 ## Video viewport
@@ -88,8 +91,11 @@ Inactive pages cannot compete for the viewport.
 * Ready with playing, paused, or ended video and a retained displayed frame.
 
 The Ready state exposes play/pause or replay, open another, and close. Queue
-and frame counters provide lightweight pipeline observability. Add seek, track,
-subtitle, and volume controls only when their underlying commands and
+and frame counters provide lightweight pipeline observability. Its non-live
+timeline sends only interactive moves back to the session, so backend position
+updates cannot create seek loops. Seeking has a distinct busy state and keeps
+the timeline visible but disabled. Add track, subtitle, and volume controls
+only when their underlying commands and
 observable states exist.
 
 ## HDR Lab and diagnostics
@@ -130,7 +136,9 @@ QML shell through the same initial-property contract, resizes it, and verifies
 that active-page geometry and visibility reach `VideoViewportState`. It also
 verifies Empty/Opening/Ready/Error visibility, cancel/retry/close and
 play/pause command wiring, Player/HDR-Lab route and viewport selection, and the diagnostic
-renderer switch's default and source binding. The real
+renderer switch's default and source binding. It also verifies timeline
+formatting, backend position updates, one user seek command, and disabled
+seeking state without launching a native dialog. The real
 D3D11 capture verifies that zero video geometry and the compositor's fallback
 binding produce the normal background rather than sampling the retained video
 surface. It also destroys a bound diagnostic producer, creates the other

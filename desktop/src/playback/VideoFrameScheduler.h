@@ -32,7 +32,9 @@ public:
         VideoFrameQueue &queue,
         std::uint64_t playbackGeneration,
         MediaClockSnapshot clock,
-        bool decoderDrained);
+        bool decoderDrained,
+        std::optional<std::int64_t>
+            declaredDurationMicroseconds = std::nullopt);
 
 private:
     void remember(const QueuedVideoFrame &frame);

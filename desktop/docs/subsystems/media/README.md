@@ -7,8 +7,8 @@ Sunroom integrates the official vcpkg FFmpeg 8.1.2 package with `avformat`,
 DXVA2, and Media Foundation support. Sunroom now exercises D3D11VA for
 supported streams and keeps software decoding as an explicit fallback.
 
-The production `decodeVideoFrames()` operation opens a local file, discovers
-the best video stream, and continuously emits immutable
+The production `decodeVideoFrames()` operation accepts one restartable request,
+opens a local file, discovers the best video stream, and continuously emits immutable
 `DecodedVideoFrame`s. `decodeFirstVideoFrame()` is now only a focused-test
 adapter over that same implementation, so hardware negotiation, metadata,
 timestamp, EOF, and fallback behavior do not diverge.
@@ -42,18 +42,31 @@ If the retained hardware surface later cannot be imported by the active
 graphics backend, `MediaSession` consumes at most one software-only re-decode
 for that open and records the import reason. A repeated typed failure becomes a
 session error. Graphics-device recreation cancels or supersedes in-flight work
-and published hardware frames, then re-decodes after the replacement domain
-supplies its capability. Ready software frames are generation-independent and
-remain published for the recreated producer.
+and published frames, then re-decodes from the captured logical position after
+the replacement domain supplies its capability. Software `AVFrame` storage is
+generation-independent, but restarting the active pipeline prevents later
+seeks or fallback from retaining an obsolete graphics capability.
 
 The operation and both bounded channels are cooperatively cancellable through
 `std::stop_token`. The FFmpeg interrupt state outlives format teardown, and
 every blocking queue wait includes stop or generation invalidation.
+For an explicit targeted start, including a seek to zero, the operation
+can request demux positioning separately from presentation-target filtering.
+A seekable source disables unselected streams, translates the normalized
+target from the stable exact origin into the selected stream time base, and
+calls `avformat_seek_file()` with a keyframe-constrained range ending at the
+requested timestamp. Initial open, and a nonseekable restart at zero, read
+naturally. The target remains explicit in the latter case so negative-timestamp
+preroll is still filtered. Positioning occurs after probing and stream
+selection but before `AVFormatContext` moves to the demux worker. Fresh
+demux/codec contexts need no explicit flush. Decoded preroll is retained
+through codec dependency processing and filtered at the playback boundary.
+
 Uninterruptible mounted-filesystem kernel waits remain outside the guarantee
 and may require helper-process containment.
 
 This remains the first selected-video pipeline. It has no audio/subtitle
-packet dispatch, seek implementation, complete track-discovery model, or
+packet dispatch, complete track-discovery model, or
 source-stall recovery.
 
 ## Dependency boundary
@@ -121,12 +134,11 @@ rotated-content output still needs a dedicated fixture and capture.
 
 ## Next implementation
 
-1. Add a seekable demux command boundary and keyframe-anchored decoder restart.
-2. Normalize complete stream, chapter, attachment, and session duration state.
-3. Dispatch audio and subtitle packets without letting a full video channel
+1. Normalize complete stream, chapter, attachment, and session duration state.
+2. Dispatch audio and subtitle packets without letting a full video channel
    prevent progress for interleaved streams.
-4. Add packet byte/duration and decode-time diagnostics.
-5. Add equivalent native hardware-device negotiation on Linux and macOS when
+3. Add packet byte/duration and decode-time diagnostics.
+4. Add equivalent native hardware-device negotiation on Linux and macOS when
    their graphics domains are implemented.
 
 ## Verification
@@ -158,3 +170,10 @@ generation reset, and stop wakeup. A separate twelve-frame FFV1 fixture drives
 the production session beyond mailbox capacity and verifies pause-induced
 decoder backpressure, resume/refill, due-frame dropping, complete drain, end,
 and replay.
+The playback fixture also verifies exact-zero and nonzero seeking,
+paused/playing intent, end seeking, and position-preserving hardware-import
+fallback. A separate pinned H.264 fixture has closed sparse GOPs and B-frames;
+it proves that FFmpeg starts at the preceding keyframe and the session decodes
+dependencies without publishing preroll. Pure timeline tests prove that an
+inferred first-frame origin survives restart and use one-frame PTS lookahead
+when a frame duration is not authoritative.

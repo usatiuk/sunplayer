@@ -33,33 +33,51 @@ autoplays. Play/pause/replay change user intent without recreating the decoder
 unless replay follows end of stream.
 
 The initial monotonic clock and its snapshots stay in integer microseconds.
-Valid FFmpeg PTS is mapped against the container/stream origin; a missing PTS
-advances by the last positive duration, then the nominal frame-rate estimate.
-Backward timestamps are clamped to the previous scheduled time. Early frames
-remain queued, due frames are selected only at the presentation boundary, and
-if several frames are due only the newest is published while earlier due
-frames are counted as dropped. Decoder wakeups after first-frame bootstrap only
-request a presentation pass. Decoder drain is distinct from demux EOF;
-playback ends only after the queue and final frame duration are consumed, and
-the final frame remains visible.
+Valid FFmpeg PTS is mapped against one stable container/stream origin. If the
+container and stream omit their origins, the first decoded best-effort
+timestamp becomes the stable fallback and is retained across decoder
+restarts. A missing PTS advances by the last positive duration, then the
+nominal frame-rate estimate. Backward timestamps are clamped to the previous
+scheduled time.
+
+The public session exposes position and duration in explicitly named integer
+milliseconds while retaining microseconds internally. Local sources report
+seekability only after duration and a stable origin are known. A user seek
+cancels the previous decode generation, opens fresh FFmpeg contexts, seeks to
+a keyframe at or before the requested position, decodes dependencies, and
+filters decoded preroll before the three-frame mailbox. `Ready` resumes only
+after the target generation publishes the frame active at the requested
+position or the first frame after it. Paused seeks stay paused; playing seeks
+resume from the requested clock anchor. Rapid seeks use the existing
+latest-request replacement and stale-generation rejection.
+
+Early ordinary-playback frames remain queued, due frames are selected only at
+the presentation boundary, and if several frames are due only the newest is
+published while earlier due frames are counted as dropped. Decoder wakeups
+after first-frame bootstrap only request a presentation pass. Decoder drain is
+distinct from demux EOF; playback ends only after the queue and final frame
+duration are consumed, and the final frame remains visible.
 
 Presentation failures return to the session as user-visible errors. A typed
 hardware-frame import failure instead causes one software-only restart from
-the beginning; failure of that software path or a repeated typed failure
+the current logical position; failure of that software path or a repeated typed failure
 becomes the visible error. Supported Windows streams report `D3D11VA`;
 unsupported or failed hardware decode reports `Software` plus its fallback
 reason. This is diagnostic state, not a user-selectable renderer or decoder
 preference.
 
-Graphics-device recreation advances the playback generation for an in-flight
-open or ready hardware frame, clears hardware-backed queued/current state, and
-holds the session in `Opening` until it can restart from the beginning against
-the replacement capability. A ready software pipeline remains valid because
-its storage is generation-independent.
+Graphics-device recreation captures the current or pending logical position,
+advances the playback generation for every in-flight or ready pipeline, clears
+queued/current state, and holds the session in `Opening` until it can restart
+at that position against the replacement capability. Software frame storage is
+generation-independent, but the active pipeline still restarts so subsequent
+seek and fallback requests use the replacement graphics capability.
+If device invalidation interrupts a user seek, the pending seeking state and
+latest requested position remain replaceable while the session waits for the
+new graphics capability.
 
-There is still no seek implementation, position/duration UI, audio clock,
-unified buffering state, or position-preserving graphics recovery. The
-monotonic clock is deliberately one producer of the shared
+There is still no audio clock or unified buffering state. The monotonic clock
+is deliberately one producer of the shared
 `MediaClockSnapshot` value, not a claim of A/V synchronization.
 
 ## Clock ownership
@@ -135,10 +153,18 @@ from intuition in this first scheduler.
 
 Current focused tests drive a real twelve-frame FFmpeg fixture through the
 production session, pause with the three-frame mailbox full, advance controlled
-presentation times, resume, select every frame, replay, and verify drain/end
-behavior and bounded occupancy. Scheduler tests exercise paused snapshots,
-multi-due dropping, and final-duration end policy independently of the clock
-producer. Queue tests cover hard backpressure plus stop/generation wakeups;
+presentation times, resume, select every frame, replay, seek while paused and
+playing, seek to end, and verify drain/end behavior and bounded occupancy. A
+real sparse-GOP H.264 seek test verifies decode from a preceding keyframe,
+B-frame presentation order, and publication at the requested position.
+Timeline and preroll tests verify stable-origin reuse, authoritative-duration
+intervals, one-frame PTS lookahead for missing durations, and that frames
+ending before the target do not enter the bounded mailbox. A fallback scenario
+verifies that a
+hardware-import failure restarts at the current position. Scheduler tests
+exercise paused snapshots, multi-due dropping, and one authoritative declared
+session endpoint independently of the clock producer. Queue tests cover hard
+backpressure plus stop/generation wakeups;
 timeline tests cover valid, missing, repeated, and non-monotonic timestamps.
 
 The later audio-clock suite still needs underrun, latency change, device

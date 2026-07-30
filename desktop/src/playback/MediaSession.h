@@ -41,6 +41,12 @@ class MediaSession final
     Q_PROPERTY(bool hasFrame READ hasFrame NOTIFY sessionChanged)
     Q_PROPERTY(bool playing READ playing NOTIFY sessionChanged)
     Q_PROPERTY(bool ended READ ended NOTIFY sessionChanged)
+    Q_PROPERTY(bool seekable READ seekable NOTIFY timelineChanged)
+    Q_PROPERTY(bool seeking READ seeking NOTIFY timelineChanged)
+    Q_PROPERTY(qlonglong positionMilliseconds
+               READ positionMilliseconds NOTIFY timelineChanged)
+    Q_PROPERTY(qlonglong durationMilliseconds
+               READ durationMilliseconds NOTIFY timelineChanged)
     Q_PROPERTY(qulonglong decodedVideoFrames
                READ decodedFrameCount NOTIFY playbackMetricsChanged)
     Q_PROPERTY(qulonglong selectedVideoFrames
@@ -61,10 +67,7 @@ public:
 
     using DecodeOperation = std::function<
         FfmpegVideoDecodeResult(
-            const QString &,
-            const VideoFrameIdentity &,
-            const VideoHardwareDecodeCapability &,
-            int,
+            const FfmpegVideoDecodeRequest &,
             const FfmpegVideoFrameSink &,
             std::stop_token)>;
 
@@ -89,6 +92,10 @@ public:
     bool hasFrame() const;
     bool playing() const;
     bool ended() const;
+    bool seekable() const;
+    bool seeking() const;
+    qlonglong positionMilliseconds() const;
+    qlonglong durationMilliseconds() const;
     std::uint64_t playbackGeneration() const;
     std::uint64_t decodedFrameCount() const;
     std::uint64_t selectedFrameCount() const;
@@ -108,23 +115,35 @@ public:
     Q_INVOKABLE void retry();
     Q_INVOKABLE void play();
     Q_INVOKABLE void pause();
+    Q_INVOKABLE void seekToMilliseconds(
+        qlonglong positionMilliseconds);
 
 signals:
     void sessionChanged();
     void playbackMetricsChanged();
+    void timelineChanged();
 
 private:
     struct OpenRequest {
         std::uint64_t generation = 0;
-        QString path;
-        VideoFrameIdentity identity;
-        VideoHardwareDecodeCapability hardwareDecode;
+        FfmpegVideoDecodeRequest decode;
     };
 
     void startOpen(
         const QUrl &url,
         const QString &path,
         VideoHardwareDecodeCapability hardwareDecode);
+    void restartAt(
+        std::int64_t positionMicroseconds,
+        VideoHardwareDecodeCapability hardwareDecode,
+        bool seeking);
+    void startDecode(
+        const QUrl &url,
+        const QString &path,
+        VideoHardwareDecodeCapability hardwareDecode,
+        std::int64_t requestedPositionMicroseconds,
+        bool newMedia,
+        bool seeking);
     void submitOpen(OpenRequest request);
     void cancelPipeline();
     void workerLoop(std::stop_token workerStopToken);
@@ -148,7 +167,8 @@ private:
     void shutdownWorker();
     void advanceGeneration();
     void resetDiagnostics();
-    void resetPlayback();
+    void resetPlayback(
+        std::int64_t positionMicroseconds = 0);
     void publishSessionAndPlaybackMetrics(
         std::uint64_t generation);
     void applyDiagnostics(
@@ -175,11 +195,20 @@ private:
     QString m_hardwareFallbackReason;
     QString m_videoSummary;
     VideoHardwareDecodeCapability m_videoDecodeCapability;
+    VideoHardwareDecodeCapability
+        m_activeVideoDecodeCapability;
     bool m_reopenAfterGraphicsRecovery = false;
+    std::int64_t m_graphicsRecoveryPositionMicroseconds = 0;
+    bool m_graphicsRecoverySeeking = false;
     bool m_hardwareImportFallbackConsumed = false;
     bool m_userWantsPlaying = true;
     bool m_decoderDrained = false;
     bool m_ended = false;
+    bool m_seekable = false;
+    bool m_seeking = false;
+    std::optional<std::int64_t> m_durationMicroseconds;
+    std::optional<VideoTimelineOrigin> m_timelineOrigin;
+    std::int64_t m_requestedPositionMicroseconds = 0;
     std::optional<std::chrono::steady_clock::time_point>
         m_clockAnchorTime;
     std::int64_t m_clockAnchorMediaMicroseconds = 0;

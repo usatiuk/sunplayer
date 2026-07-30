@@ -126,18 +126,20 @@ current dependency build as proof of Vulkan readiness.
 
 ## Application and player
 
-### Playback has no seek, audio clock, or unified buffering recovery
+### Playback has no audio clock or unified buffering recovery
 
 The thin QML Player now continuously demuxes, decodes, schedules, and presents
-local video with bounded packet/frame channels and working play/pause/replay.
-It does not yet expose position/duration, seek, audio, subtitles, track
+local video with bounded packet/frame channels, working play/pause/replay, and
+a position/duration seek timeline. Seeking, hardware-import fallback, and
+graphics-device recovery share a fresh-context, keyframe-anchored restart and
+preserve the logical position. It does not yet expose audio, subtitles, track
 selection, source-stall buffering/recovery, persistent settings, or a general
 diagnostics view.
 
-Hardware-import fallback and graphics-device recovery restart the current file
-from the beginning. Preserving position requires a shared
-keyframe-anchored seek/decode-to-anchor primitive; restarting an arbitrary
-hardware decoder from the middle of a packet queue would be incorrect.
+The current seek implementation reopens and reprobes a local file for each
+restart. A future persistent-context optimization requires an explicit
+demux/decoder ownership barrier, stale-packet discard, and codec flush; it must
+not be introduced as an ad hoc command into the current bounded queues.
 
 The local-file operation uses FFmpeg's interrupt callback and stop-aware
 bounded channels. Cancel and replacement invalidate UI state immediately

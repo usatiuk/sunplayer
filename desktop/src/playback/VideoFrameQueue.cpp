@@ -1,6 +1,7 @@
 #include "playback/VideoFrameQueue.h"
 
 #include <algorithm>
+#include <limits>
 #include <utility>
 
 #include "media/DecodedVideoFrame.h"
@@ -17,6 +18,13 @@ bool QueuedVideoFrame::isValid() const {
         && durationMicroseconds > 0;
 }
 
+VideoFrameTimeline::VideoFrameTimeline(
+        std::optional<VideoTimelineOrigin> stableOrigin)
+    : m_timelineOrigin(std::move(stableOrigin)) {
+    Q_ASSERT(!m_timelineOrigin
+        || m_timelineOrigin->isValid());
+}
+
 QueuedVideoFrame VideoFrameTimeline::schedule(
         std::shared_ptr<const DecodedVideoFrame> frame,
         const FfmpegVideoStreamDiagnostics &diagnostics) {
@@ -26,48 +34,127 @@ QueuedVideoFrame VideoFrameTimeline::schedule(
     const VideoFrameTiming &timing = frame->timing();
     const std::optional<std::int64_t> timestamp =
         timing.ptsMicroseconds();
-    std::int64_t presentationTime = 0;
+    FfmpegVideoStreamDiagnostics effectiveDiagnostics =
+        diagnostics;
+    if (!m_timelineOrigin && diagnostics.timelineOrigin)
+        m_timelineOrigin = diagnostics.timelineOrigin;
+    if (!m_timelineOrigin && timing.pts) {
+        m_timelineOrigin = VideoTimelineOrigin{
+            .timestamp = *timing.pts,
+            .timeBase = timing.timeBase,
+        };
+    }
+    effectiveDiagnostics.timelineOrigin = m_timelineOrigin;
+
+    std::int64_t timelineTime = 0;
     if (timestamp) {
-        if (diagnostics.timelineOriginMicroseconds) {
-            presentationTime =
+        const std::optional<std::int64_t> origin =
+            m_timelineOrigin
+            ? m_timelineOrigin->microseconds()
+            : std::nullopt;
+        if (origin) {
+            timelineTime =
                 *timestamp
-                - *diagnostics.timelineOriginMicroseconds;
-        } else {
-            if (!m_firstTimestampMicroseconds)
-                m_firstTimestampMicroseconds = *timestamp;
-            presentationTime =
-                *timestamp - *m_firstTimestampMicroseconds;
+                - *origin;
         }
-    } else if (m_lastPresentationTimeMicroseconds) {
-        presentationTime =
-            *m_lastPresentationTimeMicroseconds
+    } else if (m_lastTimelineTimeMicroseconds) {
+        timelineTime =
+            *m_lastTimelineTimeMicroseconds
             + m_lastDurationMicroseconds;
     }
-    presentationTime = std::max<std::int64_t>(
-        0, presentationTime);
-    if (m_lastPresentationTimeMicroseconds) {
-        presentationTime = std::max(
-            presentationTime,
-            *m_lastPresentationTimeMicroseconds);
+    if (m_lastTimelineTimeMicroseconds) {
+        timelineTime = std::max(
+            timelineTime,
+            *m_lastTimelineTimeMicroseconds);
     }
 
+    const std::optional<std::int64_t>
+        decodedDuration =
+            timing.durationMicroseconds();
     std::int64_t duration =
-        timing.durationMicroseconds().value_or(
+        decodedDuration.value_or(
             diagnostics
                 .nominalFrameDurationMicroseconds
                 .value_or(m_lastDurationMicroseconds));
     if (duration <= 0)
         duration = defaultFrameDurationMicroseconds;
 
-    m_lastPresentationTimeMicroseconds =
-        presentationTime;
+    m_lastTimelineTimeMicroseconds =
+        timelineTime;
     m_lastDurationMicroseconds = duration;
     return {
         .frame = std::move(frame),
-        .diagnostics = diagnostics,
-        .presentationTimeMicroseconds = presentationTime,
+        .diagnostics = std::move(effectiveDiagnostics),
+        .timelineTimeMicroseconds = timelineTime,
+        .presentationTimeMicroseconds =
+            std::max<std::int64_t>(0, timelineTime),
         .durationMicroseconds = duration,
+        .durationAuthoritative =
+            decodedDuration.has_value(),
     };
+}
+
+VideoSeekPrerollGate::VideoSeekPrerollGate(
+        std::optional<std::int64_t> targetPositionMicroseconds)
+    : m_targetPositionMicroseconds(
+        targetPositionMicroseconds) {
+    Q_ASSERT(!m_targetPositionMicroseconds
+        || *m_targetPositionMicroseconds >= 0);
+}
+
+VideoSeekPrerollAdmission
+VideoSeekPrerollGate::admit(QueuedVideoFrame frame) {
+    Q_ASSERT(frame.isValid());
+    if (m_open || !m_targetPositionMicroseconds)
+        return {.first = std::move(frame)};
+
+    const std::int64_t target =
+        *m_targetPositionMicroseconds;
+    if (frame.timelineTimeMicroseconds == target) {
+        m_open = true;
+        m_candidate.reset();
+        return {.first = std::move(frame)};
+    }
+    if (frame.timelineTimeMicroseconds > target) {
+        m_open = true;
+        if (m_candidateMayCoverTarget) {
+            VideoSeekPrerollAdmission admitted{
+                .first = std::move(m_candidate),
+                .second = std::move(frame),
+            };
+            m_candidate.reset();
+            return admitted;
+        }
+        m_candidate.reset();
+        return {.first = std::move(frame)};
+    }
+
+    m_candidateMayCoverTarget =
+        !frame.durationAuthoritative;
+    const bool durationCrossesTarget =
+        frame.timelineTimeMicroseconds
+            > std::numeric_limits<std::int64_t>::max()
+                - frame.durationMicroseconds
+        || frame.timelineTimeMicroseconds
+                + frame.durationMicroseconds
+            > target;
+    if (frame.durationAuthoritative
+            && durationCrossesTarget) {
+        m_open = true;
+        m_candidate.reset();
+        return {.first = std::move(frame)};
+    }
+
+    m_candidate = std::move(frame);
+    return {};
+}
+
+std::optional<QueuedVideoFrame>
+VideoSeekPrerollGate::finish() {
+    if (m_open || !m_candidate)
+        return std::nullopt;
+    m_open = true;
+    return std::move(m_candidate);
 }
 
 void VideoFrameQueue::reset(

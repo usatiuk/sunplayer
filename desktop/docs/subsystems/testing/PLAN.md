@@ -134,14 +134,16 @@ Implement alongside graphics milestone 1:
   and presentation failure without fixed sleeps.
 * [x] Cover typed hardware-import software retry and current-media re-decode
   after graphics-device invalidation/replacement, including the one-retry
-  limit and retention of ready generation-independent software frames.
+  limit, logical-position preservation, and replacement-capability use by
+  software-backed pipelines.
 * [x] Drive the production clock-source-neutral snapshot and provisional
   monotonic clock with controlled presentation times.
 * [x] Cover twelve-frame playback, pause/resume/replay, end of stream, hard
   frame-queue capacity, backpressure, refill, and due/drop selection through
   real queues.
 * [ ] Add the controlled audio-clock/sink edge with audio output.
-* [ ] Cover seek-generation invalidation without fixed sleeps.
+* [x] Cover seek-generation invalidation without fixed sleeps, including
+  rapid replacement, decoded preroll, and sparse-GOP/B-frame media.
 * [ ] Add subtitle and audio fixtures with the features being implemented.
 * [ ] Add structured completion events and diagnostics with generation IDs.
 * [ ] Introduce an out-of-process local control channel only when several

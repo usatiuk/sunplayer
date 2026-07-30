@@ -117,7 +117,7 @@ and initial continuous, video-only local-file playback:
 * Nonzero playback generations reject stale frames, notifications, and
   completions. Ordinary open/decode/render failures become visible session
   errors; unsupported hardware-frame import triggers one observable software
-  restart from the beginning before becoming an error.
+  restart at the current logical position before becoming an error.
 * On Windows, supported streams prefer hardware decoding on the graphics
   domain's video-capable D3D11 device. FFmpeg-owned NV12, P010, P012, and P016
   texture-array slices can be mapped directly into libplacebo plane views.
@@ -125,9 +125,10 @@ and initial continuous, video-only local-file playback:
   paths share explicit GPU-phase execution serialization and D3D11 multithread
   protection. Unsupported or failed hardware decoding reopens through the
   software decoder and records the reason. Graphics-device recreation
-  supersedes in-flight or hardware-backed old-generation work and re-decodes
-  it against the replacement capability; a ready software frame remains valid
-  and is uploaded by the recreated producer.
+  supersedes every active old-generation pipeline and re-decodes from the
+  captured position against the replacement capability. Software frame
+  storage remains generation-independent, but the session still restarts so
+  future seeks and fallback cannot retain stale graphics capability.
 * A stable active-source router switches the presentation engine between the
   Player's decoded source and HDR Lab at a render boundary. The Player fits the
   selected frame's display aspect ratio inside its viewport, renders through
@@ -139,7 +140,7 @@ and initial continuous, video-only local-file playback:
   zero output copies/transfers, and tolerant agreement with the software-decode
   result.
 
-libass, audio, seeking, buffering recovery, drag-and-drop, subtitles, and
+libass, audio, buffering recovery, drag-and-drop, subtitles, and
 persistence are not integrated. CTest/Qt Test coverage exists for pure
 presentation-target policy, video-viewport state, the real QML shell's
 viewport publication and diagnostic renderer selection, rendered-video surface
@@ -158,12 +159,12 @@ FFmpeg-decoded mastered-PQ fixture, HLG/dynamic-HDR mapping, actual display
 gamut propagation, P010/P012/P016 capture, cross-platform hardware import, and
 physical-output validation do not yet exist.
 
-The next playback slice should add seeking and normalized
-position/duration state, including a keyframe-anchored decoder restart
-primitive reused by seek, hardware-import fallback, and graphics-device
-recovery. Audio decoding, resampling, output, and the audio-backed master clock
-follow that boundary. Playback uses libplacebo as its video renderer; the
-procedural producer remains HDR-Lab-only diagnostic tooling.
+Playback now exposes normalized position/duration and seeking through a
+generation-scoped, keyframe-anchored decoder restart shared by user seek,
+hardware-import fallback, and graphics-device recovery. Audio decoding,
+resampling, output, and the audio-backed master clock are the next playback
+boundary. Playback uses libplacebo as its video renderer; the procedural
+producer remains HDR-Lab-only diagnostic tooling.
 
 ## Subsystems
 
@@ -202,7 +203,7 @@ Documentation: `docs/subsystems/media-io/`
 * [ ] Audio decoding
 * [ ] Subtitle decoding
 * [x] Initial Windows D3D11VA device capability and decoder negotiation
-* [ ] Metadata and timestamp normalization
+* [x] Initial selected-video duration and timestamp normalization
 
 Documentation: `docs/subsystems/media/`
 
@@ -211,14 +212,15 @@ Documentation: `docs/subsystems/media/`
 * [x] Initial Empty/Opening/Ready/Error session state model
 * [x] Bounded packet and frame queues
 * [x] Continuous-pipeline cancellation and generation invalidation
-* [ ] Seeking
+* [x] Generation-scoped local-video seeking
 * [x] Monotonic video-only clock and timestamp-driven frame selection
 * [x] Clock-source-neutral media snapshot and video scheduler boundary
 * [ ] Audio/video clock and synchronization
 * [ ] Buffering behavior
 * [x] Initial end-of-stream behavior
 * [ ] Track selection and switching
-* [ ] Recovery from source, decoder, audio, and graphics failures
+* [x] Initial position-preserving hardware-import and graphics recovery
+* [ ] Recovery from source, decoder, and audio failures
 
 Documentation: `docs/subsystems/playback/`
 
@@ -306,7 +308,7 @@ Documentation: `docs/subsystems/subtitles/`
 * [x] Open-file interface
 * [ ] Drag-and-drop interface
 * [x] Play and pause controls
-* [ ] Seek bar and timestamps
+* [x] Seek bar and timestamps
 * [ ] Jump backward and forward
 * [ ] Audio-track selection
 * [ ] Subtitle-track selection
@@ -345,7 +347,8 @@ Documentation: `docs/subsystems/diagnostics/`
 * [x] Deterministic RGB and compressed-YUV FFmpeg first-frame scenarios
 * [x] Continuous session cancellation and stale-generation tests
 * [x] Initial deterministic video playback scenario
-* [ ] Seeking and audio-master playback tests
+* [x] Generation-scoped video-seek and decoded-preroll tests
+* [ ] Audio-master playback and A/V seek tests
 * [ ] Color-metadata normalization tests
 * [ ] Renderer image tests
 * [ ] Subtitle layout tests

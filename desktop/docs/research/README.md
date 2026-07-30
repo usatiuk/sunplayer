@@ -25,3 +25,4 @@ the newer note or decision rather than silently rewriting the investigation.
 * [2026-07-29: Deterministic compressed SDR fixture](2026-07-29-compressed-sdr-fixture.md)
 * [2026-07-29: FFmpeg continuous decode and backpressure](2026-07-29-ffmpeg-continuous-decode-and-backpressure.md)
 * [2026-07-30: Reference-white-adaptive HDR display mapping](2026-07-30-reference-white-adaptive-hdr-mapping.md)
+* [2026-07-30: FFmpeg keyframe seek and restart](2026-07-30-ffmpeg-keyframe-seek-and-restart.md)

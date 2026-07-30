@@ -76,6 +76,8 @@ the beginning.
 * There is no position-preserving decoder restart yet. Hardware-import fallback
   and graphics recovery restart from the beginning until a keyframe-anchored
   seek/decode-to-anchor primitive exists.
+  [ADR 0009](0009-generation-scoped-seek-restart.md) later supplied that
+  primitive.
 * A single selected-video packet channel is sufficient for this slice. Audio
   and subtitles require aggregate cross-stream budgeting so a full video path
   cannot prevent demux from reaching interleaved audio packets.

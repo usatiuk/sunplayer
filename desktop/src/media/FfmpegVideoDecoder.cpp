@@ -258,12 +258,16 @@ std::optional<std::int64_t> positiveDurationMicroseconds(
         : std::nullopt;
 }
 
-std::optional<std::int64_t> timestampMicroseconds(
-        std::int64_t value,
+VideoTimelineOrigin timelineOrigin(
+        std::int64_t timestamp,
         AVRational timeBase) {
-    if (value == AV_NOPTS_VALUE)
-        return std::nullopt;
-    return av_rescale_q(value, timeBase, AV_TIME_BASE_Q);
+    return {
+        .timestamp = timestamp,
+        .timeBase = {
+            .numerator = timeBase.num,
+            .denominator = timeBase.den,
+        },
+    };
 }
 
 FfmpegVideoStreamDiagnostics streamDiagnostics(
@@ -290,6 +294,9 @@ FfmpegVideoStreamDiagnostics streamDiagnostics(
             hardwareState.fallbackReason;
     }
     diagnostics.videoStreamIndex = streamIndex;
+    diagnostics.seekable = formatContext.pb
+        && (formatContext.pb->seekable
+            & AVIO_SEEKABLE_NORMAL);
     if (formatContext.duration > 0
             && formatContext.duration != AV_NOPTS_VALUE) {
         diagnostics.durationMicroseconds =
@@ -300,12 +307,15 @@ FfmpegVideoStreamDiagnostics streamDiagnostics(
                 stream.duration, stream.time_base);
     }
     if (formatContext.start_time != AV_NOPTS_VALUE) {
-        diagnostics.timelineOriginMicroseconds =
-            formatContext.start_time;
-    } else {
-        diagnostics.timelineOriginMicroseconds =
-            timestampMicroseconds(
-                stream.start_time, stream.time_base);
+        diagnostics.timelineOrigin =
+            timelineOrigin(
+                formatContext.start_time,
+                AV_TIME_BASE_Q);
+    } else if (stream.start_time != AV_NOPTS_VALUE) {
+        diagnostics.timelineOrigin =
+            timelineOrigin(
+                stream.start_time,
+                stream.time_base);
     }
     const AVRational frameRate =
         av_guess_frame_rate(
@@ -329,6 +339,38 @@ enum class DrainResult {
 };
 }
 
+bool VideoTimelineOrigin::isValid() const {
+    return timeBase.isValid();
+}
+
+std::optional<std::int64_t>
+VideoTimelineOrigin::microseconds() const {
+    if (!isValid())
+        return std::nullopt;
+    return VideoFrameTiming{
+        .pts = timestamp,
+        .timeBase = timeBase,
+    }.ptsMicroseconds();
+}
+
+bool VideoDecodeStart::isValid() const {
+    return (!targetPositionMicroseconds
+            || *targetPositionMicroseconds >= 0)
+        && (!timelineOrigin
+            || timelineOrigin->isValid())
+        && (!targetPositionMicroseconds
+            || timelineOrigin)
+        && (!performDemuxSeek
+            || targetPositionMicroseconds);
+}
+
+bool FfmpegVideoDecodeRequest::isValid() const {
+    return !path.isEmpty()
+        && firstFrameIdentity.isValid()
+        && extraHardwareFrames >= 0
+        && start.isValid();
+}
+
 bool FfmpegVideoStreamDiagnostics::isValid() const {
     return !containerFormat.isEmpty()
         && !decoderName.isEmpty()
@@ -338,6 +380,8 @@ bool FfmpegVideoStreamDiagnostics::isValid() const {
                 && hardwareFallbackReason.isEmpty()
             : decodePath == QStringLiteral("Software"))
         && videoStreamIndex >= 0
+        && (!timelineOrigin
+            || timelineOrigin->isValid())
         && (!durationMicroseconds
             || *durationMicroseconds > 0)
         && (!nominalFrameDurationMicroseconds
@@ -361,10 +405,7 @@ bool FfmpegVideoDecodeResult::isCancelled() const {
 
 namespace {
 FfmpegVideoDecodeResult decodeVideoFramesAttempt(
-        const QString &path,
-        const VideoFrameIdentity &firstFrameIdentity,
-        const VideoHardwareDecodeCapability &hardwareDecode,
-        int extraHardwareFrames,
+        const FfmpegVideoDecodeRequest &request,
         const FfmpegVideoFrameSink &sink,
         std::stop_token stopToken,
         bool *hardwareSelected) {
@@ -394,23 +435,15 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
 
     if (stopToken.stop_requested())
         return cancel();
-    if (path.isEmpty())
-        return fail(QStringLiteral("Media path is empty"));
-    if (!firstFrameIdentity.isValid()) {
-        return fail(QStringLiteral(
-            "Video decode identity is invalid"));
-    }
-    if (extraHardwareFrames < 0) {
-        return fail(QStringLiteral(
-            "Hardware frame reserve is invalid"));
-    }
+    if (!request.isValid())
+        return fail(QStringLiteral("Video decode request is invalid"));
 
     // AVCodecContext::opaque points here, so this state must outlive codec
     // teardown as well as every get_format callback.
     HardwareDecodeState hardwareState;
     hardwareState.hardwareSelected = hardwareSelected;
     hardwareState.fallbackReason =
-        hardwareDecode.unavailableReason;
+        request.hardwareDecode.unavailableReason;
 
     AVFormatContext *rawFormatContext =
         avformat_alloc_context();
@@ -427,7 +460,7 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
         interruptFfmpeg,
         &openingInterrupt,
     };
-    const QByteArray encodedPath = path.toUtf8();
+    const QByteArray encodedPath = request.path.toUtf8();
     int status = avformat_open_input(
         &rawFormatContext,
         encodedPath.constData(),
@@ -482,6 +515,61 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
             stream.codecpar->sample_aspect_ratio;
     }
 
+    if (request.start.performDemuxSeek) {
+        if (!formatContext->pb
+                || !(formatContext->pb->seekable
+                    & AVIO_SEEKABLE_NORMAL)) {
+            return fail(QStringLiteral(
+                "The selected media source is not seekable"));
+        }
+
+        for (unsigned int index = 0;
+                index < formatContext->nb_streams;
+                ++index) {
+            formatContext->streams[index]->discard =
+                static_cast<int>(index) == streamIndex
+                ? AVDISCARD_DEFAULT
+                : AVDISCARD_ALL;
+        }
+
+        const VideoTimelineOrigin &origin =
+            *request.start.timelineOrigin;
+        const AVRational originTimeBase{
+            origin.timeBase.numerator,
+            origin.timeBase.denominator,
+        };
+        const std::int64_t originInStreamTimeBase =
+            av_rescale_q(
+                origin.timestamp,
+                originTimeBase,
+                streamTimeBase);
+        const std::int64_t targetTimestamp =
+            av_add_stable(
+                streamTimeBase,
+                originInStreamTimeBase,
+                AV_TIME_BASE_Q,
+                *request.start
+                    .targetPositionMicroseconds);
+        status = avformat_seek_file(
+            formatContext.get(),
+            streamIndex,
+            std::numeric_limits<std::int64_t>::min(),
+            targetTimestamp,
+            targetTimestamp,
+            0);
+        if (status < 0) {
+            if (stopToken.stop_requested())
+                return cancel();
+            return fail(QStringLiteral(
+                "Could not seek video to %1 ms: %2")
+                .arg(
+                    *request.start
+                        .targetPositionMicroseconds
+                        / 1'000)
+                .arg(ffmpegError(status)));
+        }
+    }
+
     CodecParametersPtr streamParameters(
         avcodec_parameters_alloc());
     if (!streamParameters) {
@@ -511,14 +599,17 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
     }
     codecContext->pkt_timebase = streamTimeBase;
 
-    if (hardwareDecode.device) {
+    if (request.hardwareDecode.device) {
         AVBufferRef *deviceReference =
-            hardwareDecode.device->referenceDeviceContext();
+            request.hardwareDecode.device
+                ->referenceDeviceContext();
         if (!deviceReference) {
             hardwareState.fallbackReason =
                 QStringLiteral(
                     "Could not retain the %1 device")
-                    .arg(hardwareDecode.device->apiName());
+                    .arg(
+                        request.hardwareDecode.device
+                            ->apiName());
         } else {
             const auto *const deviceContext =
                 reinterpret_cast<const AVHWDeviceContext *>(
@@ -534,23 +625,25 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
                         "Decoder %1 does not support %2")
                         .arg(
                             QString::fromLatin1(decoder->name),
-                            hardwareDecode.device->apiName());
+                            request.hardwareDecode.device
+                                ->apiName());
                 av_buffer_unref(&deviceReference);
             } else {
                 hardwareState.pixelFormat =
                     configuration->pix_fmt;
                 hardwareState.graphicsDeviceGeneration =
-                    hardwareDecode.device
+                    request.hardwareDecode.device
                         ->graphicsDeviceGeneration();
                 hardwareState.apiName =
-                    hardwareDecode.device->apiName();
+                    request.hardwareDecode.device
+                        ->apiName();
                 codecContext->opaque = &hardwareState;
                 codecContext->get_format =
                     selectHardwareFormat;
                 codecContext->hw_device_ctx =
                     deviceReference;
                 codecContext->extra_hw_frames =
-                    extraHardwareFrames;
+                    request.extraHardwareFrames;
             }
         }
     }
@@ -589,6 +682,10 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
             streamIndex,
             hardwareState,
             true);
+    std::optional<VideoTimelineOrigin> resolvedTimelineOrigin =
+        request.start.timelineOrigin
+        ? request.start.timelineOrigin
+        : softwareDiagnostics.timelineOrigin;
 
     BoundedPacketChannel packets;
     std::jthread demuxWorker(
@@ -640,7 +737,7 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
         });
 
     std::uint64_t nextFrameId =
-        firstFrameIdentity.frameId;
+        request.firstFrameIdentity.frameId;
     const auto drainDecoder =
         [&](bool flushing) -> DrainResult {
             while (true) {
@@ -691,9 +788,11 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
                 }
                 const VideoFrameIdentity identity{
                     .playbackGeneration =
-                        firstFrameIdentity.playbackGeneration,
+                        request.firstFrameIdentity
+                            .playbackGeneration,
                     .decoderRevision =
-                        firstFrameIdentity.decoderRevision,
+                        request.firstFrameIdentity
+                            .decoderRevision,
                     .frameId = nextFrameId++,
                 };
                 QString frameError;
@@ -723,6 +822,18 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
                     hardwareFrame
                     ? hardwareDiagnostics
                     : softwareDiagnostics;
+                if (!resolvedTimelineOrigin
+                        && decoded->timing().pts) {
+                    resolvedTimelineOrigin =
+                        VideoTimelineOrigin{
+                            .timestamp =
+                                *decoded->timing().pts,
+                            .timeBase =
+                                decoded->timing().timeBase,
+                        };
+                }
+                diagnostics.timelineOrigin =
+                    resolvedTimelineOrigin;
                 if (!hardwareFrame) {
                     diagnostics.hardwareFallbackReason =
                         hardwareState.fallbackReason;
@@ -858,21 +969,18 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
 }
 
 FfmpegVideoDecodeResult decodeVideoFrames(
-        const QString &path,
-        const VideoFrameIdentity &firstFrameIdentity,
-        const VideoHardwareDecodeCapability &hardwareDecode,
-        int extraHardwareFrames,
+        const FfmpegVideoDecodeRequest &request,
         const FfmpegVideoFrameSink &sink,
         std::stop_token stopToken) {
     return decodeVideoFramesWithFallback(
-        hardwareDecode,
+        request.hardwareDecode,
         [&](const VideoHardwareDecodeCapability &capability,
             bool &hardwareSelected) {
+            FfmpegVideoDecodeRequest attemptRequest =
+                request;
+            attemptRequest.hardwareDecode = capability;
             return decodeVideoFramesAttempt(
-                path,
-                firstFrameIdentity,
-                capability,
-                extraHardwareFrames,
+                attemptRequest,
                 sink,
                 stopToken,
                 &hardwareSelected);

@@ -17,7 +17,7 @@ Windows QRhi presentation path plus asynchronous continuous video playback,
 so useful tests cover display-target policy, resource-generation contracts,
 real QRhi composition, bounded frame-mailbox backpressure, stop-aware packet
 channels, timestamp-driven selection, active-source/session lifecycle, and
-retained software/D3D11VA `AVFrame`s. As libass, seeking, and audio arrive,
+retained software/D3D11VA `AVFrame`s. As libass and audio arrive,
 deterministic whole-pipeline scenarios should become the bulk of behavioral
 coverage.
 
@@ -266,8 +266,9 @@ The first pipeline scenarios should grow with implementation milestones:
 4. Complete three-frame compressed BT.709 YUV software/hardware drain.
 5. Twelve-frame bounded queue, play/pause/replay, timestamp selection, due
    dropping, and end of stream through the real session.
-6. Display-target change with rerender, then seek-generation invalidation.
-7. Audio-backed playback and A/V synchronization.
+6. Sparse-GOP/B-frame seek with decoded preroll and generation invalidation.
+7. Display-target change with rerender.
+8. Audio-backed playback and A/V synchronization.
 
 ## Media fixture corpus
 
@@ -299,7 +300,9 @@ Initial additions should be narrowly tied to milestones:
   retained NV12 import, complete
   BT.709 signal metadata plus PTS, duration, time-base, derived frame-rate, and
   SAR assertions, hardware/software output comparison, and zero-copy
-  input/output diagnostics.
+  input/output diagnostics. A second pinned Matroska/H.264 fixture contains
+  closed sparse GOPs and B-frames for dependency-safe keyframe seek,
+  presentation-order preroll, and exact requested-frame publication.
 * One small HDR10 container with explicit mastering and content-light
   metadata.
 * Timeline, subtitle, audio, corruption, dynamic-HDR, and unusual-format

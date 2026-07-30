@@ -10,6 +10,24 @@ VideoPage {
 
     readonly property bool ready:
         session.state === MediaSession.Ready && session.hasFrame
+    readonly property bool sessionActive:
+        ready || session.seeking
+
+    function formatTime(milliseconds) {
+        if (milliseconds < 0)
+            return "--:--"
+        const totalSeconds = Math.floor(milliseconds / 1000)
+        const seconds = totalSeconds % 60
+        const totalMinutes = Math.floor(totalSeconds / 60)
+        const minutes = totalMinutes % 60
+        const hours = Math.floor(totalMinutes / 60)
+        const paddedSeconds = seconds.toString().padStart(2, "0")
+        const paddedMinutes = minutes.toString().padStart(2, "0")
+        return hours > 0
+            ? hours + ":" + paddedMinutes + ":" + paddedSeconds
+            : totalMinutes + ":" + paddedSeconds
+    }
+
     videoViewportRect:
         Qt.rect(videoFrame.x, videoFrame.y,
                 videoFrame.width, videoFrame.height)
@@ -39,7 +57,10 @@ VideoPage {
         x: 24
         y: 72
         width: Math.max(1, root.width - 48)
-        height: Math.max(1, root.height - 96)
+        height: Math.max(
+            1,
+            root.height - y
+                - (timelineBar.visible ? timelineBar.height + 24 : 24))
 
         Rectangle {
             anchors.fill: parent
@@ -80,6 +101,7 @@ VideoPage {
         objectName: "openingState"
         anchors.centerIn: parent
         visible: root.session.state === MediaSession.Opening
+            && !root.session.seeking
         spacing: 14
 
         BusyIndicator {
@@ -100,6 +122,27 @@ VideoPage {
             Layout.alignment: Qt.AlignHCenter
             text: qsTr("Cancel")
             onClicked: root.session.cancel()
+        }
+    }
+
+    ColumnLayout {
+        objectName: "seekingState"
+        anchors.centerIn: parent
+        visible: root.session.seeking
+        spacing: 14
+
+        BusyIndicator {
+            Layout.alignment: Qt.AlignHCenter
+            running: parent.visible
+        }
+
+        Label {
+            Layout.alignment: Qt.AlignHCenter
+            text: qsTr("Seeking to %1…").arg(
+                root.formatTime(
+                    root.session.positionMilliseconds))
+            color: "white"
+            font.pixelSize: 20
         }
     }
 
@@ -152,7 +195,7 @@ VideoPage {
             top: parent.top
             margins: 16
         }
-        visible: root.ready
+        visible: root.sessionActive
         height: readyLayout.implicitHeight + 16
         radius: 8
         color: Qt.rgba(17 / 255, 19 / 255, 24 / 255, 0.92)
@@ -185,6 +228,8 @@ VideoPage {
                     text: qsTr("%1 · %2 · %3 · %4")
                         .arg(root.session.ended
                             ? qsTr("Ended")
+                            : root.session.seeking
+                                ? qsTr("Seeking")
                             : root.session.playing
                                 ? qsTr("Playing")
                                 : qsTr("Paused"))
@@ -218,6 +263,7 @@ VideoPage {
 
             Button {
                 objectName: "playPauseButton"
+                enabled: !root.session.seeking
                 text: root.session.ended
                     ? qsTr("Replay")
                     : root.session.playing
@@ -237,6 +283,83 @@ VideoPage {
                 objectName: "closeMediaButton"
                 text: qsTr("Close")
                 onClicked: root.session.cancel()
+            }
+        }
+    }
+
+    Rectangle {
+        id: timelineBar
+
+        anchors {
+            left: parent.left
+            right: parent.right
+            bottom: parent.bottom
+            margins: 16
+        }
+        visible: root.sessionActive
+        height: 56
+        radius: 8
+        color: Qt.rgba(17 / 255, 19 / 255, 24 / 255, 0.92)
+        border.color: "#303746"
+
+        RowLayout {
+            anchors {
+                fill: parent
+                leftMargin: 12
+                rightMargin: 12
+            }
+            spacing: 10
+
+            Label {
+                objectName: "positionLabel"
+                text: root.formatTime(
+                    root.session.positionMilliseconds)
+                color: "white"
+                font.features: {
+                    "tnum": 1
+                }
+            }
+
+            Slider {
+                id: seekSlider
+                objectName: "seekSlider"
+
+                Layout.fillWidth: true
+                from: 0
+                to: Math.max(
+                    1, root.session.durationMilliseconds)
+                live: false
+                enabled: root.session.seekable
+                    && root.session.durationMilliseconds > 0
+                    && !root.session.seeking
+                onMoved: {
+                    if (enabled && !pressed) {
+                        root.session.seekToMilliseconds(
+                            Math.round(valueAt(position)))
+                    }
+                }
+                onPressedChanged: {
+                    if (enabled && !pressed) {
+                        root.session.seekToMilliseconds(
+                            Math.round(valueAt(position)))
+                    }
+                }
+
+                Binding on value {
+                    when: !seekSlider.pressed
+                    value: root.session.positionMilliseconds
+                    restoreMode: Binding.RestoreBinding
+                }
+            }
+
+            Label {
+                objectName: "durationLabel"
+                text: root.formatTime(
+                    root.session.durationMilliseconds)
+                color: "#9ca6b8"
+                font.features: {
+                    "tnum": 1
+                }
             }
         }
     }

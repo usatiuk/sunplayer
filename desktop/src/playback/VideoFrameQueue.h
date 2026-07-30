@@ -16,8 +16,10 @@ class DecodedVideoFrame;
 struct QueuedVideoFrame {
     std::shared_ptr<const DecodedVideoFrame> frame;
     FfmpegVideoStreamDiagnostics diagnostics;
+    std::int64_t timelineTimeMicroseconds = 0;
     std::int64_t presentationTimeMicroseconds = 0;
     std::int64_t durationMicroseconds = 0;
+    bool durationAuthoritative = false;
 
     bool isValid() const;
 };
@@ -26,14 +28,41 @@ struct QueuedVideoFrame {
 // FFmpeg timing snapshot. One instance belongs to one decoder revision.
 class VideoFrameTimeline final {
 public:
+    explicit VideoFrameTimeline(
+        std::optional<VideoTimelineOrigin> stableOrigin = {});
+
     QueuedVideoFrame schedule(
         std::shared_ptr<const DecodedVideoFrame> frame,
         const FfmpegVideoStreamDiagnostics &diagnostics);
 
 private:
-    std::optional<std::int64_t> m_firstTimestampMicroseconds;
-    std::optional<std::int64_t> m_lastPresentationTimeMicroseconds;
+    std::optional<VideoTimelineOrigin> m_timelineOrigin;
+    std::optional<std::int64_t> m_lastTimelineTimeMicroseconds;
     std::int64_t m_lastDurationMicroseconds = 33'333;
+};
+
+struct VideoSeekPrerollAdmission {
+    std::optional<QueuedVideoFrame> first;
+    std::optional<QueuedVideoFrame> second;
+};
+
+// Decoder restarts begin at a preceding keyframe. This gate consumes decoded
+// preroll before the bounded frame mailbox, admitting the frame active at the
+// target position or the first frame after it.
+class VideoSeekPrerollGate final {
+public:
+    explicit VideoSeekPrerollGate(
+        std::optional<std::int64_t> targetPositionMicroseconds);
+
+    VideoSeekPrerollAdmission admit(
+        QueuedVideoFrame frame);
+    std::optional<QueuedVideoFrame> finish();
+
+private:
+    std::optional<std::int64_t> m_targetPositionMicroseconds;
+    bool m_open = false;
+    std::optional<QueuedVideoFrame> m_candidate;
+    bool m_candidateMayCoverTarget = false;
 };
 
 // Stop-aware, generation-scoped mailbox. Retained hardware frames reserve

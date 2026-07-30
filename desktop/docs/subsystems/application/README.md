@@ -6,9 +6,9 @@ The application shell is a single-window Windows presentation host with a thin
 QML `AppShell`, default Player page, and retained HDR Lab. It establishes
 startup, object ownership, native presentation events, redirected Qt Quick
 input, the active video-viewport boundary, and asynchronous continuous local
-video playback. It does not yet provide audio, seeking, drag-and-drop,
-persistent settings, fullscreen behavior, general structured errors, or
-logging.
+video playback with a position/duration seek timeline. It does not yet provide
+audio, drag-and-drop, persistent settings, fullscreen behavior, general
+structured errors, or logging.
 
 Graphics details belong to
 [../graphics/README.md](../graphics/README.md). The current diagnostic QML is

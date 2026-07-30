@@ -151,6 +151,12 @@ class ShellTestMediaSession final : public QObject {
     Q_PROPERTY(bool hasFrame READ hasFrame NOTIFY sessionChanged)
     Q_PROPERTY(bool playing READ playing NOTIFY sessionChanged)
     Q_PROPERTY(bool ended READ ended NOTIFY sessionChanged)
+    Q_PROPERTY(bool seekable READ seekable NOTIFY timelineChanged)
+    Q_PROPERTY(bool seeking READ seeking NOTIFY timelineChanged)
+    Q_PROPERTY(qlonglong positionMilliseconds
+               READ positionMilliseconds NOTIFY timelineChanged)
+    Q_PROPERTY(qlonglong durationMilliseconds
+               READ durationMilliseconds NOTIFY timelineChanged)
     Q_PROPERTY(qulonglong decodedVideoFrames MEMBER m_decodedVideoFrames
                NOTIFY playbackMetricsChanged)
     Q_PROPERTY(qulonglong selectedVideoFrames MEMBER m_selectedVideoFrames
@@ -176,15 +182,28 @@ public:
     bool hasFrame() const { return m_hasFrame; }
     bool playing() const { return m_playing; }
     bool ended() const { return m_ended; }
+    bool seekable() const { return m_seekable; }
+    bool seeking() const { return m_seeking; }
+    qlonglong positionMilliseconds() const {
+        return m_positionMilliseconds;
+    }
+    qlonglong durationMilliseconds() const {
+        return m_durationMilliseconds;
+    }
     int openCount() const { return m_openCount; }
     int cancelCount() const { return m_cancelCount; }
     int retryCount() const { return m_retryCount; }
+    int seekCount() const { return m_seekCount; }
+    qlonglong lastSeekMilliseconds() const {
+        return m_lastSeekMilliseconds;
+    }
 
     void setState(State state, bool hasFrame = false) {
         m_state = state;
         m_hasFrame = hasFrame;
         m_playing = state == State::Ready && hasFrame;
         m_ended = false;
+        m_seeking = false;
         if (state == State::Ready) {
             m_mediaUrl = QUrl::fromLocalFile(
                 QStringLiteral("test-video.mkv"));
@@ -194,8 +213,23 @@ public:
             m_decodePath = QStringLiteral("Software");
             m_videoSummary =
                 QStringLiteral("96×64 · yuv420p · 8-bit");
+            m_seekable = true;
+            m_durationMilliseconds = 65'000;
         }
         emit sessionChanged();
+        emit timelineChanged();
+    }
+
+    void setTimeline(
+            qlonglong positionMilliseconds,
+            qlonglong durationMilliseconds,
+            bool seekable,
+            bool seeking = false) {
+        m_positionMilliseconds = positionMilliseconds;
+        m_durationMilliseconds = durationMilliseconds;
+        m_seekable = seekable;
+        m_seeking = seeking;
+        emit timelineChanged();
     }
 
     Q_INVOKABLE void openMedia(const QUrl &) {
@@ -217,16 +251,28 @@ public:
         m_playing = false;
         emit sessionChanged();
     }
+    Q_INVOKABLE void seekToMilliseconds(
+            qlonglong positionMilliseconds) {
+        ++m_seekCount;
+        m_lastSeekMilliseconds = positionMilliseconds;
+        m_positionMilliseconds = positionMilliseconds;
+        emit timelineChanged();
+    }
 
 signals:
     void sessionChanged();
     void playbackMetricsChanged();
+    void timelineChanged();
 
 private:
     State m_state = State::Empty;
     bool m_hasFrame = false;
     bool m_playing = false;
     bool m_ended = false;
+    bool m_seekable = false;
+    bool m_seeking = false;
+    qlonglong m_positionMilliseconds = 0;
+    qlonglong m_durationMilliseconds = -1;
     qulonglong m_decodedVideoFrames = 3;
     qulonglong m_selectedVideoFrames = 1;
     qulonglong m_droppedVideoFrames = 0;
@@ -242,6 +288,8 @@ private:
     int m_openCount = 0;
     int m_cancelCount = 0;
     int m_retryCount = 0;
+    int m_seekCount = 0;
+    qlonglong m_lastSeekMilliseconds = -1;
 };
 
 class ShellTestActiveVideoSource final : public QObject {

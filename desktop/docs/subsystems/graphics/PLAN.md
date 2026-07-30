@@ -193,8 +193,9 @@ playback should prefer the later platform hardware importer when available.
 * Unsupported media produces a clear error and leaves the presentation shell
   usable.
 
-Seeking, audio, and position-preserving recovery remain later playback/media
-milestones. The first Windows hardware path is milestone 5.
+Generation-scoped seeking and position-preserving graphics recovery are now
+implemented by the playback/media subsystems. Audio remains a later milestone.
+The first Windows hardware path is milestone 5.
 
 ## Milestone 5: Windows hardware decode and direct input import
 
@@ -219,9 +220,9 @@ libplacebo producer, or compositor contracts.
   failure before the first published frame and expose the fallback reason.
 * [x] Retry once in software when a decoded hardware surface cannot be
   imported, without making that policy part of the native importer.
-* [x] Supersede old-generation decode/frame state and re-decode current media
-  after graphics-device recreation while retaining a ready
-  generation-independent software frame.
+* [x] Capture logical position, supersede old-generation decode/frame state,
+  and re-decode current media after graphics-device recreation against the
+  replacement capability, including software-backed pipelines.
 * [x] Prove real H.264 D3D11VA decode/direct import against a pinned fixture.
 * [ ] Capture P010/P012/P016 and real device-loss behavior.
 * [ ] Measure decoder/render contention during long continuous playback.

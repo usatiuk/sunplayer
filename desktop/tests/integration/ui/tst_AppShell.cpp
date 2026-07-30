@@ -117,6 +117,18 @@ void AppShellTest::publishesActiveViewport() {
     QObject *const playPauseButton =
         rootItem->findChild<QObject *>(
             QStringLiteral("playPauseButton"));
+    QObject *const seekingState =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("seekingState"));
+    QObject *const seekSlider =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("seekSlider"));
+    QObject *const positionLabel =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("positionLabel"));
+    QObject *const durationLabel =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("durationLabel"));
     QVERIFY(emptyState);
     QVERIFY(openingState);
     QVERIFY(errorState);
@@ -124,6 +136,10 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(retryMediaButton);
     QVERIFY(closeMediaButton);
     QVERIFY(playPauseButton);
+    QVERIFY(seekingState);
+    QVERIFY(seekSlider);
+    QVERIFY(positionLabel);
+    QVERIFY(durationLabel);
     QCOMPARE(
         rendererSwitch->property("checked").toBool(),
         true);
@@ -134,10 +150,14 @@ void AppShellTest::publishesActiveViewport() {
     QQuickWindow quickWindow;
     rootItem->setParentItem(quickWindow.contentItem());
     rootItem->setSize({1100.0, 760.0});
+    quickWindow.resize(1100, 760);
+    quickWindow.show();
+    QTRY_VERIFY(quickWindow.isExposed());
     QTRY_VERIFY(!videoViewport.visible());
     QTRY_VERIFY(emptyState->property("visible").toBool());
     QVERIFY(!openingState->property("visible").toBool());
     QVERIFY(!errorState->property("visible").toBool());
+    QVERIFY(!seekSlider->property("visible").toBool());
 
     mediaSession.setState(
         ShellTestMediaSession::State::Opening);
@@ -167,7 +187,69 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_COMPARE(videoViewport.rect().x(), 24.0);
     QTRY_COMPARE(videoViewport.rect().y(), 128.0);
     QTRY_COMPARE(videoViewport.rect().width(), 1052.0);
-    QTRY_COMPARE(videoViewport.rect().height(), 608.0);
+    QTRY_COMPARE(videoViewport.rect().height(), 552.0);
+    QTRY_VERIFY(seekSlider->property("visible").toBool());
+    QVERIFY(seekSlider->property("enabled").toBool());
+    QCOMPARE(seekSlider->property("from").toDouble(), 0.0);
+    QCOMPARE(seekSlider->property("to").toDouble(), 65'000.0);
+    QCOMPARE(durationLabel->property("text").toString(),
+             QStringLiteral("1:05"));
+
+    mediaSession.setTimeline(12'500, 65'000, true);
+    QTRY_COMPARE(
+        seekSlider->property("value").toDouble(),
+        12'500.0);
+    QCOMPARE(positionLabel->property("text").toString(),
+             QStringLiteral("0:12"));
+    QCOMPARE(mediaSession.seekCount(), 0);
+    QQuickItem *const seekSliderItem =
+        qobject_cast<QQuickItem *>(seekSlider);
+    QVERIFY(seekSliderItem);
+    const QPointF start =
+        seekSliderItem->mapToScene({
+            seekSliderItem->width() * 0.2,
+            seekSliderItem->height() * 0.5,
+        });
+    const QPointF destination =
+        seekSliderItem->mapToScene({
+            seekSliderItem->width() * 0.7,
+            seekSliderItem->height() * 0.5,
+        });
+    QTest::mousePress(
+        &quickWindow,
+        Qt::LeftButton,
+        Qt::NoModifier,
+        start.toPoint());
+    QTest::mouseMove(
+        &quickWindow,
+        destination.toPoint());
+    QCOMPARE(mediaSession.seekCount(), 0);
+    QTest::mouseRelease(
+        &quickWindow,
+        Qt::LeftButton,
+        Qt::NoModifier,
+        destination.toPoint());
+    QTRY_COMPARE(mediaSession.seekCount(), 1);
+    QVERIFY(mediaSession.lastSeekMilliseconds() > 30'000);
+    QTRY_COMPARE(
+        qRound(seekSlider->property("value").toDouble()),
+        static_cast<int>(
+            mediaSession.lastSeekMilliseconds()));
+
+    mediaSession.setTimeline(42'000, 65'000, false);
+    QTRY_VERIFY(!seekSlider->property("enabled").toBool());
+    mediaSession.setTimeline(42'000, 65'000, true);
+    QTRY_VERIFY(seekSlider->property("enabled").toBool());
+
+    mediaSession.setState(
+        ShellTestMediaSession::State::Opening);
+    mediaSession.setTimeline(42'000, 65'000, true, true);
+    QTRY_VERIFY(seekingState->property("visible").toBool());
+    QVERIFY(!openingState->property("visible").toBool());
+    QVERIFY(!seekSlider->property("enabled").toBool());
+    QVERIFY(!videoViewport.visible());
+    mediaSession.setState(
+        ShellTestMediaSession::State::Ready, true);
     QVERIFY(mediaSession.playing());
     QVERIFY(QMetaObject::invokeMethod(
         playPauseButton, "clicked", Qt::DirectConnection));

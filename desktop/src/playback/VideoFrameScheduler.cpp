@@ -22,7 +22,9 @@ VideoFrameScheduler::selectForPresentation(
         VideoFrameQueue &queue,
         std::uint64_t playbackGeneration,
         MediaClockSnapshot clock,
-        bool decoderDrained) {
+        bool decoderDrained,
+        std::optional<std::int64_t>
+            declaredDurationMicroseconds) {
     VideoFrameSelection selection;
     if (!clock.advancing)
         return selection;
@@ -52,9 +54,13 @@ VideoFrameScheduler::selectForPresentation(
         return selection;
     }
 
-    const std::int64_t mediaEnd =
+    const std::int64_t finalFrameEnd =
         *m_currentFrameTimeMicroseconds
         + m_currentFrameDurationMicroseconds;
+    const std::int64_t mediaEnd =
+        declaredDurationMicroseconds
+        ? *declaredDurationMicroseconds
+        : finalFrameEnd;
     if (clock.positionMicroseconds >= mediaEnd) {
         selection.reachedEnd = true;
         selection.mediaEndMicroseconds = mediaEnd;

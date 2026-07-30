@@ -153,10 +153,10 @@ The current destruction order is an invariant:
    its surface resources.
 3. Disconnect and destroy `QuickUiLayer`, allowing it to invalidate its scene
    and release QRhi resources.
-4. Before device teardown, supersede the media session's in-flight decode and
-   clear any published hardware frame. A ready software frame remains valid.
-   Destroy the graphics-device domain and QRhi while holding the shared
-   execution scope.
+4. Before device teardown, capture the media position, supersede the media
+   session's active decode generation, and clear its published frame. Software
+   frame storage itself remains generation-independent. Destroy the
+   graphics-device domain and QRhi while holding the shared execution scope.
 5. Once the replacement domain publishes its decode capability, re-decode
    superseded media work. A retained worker reference may keep an old native
    allocation alive temporarily, but stale completion cannot be published or
@@ -234,10 +234,10 @@ The native surface and graphics device have different lifetimes:
 * The video texture survives swapchain-only teardown because it depends on the
   QRhi device, not the swapchain render-pass descriptor.
 * Device loss tears down compositor, swapchain, diagnostic producer, Quick,
-  and QRhi resources in ownership order. It supersedes an in-flight media open
-  or clears a ready hardware frame, then re-decodes against the replacement
-  graphics capability. Ready software frames survive and are uploaded by the
-  recreated producer.
+  and QRhi resources in ownership order. It captures the current position,
+  supersedes every active media pipeline, clears the published frame, then
+  re-decodes against the replacement graphics capability. This also prevents a
+  software pipeline's later seeks from retaining stale capability state.
 * Device recovery is bounded to eight attempts, spaced 250 milliseconds apart.
 * An otherwise unexpected QRhi frame error triggers one complete rebuild. A
   second consecutive frame error is fatal.

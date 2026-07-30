@@ -8,9 +8,36 @@
 
 #include <QString>
 
-class DecodedVideoFrame;
-struct VideoFrameIdentity;
-struct VideoHardwareDecodeCapability;
+#include "media/DecodedVideoFrame.h"
+#include "media/FfmpegHardwareDevice.h"
+
+struct VideoTimelineOrigin {
+    bool operator==(const VideoTimelineOrigin &) const = default;
+
+    std::int64_t timestamp = 0;
+    VideoFrameRational timeBase;
+
+    bool isValid() const;
+    std::optional<std::int64_t> microseconds() const;
+};
+
+struct VideoDecodeStart {
+    std::optional<std::int64_t> targetPositionMicroseconds;
+    std::optional<VideoTimelineOrigin> timelineOrigin;
+    bool performDemuxSeek = false;
+
+    bool isValid() const;
+};
+
+struct FfmpegVideoDecodeRequest {
+    QString path;
+    VideoFrameIdentity firstFrameIdentity;
+    VideoHardwareDecodeCapability hardwareDecode;
+    int extraHardwareFrames = 0;
+    VideoDecodeStart start;
+
+    bool isValid() const;
+};
 
 struct FfmpegVideoStreamDiagnostics {
     QString containerFormat;
@@ -19,8 +46,9 @@ struct FfmpegVideoStreamDiagnostics {
     QString hardwareFallbackReason;
     int videoStreamIndex = -1;
     bool hardwareAccelerated = false;
+    bool seekable = false;
     std::optional<std::int64_t> durationMicroseconds;
-    std::optional<std::int64_t> timelineOriginMicroseconds;
+    std::optional<VideoTimelineOrigin> timelineOrigin;
     std::optional<std::int64_t> nominalFrameDurationMicroseconds;
 
     bool isValid() const;
@@ -47,9 +75,6 @@ using FfmpegVideoFrameSink = std::function<bool(
 // communicate through a byte-bounded packet channel. The sink supplies
 // decoded-frame backpressure and must not retain frames without a bound.
 FfmpegVideoDecodeResult decodeVideoFrames(
-    const QString &path,
-    const VideoFrameIdentity &firstFrameIdentity,
-    const VideoHardwareDecodeCapability &hardwareDecode,
-    int extraHardwareFrames,
+    const FfmpegVideoDecodeRequest &request,
     const FfmpegVideoFrameSink &sink,
     std::stop_token stopToken = {});

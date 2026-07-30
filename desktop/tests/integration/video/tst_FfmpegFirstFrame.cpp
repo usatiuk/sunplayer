@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
@@ -248,6 +249,7 @@ private slots:
     void realDemuxDecodeImportAndComposition();
     void compressedYuvMetadataAndRendering();
     void continuousDecodeDrainsEveryFrame();
+    void seekDecodesInterFramePreroll();
     void hardwareDecodeFailureRetriesSoftware();
     void continuousD3d11DecodeRetainsBoundedFrames();
     void d3d11HardwareDecodeDirectImport();
@@ -735,14 +737,14 @@ continuousDecodeDrainsEveryFrame() {
         std::shared_ptr<const DecodedVideoFrame>> frames;
     const FfmpegVideoDecodeResult result =
         decodeVideoFrames(
-            fixture,
             {
-                .playbackGeneration = 17,
-                .decoderRevision = 3,
-                .frameId = 40,
+                .path = fixture,
+                .firstFrameIdentity = {
+                    .playbackGeneration = 17,
+                    .decoderRevision = 3,
+                    .frameId = 40,
+                },
             },
-            {},
-            0,
             [&frames](
                     std::shared_ptr<
                         const DecodedVideoFrame> frame,
@@ -772,6 +774,85 @@ continuousDecodeDrainsEveryFrame() {
         result.diagnostics
             .nominalFrameDurationMicroseconds,
         std::optional<std::int64_t>(250'000));
+}
+
+void FfmpegFirstFrameTest::
+seekDecodesInterFramePreroll() {
+    const QString fixture = QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-h264-seek.mkv");
+    const QString manifest = QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-h264-seek.toml");
+    const QByteArray declaredHash =
+        expectedFixtureHash(manifest);
+    QVERIFY2(
+        !declaredHash.isEmpty(),
+        "Fixture manifest has no valid SHA-256");
+    QCOMPARE(fixtureHash(fixture), declaredHash);
+
+    const FfmpegFirstFrameResult initial =
+        decodeFirstVideoFrame(
+            fixture,
+            {
+                .playbackGeneration = 18,
+                .decoderRevision = 1,
+                .frameId = 1,
+            });
+    QVERIFY2(initial.isSuccess(), qPrintable(initial.error));
+    QVERIFY(initial.diagnostics.seekable);
+    QVERIFY(initial.diagnostics.timelineOrigin);
+
+    std::vector<std::int64_t> decodedPts;
+    std::optional<VideoSignalDescription> decodedSignal;
+    const FfmpegVideoDecodeResult sought =
+        decodeVideoFrames(
+            {
+                .path = fixture,
+                .firstFrameIdentity = {
+                    .playbackGeneration = 19,
+                    .decoderRevision = 1,
+                    .frameId = 1,
+                },
+                .start = {
+                    .targetPositionMicroseconds = 3'250'000,
+                    .timelineOrigin =
+                        initial.diagnostics.timelineOrigin,
+                    .performDemuxSeek = true,
+                },
+            },
+            [&decodedPts, &decodedSignal](
+                    std::shared_ptr<
+                        const DecodedVideoFrame> frame,
+                    const FfmpegVideoStreamDiagnostics &) {
+                const auto pts =
+                    frame->timing().ptsMicroseconds();
+                if (!pts)
+                    return false;
+                if (!decodedSignal)
+                    decodedSignal = frame->signal();
+                decodedPts.push_back(*pts);
+                return *pts < 3'250'000;
+            });
+
+    QVERIFY2(sought.isSuccess(), qPrintable(sought.error));
+    QVERIFY(sought.stopped);
+    QVERIFY(decodedPts.size() > 1);
+    QCOMPARE(decodedPts.front(), 2'000'000);
+    QCOMPARE(decodedPts.back(), 3'250'000);
+    QVERIFY(std::is_sorted(
+        decodedPts.cbegin(), decodedPts.cend()));
+    QVERIFY(decodedPts.front() < 3'250'000);
+    QVERIFY(decodedSignal);
+    QCOMPARE(
+        decodedSignal->colorPrimaries,
+        QStringLiteral("bt709"));
+    QCOMPARE(
+        decodedSignal->transferFunction,
+        QStringLiteral("bt709"));
+    QCOMPARE(
+        decodedSignal->matrixCoefficients,
+        QStringLiteral("bt709"));
 }
 
 void FfmpegFirstFrameTest::
@@ -810,10 +891,12 @@ hardwareDecodeFailureRetriesSoftware() {
                         QStringLiteral(
                             "Injected post-selection hardware failure"));
                 return decodeVideoFrames(
-                    fixture,
-                    identity,
-                    capability,
-                    2,
+                    {
+                        .path = fixture,
+                        .firstFrameIdentity = identity,
+                        .hardwareDecode = capability,
+                        .extraHardwareFrames = 2,
+                    },
                     [](
                             std::shared_ptr<
                                 const DecodedVideoFrame>,
@@ -863,15 +946,18 @@ continuousD3d11DecodeRetainsBoundedFrames() {
         std::shared_ptr<const DecodedVideoFrame>> frames;
     const FfmpegVideoDecodeResult result =
         decodeVideoFrames(
-            fixture,
             {
-                .playbackGeneration = 29,
-                .decoderRevision = 5,
-                .frameId = 70,
+                .path = fixture,
+                .firstFrameIdentity = {
+                    .playbackGeneration = 29,
+                    .decoderRevision = 5,
+                    .frameId = 70,
+                },
+                .hardwareDecode = capability,
+                .extraHardwareFrames =
+                    static_cast<int>(
+                        VideoFrameQueue::capacity + 2),
             },
-            capability,
-            static_cast<int>(
-                VideoFrameQueue::capacity + 2),
             [&frames](
                     std::shared_ptr<
                         const DecodedVideoFrame> frame,

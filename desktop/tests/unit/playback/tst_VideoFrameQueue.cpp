@@ -66,7 +66,10 @@ FfmpegVideoStreamDiagnostics diagnostics() {
         .videoStreamIndex = 0,
         .hardwareAccelerated = false,
         .durationMicroseconds = 1'000'000,
-        .timelineOriginMicroseconds = 25'000'000,
+        .timelineOrigin = VideoTimelineOrigin{
+            .timestamp = 25,
+            .timeBase = {1, 1},
+        },
         .nominalFrameDurationMicroseconds = 250'000,
     };
 }
@@ -87,6 +90,8 @@ public:
 
 private slots:
     void timelinePreservesIntegerTimingAndFillsMissingPts();
+    void timelineOriginSurvivesDecoderRestart();
+    void seekPrerollGateAdmitsTargetFrame();
     void schedulerUsesClockSnapshotForDropAndEndPolicy();
     void coalescedWakeBoundsBurstAndHandsOff();
     void boundedQueueBackpressuresAndReleasesCapacity();
@@ -114,6 +119,163 @@ timelinePreservesIntegerTimingAndFillsMissingPts() {
     QCOMPARE(second.presentationTimeMicroseconds, 250'000);
     QCOMPARE(missing.presentationTimeMicroseconds, 500'000);
     QCOMPARE(repeated.presentationTimeMicroseconds, 500'000);
+}
+
+void VideoFrameQueueTest::
+timelineOriginSurvivesDecoderRestart() {
+    FfmpegVideoStreamDiagnostics stream = diagnostics();
+    stream.timelineOrigin.reset();
+
+    VideoFrameTimeline initialTimeline;
+    const QueuedVideoFrame initial =
+        initialTimeline.schedule(
+            makeFrame(31, 1, 40), stream);
+    QVERIFY(initial.diagnostics.timelineOrigin);
+    QCOMPARE(initial.presentationTimeMicroseconds, 0);
+
+    VideoFrameTimeline restartedTimeline(
+        initial.diagnostics.timelineOrigin);
+    const QueuedVideoFrame afterRestart =
+        restartedTimeline.schedule(
+            makeFrame(32, 1, 48), stream);
+    QCOMPARE(
+        afterRestart.presentationTimeMicroseconds,
+        2'000'000);
+    QVERIFY(
+        afterRestart.diagnostics.timelineOrigin
+        == initial.diagnostics.timelineOrigin);
+}
+
+void VideoFrameQueueTest::
+seekPrerollGateAdmitsTargetFrame() {
+    FfmpegVideoStreamDiagnostics stream = diagnostics();
+    stream.timelineOrigin = VideoTimelineOrigin{
+        .timestamp = 0,
+        .timeBase = {1, 4},
+    };
+    VideoFrameTimeline timeline(stream.timelineOrigin);
+    VideoSeekPrerollGate gate(750'000);
+
+    for (std::uint64_t frameId = 1;
+            frameId <= 3;
+            ++frameId) {
+        const auto rejected = gate.admit(
+            timeline.schedule(
+                makeFrame(
+                    41,
+                    frameId,
+                    static_cast<std::int64_t>(
+                        frameId - 1)),
+                stream));
+        QVERIFY(!rejected.first);
+        QVERIFY(!rejected.second);
+    }
+
+    const auto target = gate.admit(
+        timeline.schedule(
+            makeFrame(41, 4, 3), stream));
+    QVERIFY(target.first);
+    QVERIFY(!target.second);
+    QCOMPARE(
+        target.first->presentationTimeMicroseconds,
+        750'000);
+    QCOMPARE(
+        target.first->frame->identity().frameId,
+        4U);
+
+    const auto following = gate.admit(
+        timeline.schedule(
+            makeFrame(41, 5, 4), stream));
+    QVERIFY(following.first);
+    QVERIFY(!following.second);
+    QCOMPARE(
+        following.first->frame->identity().frameId,
+        5U);
+
+    VideoFrameTimeline endTimeline(stream.timelineOrigin);
+    VideoSeekPrerollGate endGate(2'000'000);
+    for (std::uint64_t frameId = 1;
+            frameId <= 4;
+            ++frameId) {
+        const auto rejected = endGate.admit(
+            endTimeline.schedule(
+                makeFrame(
+                    42,
+                    frameId,
+                    static_cast<std::int64_t>(
+                        frameId - 1)),
+                stream));
+        QVERIFY(!rejected.first);
+        QVERIFY(!rejected.second);
+    }
+    const auto endFallback = endGate.finish();
+    QVERIFY(endFallback);
+    QCOMPARE(
+        endFallback->frame->identity().frameId,
+        4U);
+
+    VideoFrameTimeline variableTimeline(
+        stream.timelineOrigin);
+    VideoSeekPrerollGate variableGate(600'000);
+    auto variableRejected = variableGate.admit(
+        variableTimeline.schedule(
+            makeFrame(43, 1, 0, std::nullopt),
+            stream));
+    QVERIFY(!variableRejected.first);
+    QVERIFY(!variableRejected.second);
+    variableRejected = variableGate.admit(
+        variableTimeline.schedule(
+            makeFrame(43, 2, 2, std::nullopt),
+            stream));
+    QVERIFY(!variableRejected.first);
+    QVERIFY(!variableRejected.second);
+    const auto variableTarget = variableGate.admit(
+        variableTimeline.schedule(
+            makeFrame(43, 3, 3, std::nullopt),
+            stream));
+    QVERIFY(variableTarget.first);
+    QVERIFY(variableTarget.second);
+    QCOMPARE(
+        variableTarget.first->frame->identity().frameId,
+        2U);
+    QCOMPARE(
+        variableTarget.second->frame->identity().frameId,
+        3U);
+
+    VideoFrameTimeline exactTimeline(
+        stream.timelineOrigin);
+    VideoSeekPrerollGate exactGate(500'000);
+    const auto exactTarget = exactGate.admit(
+        exactTimeline.schedule(
+            makeFrame(45, 1, 2, std::nullopt),
+            stream));
+    QVERIFY(exactTarget.first);
+    QVERIFY(!exactTarget.second);
+    QCOMPARE(
+        exactTarget.first->frame->identity().frameId,
+        1U);
+
+    FfmpegVideoStreamDiagnostics offsetStream = stream;
+    offsetStream.timelineOrigin = VideoTimelineOrigin{
+        .timestamp = 4,
+        .timeBase = {1, 4},
+    };
+    VideoFrameTimeline offsetTimeline(
+        offsetStream.timelineOrigin);
+    VideoSeekPrerollGate zeroGate(0);
+    const auto negativePreroll = zeroGate.admit(
+        offsetTimeline.schedule(
+            makeFrame(44, 1, 3), offsetStream));
+    QVERIFY(!negativePreroll.first);
+    QVERIFY(!negativePreroll.second);
+    const auto zeroTarget = zeroGate.admit(
+        offsetTimeline.schedule(
+            makeFrame(44, 2, 4), offsetStream));
+    QVERIFY(zeroTarget.first);
+    QVERIFY(!zeroTarget.second);
+    QCOMPARE(
+        zeroTarget.first->frame->identity().frameId,
+        2U);
 }
 
 void VideoFrameQueueTest::
@@ -181,7 +343,7 @@ schedulerUsesClockSnapshotForDropAndEndPolicy() {
     QVERIFY(!due.reachedEnd);
     QCOMPARE(queue.size(9), 0U);
 
-    const VideoFrameSelection ended =
+    const VideoFrameSelection heldTail =
         scheduler.selectForPresentation(
             queue,
             9,
@@ -189,13 +351,54 @@ schedulerUsesClockSnapshotForDropAndEndPolicy() {
                 .positionMicroseconds = 1'000'000,
                 .advancing = true,
             },
-            true);
+            true,
+            1'500'000);
+    QVERIFY(!heldTail.frame);
+    QVERIFY(!heldTail.reachedEnd);
+
+    const VideoFrameSelection ended =
+        scheduler.selectForPresentation(
+            queue,
+            9,
+            {
+                .positionMicroseconds = 1'500'000,
+                .advancing = true,
+            },
+            true,
+            1'500'000);
     QVERIFY(!ended.frame);
     QVERIFY(ended.reachedEnd);
     QVERIFY(ended.mediaEndMicroseconds);
     QCOMPARE(
         *ended.mediaEndMicroseconds,
-        1'000'000);
+        1'500'000);
+
+    queue.reset(10);
+    VideoFrameTimeline longFrameTimeline(
+        stream.timelineOrigin);
+    VideoFrameScheduler declaredEndScheduler;
+    QVERIFY(queue.push(
+        10,
+        longFrameTimeline.schedule(
+            makeFrame(10, 1, 25, 4),
+            stream),
+        {}));
+    QVERIFY(declaredEndScheduler.selectFirst(
+        queue, 10).frame);
+    const VideoFrameSelection declaredEnd =
+        declaredEndScheduler.selectForPresentation(
+            queue,
+            10,
+            {
+                .positionMicroseconds = 500'000,
+                .advancing = true,
+            },
+            true,
+            500'000);
+    QVERIFY(declaredEnd.reachedEnd);
+    QCOMPARE(
+        declaredEnd.mediaEndMicroseconds,
+        std::optional<std::int64_t>(500'000));
 }
 
 void VideoFrameQueueTest::

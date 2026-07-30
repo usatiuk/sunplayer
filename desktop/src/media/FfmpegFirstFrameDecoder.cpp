@@ -37,10 +37,12 @@ FfmpegFirstFrameResult decodeFirstVideoFrame(
     FfmpegFirstFrameResult firstFrame;
     const FfmpegVideoDecodeResult decoded =
         decodeVideoFrames(
-            path,
-            identity,
-            hardwareDecode,
-            2,
+            {
+                .path = path,
+                .firstFrameIdentity = identity,
+                .hardwareDecode = hardwareDecode,
+                .extraHardwareFrames = 2,
+            },
             [&firstFrame](
                     std::shared_ptr<const DecodedVideoFrame> frame,
                     const FfmpegVideoStreamDiagnostics &diagnostics) {
