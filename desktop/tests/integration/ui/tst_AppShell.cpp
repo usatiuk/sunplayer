@@ -142,6 +142,9 @@ void AppShellTest::publishesActiveViewport() {
     QObject *const audioDiagnosticsLabel =
         rootItem->findChild<QObject *>(
             QStringLiteral("audioDiagnosticsLabel"));
+    QObject *const playbackStateLabel =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("playbackStateLabel"));
     QQuickItem *const sessionStatusBar =
         rootItem->findChild<QQuickItem *>(
             QStringLiteral("sessionStatusBar"));
@@ -160,6 +163,7 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(muteButton);
     QVERIFY(volumeSlider);
     QVERIFY(audioDiagnosticsLabel);
+    QVERIFY(playbackStateLabel);
     QVERIFY(sessionStatusBar);
     QObject *const rendererSwitchContent =
         qvariant_cast<QObject *>(
@@ -253,6 +257,28 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_COMPARE(
         volumeSlider->property("value").toDouble(),
         mediaSession.volume());
+
+    mediaSession.setPlaybackInterruption(
+        ShellTestMediaSession::PlaybackInterruption::Buffering);
+    QVERIFY(!mediaSession.playing());
+    QVERIFY(mediaSession.playRequested());
+    QTRY_VERIFY(
+        playbackStateLabel->property("text").toString().contains(
+            QStringLiteral("Buffering audio")));
+    QVERIFY(QMetaObject::invokeMethod(
+        playPauseButton, "clicked", Qt::DirectConnection));
+    QVERIFY(!mediaSession.playRequested());
+    QTRY_VERIFY(
+        playbackStateLabel->property("text").toString().contains(
+            QStringLiteral("Paused")));
+    QVERIFY(QMetaObject::invokeMethod(
+        playPauseButton, "clicked", Qt::DirectConnection));
+    QVERIFY(mediaSession.playRequested());
+    QTRY_VERIFY(
+        playbackStateLabel->property("text").toString().contains(
+            QStringLiteral("Buffering audio")));
+    mediaSession.setPlaybackInterruption(
+        ShellTestMediaSession::PlaybackInterruption::None);
 
     mediaSession.setState(
         ShellTestMediaSession::State::Ready, true);

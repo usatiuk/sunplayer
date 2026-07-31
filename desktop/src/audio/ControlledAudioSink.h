@@ -17,6 +17,11 @@ struct ControlledAudioRender {
     std::size_t frames = 0;
 };
 
+struct ControlledAudioAdvance {
+    std::size_t mediaFrames = 0;
+    std::size_t holdFrames = 0;
+};
+
 // Deterministic device edge for tests and scenario runners. It models a
 // bounded decode-to-device queue and keeps submitted and presented cursors
 // separate. It intentionally uses locks and is not a physical callback.
@@ -49,6 +54,11 @@ public:
 
     ControlledAudioRender render(std::size_t requestedFrames);
     void advancePresentedFrames(std::size_t frames);
+    // Simulates one ordered device interval when no earlier rendered media is
+    // awaiting presentation. Queued media is rendered and presented first;
+    // any remaining request becomes hold silence unless the producer has
+    // finished, matching the physical callback's FIFO contract.
+    ControlledAudioAdvance advanceOutput(std::size_t requestedFrames);
 
     std::size_t bufferedFrames() const;
     std::size_t maximumObservedBufferedFrames() const;
@@ -70,6 +80,8 @@ private:
     std::int64_t mediaPositionForPresentedFrameLocked(
         std::uint64_t presentedFrame) const;
     std::uint64_t outstandingFramesLocked() const;
+    ControlledAudioRender renderLocked(std::size_t requestedFrames);
+    void prunePresentedMappingsLocked();
 
     const std::size_t m_maximumBufferedFrames;
     mutable std::mutex m_mutex;
@@ -78,13 +90,18 @@ private:
     std::vector<MappingSegment> m_mapping;
     AudioStreamFormat m_format;
     std::uint64_t m_playbackGeneration = 0;
+    std::uint64_t m_audioOutputEpoch = 0;
     std::uint64_t m_submittedFrames = 0;
     std::uint64_t m_presentedFrames = 0;
+    std::uint64_t m_deviceFramesWritten = 0;
+    std::uint64_t m_deviceFramesPresented = 0;
+    std::uint64_t m_underrunFrames = 0;
     std::size_t m_bufferedFrames = 0;
     std::size_t m_maximumObservedBufferedFrames = 0;
     bool m_running = false;
     bool m_finished = false;
     bool m_positionAvailable = true;
+    bool m_holding = false;
     float m_gain = 1.0F;
     std::string m_failureReason;
 };

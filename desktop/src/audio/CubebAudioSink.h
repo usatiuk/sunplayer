@@ -66,11 +66,13 @@ private:
     RealtimePcmQueue m_queue;
     AudioOutputLedger m_outputLedger;
     std::string m_backendName;
+    std::string m_deviceId;
     AudioStreamFormat m_format;
     std::size_t m_prerollFrames = 0;
     std::uint32_t m_requestedLatencyFrames = 0;
     std::atomic<Error> m_error{Error::None};
     std::atomic<std::uint64_t> m_playbackGeneration{0};
+    std::atomic<std::uint64_t> m_audioOutputEpoch{0};
     std::atomic<std::uint64_t> m_deviceFramesWritten{0};
     std::atomic<std::uint64_t> m_underrunFrames{0};
     std::atomic<std::uint64_t> m_deviceRevision{0};

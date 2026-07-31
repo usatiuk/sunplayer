@@ -43,6 +43,7 @@ public:
 
 private slots:
     void separatesSubmittedAndPresentedMediaTime();
+    void underrunSilenceHoldsMediaTime();
     void gainChangesSamplesWithoutChangingPresentation();
     void boundsPcmAndWakesBlockedGeneration();
     void reportsGenerationScopedFailure();
@@ -103,6 +104,56 @@ separatesSubmittedAndPresentedMediaTime() {
     QVERIFY(!observation.valid);
     QVERIFY(observation.terminalPositionValid);
     QCOMPARE(observation.mediaPositionMicroseconds, 520'000);
+}
+
+void ControlledAudioSinkTest::underrunSilenceHoldsMediaTime() {
+    ControlledAudioSink sink(32);
+    sink.reset(9, {48'000, 2});
+    QVERIFY(sink.submit(block(9, 0, 400'000, 24, 0.25F)));
+    sink.start();
+    const ControlledAudioAdvance first = sink.advanceOutput(16);
+    QCOMPARE(first.mediaFrames, 16U);
+    QCOMPARE(first.holdFrames, 0U);
+
+    const AudioPresentationSnapshot before = sink.snapshot();
+    QVERIFY(before.valid);
+    QVERIFY(before.audioOutputEpoch != 0);
+    QVERIFY(!before.advancing);
+    QCOMPARE(before.mediaPositionMicroseconds, 400'333);
+
+    const ControlledAudioAdvance underrun =
+        sink.advanceOutput(488);
+    QCOMPARE(underrun.mediaFrames, 8U);
+    QCOMPARE(underrun.holdFrames, 480U);
+    const AudioPresentationSnapshot held = sink.snapshot();
+    QVERIFY(held.valid);
+    QVERIFY(held.holding);
+    QVERIFY(!held.advancing);
+    QCOMPARE(held.submittedFrames, 24U);
+    QCOMPARE(held.presentedFrames, 24U);
+    QCOMPARE(held.mediaPositionMicroseconds, 400'500);
+
+    const AudioSinkDiagnostics diagnostics = sink.diagnostics();
+    QCOMPARE(diagnostics.deviceFramesWritten, 504U);
+    QVERIFY(diagnostics.deviceFramesPresented.has_value());
+    QCOMPARE(*diagnostics.deviceFramesPresented, 504U);
+    QCOMPARE(diagnostics.underrunFrames, 480U);
+
+    QVERIFY(sink.submit(block(9, 24, 400'500, 8, 0.5F)));
+    const ControlledAudioAdvance resumedOutput =
+        sink.advanceOutput(4);
+    QCOMPARE(resumedOutput.mediaFrames, 4U);
+    QCOMPARE(resumedOutput.holdFrames, 0U);
+    const AudioPresentationSnapshot resumed = sink.snapshot();
+    QVERIFY(!resumed.holding);
+    QVERIFY(!resumed.advancing);
+    QVERIFY(
+        resumed.mediaPositionMicroseconds
+        > held.mediaPositionMicroseconds);
+
+    const std::uint64_t firstEpoch = resumed.audioOutputEpoch;
+    sink.reset(9, {48'000, 2});
+    QVERIFY(sink.snapshot().audioOutputEpoch > firstEpoch);
 }
 
 void ControlledAudioSinkTest::

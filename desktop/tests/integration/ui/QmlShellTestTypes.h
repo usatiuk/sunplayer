@@ -150,6 +150,7 @@ class ShellTestMediaSession final : public QObject {
     Q_PROPERTY(QString videoSummary MEMBER m_videoSummary NOTIFY sessionChanged)
     Q_PROPERTY(bool hasFrame READ hasFrame NOTIFY sessionChanged)
     Q_PROPERTY(bool playing READ playing NOTIFY sessionChanged)
+    Q_PROPERTY(bool playRequested READ playRequested NOTIFY sessionChanged)
     Q_PROPERTY(bool ended READ ended NOTIFY sessionChanged)
     Q_PROPERTY(bool seekable READ seekable NOTIFY timelineChanged)
     Q_PROPERTY(bool seeking READ seeking NOTIFY timelineChanged)
@@ -167,6 +168,8 @@ class ShellTestMediaSession final : public QObject {
                NOTIFY playbackMetricsChanged)
     Q_PROPERTY(qreal volume READ volume WRITE setVolume NOTIFY volumeChanged)
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)
+    Q_PROPERTY(PlaybackInterruption playbackInterruption
+               MEMBER m_playbackInterruption NOTIFY sessionChanged)
     Q_PROPERTY(bool hasAudioOutput MEMBER m_hasAudioOutput
                NOTIFY audioDiagnosticsChanged)
     Q_PROPERTY(QString audioBackend MEMBER m_audioBackend
@@ -202,12 +205,27 @@ public:
     };
     Q_ENUM(MediaClockSource)
 
+    enum class PlaybackInterruption {
+        None,
+        Buffering,
+    };
+    Q_ENUM(PlaybackInterruption)
+
     explicit ShellTestMediaSession(QObject *parent)
         : QObject(parent) {}
 
     State state() const { return m_state; }
     bool hasFrame() const { return m_hasFrame; }
-    bool playing() const { return m_playing; }
+    bool playing() const {
+        return m_state == State::Ready
+            && m_playRequested
+            && m_playbackInterruption
+                == PlaybackInterruption::None
+            && !m_ended;
+    }
+    bool playRequested() const {
+        return m_playRequested && !m_ended;
+    }
     bool ended() const { return m_ended; }
     bool seekable() const { return m_seekable; }
     bool seeking() const { return m_seeking; }
@@ -230,7 +248,7 @@ public:
     void setState(State state, bool hasFrame = false) {
         m_state = state;
         m_hasFrame = hasFrame;
-        m_playing = state == State::Ready;
+        m_playRequested = state == State::Ready;
         m_ended = false;
         m_seeking = false;
         if (state == State::Ready) {
@@ -275,6 +293,14 @@ public:
         emit mutedChanged();
     }
 
+    void setPlaybackInterruption(
+            PlaybackInterruption interruption) {
+        if (m_playbackInterruption == interruption)
+            return;
+        m_playbackInterruption = interruption;
+        emit sessionChanged();
+    }
+
     Q_INVOKABLE void openMedia(const QUrl &) {
         ++m_openCount;
     }
@@ -286,12 +312,12 @@ public:
         ++m_retryCount;
     }
     Q_INVOKABLE void play() {
-        m_playing = true;
+        m_playRequested = true;
         m_ended = false;
         emit sessionChanged();
     }
     Q_INVOKABLE void pause() {
-        m_playing = false;
+        m_playRequested = false;
         emit sessionChanged();
     }
     Q_INVOKABLE void seekToMilliseconds(
@@ -313,7 +339,7 @@ signals:
 private:
     State m_state = State::Empty;
     bool m_hasFrame = false;
-    bool m_playing = false;
+    bool m_playRequested = false;
     bool m_ended = false;
     bool m_seekable = false;
     bool m_seeking = false;
@@ -329,6 +355,8 @@ private:
     QString m_audioBackend = QStringLiteral("controlled");
     MediaClockSource m_mediaClockSource =
         MediaClockSource::PresentedAudio;
+    PlaybackInterruption m_playbackInterruption =
+        PlaybackInterruption::None;
     bool m_audioClockReliable = true;
     int m_audioQueuedMilliseconds = 80;
     qulonglong m_audioSubmittedFrames = 4'800;

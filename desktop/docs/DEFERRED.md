@@ -135,7 +135,7 @@ application test covers the normal deployed runtime, but a future early
 bootstrap or launcher should capture loader/platform initialization failures
 without duplicating Sunroom's command-line and logging policy.
 
-### Playback lacks unified buffering and audio-device recovery
+### Playback lacks physical audio-device replacement
 
 The thin QML Player now continuously demuxes, decodes, schedules, and presents
 local video with bounded packet/frame channels, working play/pause/replay, and
@@ -152,9 +152,12 @@ tail. The active graphics capability and whole-operation hardware fallback pass
 through the same media operation, so audio never requires a second
 `AVFormatContext`.
 
-Terminal audio-output failure currently becomes a visible session error. The
-player still lacks buffering/recovery states for sustained underrun, default
-device replacement, Bluetooth reconnect, sleep/wake, and service interruption.
+Short device underruns already map to hold silence without advancing media.
+Sustained holds now enter a visible `Buffering` interruption, freeze the
+timeline, and remain separate from explicit user play/pause intent. Sustained
+loss of an established presentation clock is still terminal because the
+player does not yet replace the physical stream for default-device changes,
+Bluetooth reconnect, sleep/wake, or service interruption.
 Volume and mute now apply at the output boundary without changing audio-clock
 progression, and `MediaSession` exposes the active clock, PCM queue, submitted
 and presented frames, and underrun count through a typed low-rate snapshot.
@@ -162,6 +165,18 @@ The visible Player summary currently renders the clock, backend, PCM queue,
 and underruns. It still lacks click-free gain ramps, persistence, subtitles,
 track selection, and a general diagnostics view. macOS and Linux physical
 audio backends are not yet packaged or validated.
+
+Pinned cubeb's WASAPI backend can migrate a null-device stream internally, but
+does not expose a stream-specific success notification or guarantee that its
+monotonic logical position excludes discarded old-device audio. Sunroom now
+enumerates and opens the explicit multimedia default and disables opaque
+default switching. Its narrow cubeb overlay patch also rejects same-endpoint
+WASAPI client reconfiguration, so invalidation fails closed. The next slice will
+re-enumerate on collection changes and replace only the audio-output epoch from
+the last confident presented position. The single demux/video pipeline remains
+alive; reopening the source is an explicit fallback for irreconcilable timeline
+state.
+See the dated Cubeb recovery research note.
 
 The current seek implementation reopens and reprobes a local file for each
 restart. A future persistent-context optimization requires an explicit

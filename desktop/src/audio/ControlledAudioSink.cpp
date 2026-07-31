@@ -45,13 +45,19 @@ void ControlledAudioSink::reset(
         m_mapping.clear();
         m_format = format;
         m_playbackGeneration = playbackGeneration;
+        if (++m_audioOutputEpoch == 0)
+            ++m_audioOutputEpoch;
         m_submittedFrames = 0;
         m_presentedFrames = 0;
+        m_deviceFramesWritten = 0;
+        m_deviceFramesPresented = 0;
+        m_underrunFrames = 0;
         m_bufferedFrames = 0;
         m_maximumObservedBufferedFrames = 0;
         m_running = false;
         m_finished = false;
         m_positionAvailable = true;
+        m_holding = false;
         m_failureReason.clear();
     }
     m_wake.notify_all();
@@ -110,9 +116,13 @@ void ControlledAudioSink::cancel(
         m_playbackGeneration = 0;
         m_submittedFrames = 0;
         m_presentedFrames = 0;
+        m_deviceFramesWritten = 0;
+        m_deviceFramesPresented = 0;
+        m_underrunFrames = 0;
         m_bufferedFrames = 0;
         m_running = false;
         m_finished = false;
+        m_holding = false;
         m_failureReason.clear();
     }
     m_wake.notify_all();
@@ -153,10 +163,12 @@ AudioPresentationSnapshot ControlledAudioSink::snapshot() const {
         && m_presentedFrames == m_submittedFrames;
     AudioPresentationSnapshot result{
         .playbackGeneration = m_playbackGeneration,
+        .audioOutputEpoch = m_audioOutputEpoch,
         .submittedFrames = m_submittedFrames,
         .presentedFrames = m_presentedFrames,
         .producerFinished = m_finished,
         .drained = drained,
+        .holding = m_holding && !drained,
         .terminalPositionValid = drained
             && !m_mapping.empty(),
         .valid = m_playbackGeneration != 0
@@ -167,6 +179,7 @@ AudioPresentationSnapshot ControlledAudioSink::snapshot() const {
     result.advancing = result.valid
         && m_running
         && !result.drained
+        && !result.holding
         && m_presentedFrames < m_submittedFrames;
     result.failed = !m_failureReason.empty();
     if (result.failed) {
@@ -198,10 +211,13 @@ AudioSinkDiagnostics ControlledAudioSink::diagnostics() const {
         .maximumQueuedFrames = m_maximumObservedBufferedFrames,
         .mediaFramesSubmitted = m_submittedFrames,
         .mediaFramesPresented = m_presentedFrames,
-        .deviceFramesWritten = m_submittedFrames,
+        .deviceFramesWritten = m_deviceFramesWritten,
         .deviceFramesPresented = hasPosition
-            ? std::optional<std::uint64_t>(m_presentedFrames)
+            ? std::optional<std::uint64_t>(
+                m_deviceFramesPresented)
             : std::nullopt,
+        .underrunFrames = m_underrunFrames,
+        .audioOutputEpoch = m_audioOutputEpoch,
         .streamOpen = m_playbackGeneration != 0
             && m_format.isValid(),
         .positionAvailable = hasPosition,
@@ -236,8 +252,16 @@ void ControlledAudioSink::setPositionAvailable(bool available) {
 
 ControlledAudioRender ControlledAudioSink::render(
         std::size_t requestedFrames) {
-    ControlledAudioRender result;
     std::unique_lock lock(m_mutex);
+    ControlledAudioRender result = renderLocked(requestedFrames);
+    lock.unlock();
+    m_wake.notify_all();
+    return result;
+}
+
+ControlledAudioRender ControlledAudioSink::renderLocked(
+        std::size_t requestedFrames) {
+    ControlledAudioRender result;
     if (!m_running
             || requestedFrames == 0
             || !m_format.isValid()) {
@@ -318,14 +342,20 @@ ControlledAudioRender ControlledAudioSink::render(
         queued.consumedFrames += taken;
         result.frames += taken;
         m_submittedFrames += taken;
+        m_deviceFramesWritten += taken;
         m_bufferedFrames -= taken;
         if (queued.consumedFrames == blockFrames)
             m_blocks.pop_front();
     }
-
-    lock.unlock();
-    m_wake.notify_all();
     return result;
+}
+
+void ControlledAudioSink::prunePresentedMappingsLocked() {
+    while (m_mapping.size() > 1
+            && m_mapping[1].submittedStartFrame
+                <= m_presentedFrames) {
+        m_mapping.erase(m_mapping.begin());
+    }
 }
 
 void ControlledAudioSink::advancePresentedFrames(
@@ -336,15 +366,46 @@ void ControlledAudioSink::advancePresentedFrames(
             return;
         const std::uint64_t available =
             m_submittedFrames - m_presentedFrames;
-        m_presentedFrames += std::min<std::uint64_t>(
-            frames, available);
-        while (m_mapping.size() > 1
-                && m_mapping[1].submittedStartFrame
-                    <= m_presentedFrames) {
-            m_mapping.erase(m_mapping.begin());
-        }
+        const std::uint64_t presented =
+            std::min<std::uint64_t>(frames, available);
+        m_presentedFrames += presented;
+        m_deviceFramesPresented += presented;
+        if (presented != 0)
+            m_holding = false;
+        prunePresentedMappingsLocked();
     }
     m_wake.notify_all();
+}
+
+ControlledAudioAdvance ControlledAudioSink::advanceOutput(
+        std::size_t requestedFrames) {
+    ControlledAudioAdvance advanced;
+    std::unique_lock lock(m_mutex);
+    if (!m_running
+            || requestedFrames == 0
+            || !m_format.isValid()
+            || m_submittedFrames != m_presentedFrames
+            || !m_failureReason.empty()) {
+        return advanced;
+    }
+
+    const ControlledAudioRender media =
+        renderLocked(requestedFrames);
+    advanced.mediaFrames = media.frames;
+    m_presentedFrames += media.frames;
+    m_deviceFramesPresented += media.frames;
+    prunePresentedMappingsLocked();
+
+    if (!m_finished && media.frames < requestedFrames) {
+        advanced.holdFrames = requestedFrames - media.frames;
+        m_deviceFramesWritten += advanced.holdFrames;
+        m_deviceFramesPresented += advanced.holdFrames;
+        m_underrunFrames += advanced.holdFrames;
+    }
+    m_holding = advanced.holdFrames != 0;
+    lock.unlock();
+    m_wake.notify_all();
+    return advanced;
 }
 
 std::size_t ControlledAudioSink::bufferedFrames() const {

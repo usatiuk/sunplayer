@@ -44,6 +44,7 @@ class MediaSession final
     Q_PROPERTY(QString videoSummary READ videoSummary NOTIFY sessionChanged)
     Q_PROPERTY(bool hasFrame READ hasFrame NOTIFY sessionChanged)
     Q_PROPERTY(bool playing READ playing NOTIFY sessionChanged)
+    Q_PROPERTY(bool playRequested READ playRequested NOTIFY sessionChanged)
     Q_PROPERTY(bool ended READ ended NOTIFY sessionChanged)
     Q_PROPERTY(bool seekable READ seekable NOTIFY timelineChanged)
     Q_PROPERTY(bool seeking READ seeking NOTIFY timelineChanged)
@@ -61,6 +62,8 @@ class MediaSession final
                READ queuedVideoFrames NOTIFY playbackMetricsChanged)
     Q_PROPERTY(qreal volume READ volume WRITE setVolume NOTIFY volumeChanged)
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)
+    Q_PROPERTY(PlaybackInterruption playbackInterruption
+               READ playbackInterruption NOTIFY sessionChanged)
     Q_PROPERTY(bool hasAudioOutput
                READ hasAudioOutput NOTIFY audioDiagnosticsChanged)
     Q_PROPERTY(QString audioBackend
@@ -95,6 +98,12 @@ public:
         PostAudioMonotonic,
     };
     Q_ENUM(MediaClockSource)
+
+    enum class PlaybackInterruption {
+        None,
+        Buffering,
+    };
+    Q_ENUM(PlaybackInterruption)
 
     using DecodeOperation = std::function<
         FfmpegVideoDecodeResult(
@@ -134,6 +143,7 @@ public:
     QString videoSummary() const;
     bool hasFrame() const;
     bool playing() const;
+    bool playRequested() const;
     bool ended() const;
     bool seekable() const;
     bool seeking() const;
@@ -148,6 +158,7 @@ public:
     int queuedVideoFrames() const;
     qreal volume() const;
     bool muted() const;
+    PlaybackInterruption playbackInterruption() const;
     bool hasAudioOutput() const;
     QString audioBackend() const;
     MediaClockSource mediaClockSource() const;
@@ -232,6 +243,8 @@ private:
         std::int64_t positionMicroseconds = 0);
     void applyAudioGain();
     void resetAudioDiagnostics();
+    void setPlaybackInterruption(
+        PlaybackInterruption interruption);
     void updateAudioClockDiagnostics(
         const AudioPresentationSnapshot &presentation);
     void sampleAudioSinkDiagnostics();
@@ -252,6 +265,7 @@ private:
         std::chrono::steady_clock::time_point now,
         const AudioPresentationSnapshot *audio = nullptr) const;
     bool currentGenerationUsesAudioClock() const;
+    bool needsPlaybackMonitoring() const;
     bool currentGenerationStreamsDiscovered() const;
     std::optional<FfmpegVideoStreamDiagnostics>
         currentGenerationInitialVideoDiagnostics() const;
@@ -301,7 +315,10 @@ private:
     std::int64_t m_clockAnchorMediaMicroseconds = 0;
     bool m_audioClockEstablished = false;
     bool m_audioTailClockActive = false;
+    PlaybackInterruption m_playbackInterruption =
+        PlaybackInterruption::None;
     AudioSinkDiagnostics m_audioSinkDiagnostics;
+    std::uint64_t m_audioOutputEpoch = 0;
     MediaClockSource m_mediaClockSource =
         MediaClockSource::Monotonic;
     std::uint64_t m_selectedFrameCount = 0;
@@ -319,6 +336,8 @@ private:
     bool m_audioOutputEndedWithoutFrames = false;
     std::optional<FfmpegVideoStreamDiagnostics>
         m_initialVideoDiagnostics;
+    std::optional<std::chrono::steady_clock::time_point>
+        m_audioHoldSince;
     std::optional<std::chrono::steady_clock::time_point>
         m_audioClockUnavailableSince;
     QTimer m_playbackMonitorTimer;

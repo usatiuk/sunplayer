@@ -73,15 +73,24 @@ ready-without-frame interval so the presentation boundary can select a newly
 available frame; the renderer provisions no video surface until the source
 actually publishes display geometry.
 
-Every audio output epoch begins at the requested playback position. When the
-selected audio content begins later, the decoder publishes timeline-advancing
-source silence up to the first decoded sample. This is media silence, not
-underrun hold silence. It keeps the audio presentation clock continuous and
-prevents bounded audio, video, and packet queues from waiting circularly for a
-later stream. A selected audio stream that reaches clean end-of-stream without
-producing output for the requested interval creates no audio epoch; playback
-uses the no-audio clock for that interval. Decode failure remains terminal and
-is not reclassified as an empty interval.
+The initial audio-output epoch in a playback generation begins at the requested
+playback position. When selected audio begins later, the decoder publishes
+timeline-advancing source silence up to the first decoded sample. This is media
+silence, not underrun hold silence. It keeps the audio presentation clock
+continuous and prevents bounded audio, video, and packet queues from waiting
+circularly for a later stream. A selected audio stream that reaches clean
+end-of-stream without producing output for the requested interval creates no
+audio epoch; playback uses the no-audio clock for that interval. Decode failure
+remains terminal and is not reclassified as an empty interval.
+
+An audio-output epoch is distinct from a playback generation. Presentation
+snapshots and diagnostics carry both identities, and playback rejects an epoch
+change that has not been explicitly re-anchored. Future physical-device
+replacement will recreate device-dependent output, conversion, and
+presentation-ledger state and anchor the new raw device clock to the last
+confident media position. It will not normally reopen the shared source,
+demuxer, or video decoder. Full generation replacement remains a fallback when
+buffered timeline state cannot be reconciled.
 
 Both decoder workers start before demuxing, and packet admission is independent
 of first-frame or first-PCM readiness. Every selected packet passes through the
@@ -95,12 +104,16 @@ sink observation is reused for each presentation decision. A drained epoch
 publishes its final media endpoint independently of whether the backend still
 answers live position queries; if audio drains before video, playback
 continues from that endpoint with a monotonic tail clock. A live position
-observation may be briefly unavailable, but sustained loss and any explicit
-current-generation sink failure are terminal session state, not an implicit
-switch to the no-audio clock. Active sessions monitor this state even when no
-video frame is being requested. The same playback-owned monitor selects or
-drops due video frames while presentation is hidden or inactive, preventing
-the bounded frame mailbox from starving the shared audio demux path.
+observation may be briefly unavailable. Sustained loss of an established
+observation is terminal until output-epoch replacement exists; it never
+switches to the provisional or no-audio clock. A callback underrun maps device
+frames to hold silence without advancing media, and a sustained hold enters
+`Buffering`. User play intent remains separate from the interruption. Explicit
+current-generation sink failure is likewise terminal. Active
+sessions monitor this state even when no video frame is being requested. The
+same playback-owned monitor selects or drops due video frames while
+presentation is hidden or inactive, preventing the bounded frame mailbox from
+starving the shared audio demux path.
 
 Synchronized A/V currently requires a stable common origin from the request,
 container, or selected stream metadata before workers start. It rejects a
@@ -136,11 +149,14 @@ Costs and current limits:
   must establish whether soft watermarks or reservations are needed.
 * `ControlledAudioSink` proves deterministic queue and cursor behavior; the
   physical sink's default-endpoint tests do not prove real playback latency.
-* Hold-silence mapping and the audio-backed production clock exist. Unified
-  buffering and device recovery remain later slices; terminal device failure
-  currently becomes a visible session error.
+* Hold-silence mapping, the initial `Buffering` interruption, and the
+  audio-backed production clock exist. Replacing a physical device/output
+  epoch while retaining the media generation remains a later slice; sustained
+  clock loss and terminal device failure currently become visible errors.
 * cubeb is maintained as a project-local overlay because the pinned registry
-  package is substantially older than the reviewed upstream revision.
+  package is substantially older than the reviewed upstream revision. A narrow
+  WASAPI patch makes disabled-switching reconfigure events fail before Cubeb
+  can replace the clock source invisibly.
 
 ## Alternatives considered
 

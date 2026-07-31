@@ -123,6 +123,11 @@ and continuous synchronized local-file audio/video playback:
   PCM, records bounded output-to-media mappings, and represents short underruns
   as hold silence. The sink exposes separate media/device positions, optional
   latency and device-notification capabilities, and generation-safe drain.
+* Playback exposes user play intent independently from audio interruption.
+  Sustained hold-silence enters `Buffering`, preserves the last confident
+  audio-master position, and keeps video frozen without switching to a
+  monotonic fallback. Sustained loss of an established presentation clock is
+  terminal until explicit audio-output epoch replacement is implemented.
 * Frame selection uses integer FFmpeg timestamps, a clock-source-neutral
   `MediaClockSnapshot`, and a focused `VideoFrameScheduler`. Presented cubeb
   frames are the master for sources with audio; video-only playback uses the
@@ -132,7 +137,7 @@ and continuous synchronized local-file audio/video playback:
   thread retains early
   frames, publishes due frames, collapses multiple due frames to the newest,
   keeps the drained final frame visible, and stops continuous rendering while
-  paused or ended.
+  paused, buffering, or ended.
 * Nonzero playback generations reject stale frames, notifications, and
   completions. Ordinary open/decode/render failures become visible session
   errors; unsupported hardware-frame import triggers one observable software
@@ -159,8 +164,8 @@ and continuous synchronized local-file audio/video playback:
   zero output copies/transfers, and tolerant agreement with the software-decode
   result.
 
-libass, buffering/device recovery, drag-and-drop, subtitles, and persistence
-are not integrated. CTest/Qt Test
+libass, physical audio-device replacement, general source buffering,
+drag-and-drop, subtitles, and persistence are not integrated. CTest/Qt Test
 coverage exists for pure
 presentation-target policy, video-viewport state, the real QML shell's
 viewport publication and diagnostic renderer selection, rendered-video surface
@@ -246,7 +251,8 @@ Documentation: `docs/subsystems/media/`
 * [x] Initial presented-audio clock and audio-master video synchronization
 * [x] Staggered A/V starts, clean zero-audio seek intervals, final audio
   endpoints, and bounded live-clock-loss handling
-* [ ] Buffering behavior
+* [x] Initial audio-underrun buffering and terminal clock-loss handling
+* [ ] General source buffering behavior
 * [x] Initial end-of-stream behavior
 * [ ] Track selection and switching
 * [x] Initial position-preserving hardware-import and graphics recovery
@@ -345,7 +351,8 @@ Documentation: `docs/subsystems/subtitles/`
 * [x] Volume and mute
 * [ ] Fullscreen
 * [x] Continuous video loading and media error presentation
-* [ ] Continuous buffering presentation
+* [x] Initial audio-buffering status presentation
+* [ ] General source-buffering presentation
 * [ ] Keyboard shortcuts
 * [ ] Minimal settings surface
 * [ ] Playback-pipeline diagnostics view
@@ -361,6 +368,7 @@ Documentation: `docs/subsystems/ui/`
 * [ ] Queue, buffering, and stall telemetry
 * [ ] Decode and render timing
 * [x] Initial frame-drop and audio-underrun reporting
+* [x] Initial audio-buffering transition logging
 * [ ] CPU and GPU copy reporting where detectable
 * [ ] Active graphics-adapter reporting
 * [ ] Recovery diagnostics

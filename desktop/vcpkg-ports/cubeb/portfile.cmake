@@ -6,6 +6,7 @@ vcpkg_from_github(
     HEAD_REF master
     PATCHES
         fix-install-interface.patch
+        fail-disabled-device-reconfigure.patch
 )
 
 vcpkg_cmake_configure(

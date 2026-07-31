@@ -97,16 +97,18 @@ Inactive pages cannot compete for the viewport.
 * Empty.
 * Opening.
 * Error.
-* Ready with playing, paused, or ended media; video may still be waiting for
-  its first due frame.
+* Ready with playing, paused, ended, or buffering-audio status; video may still
+  be waiting for its first due frame.
 
 The Ready state exposes play/pause or replay, open another, close, mute, and
 volume. Queue/frame counters plus audio-clock, PCM-occupancy, and underrun
 diagnostics provide lightweight pipeline observability. Its non-live timeline
 sends only interactive moves back to the session, so backend position updates
 cannot create seek loops. Seeking has a distinct busy state and keeps the
-timeline visible but disabled. Add track and subtitle controls only when their
-underlying commands and observable states exist.
+timeline visible but disabled. The status bar uses explicit user play intent,
+so Buffering still offers Pause and a pause made during an interruption cannot
+be mistaken for automatic playback. Add track and subtitle controls only when
+their underlying commands and observable states exist.
 
 ## HDR Lab and diagnostics
 

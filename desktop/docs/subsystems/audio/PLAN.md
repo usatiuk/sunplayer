@@ -28,6 +28,9 @@ explicit recovery semantics.
   an explicit one-oversized-packet exception.
 * [x] Add focused router saturation/cancellation coverage before production
   adoption, including the one-oversized-packet exception.
+* [ ] Add a real or controllable asymmetric-interleave regression before
+  claiming robust arbitrary/network playback; use its failure to shape any
+  per-stream soft watermark or reservation policy.
 * [x] Decode real audio and video concurrently without fixed sleeps.
 * [x] Start both decoder workers before demuxing and keep packet admission
   independent of first-frame or first-PCM readiness.
@@ -78,18 +81,42 @@ explicit recovery semantics.
   controlled sink.
 * [x] Keep bounded video selection and timeline notifications progressing when
   no presentation consumer is active.
-* [ ] Cover sustained underrun, latency change, and large-discontinuity
-  recovery through the controlled sink.
+* [x] Cover sustained underrun and frozen media time through the controlled
+  sink and real-FFmpeg session boundary.
+* [ ] Cover latency change and large-discontinuity recovery through the
+  controlled sink.
 * [x] Add ordinary audio/video position, queue, underrun, and drop diagnostics
   without logging from the callback.
 
 ## Milestone 4: device recovery and supported platforms
 
-* [ ] Separate user play intent from buffering and device-recovery state.
+* [x] Separate user play intent from `Buffering`; record pause intent before
+  observing the fallible sink boundary.
+* [x] Keep sustained hold-silence frozen and observable without falling back
+  to a monotonic clock; keep established-clock loss terminal until physical
+  output replacement exists.
+* [ ] Detect a valid but non-advancing physical position with a grace-based
+  progress watchdog; repeated equal `IAudioClock` samples are allowed within
+  the grace window.
+* [x] Disable Cubeb-managed default-device switching so opaque migration cannot
+  redefine the current output epoch.
+* [x] Patch the pinned WASAPI render loop so a disabled-switching session
+  reconfigure fails before silently replacing the same endpoint's client.
+* [x] Enumerate and open the Windows multimedia default explicitly as the
+  selected device for Sunroom-owned replacement.
+* [x] Identify every presentation/diagnostic observation by an audio-output
+  epoch distinct from playback generation; reject an unanchored epoch change.
+* [ ] After selected-device loss, recreate only device-dependent
+  output/conversion state, re-anchor a new epoch at the last confident
+  presented position, bound retry, and require a new presentation observation
+  before resuming.
+* [ ] Preserve the single demux/video pipeline across ordinary audio-device
+  replacement; use a full media-generation restart only when buffered timeline
+  state cannot be reconciled.
 * [ ] Validate default-device change, USB removal, Bluetooth disconnect and
   reconnect, sleep/wake, and service interruption on Windows.
-* [ ] Decide from measurements whether cubeb automatic migration or explicit
-  stream recreation gives the clearest epoch semantics.
+* [x] Select explicit stream recreation over Cubeb's opaque migration for
+  trustworthy epoch semantics.
 * [ ] Package and validate cubeb's current macOS and Linux backend choices with
   locked Rust dependencies if those backends remain selected upstream.
 * [ ] Validate PulseAudio and PipeWire-Pulse behavior on supported Linux

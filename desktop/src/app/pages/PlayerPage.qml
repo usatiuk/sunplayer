@@ -45,6 +45,21 @@ VideoPage {
         }
     }
 
+    function playbackStateText() {
+        if (session.ended)
+            return qsTr("Ended")
+        if (session.seeking)
+            return qsTr("Seeking")
+        if (!session.playRequested)
+            return qsTr("Paused")
+        switch (session.playbackInterruption) {
+        case MediaSession.Buffering:
+            return qsTr("Buffering audio")
+        default:
+            return qsTr("Playing")
+        }
+    }
+
     videoViewportRect:
         Qt.rect(videoFrame.x, videoFrame.y,
                 videoFrame.width, videoFrame.height)
@@ -264,15 +279,10 @@ VideoPage {
                 }
 
                 Label {
+                    objectName: "playbackStateLabel"
                     Layout.fillWidth: true
                     text: qsTr("%1 · %2 · %3 · %4")
-                        .arg(root.session.ended
-                            ? qsTr("Ended")
-                            : root.session.seeking
-                                ? qsTr("Seeking")
-                            : root.session.playing
-                                ? qsTr("Playing")
-                                : qsTr("Paused"))
+                        .arg(root.playbackStateText())
                         .arg(root.session.videoSummary)
                         .arg(root.session.decoderName)
                         .arg(root.session.decodePath)
@@ -322,10 +332,10 @@ VideoPage {
                 enabled: !root.session.seeking
                 text: root.session.ended
                     ? qsTr("Replay")
-                    : root.session.playing
+                    : root.session.playRequested
                         ? qsTr("Pause")
                         : qsTr("Play")
-                onClicked: root.session.playing
+                onClicked: root.session.playRequested
                     ? root.session.pause()
                     : root.session.play()
             }

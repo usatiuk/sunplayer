@@ -10,11 +10,14 @@ the same shared categories.
 
 Current pipeline properties exposed in the UI remain subsystem-owned
 diagnostic snapshots. The audio boundary now contributes a common low-rate
-snapshot for backend/format, PCM occupancy, submitted/presented frames,
-latency and device position when available, underruns, device revision, and
-clock reliability; `MediaSession` adds the active clock source. There is not
-yet one exportable support report, performance trace, buffering/stall model,
-or A/V synchronization report.
+snapshot for backend/device/format, PCM occupancy, submitted/presented frames,
+latency and device position when available, underruns, device revision,
+audio-output epoch, and clock reliability; `MediaSession` adds the active clock
+source. There is not
+yet one exportable support report, performance trace, or A/V synchronization
+report. Playback logs transitions into and out of its initial audio
+`Buffering` state and reports sustained clock loss as a structured session
+failure, but physical device-replacement transactions are not implemented yet.
 The session file starts after `QGuiApplication` construction, so failures while
 Qt is locating or initializing its platform plugin remain outside this sink.
 The packaged-QML startup test catches the common deployment failure, but it is

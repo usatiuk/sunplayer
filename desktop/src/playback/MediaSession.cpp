@@ -18,6 +18,8 @@
 
 namespace {
 constexpr int playbackMonitorIntervalMilliseconds = 100;
+constexpr auto sustainedAudioHoldGrace =
+    std::chrono::milliseconds(500);
 constexpr auto audioClockUnavailableGrace =
     std::chrono::seconds(1);
 
@@ -162,7 +164,13 @@ bool MediaSession::hasFrame() const {
 bool MediaSession::playing() const {
     return m_state == State::Ready
         && m_userWantsPlaying
+        && m_playbackInterruption
+            == PlaybackInterruption::None
         && !m_ended;
+}
+
+bool MediaSession::playRequested() const {
+    return m_userWantsPlaying && !m_ended;
 }
 
 bool MediaSession::ended() const {
@@ -234,6 +242,11 @@ qreal MediaSession::volume() const {
 
 bool MediaSession::muted() const {
     return m_muted;
+}
+
+MediaSession::PlaybackInterruption
+MediaSession::playbackInterruption() const {
+    return m_playbackInterruption;
 }
 
 bool MediaSession::hasAudioOutput() const {
@@ -477,6 +490,11 @@ void MediaSession::pause() {
     }
     const auto now =
         std::chrono::steady_clock::now();
+    // Record intent before observing a fallible device boundary. A recovery
+    // transition triggered by the observation must not lose a concurrent
+    // user pause or resume automatically afterward.
+    m_userWantsPlaying = false;
+    m_audioPlayIntent.store(false, std::memory_order_release);
     std::optional<AudioPresentationSnapshot> audio;
     if (!observeAudioOutput(now, audio))
         return;
@@ -485,8 +503,8 @@ void MediaSession::pause() {
             now, audio ? &*audio : nullptr)
             .positionMicroseconds;
     m_clockAnchorTime = now;
-    m_userWantsPlaying = false;
-    m_audioPlayIntent.store(false, std::memory_order_release);
+    m_audioHoldSince.reset();
+    m_audioClockUnavailableSince.reset();
     if (!m_audioTailClockActive) {
         std::lock_guard lock(m_audioSinkLifecycleMutex);
         if (m_audioSink
@@ -709,6 +727,7 @@ void MediaSession::cancelPipeline() {
 
 void MediaSession::cancelAudioOutput() {
     m_playbackMonitorTimer.stop();
+    m_audioHoldSince.reset();
     m_audioClockUnavailableSince.reset();
     std::lock_guard lock(m_audioSinkLifecycleMutex);
     const std::uint64_t generation =
@@ -1382,7 +1401,35 @@ void MediaSession::applyAudioGain() {
 
 void MediaSession::resetAudioDiagnostics() {
     m_audioSinkDiagnostics = {};
+    m_audioOutputEpoch = 0;
     m_mediaClockSource = MediaClockSource::Monotonic;
+    m_playbackInterruption = PlaybackInterruption::None;
+    m_audioHoldSince.reset();
+    m_audioClockUnavailableSince.reset();
+}
+
+void MediaSession::setPlaybackInterruption(
+        PlaybackInterruption interruption) {
+    if (m_playbackInterruption == interruption)
+        return;
+    m_playbackInterruption = interruption;
+
+    QString state;
+    switch (interruption) {
+    case PlaybackInterruption::None:
+        state = QStringLiteral("none");
+        break;
+    case PlaybackInterruption::Buffering:
+        state = QStringLiteral("buffering");
+        break;
+    }
+    qCInfo(sunroomLogPlayback).noquote()
+        << "event=playback.interruption_changed"
+        << "generation=" + QString::number(m_playbackGeneration)
+        << "state=" + state;
+    emit sessionChanged();
+    emit audioDiagnosticsChanged();
+    m_videoSource.requestFrameSelection();
 }
 
 void MediaSession::updateAudioClockDiagnostics(
@@ -1396,6 +1443,10 @@ void MediaSession::updateAudioClockDiagnostics(
         clockSource = MediaClockSource::PostAudioMonotonic;
     } else if (!m_audioClockEstablished) {
         clockSource = MediaClockSource::ProvisionalMonotonic;
+    } else if (presentation.holding
+            || m_playbackInterruption
+                != PlaybackInterruption::None) {
+        clockSource = MediaClockSource::FrozenAudio;
     } else if (presentation.valid
             || (presentation.drained
                 && presentation.terminalPositionValid)) {
@@ -1463,6 +1514,16 @@ bool MediaSession::updateAudioOutputState(
         const AudioPresentationSnapshot &snapshot) {
     if (snapshot.playbackGeneration != m_playbackGeneration)
         return true;
+    if (snapshot.audioOutputEpoch != 0) {
+        if (m_audioOutputEpoch == 0) {
+            m_audioOutputEpoch = snapshot.audioOutputEpoch;
+        } else if (snapshot.audioOutputEpoch != m_audioOutputEpoch) {
+            failCurrentAudioOutput(
+                snapshot,
+                tr("The audio output clock changed without being re-anchored."));
+            return false;
+        }
+    }
     if (snapshot.failed) {
         failCurrentAudioOutput(snapshot);
         return false;
@@ -1477,8 +1538,36 @@ bool MediaSession::updateAudioOutputState(
             snapshot.mediaPositionMicroseconds;
         m_clockAnchorTime = now;
     }
-    if (positionAvailable
-            || !m_userWantsPlaying
+
+    const bool activePlayback = m_state == State::Ready
+        && m_userWantsPlaying
+        && !m_ended;
+    const bool holdingMedia = activePlayback
+        && m_audioClockEstablished
+        && snapshot.holding
+        && !snapshot.drained;
+    if (holdingMedia) {
+        if (!m_audioHoldSince) {
+            m_audioHoldSince = now;
+        } else if (now - *m_audioHoldSince
+                >= sustainedAudioHoldGrace) {
+            setPlaybackInterruption(
+                PlaybackInterruption::Buffering);
+        }
+    } else {
+        m_audioHoldSince.reset();
+        if (activePlayback
+                && positionAvailable
+                && m_playbackInterruption
+                    == PlaybackInterruption::Buffering) {
+            setPlaybackInterruption(
+                PlaybackInterruption::None);
+        }
+    }
+
+    if (positionAvailable) {
+        m_audioClockUnavailableSince.reset();
+    } else if (!activePlayback
             || m_state == State::Opening
             || !m_audioClockEstablished) {
         m_audioClockUnavailableSince.reset();
@@ -1499,6 +1588,9 @@ bool MediaSession::updateAudioOutputState(
             snapshot.mediaPositionMicroseconds;
         m_clockAnchorTime = now;
         m_audioTailClockActive = true;
+        m_audioHoldSince.reset();
+        m_audioClockUnavailableSince.reset();
+        setPlaybackInterruption(PlaybackInterruption::None);
         qCInfo(sunroomLogPlayback).noquote()
             << "event=playback.audio_tail_clock_started"
             << "generation=" + QString::number(
@@ -1615,6 +1707,13 @@ bool MediaSession::currentGenerationUsesAudioClock() const {
             == m_playbackGeneration;
 }
 
+bool MediaSession::needsPlaybackMonitoring() const {
+    return (m_state == State::Opening
+            || m_state == State::Ready)
+        && m_userWantsPlaying
+        && !m_ended;
+}
+
 bool MediaSession::currentGenerationStreamsDiscovered() const {
     std::lock_guard lock(m_streamDiscoveryMutex);
     return m_streamDiscoveryGeneration
@@ -1668,7 +1767,7 @@ bool MediaSession::enterReady(
         m_audioPlayIntent.store(
             false, std::memory_order_release);
     }
-    if (playing())
+    if (needsPlaybackMonitoring())
         m_playbackMonitorTimer.start();
     return true;
 }
@@ -1708,7 +1807,7 @@ void MediaSession::monitorPlayback() {
         return;
 
     emit timelineChanged();
-    if (!playing())
+    if (!needsPlaybackMonitoring())
         m_playbackMonitorTimer.stop();
 }
 

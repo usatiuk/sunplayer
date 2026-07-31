@@ -31,11 +31,18 @@ struct PcmAudioBlock {
 
 struct AudioPresentationSnapshot {
     std::uint64_t playbackGeneration = 0;
+    // Identifies one physical output-clock lifetime within a playback
+    // generation. Device replacement must start a new epoch and re-anchor it.
+    std::uint64_t audioOutputEpoch = 0;
     std::uint64_t submittedFrames = 0;
     std::uint64_t presentedFrames = 0;
     std::int64_t mediaPositionMicroseconds = 0;
     bool producerFinished = false;
     bool drained = false;
+    // The device is presenting output hold-silence rather than media PCM.
+    // The device cursor may advance, but mediaPositionMicroseconds must stay
+    // fixed until real media presentation resumes.
+    bool holding = false;
     bool advancing = false;
     // A drained backend may stop exposing a live device position. In that
     // case mediaPositionMicroseconds still carries the final presented media
@@ -54,6 +61,7 @@ struct AudioSinkDiagnostics {
     bool operator==(const AudioSinkDiagnostics &) const = default;
 
     std::string backendName;
+    std::string deviceId;
     std::string errorMessage;
     AudioStreamFormat format;
     std::size_t queueCapacityFrames = 0;
@@ -67,6 +75,7 @@ struct AudioSinkDiagnostics {
     std::uint64_t deviceFramesWritten = 0;
     std::optional<std::uint64_t> deviceFramesPresented;
     std::uint64_t underrunFrames = 0;
+    std::uint64_t audioOutputEpoch = 0;
     std::uint64_t deviceRevision = 0;
     bool streamOpen = false;
     bool positionAvailable = false;

@@ -82,6 +82,7 @@ opensDefaultOutputWithoutStartingPlayback() {
         diagnostics.errorMessage.empty(),
         diagnostics.errorMessage.c_str());
     QCOMPARE(diagnostics.backendName, std::string("wasapi"));
+    QVERIFY(!diagnostics.deviceId.empty());
     QVERIFY(diagnostics.streamOpen);
     QCOMPARE(
         diagnostics.format,
@@ -145,6 +146,8 @@ void CubebAudioSinkTest::startsPausesAndDrainsSilentPcm() {
     QVERIFY(drained.drained);
     QVERIFY(drained.terminalPositionValid);
     QVERIFY(!drained.advancing);
+    const std::uint64_t drainedEpoch = drained.audioOutputEpoch;
+    QVERIFY(drainedEpoch != 0);
 
     const AudioSinkDiagnostics drainedDiagnostics =
         sink.diagnostics();
@@ -154,6 +157,7 @@ void CubebAudioSinkTest::startsPausesAndDrainsSilentPcm() {
     QVERIFY(drainedDiagnostics.clockReliable);
 
     sink.reset(21, {48'000, 2});
+    QVERIFY(sink.snapshot().audioOutputEpoch > drainedEpoch);
     sink.finish(20);
     QVERIFY(!sink.snapshot().producerFinished);
     sink.start();

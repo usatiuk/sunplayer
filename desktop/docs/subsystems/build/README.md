@@ -44,7 +44,9 @@ Sunroom uses vcpkg manifest mode. The repository owns:
   SPIRV-Cross port cannot satisfy libplacebo's shared C dependency.
 * `vcpkg-ports/cubeb`, because the registry port is older than the reviewed
   audio timing and recovery behavior. The overlay also corrects upstream's
-  installed CMake target so consumers receive its public include directory.
+  installed CMake target so consumers receive its public include directory and
+  makes disabled WASAPI device switching fail closed on every reconfigure
+  event.
 * `cmake/vcpkg/triplets/x64-windows-clangcl.cmake` and its chainloaded
   toolchain, so compiler identity participates in vcpkg's package ABI and
   binary-cache key.
@@ -90,6 +92,11 @@ decided and validated on those platforms; current upstream choices may require
 pinned Rust submodules and Cargo inputs there. vcpkg downloads and binary
 caches remain project-build or per-user cache state and do not install cubeb
 system-wide.
+
+The runtime patch is intentionally narrower than a Sunroom-owned WASAPI
+backend: it only prevents cubeb from silently replacing an `IAudioClient` when
+the stream requested disabled switching. Any upstream update must check whether
+equivalent behavior landed before refreshing or dropping the patch.
 
 ## Qt dependency
 

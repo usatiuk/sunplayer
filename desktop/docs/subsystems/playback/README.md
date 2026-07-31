@@ -87,8 +87,8 @@ If device invalidation interrupts a user seek, the pending seeking state and
 latest requested position remain replaceable while the session waits for the
 new graphics capability.
 
-There is still no unified buffering or device-recovery state. Sources with
-audio use the current generation's cubeb presented-frame observation as the
+The first shared audio-interruption state is now explicit. Sources with audio
+use the current generation's cubeb presented-frame observation as the
 production clock; sources without audio use the monotonic producer of the same
 `MediaClockSnapshot` contract. Startup is timeline-driven rather than gated on
 both streams producing a first payload. An audio epoch begins at the requested
@@ -96,15 +96,17 @@ position, using timeline-advancing source silence when selected audio starts
 later; audio may advance while the video layer remains empty when video starts
 later. Clean audio EOF with no output for the requested interval creates no
 audio epoch. When audio ends before video, a monotonic tail clock continues
-from the final presented audio position. A terminal output failure or sustained
-loss of the live audio position cancels the generation and becomes a visible
-session error.
+from the final presented audio position. A sustained callback hold enters
+`Buffering` and freezes at the last confident position without destroying the
+session. Sustained loss of an established live position and explicit
+current-generation output failure remain terminal until physical stream
+replacement is implemented.
 
 The playback monitor emits throttled timeline notifications during normal
 audio-only intervals and monotonic video tails. It begins during opening for
-startup/drain observation but treats clock unavailability as terminal only
-after the session has established `Ready`; a device clock that has not yet
-started is not a lost clock.
+startup/drain observation. A device clock that has not yet started remains the
+ordinary provisional startup state; only loss after a trustworthy position has
+been established can become a clock failure.
 
 ## Clock ownership
 
@@ -122,9 +124,8 @@ as soon as audio becomes observable, subsequent video selection follows audio.
 If the provisional video position is ahead at handoff, the current frame is
 held until audio catches up; audio is not skipped or retimed to preserve the
 temporary video estimate. Loss of an established clock never falls back to
-the provisional clock. This milestone reports sustained loss as a terminal
-error; later device-recovery work will freeze at the last confident audio
-position, create a new output epoch, preroll, and re-anchor before resuming.
+the provisional clock; after a one-second grace period it becomes a visible
+session error.
 
 Conceptually:
 
@@ -150,19 +151,25 @@ clock smoothing.
 
 ## Audio-device recovery
 
-User intent and temporary ability to advance are distinct state:
+User intent and temporary ability to advance are distinct facts. The session
+exposes `playRequested` independently of its interruption:
 
 * User pause freezes the clock until the user resumes.
-* Audio-device loss enters `RecoveringAudio`, not `Paused`.
-* Video presentation and media-clock advancement stop while the required audio
-  stream is recreated.
-* The new stream receives bounded preroll, reports a trustworthy position and
-  latency, and re-anchors the media clock.
-* Playback resumes automatically only if user intent still says playing.
+* A sustained output hold enters `Buffering`, not `Paused`.
+* `playing` becomes false while Buffering, while `playRequested` preserves the
+  user's intent and keeps the low-rate playback monitor active.
+* Video presentation and media-clock advancement stop during Buffering, and
+  the source stops advertising continuous-frame demand.
+* Pause intent is recorded before the fallible sink observation and remains
+  separate from the Buffering fact.
 
-This policy covers default-device changes and Bluetooth disconnect/reconnect
-without allowing video to run silently ahead or presenting old queued audio
-after recovery.
+Physical stream replacement is not implemented yet. Its accepted direction is
+to re-enumerate the explicit default, replace only the audio-output epoch from
+the frozen position, preroll it, and leave recovery only after a trustworthy
+new presented-audio observation. The playback generation, shared demux, and
+video decoder stay alive unless their buffered timeline cannot be reconciled.
+This avoids rereading a network source, allowing video to run silently ahead,
+or trusting cubeb's opaque migration as an acoustically continuous epoch.
 
 A short audio underrun writes silence and lowers clock confidence. A sustained
 underrun participates in the unified buffering state and freezes progression.
@@ -214,11 +221,14 @@ unequal-duration and opposite-offset fixtures verify the post-audio video tail,
 clean zero-output audio after a seek, timeline-advancing leading source
 silence, audio-before-video playback, and that a future first video frame is
 not displayed early. Drained audio retains a terminal endpoint even if live
-position observation disappears. Hidden post-decode sink failure and sustained
-clock loss become visible errors without requiring a presentation request. A
-real-FFmpeg no-presentation-consumer scenario proves playback-owned selection
+position observation disappears. Hidden post-decode sink failure becomes a
+visible error without requiring a presentation request. Sustained clock loss
+also becomes a visible terminal error after its grace period. A real-FFmpeg
+no-presentation-consumer scenario proves playback-owned selection
 continues draining the three-frame mailbox and reaches end of stream.
-Session-level sustained underrun, latency change, device replacement, and
+A real-FFmpeg/controlled-sink scenario also proves sustained underrun freezes
+media time, enters `Buffering`, preserves play intent, honors pause, and clears
+only after media presentation resumes. Latency change, device replacement, and
 large-discontinuity recovery remain missing.
 
 Later physical verification uses synchronized audio impulses and visual flashes

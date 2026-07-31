@@ -92,6 +92,12 @@ Each `PcmAudioBlock` contains:
 * Sample rate and channel count.
 * Native-endian interleaved float32 samples.
 
+Every presentation snapshot and diagnostic sample identifies both its playback
+generation and its monotonic audio-output epoch. A sink reset starts a new
+output epoch even when the playback generation is retained. Until physical
+replacement can explicitly re-anchor that epoch, an unexpected change is
+terminal rather than being mistaken for continuous presentation.
+
 An output epoch begins at the requested media position. If stream metadata
 declares that selected audio begins later, the decoder publishes the complete
 declared interval as timeline-advancing silence, split into bounded PCM blocks,
@@ -120,8 +126,9 @@ can produce a larger block.
 
 ## Device and clock direction
 
-The production backend is cubeb in shared mode. Sunroom follows the default
-output unless the product later exposes an explicit device choice. Context
+The production backend is cubeb in shared mode. At the start of each output
+epoch, Sunroom enumerates the current multimedia default and opens that device
+explicitly; it does not migrate to another default inside the epoch. Context
 collection-change notification is capability-reported; stream-level device
 change callbacks are not assumed because the pinned WASAPI backend does not
 provide them.
@@ -144,9 +151,12 @@ An audio epoch may start while the video layer is empty, and a first video
 frame with a future PTS stays queued until its time. If audio begins later,
 leading source silence keeps its presentation clock continuous from the
 requested position. Clean audio EOF with zero output for the requested
-interval creates no audio epoch and keeps the monotonic clock. A seek or
-replacement cancels the decoder and matching sink epoch together, waking
-blocked PCM submission and rejecting stale completion.
+interval creates no audio epoch and keeps the monotonic clock. A seek or full
+playback-generation replacement cancels the decoder and matching sink epoch
+together, waking blocked PCM submission and rejecting stale completion. A
+future physical output replacement will instead create a new audio-output
+epoch while retaining the media generation when its buffered timeline remains
+usable.
 
 The audio and video decoder workers both start before demuxing. Packet routing
 does not depend on either decoder producing its first output: every selected
@@ -171,8 +181,7 @@ requesting renders. That keeps the bounded video queue from backpressuring the
 shared demuxer and starving audio. It also observes audio drain and failure.
 Explicit sink failure is immediate; after `Ready`, loss of an established live
 position is allowed a one-second grace period and then becomes a visible
-clock-unavailable error rather than freezing indefinitely or silently
-switching clock sources.
+session error without silently switching clock sources.
 
 The same bounded monitor publishes a typed, low-rate audio diagnostic snapshot
 containing backend and format, PCM capacity and occupancy, submitted and
@@ -183,14 +192,31 @@ backend, clock, queued PCM duration, and underrun count. No callback emits Qt
 signals or log records.
 
 User intent remains separate from temporary ability to play. Pause freezes the
-timeline. Device loss or sustained underrun will freeze it in a recovery or
-buffering state, create a new audio-output epoch, preroll current-generation
-PCM, and re-anchor before resuming if the user still wants playback.
+timeline and is recorded before querying the fallible sink boundary. A short
+underrun remains an internal hold. A hold lasting at least 500 ms becomes the
+visible `Buffering` interruption. It keeps the last confident media position
+and video frame frozen, preserves user play intent, and never falls back to the
+provisional monotonic clock. Pausing during the interruption keeps Buffering
+distinct from user intent and prevents automatic resume.
 
 A short underrun is represented as hold silence in the output ledger. Cubeb's
 device-frame position continues to advance while its media-frame mapping stays
 fixed, then resumes from the next real PCM frame. End-of-stream is
 generation-scoped so a stale decoder cannot finish a newer sink epoch.
+
+Physical device replacement is not implemented. Pinned cubeb's WASAPI backend
+can migrate a null-device stream internally without a stream-specific success
+notification or an acoustically continuous position guarantee. Sunroom avoids
+that ambiguity by enumerating the enabled multimedia default, opening its
+explicit device ID, disabling Cubeb-managed default switching, and carrying a
+narrow overlay patch that turns every disabled-switching WASAPI reconfigure
+event into an error before the client is replaced. The selected device ID is
+diagnostic state. Invalidation therefore fails closed until the next Windows
+slice re-enumerates the default and creates a new audio-output epoch from the
+last confident presented position. Demux, video decode, and the shared media
+timeline will remain alive; reopening the media source is a fallback, not the
+normal recovery path. See the
+[recovery research](../../research/2026-07-31-cubeb-wasapi-device-recovery.md).
 
 ## Verification
 
@@ -221,13 +247,24 @@ master clock. Focused sink coverage verifies that gain changes samples but not
 the submitted/presented mapping, and QML component coverage exercises both
 controls and the typed diagnostic bindings.
 
+The controlled sink can also advance one ordered device interval, presenting
+queued media first and filling only the remaining demand with hold silence. A
+real-FFmpeg session scenario exhausts that PCM boundary and proves a short hold
+remains transparent, a sustained hold enters `Buffering`, media and video stay
+frozen, pause intent wins during the interruption, and later presented PCM
+clears the state.
+Another scenario keeps consuming controlled output after hiding its position
+and proves sustained loss of an established presentation clock becomes a
+terminal error instead of letting audio continue behind frozen video.
+
 Two additional lossless fixtures offset audio and video starts in opposite
 directions. They prove that leading audio gaps advance through silence, audio
 may play before the first video frame, and future video is not presented early.
 The shorter-audio scenario also seeks beyond the audio endpoint, disables the
 live position after drain, and completes on the video timeline. Separate
 session scenarios prove hidden post-decode sink failure and sustained clock
-loss without requiring presentation calls. A further real-FFmpeg session
+loss observation without requiring presentation calls. A further real-FFmpeg
+session
 scenario supplies no presentation consumer at all and proves playback still
 drains bounded video/audio queues to end of stream; removing the playback
 monitor's frame selection makes that scenario fail.

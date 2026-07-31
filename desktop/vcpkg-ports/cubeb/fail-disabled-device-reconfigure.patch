@@ -1,0 +1,24 @@
+diff --git a/src/cubeb_wasapi.cpp b/src/cubeb_wasapi.cpp
+index 721f0a9..5032a99 100644
+--- a/src/cubeb_wasapi.cpp
++++ b/src/cubeb_wasapi.cpp
+@@ -1559,6 +1559,19 @@ wasapi_stream_render_loop(LPVOID stream)
+     }
+     case WAIT_OBJECT_0 + 2: { /* reconfigure */
+       auto_lock lock(stm->stream_reset_lock);
++      const bool reconfigure_disabled =
++          (has_input(stm) &&
++           (stm->input_stream_params.prefs &
++            CUBEB_STREAM_PREF_DISABLE_DEVICE_SWITCHING)) ||
++          (has_output(stm) &&
++           (stm->output_stream_params.prefs &
++            CUBEB_STREAM_PREF_DISABLE_DEVICE_SWITCHING));
++      if (reconfigure_disabled) {
++        LOG("Stream reconfiguration is disabled; reporting an error");
++        is_playing = false;
++        hr = E_FAIL;
++        continue;
++      }
+       if (!stm->active) {
+         /* Avoid reconfiguring, stream start will handle it. */
+         LOG("Stream is not active, ignoring reconfigure.");
