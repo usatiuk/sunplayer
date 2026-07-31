@@ -46,6 +46,11 @@ general telemetry platform in advance.
 
 ## Milestone 4: Audio and synchronization
 
+The controlled sink already exposes typed generation, running state,
+submitted/presented frame counts, media position, queue depth, and observed
+capacity for deterministic tests. Production telemetry begins when the cubeb
+sink and audio-master session are wired.
+
 * [ ] Record the selected master clock and clock-anchor revisions.
 * [ ] Track audio submitted/presented estimates, video selection/presentation,
   drift correction, underruns, and dropped frames.

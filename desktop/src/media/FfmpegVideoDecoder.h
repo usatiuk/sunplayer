@@ -55,6 +55,7 @@ struct FfmpegVideoStreamDiagnostics {
     bool hardwareAccelerated = false;
     bool seekable = false;
     std::optional<std::int64_t> durationMicroseconds;
+    bool durationFinal = false;
     std::optional<VideoTimelineOrigin> timelineOrigin;
     std::optional<std::int64_t> nominalFrameDurationMicroseconds;
 
@@ -65,6 +66,7 @@ struct FfmpegVideoDecodeResult {
     FfmpegVideoStreamDiagnostics diagnostics;
     QString error;
     std::uint64_t framesDecoded = 0;
+    std::optional<std::int64_t> observedEndMicroseconds;
     bool endOfStream = false;
     bool stopped = false;
     bool cancelled = false;

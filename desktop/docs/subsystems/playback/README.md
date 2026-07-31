@@ -76,9 +76,12 @@ If device invalidation interrupts a user seek, the pending seeking state and
 latest requested position remain replaceable while the session waits for the
 new graphics capability.
 
-There is still no audio clock or unified buffering state. The monotonic clock
-is deliberately one producer of the shared
-`MediaClockSnapshot` value, not a claim of A/V synchronization.
+There is still no production audio clock or unified buffering state. The
+monotonic clock is deliberately one producer of the shared
+`MediaClockSnapshot` value, not a claim of A/V synchronization. A bounded
+controlled audio sink and one-pass FFmpeg A/V decode scenario now prove the
+next deterministic boundary, but neither is wired into `MediaSession` or a
+physical device yet.
 
 ## Clock ownership
 
@@ -169,8 +172,10 @@ session endpoint independently of the clock producer. Queue tests cover hard
 backpressure plus stop/generation wakeups;
 timeline tests cover valid, missing, repeated, and non-monotonic timestamps.
 
-The later audio-clock suite still needs underrun, latency change, device
-replacement, seek generation, and large-discontinuity cases.
+The controlled sink currently verifies submitted-versus-presented position,
+pause, bounded backpressure, and generation reset. The later audio-clock suite
+still needs integrated session play/pause/seek/drain, hold silence, underrun,
+latency change, device replacement, and large-discontinuity cases.
 
 Later physical verification uses synchronized audio impulses and visual flashes
 to measure actual speaker-to-display output timing. Software timestamps alone

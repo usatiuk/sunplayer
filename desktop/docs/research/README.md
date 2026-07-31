@@ -27,3 +27,5 @@ the newer note or decision rather than silently rewriting the investigation.
 * [2026-07-30: Reference-white-adaptive HDR display mapping](2026-07-30-reference-white-adaptive-hdr-mapping.md)
 * [2026-07-30: FFmpeg keyframe seek and restart](2026-07-30-ffmpeg-keyframe-seek-and-restart.md)
 * [2026-07-30: Large network Matroska seek observability](2026-07-30-large-network-matroska-seek-observability.md)
+* [2026-07-31: Audio architecture research draft](2026-07-31-chatgpt-audio.md)
+* [2026-07-31: FFmpeg duration semantics on a normalized timeline](2026-07-31-ffmpeg-duration-semantics.md)

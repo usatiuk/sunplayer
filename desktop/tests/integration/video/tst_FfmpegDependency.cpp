@@ -4,6 +4,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/hwcontext.h>
+#include <libswresample/swresample.h>
 }
 
 #ifdef Q_OS_WIN
@@ -31,12 +32,17 @@ void FfmpegDependencyTest::pinnedMinimalFeatureSet() {
     QCOMPARE(LIBAVFORMAT_VERSION_MAJOR, 62);
     QCOMPARE(LIBAVCODEC_VERSION_MAJOR, 62);
     QCOMPARE(LIBAVUTIL_VERSION_MAJOR, 60);
+    QCOMPARE(LIBSWRESAMPLE_VERSION_MAJOR, 6);
     QCOMPARE(
         avformat_version(),
         static_cast<unsigned int>(LIBAVFORMAT_VERSION_INT));
     QCOMPARE(
         avcodec_version(),
         static_cast<unsigned int>(LIBAVCODEC_VERSION_INT));
+    QCOMPARE(
+        swresample_version(),
+        static_cast<unsigned int>(
+            LIBSWRESAMPLE_VERSION_INT));
 
     const QString configuration =
         QString::fromLatin1(avcodec_configuration());

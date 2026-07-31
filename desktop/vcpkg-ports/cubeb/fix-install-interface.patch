@@ -1,0 +1,21 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index e4d4541..b2cc6f6 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -5,6 +5,8 @@ cmake_policy(SET CMP0091 NEW)
+ project(cubeb
+   VERSION 0.0.0)
+ 
++include(GNUInstallDirs)
++
+ option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
+ option(BUILD_TESTS "Build tests" ON)
+ option(BUILD_RUST_LIBS "Build rust backends" OFF)
+@@ -125,7 +127,5 @@ target_include_directories(cubeb
+   PUBLIC $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/exports>
+ )
+ 
+-include(GNUInstallDirs)
+-
+ install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/${PROJECT_NAME} TYPE INCLUDE)
+ install(DIRECTORY ${CMAKE_BINARY_DIR}/exports/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME})

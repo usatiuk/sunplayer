@@ -60,8 +60,9 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 
 ## Current implementation status
 
-As of 2026-07-30, the repository contains a Windows presentation foundation
-and initial continuous, video-only local-file playback:
+As of 2026-07-31, the repository contains a Windows presentation foundation,
+continuous video-only local-file playback, and the first synchronized audio
+decode/test boundary:
 
 * A factory-selected graphics-device domain owns the current D3D11 QRhi,
   same-device libplacebo GPU, FFmpeg D3D11VA device, shared immediate-context
@@ -108,6 +109,16 @@ and initial continuous, video-only local-file playback:
   `AVFormatContext` to a demux worker and keeps one `AVCodecContext` on the
   decode worker. A count- and byte-bounded packet channel and a
   generation-scoped three-frame mailbox propagate backpressure upstream.
+* A replacement media operation proves single-pass A/V routing: one
+  `AVFormatContext` opens, probes, seeks, and reads the source once; selected
+  audio and video packets share one global count/byte budget; and independent
+  decoder workers retain a common normalized timeline. Real FFmpeg FLAC decode
+  and libswresample produce 48 kHz stereo interleaved float32 PCM for a bounded
+  controlled sink with distinct submitted and presented cursors. Video-only
+  and synchronized decoding now feed one hardware-capable packet decoder. This
+  path is not yet wired into `MediaSession` or a physical device; production
+  migration must pass the active graphics capability and preserve fallback,
+  not reopen the file.
 * Frame selection uses integer FFmpeg timestamps, a clock-source-neutral
   `MediaClockSnapshot`, and a focused `VideoFrameScheduler`; the current clock
   producer is monotonic and video-only. The presentation thread retains early
@@ -140,8 +151,9 @@ and initial continuous, video-only local-file playback:
   zero output copies/transfers, and tolerant agreement with the software-decode
   result.
 
-libass, audio, buffering recovery, drag-and-drop, subtitles, and
-persistence are not integrated. CTest/Qt Test coverage exists for pure
+libass, physical audio output/audio-master scheduling, buffering recovery,
+drag-and-drop, subtitles, and persistence are not integrated. CTest/Qt Test
+coverage exists for pure
 presentation-target policy, video-viewport state, the real QML shell's
 viewport publication and diagnostic renderer selection, rendered-video surface
 validity/invalidation, decoded-frame ownership, the libplacebo and FFmpeg
@@ -162,8 +174,9 @@ physical-output validation do not yet exist.
 Playback now exposes normalized position/duration and seeking through a
 generation-scoped, keyframe-anchored decoder restart shared by user seek,
 hardware-import fallback, and graphics-device recovery. Audio decoding,
-resampling, output, and the audio-backed master clock are the next playback
-boundary. Playback uses libplacebo as its video renderer; the procedural
+resampling, and a deterministic sink boundary exist alongside the production
+session. Shared-session migration, cubeb output, and the audio-backed master
+clock are the next playback boundaries. Playback uses libplacebo as its video renderer; the procedural
 producer remains HDR-Lab-only diagnostic tooling.
 
 ## Subsystems
@@ -200,7 +213,7 @@ Documentation: `docs/subsystems/media-io/`
 * [ ] Stream, chapter, and attachment discovery
 * [x] Bounded selected-video packet demuxing
 * [x] Continuous video decoding
-* [ ] Audio decoding
+* [x] Initial single-pass selected-audio routing, decoding, and resampling
 * [ ] Subtitle decoding
 * [x] Initial Windows D3D11VA device capability and decoder negotiation
 * [x] Initial selected-video duration and timestamp normalization
@@ -275,9 +288,9 @@ Documentation: `docs/subsystems/video-rendering/`
 
 ### 7. Audio
 
-* [ ] Audio-output backend selection
-* [ ] Audio decoding and resampling
-* [ ] Bounded PCM buffering
+* [x] Audio-output backend direction and pinned cubeb dependency
+* [x] Initial real FFmpeg audio decoding and libswresample conversion
+* [x] Bounded controlled PCM buffering
 * [ ] Real-time-safe device callback
 * [ ] Volume and mute
 * [ ] Device changes and recovery
@@ -350,7 +363,8 @@ Documentation: `docs/subsystems/diagnostics/`
 * [x] Continuous session cancellation and stale-generation tests
 * [x] Initial deterministic video playback scenario
 * [x] Generation-scoped video-seek and decoded-preroll tests
-* [ ] Audio-master playback and A/V seek tests
+* [x] Initial one-pass A/V decode, resample, sink, and seek scenario
+* [ ] Audio-master playback and device-output A/V seek tests
 * [ ] Color-metadata normalization tests
 * [ ] Renderer image tests
 * [ ] Subtitle layout tests
@@ -369,6 +383,7 @@ Documentation: `docs/TESTING.md` and `docs/subsystems/testing/`
   triplet
 * [x] Reproducible D3D11-only libplacebo dependency integration
 * [x] Reproducible FFmpeg integration
+* [x] Pinned Windows cubeb dependency integration
 * [ ] Reproducible libass integration
 * [ ] Cross-platform libplacebo dependency configurations
 * [ ] Windows packaging

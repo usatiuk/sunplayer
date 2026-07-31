@@ -67,6 +67,8 @@ find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS
 find_package(libplacebo 7.360.1 EXACT CONFIG REQUIRED)
 
 if (WIN32)
+    find_package(cubeb CONFIG REQUIRED)
+
     function(sunroom_stage_windows_runtime target)
         add_custom_command(
                 TARGET ${target}
@@ -110,6 +112,22 @@ target_link_libraries(sunroom_diagnostics
         Qt6::Core
 )
 
+add_library(sunroom_audio STATIC
+        src/audio/AudioSink.h
+        src/audio/AudioTypes.cpp
+        src/audio/AudioTypes.h
+        src/audio/ControlledAudioSink.cpp
+        src/audio/ControlledAudioSink.h
+)
+target_include_directories(sunroom_audio
+        PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+)
+target_link_libraries(sunroom_audio
+        PRIVATE
+        Qt6::Core
+)
+
 add_library(sunroom_media STATIC
         src/media/DecodedVideoFrame.cpp
         src/media/DecodedVideoFrame.h
@@ -117,10 +135,16 @@ add_library(sunroom_media STATIC
         src/media/FfmpegFirstFrameDecoder.h
         src/media/FfmpegHardwareDevice.cpp
         src/media/FfmpegHardwareDevice.h
+        src/media/FfmpegMediaDecoder.cpp
+        src/media/FfmpegMediaDecoder.h
         src/media/FfmpegVideoDecoder.cpp
         src/media/FfmpegVideoDecoder.h
         src/media/ffmpeg/FfmpegFrameMetadata.cpp
         src/media/ffmpeg/FfmpegFrameMetadata.h
+        src/media/ffmpeg/FfmpegStreamMetadata.cpp
+        src/media/ffmpeg/FfmpegStreamMetadata.h
+        src/media/ffmpeg/FfmpegVideoPacketDecoder.cpp
+        src/media/ffmpeg/FfmpegVideoPacketDecoder.h
         src/media/ffmpeg/FfmpegVideoDecodeFallback.cpp
         src/media/ffmpeg/FfmpegVideoDecodeFallback.h
 )
@@ -129,6 +153,8 @@ target_include_directories(sunroom_media
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 target_link_libraries(sunroom_media
+        PUBLIC
+        sunroom_audio
         PRIVATE
         Qt6::Core
         sunroom_diagnostics

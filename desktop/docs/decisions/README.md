@@ -25,3 +25,4 @@ with a new decision when the accepted choice changes materially.
 * [0008: Anchor normal HDR playback to the platform reference white](0008-reference-white-adaptive-hdr-display-mapping.md)
 * [0009: Use generation-scoped decode restarts for seeking and recovery](0009-generation-scoped-seek-restart.md)
 * [0010: Use Qt category logging with bounded session files](0010-qt-category-logging-and-bounded-session-files.md)
+* [0011: Route selected media once and separate decoded audio from device output](0011-single-pass-media-routing-and-audio-output-boundary.md)

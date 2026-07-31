@@ -9,6 +9,14 @@ qt_add_executable(sunroom_application_log_tests
         unit/diagnostics/tst_ApplicationLog.cpp
 )
 
+qt_add_executable(sunroom_controlled_audio_sink_tests
+        unit/audio/tst_ControlledAudioSink.cpp
+)
+
+qt_add_executable(sunroom_ffmpeg_media_decoder_tests
+        integration/media/tst_FfmpegMediaDecoder.cpp
+)
+
 qt_add_executable(sunroom_rendered_video_surface_tests
         unit/video/tst_RenderedVideoSurface.cpp
         ../src/video/RenderedVideoSurface.cpp
@@ -71,6 +79,10 @@ qt_add_executable(sunroom_qml_shell_tests
 )
 
 if (WIN32)
+    qt_add_executable(sunroom_cubeb_dependency_tests
+            integration/audio/tst_CubebDependency.cpp
+    )
+
     qt_add_executable(sunroom_ffmpeg_dependency_tests
             integration/video/tst_FfmpegDependency.cpp
     )
@@ -118,6 +130,16 @@ target_include_directories(sunroom_presentation_target_tests
 )
 
 target_include_directories(sunroom_application_log_tests
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+)
+
+target_include_directories(sunroom_controlled_audio_sink_tests
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+)
+
+target_include_directories(sunroom_ffmpeg_media_decoder_tests
         PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
 )
@@ -187,6 +209,24 @@ target_link_libraries(sunroom_application_log_tests
         sunroom_diagnostics
 )
 
+target_link_libraries(sunroom_controlled_audio_sink_tests
+        PRIVATE
+        Qt6::Test
+        sunroom_audio
+)
+
+target_compile_definitions(
+        sunroom_ffmpeg_media_decoder_tests
+        PRIVATE
+        SUNROOM_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
+)
+target_link_libraries(sunroom_ffmpeg_media_decoder_tests
+        PRIVATE
+        Qt6::Test
+        sunroom_media
+        sunroom_ffmpeg
+)
+
 target_link_libraries(sunroom_rendered_video_surface_tests
         PRIVATE
         Qt6::Test
@@ -252,6 +292,12 @@ target_link_libraries(sunroom_qml_shell_tests
 )
 
 if (WIN32)
+    target_link_libraries(sunroom_cubeb_dependency_tests
+            PRIVATE
+            Qt6::Test
+            cubeb::cubeb
+    )
+
     target_link_libraries(sunroom_ffmpeg_dependency_tests
             PRIVATE
             Qt6::Test
@@ -267,6 +313,8 @@ if (WIN32)
     foreach (test_target IN ITEMS
             sunroom_presentation_target_tests
             sunroom_application_log_tests
+            sunroom_controlled_audio_sink_tests
+            sunroom_ffmpeg_media_decoder_tests
             sunroom_rendered_video_surface_tests
             sunroom_video_viewport_tests
             sunroom_video_presentation_geometry_tests
@@ -274,6 +322,7 @@ if (WIN32)
             sunroom_media_session_tests
             sunroom_video_frame_queue_tests
             sunroom_active_video_source_tests
+            sunroom_cubeb_dependency_tests
             sunroom_qml_shell_tests
             sunroom_libplacebo_dependency_tests)
         sunroom_stage_windows_runtime(${test_target})
@@ -298,6 +347,16 @@ add_test(
 add_test(
         NAME application-log
         COMMAND sunroom_application_log_tests
+)
+
+add_test(
+        NAME controlled-audio-sink
+        COMMAND sunroom_controlled_audio_sink_tests
+)
+
+add_test(
+        NAME ffmpeg-media-decoder
+        COMMAND sunroom_ffmpeg_media_decoder_tests
 )
 
 add_test(
@@ -350,6 +409,19 @@ add_test(
         COMMAND $<TARGET_FILE:sunroom> --verify-qml
 )
 
+if (WIN32)
+    add_test(
+            NAME cubeb-dependency
+            COMMAND sunroom_cubeb_dependency_tests
+    )
+    set_tests_properties(
+            cubeb-dependency
+            PROPERTIES
+            LABELS "audio;dependency;integration;windows"
+            TIMEOUT 30
+    )
+endif ()
+
 set_tests_properties(
         presentation-target
         application-log
@@ -361,6 +433,20 @@ set_tests_properties(
         video-frame-queue
         active-video-source
         PROPERTIES LABELS "unit"
+)
+
+set_tests_properties(
+        controlled-audio-sink
+        PROPERTIES
+        LABELS "audio;concurrency;unit"
+        TIMEOUT 30
+)
+
+set_tests_properties(
+        ffmpeg-media-decoder
+        PROPERTIES
+        LABELS "audio;integration;media"
+        TIMEOUT 30
 )
 
 set_tests_properties(

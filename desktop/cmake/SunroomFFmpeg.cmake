@@ -42,7 +42,11 @@ function(sunroom_configure_ffmpeg)
 
     if (WIN32)
         set(runtime_targets)
-        foreach (component IN ITEMS avutil avcodec avformat)
+        foreach (component IN ITEMS
+                avutil
+                swresample
+                avcodec
+                avformat)
             set(variable_prefix "FFMPEG_lib${component}")
             set(release_variable
                     "${variable_prefix}_LIBRARY_RELEASE")

@@ -1,0 +1,47 @@
+file = "sdr-bt709-ffv1-flac-sync.mkv"
+sha256 = "47c785fa0de5ca82613c0e8fd1b8f2c73a47d72ad9af9d6c0e9bf105247c46a6"
+provenance = "Generated analytically for Sunroom; no external source media"
+generator = "FFmpeg 8.1.2-full_build-www.gyan.dev"
+license = "CC0-1.0"
+
+generation_command = """
+ffmpeg -hide_banner -loglevel error -nostdin -y -f lavfi -i "color=c=black:size=96x64:rate=4:duration=3,format=yuv420p,drawbox=x=0:y=0:w=iw:h=ih:color=white:t=fill:enable='between(t,0.5,0.749)+between(t,1.5,1.749)+between(t,2.5,2.749)',setparams=range=limited:color_primaries=bt709:color_trc=bt709:colorspace=bt709" -f lavfi -i "aevalsrc=if(eq(n\\,16000)+eq(n\\,48000)+eq(n\\,80000)\\,0.8\\,0):s=32000:d=3" -map 0:v:0 -map 1:a:0 -c:v ffv1 -level 3 -coder 1 -context 1 -g 1 -threads:v 1 -c:a flac -compression_level 12 -sample_fmt s16 -output_ts_offset 5 -fflags +bitexact -flags:v +bitexact -flags:a +bitexact -map_metadata -1 sdr-bt709-ffv1-flac-sync.mkv
+"""
+
+[expected]
+container = "matroska"
+raw_start_seconds = 5.0
+raw_duration_seconds = 8.0
+normalized_duration_seconds = 3.0
+video_codec = "ffv1"
+video_pixel_format = "yuv420p"
+video_width = 96
+video_height = 64
+video_frame_rate = "4/1"
+video_frame_count = 12
+audio_codec = "flac"
+audio_sample_format = "s16"
+audio_sample_rate = 32000
+audio_channels = 1
+audio_source_frames = 96000
+output_sample_format = "f32-interleaved-native"
+output_sample_rate = 48000
+output_channels = 2
+output_frames = 144000
+seek_target_seconds = 1.25
+flash_times_seconds = [0.5, 1.5, 2.5]
+impulse_source_frames = [16000, 48000, 80000]
+impulse_output_frames = [24000, 72000, 120000]
+
+[coverage]
+features = [
+    "single-pass-audio-video-demux",
+    "nonzero-shared-timeline-origin",
+    "lossless-compressed-audio",
+    "lossless-compressed-video",
+    "sample-rate-conversion",
+    "mono-to-stereo-rematrix",
+    "float32-interleaved-pcm",
+    "audio-video-sync-markers",
+    "resampler-drain",
+]

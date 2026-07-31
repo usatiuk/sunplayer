@@ -141,10 +141,24 @@ Implement alongside graphics milestone 1:
 * [x] Cover twelve-frame playback, pause/resume/replay, end of stream, hard
   frame-queue capacity, backpressure, refill, and due/drop selection through
   real queues.
-* [ ] Add the controlled audio-clock/sink edge with audio output.
+* [x] Add a bounded controlled audio sink with distinct submitted and
+  presented cursors, pause, generation reset, and backpressure coverage.
+* [x] Add a hashed lossless A/V fixture with a nonzero shared timeline, visual
+  flashes, audio impulses, sample-rate conversion, channel rematrixing, and
+  resampler drain.
+* [x] Exercise one real FFmpeg open/probe/read operation across both selected
+  streams and assert media/sample behavior without coupling to packet counts.
+* [x] Assert aggregate packet count/byte observations stay within the declared
+  budget or its explicit one-oversized-packet exception.
+* [ ] Add a focused shared-router saturation scenario that proves demux
+  backpressure and stop wakeup independently of fixture packet counts.
+* [x] Cover missing shared-origin rejection at the timing-policy boundary.
+* [ ] Drive the production session and video scheduler from the controlled
+  presented-audio clock.
 * [x] Cover seek-generation invalidation without fixed sleeps, including
   rapid replacement, decoded preroll, and sparse-GOP/B-frame media.
-* [ ] Add subtitle and audio fixtures with the features being implemented.
+* [ ] Add subtitle fixtures and extend audio fixtures only with implemented
+  formats, layouts, discontinuities, or recovery behavior.
 * [ ] Add structured completion events and diagnostics with generation IDs.
 * [ ] Introduce an out-of-process local control channel only when several
   actual-application scenarios benefit from shared orchestration.

@@ -3,9 +3,10 @@
 ## Status
 
 Sunroom integrates the official vcpkg FFmpeg 8.1.2 package with `avformat`,
-`avcodec`, and core `avutil`. The Windows package includes D3D11VA, D3D12VA,
-DXVA2, and Media Foundation support. Sunroom now exercises D3D11VA for
-supported streams and keeps software decoding as an explicit fallback.
+`avcodec`, core `avutil`, and `swresample`. The Windows package includes
+D3D11VA, D3D12VA, DXVA2, and Media Foundation support. Sunroom exercises
+D3D11VA for supported production video streams and keeps software decoding as
+an explicit fallback.
 
 The production `decodeVideoFrames()` operation accepts one restartable request,
 opens a local file, discovers the best video stream, and continuously emits immutable
@@ -67,9 +68,26 @@ passed through an incremental rational clock helper.
 Uninterruptible mounted-filesystem kernel waits remain outside the guarantee
 and may require helper-process containment.
 
-This remains the first selected-video pipeline. It has no audio/subtitle
-packet dispatch, complete track-discovery model, or
-source-stall recovery.
+The production session still uses this selected-video pipeline. A parallel
+implementation slice now proves the replacement boundary: `decodeMediaFrames()`
+opens and probes one source once, routes referenced packets for the selected
+video and audio streams under one shared count/byte budget, decodes both on
+their own workers, and converts audio through libswresample. It is not yet wired
+into `MediaSession`. Both operations now feed one hardware-capable packet-level
+video decoder, so codec setup, D3D11VA negotiation, metadata, frame ownership,
+and drain behavior do not fork. The synchronized regression uses software
+frames; production audio must pass the active graphics capability through the
+single-pass path and retain whole-operation hardware fallback. It must not open
+a second format context for the same playback attempt.
+
+At open time, FFmpeg's public duration fields are treated as provisional
+durations and `start_time` is never subtracted from them. At successful EOF,
+the selected A/V operation finalizes duration from the maximum observed
+normalized stream endpoint. This avoids a second file read and handles
+containers whose declared duration includes a leading empty timeline interval.
+
+Subtitle packet dispatch, a complete track-discovery model, and source-stall
+recovery remain unimplemented.
 
 ## Dependency boundary
 
@@ -79,22 +97,22 @@ The manifest requests:
 {
   "name": "ffmpeg",
   "default-features": false,
-  "features": ["avcodec", "avformat"]
+  "features": ["avcodec", "avformat", "swresample"]
 }
 ```
 
 This deliberately excludes FFmpeg tools, `avfilter`, `avdevice`, `swscale`,
-`swresample`, Vulkan, vendor SDKs, and external codec libraries. Native FFmpeg
-demuxers and software decoders remain available. libplacebo owns video
-conversion and scaling. Add `swresample` when the audio-output format
-conversion boundary is implemented, and add codec libraries only for a
-documented coverage or performance requirement.
+Vulkan, vendor SDKs, and external codec libraries. Native FFmpeg demuxers and
+software decoders remain available. libplacebo owns video conversion and
+scaling; libswresample owns audio sample-format, rate, layout, and
+planar/interleaved conversion. Add codec libraries only for a documented
+coverage or performance requirement.
 
 The dependency is dynamically linked under the project clang-cl vcpkg triplet.
-`avutil`, `avcodec`, and `avformat` DLLs are staged explicitly beside linked
-build-tree targets and installed beside the application. This prevents loader
-dialogs and avoids relying on CMake's transitive-runtime discovery for the
-port's variable-style interface.
+`avutil`, `swresample`, `avcodec`, and `avformat` DLLs are staged explicitly
+beside linked build-tree targets and installed beside the application. This
+prevents loader dialogs and avoids relying on CMake's transitive-runtime
+discovery for the port's variable-style interface.
 
 The selected FFmpeg configuration remains LGPL-oriented: GPL, version-3-only,
 nonfree, x264, x265, and fdk-aac features are not enabled. Shipping still
@@ -136,18 +154,21 @@ rotated-content output still needs a dedicated fixture and capture.
 
 ## Next implementation
 
-1. Normalize complete stream, chapter, attachment, and session duration state.
-2. Dispatch audio and subtitle packets without letting a full video channel
-   prevent progress for interleaved streams.
-3. Add packet byte/duration and decode-time diagnostics.
-4. Add equivalent native hardware-device negotiation on Linux and macOS when
+1. Migrate `MediaSession` to the shared audio/video router without a second
+   source read, passing the active graphics capability and preserving fallback.
+2. Normalize complete stream, chapter, attachment, and provisional/final
+   session duration state.
+3. Dispatch subtitle packets without letting one selected stream prevent
+   progress for another.
+4. Add packet byte/duration and decode-time diagnostics.
+5. Add equivalent native hardware-device negotiation on Linux and macOS when
    their graphics domains are implemented.
 
 ## Verification
 
-The dependency test loads the three FFmpeg DLLs through CTest, verifies pinned
-major versions, confirms D3D11VA and native H.264/HEVC decoders, and checks that
-Vulkan and swscale remain disabled.
+The dependency test loads the four selected FFmpeg DLLs through CTest, verifies
+pinned major versions including libswresample, confirms D3D11VA and native
+H.264/HEVC decoders, and checks that Vulkan and swscale remain disabled.
 
 The decoded-frame unit test releases the originating `AVFrame` and verifies the
 Sunroom wrapper still owns valid software pixels and semantic snapshots.
@@ -181,3 +202,12 @@ inferred first-frame origin survives restart and use one-frame PTS lookahead
 when a frame duration is not authoritative. A two-frame sparse-timeline FFV1
 fixture places its second keyframe at 3000 seconds and proves the production
 demux seek retains positions beyond the 32-bit-microsecond boundary.
+
+A separate hashed Matroska fixture combines twelve lossless FFV1 frames with
+lossless 32 kHz mono FLAC impulses on a nonzero timeline. The synchronized
+integration scenario opens and reads it once, exercises both real FFmpeg
+decoders, converts and drains 48 kHz stereo float32 PCM, verifies the common
+timeline and marker locations, and seeks without asserting FFmpeg packet or
+decoder-call counts. It also proves that the eight-second Matroska header value
+is kept provisional at open while the fully observed selected A/V endpoints
+finalize the normalized playback duration at three seconds.

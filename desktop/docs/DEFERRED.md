@@ -135,15 +135,26 @@ application test covers the normal deployed runtime, but a future early
 bootstrap or launcher should capture loader/platform initialization failures
 without duplicating Sunroom's command-line and logging policy.
 
-### Playback has no audio clock or unified buffering recovery
+### Playback has no physical audio output, audio master, or unified buffering recovery
 
 The thin QML Player now continuously demuxes, decodes, schedules, and presents
 local video with bounded packet/frame channels, working play/pause/replay, and
 a position/duration seek timeline. Seeking, hardware-import fallback, and
 graphics-device recovery share a fresh-context, keyframe-anchored restart and
-preserve the logical position. It does not yet expose audio, subtitles, track
-selection, source-stall buffering/recovery, persistent settings, or a general
-diagnostics view.
+preserve the logical position.
+
+A separate synchronized decoder slice now proves one-open A/V packet routing,
+real FFmpeg audio decode, libswresample conversion, a common nonzero timeline,
+and bounded controlled submission/presentation. It is not yet adopted by
+`MediaSession` and does not open a physical device. Both decode operations now
+share the hardware-capable video packet decoder, but the current synchronized
+regression requests software frames. Production migration must pass the active
+graphics capability and preserve whole-operation hardware fallback; a second
+`AVFormatContext` for audio is not an acceptable migration shortcut.
+
+The player still does not expose audible output, audio-master scheduling,
+subtitles, track selection, source-stall buffering/recovery, persistent
+settings, or a general diagnostics view.
 
 The current seek implementation reopens and reprobes a local file for each
 restart. A future persistent-context optimization requires an explicit
