@@ -45,6 +45,10 @@ qt_add_executable(sunroom_ffmpeg_video_timeline_tests
         unit/media/tst_FfmpegVideoTimeline.cpp
 )
 
+qt_add_executable(sunroom_ffmpeg_packet_router_tests
+        unit/media/tst_FfmpegPacketRouter.cpp
+)
+
 qt_add_executable(sunroom_media_session_tests
         unit/playback/tst_MediaSession.cpp
         ../src/playback/CoalescedGenerationWake.h
@@ -251,6 +255,13 @@ target_link_libraries(sunroom_ffmpeg_video_timeline_tests
         sunroom_ffmpeg
 )
 
+target_link_libraries(sunroom_ffmpeg_packet_router_tests
+        PRIVATE
+        Qt6::Test
+        sunroom_media
+        sunroom_ffmpeg
+)
+
 target_link_libraries(
         sunroom_video_presentation_geometry_tests
         PRIVATE
@@ -319,6 +330,7 @@ if (WIN32)
             sunroom_video_viewport_tests
             sunroom_video_presentation_geometry_tests
             sunroom_ffmpeg_video_timeline_tests
+            sunroom_ffmpeg_packet_router_tests
             sunroom_media_session_tests
             sunroom_video_frame_queue_tests
             sunroom_active_video_source_tests
@@ -377,6 +389,11 @@ add_test(
 add_test(
         NAME ffmpeg-video-timeline
         COMMAND sunroom_ffmpeg_video_timeline_tests
+)
+
+add_test(
+        NAME ffmpeg-packet-router
+        COMMAND sunroom_ffmpeg_packet_router_tests
 )
 
 add_test(
@@ -446,6 +463,13 @@ set_tests_properties(
         ffmpeg-media-decoder
         PROPERTIES
         LABELS "audio;integration;media"
+        TIMEOUT 30
+)
+
+set_tests_properties(
+        ffmpeg-packet-router
+        PROPERTIES
+        LABELS "concurrency;media;unit"
         TIMEOUT 30
 )
 

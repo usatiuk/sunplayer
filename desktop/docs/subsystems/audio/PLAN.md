@@ -26,7 +26,7 @@ explicit recovery semantics.
 * [x] Open, probe, seek, and read one `AVFormatContext` per playback attempt.
 * [x] Route selected audio and video packets under one aggregate budget with
   an explicit one-oversized-packet exception.
-* [ ] Add focused router saturation/cancellation coverage before production
+* [x] Add focused router saturation/cancellation coverage before production
   adoption, including the one-oversized-packet exception.
 * [x] Decode real audio and video concurrently without fixed sleeps.
 * [x] Convert and fully drain 32 kHz mono audio into 48 kHz stereo float32 PCM.

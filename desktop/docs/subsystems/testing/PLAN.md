@@ -150,7 +150,7 @@ Implement alongside graphics milestone 1:
   streams and assert media/sample behavior without coupling to packet counts.
 * [x] Assert aggregate packet count/byte observations stay within the declared
   budget or its explicit one-oversized-packet exception.
-* [ ] Add a focused shared-router saturation scenario that proves demux
+* [x] Add a focused shared-router saturation scenario that proves demux
   backpressure and stop wakeup independently of fixture packet counts.
 * [x] Cover missing shared-origin rejection at the timing-policy boundary.
 * [ ] Drive the production session and video scheduler from the controlled

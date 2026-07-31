@@ -1,12 +1,9 @@
 #include "media/FfmpegMediaDecoder.h"
 
 #include <algorithm>
-#include <condition_variable>
 #include <cstddef>
-#include <deque>
 #include <limits>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <thread>
 #include <utility>
@@ -24,14 +21,11 @@ extern "C" {
 
 #include "diagnostics/LogCategories.h"
 #include "media/DecodedVideoFrame.h"
+#include "media/ffmpeg/FfmpegPacketRouter.h"
 #include "media/ffmpeg/FfmpegStreamMetadata.h"
 #include "media/ffmpeg/FfmpegVideoPacketDecoder.h"
 
 namespace {
-constexpr std::size_t maximumQueuedPackets = 128;
-constexpr std::size_t maximumQueuedPacketBytes =
-    8U * 1024U * 1024U;
-
 struct FormatContextDeleter {
     void operator()(AVFormatContext *context) const {
         avformat_close_input(&context);
@@ -91,163 +85,6 @@ int interruptFfmpeg(void *opaque) {
         ? 1
         : 0;
 }
-
-enum class RoutedStream {
-    Video,
-    Audio,
-};
-
-enum class RouterTerminal {
-    Open,
-    EndOfStream,
-    Failed,
-    Cancelled,
-};
-
-struct RoutedPacket {
-    PacketPtr packet;
-    RouterTerminal terminal = RouterTerminal::Open;
-    QString error;
-};
-
-class SharedPacketRouter final {
-public:
-    struct Statistics {
-        std::size_t packetCountLimit = maximumQueuedPackets;
-        std::size_t packetByteLimit = maximumQueuedPacketBytes;
-        std::size_t maximumQueuedPacketCount = 0;
-        std::size_t maximumQueuedPacketBytes = 0;
-        std::size_t largestQueuedPacketBytes = 0;
-    };
-
-    bool push(
-            RoutedStream stream,
-            PacketPtr packet,
-            std::stop_token stopToken) {
-        Q_ASSERT(packet);
-        const std::size_t bytes = packet->size > 0
-            ? static_cast<std::size_t>(packet->size)
-            : 0;
-        std::unique_lock lock(m_mutex);
-        const bool ready = m_wake.wait(
-            lock,
-            stopToken,
-            [this, bytes] {
-                if (m_terminal != RouterTerminal::Open)
-                    return true;
-                const bool countAvailable =
-                    m_queuedPacketCount < maximumQueuedPackets;
-                const bool bytesAvailable =
-                    m_queuedPacketCount == 0
-                    || bytes <= maximumQueuedPacketBytes
-                        - std::min(
-                            m_queuedBytes,
-                            maximumQueuedPacketBytes);
-                return countAvailable && bytesAvailable;
-            });
-        if (!ready || m_terminal != RouterTerminal::Open)
-            return false;
-
-        queue(stream).push_back({
-            .packet = std::move(packet),
-            .bytes = bytes,
-        });
-        ++m_queuedPacketCount;
-        m_queuedBytes += bytes;
-        m_maximumQueuedPacketCount = std::max(
-            m_maximumQueuedPacketCount,
-            m_queuedPacketCount);
-        m_maximumQueuedPacketBytes = std::max(
-            m_maximumQueuedPacketBytes,
-            m_queuedBytes);
-        m_largestQueuedPacketBytes = std::max(
-            m_largestQueuedPacketBytes,
-            bytes);
-        lock.unlock();
-        m_wake.notify_all();
-        return true;
-    }
-
-    RoutedPacket pop(
-            RoutedStream stream,
-            std::stop_token stopToken) {
-        std::unique_lock lock(m_mutex);
-        auto &selected = queue(stream);
-        const bool ready = m_wake.wait(
-            lock,
-            stopToken,
-            [&] {
-                return !selected.empty()
-                    || m_terminal != RouterTerminal::Open;
-            });
-        if (!ready) {
-            return {.terminal = RouterTerminal::Cancelled};
-        }
-        if (!selected.empty()) {
-            Entry entry = std::move(selected.front());
-            selected.pop_front();
-            --m_queuedPacketCount;
-            m_queuedBytes -= entry.bytes;
-            lock.unlock();
-            m_wake.notify_all();
-            return {.packet = std::move(entry.packet)};
-        }
-        return {
-            .terminal = m_terminal,
-            .error = m_error,
-        };
-    }
-
-    void finish(
-            RouterTerminal terminal,
-            QString error = {}) {
-        Q_ASSERT(terminal != RouterTerminal::Open);
-        {
-            std::lock_guard lock(m_mutex);
-            if (m_terminal != RouterTerminal::Open)
-                return;
-            m_terminal = terminal;
-            m_error = std::move(error);
-        }
-        m_wake.notify_all();
-    }
-
-    Statistics statistics() const {
-        std::lock_guard lock(m_mutex);
-        return {
-            .maximumQueuedPacketCount =
-                m_maximumQueuedPacketCount,
-            .maximumQueuedPacketBytes =
-                m_maximumQueuedPacketBytes,
-            .largestQueuedPacketBytes =
-                m_largestQueuedPacketBytes,
-        };
-    }
-
-private:
-    struct Entry {
-        PacketPtr packet;
-        std::size_t bytes = 0;
-    };
-
-    std::deque<Entry> &queue(RoutedStream stream) {
-        return stream == RoutedStream::Video
-            ? m_videoPackets
-            : m_audioPackets;
-    }
-
-    mutable std::mutex m_mutex;
-    std::condition_variable_any m_wake;
-    std::deque<Entry> m_videoPackets;
-    std::deque<Entry> m_audioPackets;
-    std::size_t m_queuedPacketCount = 0;
-    std::size_t m_queuedBytes = 0;
-    std::size_t m_maximumQueuedPacketCount = 0;
-    std::size_t m_maximumQueuedPacketBytes = 0;
-    std::size_t m_largestQueuedPacketBytes = 0;
-    RouterTerminal m_terminal = RouterTerminal::Open;
-    QString m_error;
-};
 
 std::optional<std::int64_t> positiveDurationMicroseconds(
         std::int64_t value,
@@ -330,10 +167,10 @@ struct AudioWorkerStatus : WorkerStatus {
 };
 
 void stopSibling(
-        SharedPacketRouter &router,
+        FfmpegPacketRouter &router,
         std::stop_source &operationStop) {
     operationStop.request_stop();
-    router.finish(RouterTerminal::Cancelled);
+    router.finish(FfmpegPacketRouterTerminal::Cancelled);
 }
 
 FfmpegVideoDecodeResult decodeVideoPackets(
@@ -343,7 +180,7 @@ FfmpegVideoDecodeResult decodeVideoPackets(
         AVRational streamAspectRatio,
         const AVCodec &decoder,
         FfmpegVideoStreamDiagnostics diagnostics,
-        SharedPacketRouter &router,
+        FfmpegPacketRouter &router,
         const FfmpegVideoFrameSink &sink,
         std::stop_source &operationStop) {
     const std::stop_token stopToken = operationStop.get_token();
@@ -356,25 +193,25 @@ FfmpegVideoDecodeResult decodeVideoPackets(
         {streamAspectRatio.num, streamAspectRatio.den},
         std::move(diagnostics),
         [&router](std::stop_token packetStopToken) {
-            RoutedPacket input = router.pop(
-                RoutedStream::Video, packetStopToken);
+            FfmpegRoutedPacket input = router.pop(
+                FfmpegPacketStream::Video, packetStopToken);
             switch (input.terminal) {
-            case RouterTerminal::Open:
+            case FfmpegPacketRouterTerminal::Open:
                 return FfmpegVideoPacketRead{
                     .packet = std::move(input.packet),
                 };
-            case RouterTerminal::EndOfStream:
+            case FfmpegPacketRouterTerminal::EndOfStream:
                 return FfmpegVideoPacketRead{
                     .terminal =
                         FfmpegVideoPacketTerminal::EndOfStream,
                 };
-            case RouterTerminal::Failed:
+            case FfmpegPacketRouterTerminal::Failed:
                 return FfmpegVideoPacketRead{
                     .terminal =
                         FfmpegVideoPacketTerminal::Failed,
                     .error = std::move(input.error),
                 };
-            case RouterTerminal::Cancelled:
+            case FfmpegPacketRouterTerminal::Cancelled:
                 return FfmpegVideoPacketRead{
                     .terminal =
                         FfmpegVideoPacketTerminal::Cancelled,
@@ -780,7 +617,7 @@ AudioWorkerStatus decodeAudioPackets(
         int streamIndex,
         const AVCodec &decoder,
         std::optional<VideoTimelineOrigin> origin,
-        SharedPacketRouter &router,
+        FfmpegPacketRouter &router,
         const FfmpegPcmAudioSink &sink,
         std::stop_source &operationStop) {
     AudioWorkerStatus result;
@@ -866,16 +703,19 @@ AudioWorkerStatus decodeAudioPackets(
     };
 
     while (!stopToken.stop_requested()) {
-        RoutedPacket input = router.pop(
-            RoutedStream::Audio, stopToken);
-        if (input.terminal == RouterTerminal::Cancelled) {
+        FfmpegRoutedPacket input = router.pop(
+            FfmpegPacketStream::Audio, stopToken);
+        if (input.terminal
+                == FfmpegPacketRouterTerminal::Cancelled) {
             result.cancelled = true;
             return result;
         }
-        if (input.terminal == RouterTerminal::Failed)
+        if (input.terminal
+                == FfmpegPacketRouterTerminal::Failed)
             return fail(input.error);
         const bool flushing =
-            input.terminal == RouterTerminal::EndOfStream;
+            input.terminal
+                == FfmpegPacketRouterTerminal::EndOfStream;
         while (true) {
             const int sent = avcodec_send_packet(
                 codecContext.get(),
@@ -1201,7 +1041,7 @@ FfmpegMediaDecodeResult decodeMediaFrames(
         audioTimeBase = audioStream->time_base;
     }
 
-    SharedPacketRouter router;
+    FfmpegPacketRouter router;
     FfmpegVideoDecodeResult videoResult;
     AudioWorkerStatus audioResult;
     std::jthread videoWorker([&] {
@@ -1236,7 +1076,7 @@ FfmpegMediaDecodeResult decodeMediaFrames(
         PacketPtr packet(av_packet_alloc());
         if (!packet) {
             router.finish(
-                RouterTerminal::Failed,
+                FfmpegPacketRouterTerminal::Failed,
                 QStringLiteral("Could not allocate media packet"));
             break;
         }
@@ -1244,28 +1084,31 @@ FfmpegMediaDecodeResult decodeMediaFrames(
             formatContext.get(), packet.get());
         if (read < 0) {
             if (operationStop.stop_requested()) {
-                router.finish(RouterTerminal::Cancelled);
+                router.finish(
+                    FfmpegPacketRouterTerminal::Cancelled);
             } else if (read == AVERROR_EOF) {
-                router.finish(RouterTerminal::EndOfStream);
+                router.finish(
+                    FfmpegPacketRouterTerminal::EndOfStream);
             } else {
                 router.finish(
-                    RouterTerminal::Failed,
+                    FfmpegPacketRouterTerminal::Failed,
                     QStringLiteral("Media read failed: %1")
                         .arg(ffmpegError(read)));
             }
             break;
         }
-        std::optional<RoutedStream> destination;
+        std::optional<FfmpegPacketStream> destination;
         if (packet->stream_index == videoIndex)
-            destination = RoutedStream::Video;
+            destination = FfmpegPacketStream::Video;
         else if (packet->stream_index == audioIndex)
-            destination = RoutedStream::Audio;
+            destination = FfmpegPacketStream::Audio;
         if (destination
                 && !router.push(
                     *destination,
                     std::move(packet),
                     operationStop.get_token())) {
-            router.finish(RouterTerminal::Cancelled);
+            router.finish(
+                FfmpegPacketRouterTerminal::Cancelled);
             break;
         }
     }
@@ -1274,7 +1117,7 @@ FfmpegMediaDecodeResult decodeMediaFrames(
     if (audioWorker)
         audioWorker->join();
 
-    const SharedPacketRouter::Statistics routerStatistics =
+    const FfmpegPacketRouterStatistics routerStatistics =
         router.statistics();
     result.packetCountLimit = routerStatistics.packetCountLimit;
     result.packetByteLimit = routerStatistics.packetByteLimit;
