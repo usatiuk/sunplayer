@@ -9,8 +9,12 @@ boundaries. Existing graphics, video, presentation, and platform messages use
 the same shared categories.
 
 Current pipeline properties exposed in the UI remain subsystem-owned
-diagnostic snapshots. There is not yet one exportable support report,
-performance trace, buffering/stall model, or A/V synchronization report.
+diagnostic snapshots. The audio boundary now contributes a common low-rate
+snapshot for backend/format, PCM occupancy, submitted/presented frames,
+latency and device position when available, underruns, device revision, and
+clock reliability; `MediaSession` adds the active clock source. There is not
+yet one exportable support report, performance trace, buffering/stall model,
+or A/V synchronization report.
 The session file starts after `QGuiApplication` construction, so failures while
 Qt is locating or initializing its platform plugin remain outside this sink.
 The packaged-QML startup test catches the common deployment failure, but it is

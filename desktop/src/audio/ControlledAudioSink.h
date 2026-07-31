@@ -35,7 +35,9 @@ public:
     void finish(std::uint64_t playbackGeneration) override;
     void start() override;
     void pause() override;
+    void setGain(float linearGain) override;
     AudioPresentationSnapshot snapshot() const override;
+    AudioSinkDiagnostics diagnostics() const override;
     std::string failureReason() const override;
 
     // Deterministic device-failure injection for session and recovery tests.
@@ -83,5 +85,6 @@ private:
     bool m_running = false;
     bool m_finished = false;
     bool m_positionAvailable = true;
+    float m_gain = 1.0F;
     std::string m_failureReason;
 };

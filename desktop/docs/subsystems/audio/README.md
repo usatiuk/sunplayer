@@ -30,9 +30,17 @@ as cubeb's real-time callback buffer.
 `CubebAudioSink` opens the default WASAPI output through the pinned cubeb
 build. All cubeb lifecycle and position calls run on one dedicated MTA control
 thread. Its callback consumes a preallocated SPSC float queue, writes bounded
-underrun silence, and publishes fixed-capacity output-to-media spans. It does
-not allocate, block, take application locks, decode, log, invoke Qt, or perform
-device recovery.
+underrun silence, applies one atomically published linear gain, and publishes
+fixed-capacity output-to-media spans. It does not allocate, block, take
+application locks, decode, log, invoke Qt, or perform device recovery.
+
+Volume is a session-lifetime value from zero to one. Mute selects zero effective
+gain without changing that remembered value. Both controls operate after PCM
+queueing, so they affect already-buffered audio immediately while submitted and
+presented cursors continue unchanged. They are not implemented by pausing the
+device, dropping samples, or changing the media clock. A later measured slice
+may add a short click-free ramp; this milestone deliberately keeps gain
+application bounded and callback-safe.
 
 ## Accepted pipeline
 
@@ -166,6 +174,14 @@ position is allowed a one-second grace period and then becomes a visible
 clock-unavailable error rather than freezing indefinitely or silently
 switching clock sources.
 
+The same bounded monitor publishes a typed, low-rate audio diagnostic snapshot
+containing backend and format, PCM capacity and occupancy, submitted and
+presented media frames, device positions and latency when available, underrun
+frames, device revision, notification capability, and clock reliability. The
+session exposes the active clock source and the ordinary Player page shows the
+backend, clock, queued PCM duration, and underrun count. No callback emits Qt
+signals or log records.
+
 User intent remains separate from temporary ability to play. Pause freezes the
 timeline. Device loss or sustained underrun will freeze it in a recovery or
 buffering state, create a new audio-output epoch, preroll current-generation
@@ -198,6 +214,12 @@ replacement, drain, and end of stream. Pinned shorter-audio fixtures verify
 the audio-to-monotonic tail transition over both short and high-frame-rate
 video tails. Injecting a sink failure after decoded-audio EOS verifies
 current-generation failure propagation and cancellation.
+
+A real-FFmpeg session regression runs muted playback through that same
+controlled-device boundary and proves presented audio remains the advancing
+master clock. Focused sink coverage verifies that gain changes samples but not
+the submitted/presented mapping, and QML component coverage exercises both
+controls and the typed diagnostic bindings.
 
 Two additional lossless fixtures offset audio and video starts in opposite
 directions. They prove that leading audio gaps advance through silence, audio

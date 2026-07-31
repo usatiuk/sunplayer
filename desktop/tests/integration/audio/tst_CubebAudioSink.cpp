@@ -76,7 +76,7 @@ opensDefaultOutputWithoutStartingPlayback() {
     CubebAudioSink sink(48'000);
     sink.reset(9, {48'000, 2});
 
-    const CubebAudioDiagnostics diagnostics =
+    const AudioSinkDiagnostics diagnostics =
         sink.diagnostics();
     QVERIFY2(
         diagnostics.errorMessage.empty(),
@@ -146,7 +146,7 @@ void CubebAudioSinkTest::startsPausesAndDrainsSilentPcm() {
     QVERIFY(drained.terminalPositionValid);
     QVERIFY(!drained.advancing);
 
-    const CubebAudioDiagnostics drainedDiagnostics =
+    const AudioSinkDiagnostics drainedDiagnostics =
         sink.diagnostics();
     QCOMPARE(drainedDiagnostics.mediaFramesSubmitted, 12'000U);
     QCOMPARE(drainedDiagnostics.mediaFramesPresented, 12'000U);

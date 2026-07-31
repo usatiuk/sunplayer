@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <limits>
 #include <utility>
 
 #include <QFileInfo>
@@ -85,6 +87,7 @@ MediaSession::MediaSession(
       m_audioSink(std::move(audioSink)),
       m_videoSource({}, readback) {
     Q_ASSERT(m_decodeOperation);
+    applyAudioGain();
     m_videoSource.setFrameSelector(this);
     m_frameQueue.reset(m_playbackGeneration);
     connect(
@@ -223,6 +226,58 @@ std::size_t MediaSession::maximumQueuedFrameCount() const {
 
 int MediaSession::queuedVideoFrames() const {
     return static_cast<int>(queuedFrameCount());
+}
+
+qreal MediaSession::volume() const {
+    return m_volume;
+}
+
+bool MediaSession::muted() const {
+    return m_muted;
+}
+
+bool MediaSession::hasAudioOutput() const {
+    return m_audioSinkDiagnostics.streamOpen;
+}
+
+QString MediaSession::audioBackend() const {
+    return QString::fromStdString(
+        m_audioSinkDiagnostics.backendName);
+}
+
+MediaSession::MediaClockSource MediaSession::mediaClockSource() const {
+    return m_mediaClockSource;
+}
+
+bool MediaSession::audioClockReliable() const {
+    return m_audioSinkDiagnostics.clockReliable;
+}
+
+int MediaSession::audioQueuedMilliseconds() const {
+    const int sampleRate = m_audioSinkDiagnostics.format.sampleRate;
+    if (sampleRate <= 0)
+        return -1;
+    const std::uint64_t milliseconds =
+        static_cast<std::uint64_t>(
+            m_audioSinkDiagnostics.queuedFrames)
+        * 1'000ULL
+        / static_cast<std::uint64_t>(sampleRate);
+    return static_cast<int>(std::min<std::uint64_t>(
+        milliseconds,
+        static_cast<std::uint64_t>(
+            std::numeric_limits<int>::max())));
+}
+
+qulonglong MediaSession::audioSubmittedFrames() const {
+    return m_audioSinkDiagnostics.mediaFramesSubmitted;
+}
+
+qulonglong MediaSession::audioPresentedFrames() const {
+    return m_audioSinkDiagnostics.mediaFramesPresented;
+}
+
+qulonglong MediaSession::audioUnderrunFrames() const {
+    return m_audioSinkDiagnostics.underrunFrames;
 }
 
 std::optional<AudioPresentationSnapshot>
@@ -445,6 +500,27 @@ void MediaSession::pause() {
     emit sessionChanged();
     emit timelineChanged();
     m_videoSource.requestFrameSelection();
+}
+
+void MediaSession::setVolume(qreal volume) {
+    Q_ASSERT(QThread::currentThread() == thread());
+    if (!std::isfinite(volume))
+        return;
+    const qreal normalized = std::clamp(volume, 0.0, 1.0);
+    if (m_volume == normalized)
+        return;
+    m_volume = normalized;
+    applyAudioGain();
+    emit volumeChanged();
+}
+
+void MediaSession::setMuted(bool muted) {
+    Q_ASSERT(QThread::currentThread() == thread());
+    if (m_muted == muted)
+        return;
+    m_muted = muted;
+    applyAudioGain();
+    emit mutedChanged();
 }
 
 void MediaSession::seekToMilliseconds(
@@ -1286,6 +1362,7 @@ void MediaSession::resetPlayback(
         positionMicroseconds;
     m_audioClockEstablished = false;
     m_audioTailClockActive = false;
+    resetAudioDiagnostics();
     m_requestedPositionMicroseconds =
         positionMicroseconds;
     m_frameScheduler.reset();
@@ -1296,12 +1373,59 @@ void MediaSession::resetPlayback(
     m_playbackMetricsNotificationPending = false;
 }
 
+void MediaSession::applyAudioGain() {
+    if (m_audioSink) {
+        m_audioSink->setGain(
+            m_muted ? 0.0F : static_cast<float>(m_volume));
+    }
+}
+
+void MediaSession::resetAudioDiagnostics() {
+    m_audioSinkDiagnostics = {};
+    m_mediaClockSource = MediaClockSource::Monotonic;
+}
+
+void MediaSession::updateAudioClockDiagnostics(
+        const AudioPresentationSnapshot &presentation) {
+    if (presentation.playbackGeneration
+            != m_playbackGeneration) {
+        return;
+    }
+    MediaClockSource clockSource;
+    if (m_audioTailClockActive) {
+        clockSource = MediaClockSource::PostAudioMonotonic;
+    } else if (!m_audioClockEstablished) {
+        clockSource = MediaClockSource::ProvisionalMonotonic;
+    } else if (presentation.valid
+            || (presentation.drained
+                && presentation.terminalPositionValid)) {
+        clockSource = MediaClockSource::PresentedAudio;
+    } else {
+        clockSource = MediaClockSource::FrozenAudio;
+    }
+    if (m_mediaClockSource == clockSource)
+        return;
+    m_mediaClockSource = clockSource;
+    emit audioDiagnosticsChanged();
+}
+
+void MediaSession::sampleAudioSinkDiagnostics() {
+    if (!currentGenerationUsesAudioClock())
+        return;
+    AudioSinkDiagnostics sink = m_audioSink->diagnostics();
+    if (m_audioSinkDiagnostics == sink)
+        return;
+    m_audioSinkDiagnostics = std::move(sink);
+    emit audioDiagnosticsChanged();
+}
+
 void MediaSession::publishSessionAndPlaybackMetrics(
         std::uint64_t generation) {
     if (generation != m_playbackGeneration)
         return;
     emit sessionChanged();
     emit timelineChanged();
+    emit audioDiagnosticsChanged();
     if (generation == m_playbackGeneration)
         emit playbackMetricsChanged();
 }
@@ -1328,7 +1452,10 @@ bool MediaSession::observeAudioOutput(
     if (!currentGenerationUsesAudioClock())
         return true;
     observation = m_audioSink->snapshot();
-    return updateAudioOutputState(now, *observation);
+    const bool current = updateAudioOutputState(now, *observation);
+    if (current)
+        updateAudioClockDiagnostics(*observation);
+    return current;
 }
 
 bool MediaSession::updateAudioOutputState(
@@ -1576,6 +1703,7 @@ void MediaSession::monitorPlayback() {
 
     m_videoSource.prepareForPresentation(
         std::chrono::steady_clock::now());
+    sampleAudioSinkDiagnostics();
     if (m_state != State::Ready)
         return;
 

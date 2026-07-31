@@ -165,6 +165,24 @@ class ShellTestMediaSession final : public QObject {
                NOTIFY playbackMetricsChanged)
     Q_PROPERTY(int queuedVideoFrames MEMBER m_queuedVideoFrames
                NOTIFY playbackMetricsChanged)
+    Q_PROPERTY(qreal volume READ volume WRITE setVolume NOTIFY volumeChanged)
+    Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)
+    Q_PROPERTY(bool hasAudioOutput MEMBER m_hasAudioOutput
+               NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(QString audioBackend MEMBER m_audioBackend
+               NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(MediaClockSource mediaClockSource MEMBER m_mediaClockSource
+               NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(bool audioClockReliable MEMBER m_audioClockReliable
+               NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(int audioQueuedMilliseconds MEMBER m_audioQueuedMilliseconds
+               NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(qulonglong audioSubmittedFrames MEMBER m_audioSubmittedFrames
+               NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(qulonglong audioPresentedFrames MEMBER m_audioPresentedFrames
+               NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(qulonglong audioUnderrunFrames MEMBER m_audioUnderrunFrames
+               NOTIFY audioDiagnosticsChanged)
 
 public:
     enum class State {
@@ -174,6 +192,15 @@ public:
         Error,
     };
     Q_ENUM(State)
+
+    enum class MediaClockSource {
+        Monotonic,
+        ProvisionalMonotonic,
+        PresentedAudio,
+        FrozenAudio,
+        PostAudioMonotonic,
+    };
+    Q_ENUM(MediaClockSource)
 
     explicit ShellTestMediaSession(QObject *parent)
         : QObject(parent) {}
@@ -190,6 +217,8 @@ public:
     qlonglong durationMilliseconds() const {
         return m_durationMilliseconds;
     }
+    qreal volume() const { return m_volume; }
+    bool muted() const { return m_muted; }
     int openCount() const { return m_openCount; }
     int cancelCount() const { return m_cancelCount; }
     int retryCount() const { return m_retryCount; }
@@ -232,6 +261,20 @@ public:
         emit timelineChanged();
     }
 
+    void setVolume(qreal volume) {
+        if (m_volume == volume)
+            return;
+        m_volume = volume;
+        emit volumeChanged();
+    }
+
+    void setMuted(bool muted) {
+        if (m_muted == muted)
+            return;
+        m_muted = muted;
+        emit mutedChanged();
+    }
+
     Q_INVOKABLE void openMedia(const QUrl &) {
         ++m_openCount;
     }
@@ -263,6 +306,9 @@ signals:
     void sessionChanged();
     void playbackMetricsChanged();
     void timelineChanged();
+    void volumeChanged();
+    void mutedChanged();
+    void audioDiagnosticsChanged();
 
 private:
     State m_state = State::Empty;
@@ -277,6 +323,17 @@ private:
     qulonglong m_selectedVideoFrames = 1;
     qulonglong m_droppedVideoFrames = 0;
     int m_queuedVideoFrames = 2;
+    qreal m_volume = 0.75;
+    bool m_muted = false;
+    bool m_hasAudioOutput = true;
+    QString m_audioBackend = QStringLiteral("controlled");
+    MediaClockSource m_mediaClockSource =
+        MediaClockSource::PresentedAudio;
+    bool m_audioClockReliable = true;
+    int m_audioQueuedMilliseconds = 80;
+    qulonglong m_audioSubmittedFrames = 4'800;
+    qulonglong m_audioPresentedFrames = 960;
+    qulonglong m_audioUnderrunFrames = 0;
     QUrl m_mediaUrl;
     QString m_displayName;
     QString m_errorMessage;

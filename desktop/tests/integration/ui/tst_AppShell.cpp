@@ -133,6 +133,18 @@ void AppShellTest::publishesActiveViewport() {
     QObject *const durationLabel =
         rootItem->findChild<QObject *>(
             QStringLiteral("durationLabel"));
+    QObject *const muteButton =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("muteButton"));
+    QObject *const volumeSlider =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("volumeSlider"));
+    QObject *const audioDiagnosticsLabel =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("audioDiagnosticsLabel"));
+    QQuickItem *const sessionStatusBar =
+        rootItem->findChild<QQuickItem *>(
+            QStringLiteral("sessionStatusBar"));
     QVERIFY(emptyState);
     QVERIFY(openingState);
     QVERIFY(waitingForVideoState);
@@ -145,6 +157,10 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(seekSlider);
     QVERIFY(positionLabel);
     QVERIFY(durationLabel);
+    QVERIFY(muteButton);
+    QVERIFY(volumeSlider);
+    QVERIFY(audioDiagnosticsLabel);
+    QVERIFY(sessionStatusBar);
     QObject *const rendererSwitchContent =
         qvariant_cast<QObject *>(
             rendererSwitch->property("contentItem"));
@@ -191,6 +207,52 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_VERIFY(waitingForVideoState->property("visible").toBool());
     QTRY_VERIFY(playPauseButton->property("visible").toBool());
     QTRY_VERIFY(seekSlider->property("visible").toBool());
+    QTRY_VERIFY(muteButton->property("visible").toBool());
+    QTRY_VERIFY(volumeSlider->property("visible").toBool());
+    QTRY_VERIFY(audioDiagnosticsLabel->property("visible").toBool());
+    QVERIFY(audioDiagnosticsLabel->property("text").toString().contains(
+        QStringLiteral("controlled")));
+    QCOMPARE(volumeSlider->property("value").toDouble(), 0.75);
+    QVERIFY(QMetaObject::invokeMethod(
+        muteButton, "clicked", Qt::DirectConnection));
+    QVERIFY(mediaSession.muted());
+    QCOMPARE(
+        muteButton->property("text").toString(),
+        QStringLiteral("Unmute"));
+    QVERIFY(!volumeSlider->property("enabled").toBool());
+    mediaSession.setMuted(false);
+    mediaSession.setVolume(0.4);
+    QTRY_COMPARE(volumeSlider->property("value").toDouble(), 0.4);
+    QQuickItem *const volumeSliderItem =
+        qobject_cast<QQuickItem *>(volumeSlider);
+    QVERIFY(volumeSliderItem);
+    const QPointF volumeStart =
+        volumeSliderItem->mapToScene({
+            volumeSliderItem->width() * 0.4,
+            volumeSliderItem->height() * 0.5,
+        });
+    const QPointF volumeDestination =
+        volumeSliderItem->mapToScene({
+            volumeSliderItem->width() * 0.8,
+            volumeSliderItem->height() * 0.5,
+        });
+    QTest::mousePress(
+        &quickWindow,
+        Qt::LeftButton,
+        Qt::NoModifier,
+        volumeStart.toPoint());
+    QTest::mouseMove(
+        &quickWindow,
+        volumeDestination.toPoint());
+    QTest::mouseRelease(
+        &quickWindow,
+        Qt::LeftButton,
+        Qt::NoModifier,
+        volumeDestination.toPoint());
+    QTRY_VERIFY(mediaSession.volume() > 0.7);
+    QTRY_COMPARE(
+        volumeSlider->property("value").toDouble(),
+        mediaSession.volume());
 
     mediaSession.setState(
         ShellTestMediaSession::State::Ready, true);
@@ -208,9 +270,15 @@ void AppShellTest::publishesActiveViewport() {
         ShellTestMediaSession::State::Ready, true);
     QTRY_VERIFY(videoViewport.visible());
     QTRY_COMPARE(videoViewport.rect().x(), 24.0);
-    QTRY_COMPARE(videoViewport.rect().y(), 128.0);
+    QTRY_COMPARE(
+        videoViewport.rect().y(),
+        56.0 + sessionStatusBar->y()
+            + sessionStatusBar->height() + 12.0);
     QTRY_COMPARE(videoViewport.rect().width(), 1052.0);
-    QTRY_COMPARE(videoViewport.rect().height(), 552.0);
+    QTRY_COMPARE(
+        videoViewport.rect().height(),
+        rootItem->height()
+            - videoViewport.rect().y() - 80.0);
     QTRY_VERIFY(seekSlider->property("visible").toBool());
     QVERIFY(seekSlider->property("enabled").toBool());
     QCOMPARE(seekSlider->property("from").toDouble(), 0.0);

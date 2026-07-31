@@ -140,6 +140,12 @@ void ControlledAudioSink::pause() {
     m_running = false;
 }
 
+void ControlledAudioSink::setGain(float linearGain) {
+    Q_ASSERT(linearGain >= 0.0F && linearGain <= 1.0F);
+    std::lock_guard lock(m_mutex);
+    m_gain = std::clamp(linearGain, 0.0F, 1.0F);
+}
+
 AudioPresentationSnapshot ControlledAudioSink::snapshot() const {
     std::lock_guard lock(m_mutex);
     const bool drained = m_finished
@@ -173,6 +179,34 @@ AudioPresentationSnapshot ControlledAudioSink::snapshot() const {
                 m_presentedFrames);
     }
     return result;
+}
+
+AudioSinkDiagnostics ControlledAudioSink::diagnostics() const {
+    std::lock_guard lock(m_mutex);
+    const bool hasPosition = m_playbackGeneration != 0
+        && m_format.isValid()
+        && !m_mapping.empty()
+        && m_positionAvailable
+        && m_failureReason.empty();
+    return {
+        .backendName = "controlled",
+        .errorMessage = m_failureReason,
+        .format = m_format,
+        .queueCapacityFrames = m_maximumBufferedFrames,
+        .maximumSubmitFrames = m_maximumBufferedFrames,
+        .queuedFrames = m_bufferedFrames,
+        .maximumQueuedFrames = m_maximumObservedBufferedFrames,
+        .mediaFramesSubmitted = m_submittedFrames,
+        .mediaFramesPresented = m_presentedFrames,
+        .deviceFramesWritten = m_submittedFrames,
+        .deviceFramesPresented = hasPosition
+            ? std::optional<std::uint64_t>(m_presentedFrames)
+            : std::nullopt,
+        .streamOpen = m_playbackGeneration != 0
+            && m_format.isValid(),
+        .positionAvailable = hasPosition,
+        .clockReliable = hasPosition,
+    };
 }
 
 std::string ControlledAudioSink::failureReason() const {
@@ -237,6 +271,17 @@ ControlledAudioRender ControlledAudioSink::render(
             queued.block.samples.begin()
                 + static_cast<std::ptrdiff_t>(
                     firstSample + sampleCount));
+        if (m_gain != 1.0F) {
+            std::transform(
+                result.samples.end()
+                    - static_cast<std::ptrdiff_t>(sampleCount),
+                result.samples.end(),
+                result.samples.end()
+                    - static_cast<std::ptrdiff_t>(sampleCount),
+                [gain = m_gain](float sample) {
+                    return sample * gain;
+                });
+        }
 
         const std::uint64_t sourceFrame =
             queued.block.streamFrameIndex

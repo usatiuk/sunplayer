@@ -13,8 +13,8 @@ pause, and replay commands. A position/duration timeline performs seek through
 the session's
 generation-scoped restart boundary and reports truthful seeking state. It
 reports decode path/fallback plus decoded, queued, selected, and dropped-frame
-counts. Track, subtitle, and volume controls remain absent until those commands
-exist.
+counts. Session-lifetime volume and mute are wired to the audio-output boundary;
+track and subtitle controls remain absent until those commands exist.
 
 Session readiness and video-frame availability are distinct UI facts. When
 audio makes the session ready before the first video frame, Player keeps its
@@ -68,8 +68,9 @@ error state in page-local properties.
 The current seam exposes `Empty`, `Opening`, `Ready`, and `Error`; playing,
 paused, ended, seekable, and seeking state; integer-millisecond position and
 duration; and open, cancel, retry, close, play/pause, replay, and seek
-behavior. Expand it with working behavior rather than
-adding disconnected controls.
+behavior. It also exposes session-lifetime volume/mute plus a low-rate typed
+audio diagnostic view; mute preserves volume and audio-clock progression.
+Expand it with working behavior rather than adding disconnected controls.
 
 ## Video viewport
 
@@ -99,13 +100,13 @@ Inactive pages cannot compete for the viewport.
 * Ready with playing, paused, or ended media; video may still be waiting for
   its first due frame.
 
-The Ready state exposes play/pause or replay, open another, and close. Queue
-and frame counters provide lightweight pipeline observability. Its non-live
-timeline sends only interactive moves back to the session, so backend position
-updates cannot create seek loops. Seeking has a distinct busy state and keeps
-the timeline visible but disabled. Add track, subtitle, and volume controls
-only when their underlying commands and
-observable states exist.
+The Ready state exposes play/pause or replay, open another, close, mute, and
+volume. Queue/frame counters plus audio-clock, PCM-occupancy, and underrun
+diagnostics provide lightweight pipeline observability. Its non-live timeline
+sends only interactive moves back to the session, so backend position updates
+cannot create seek loops. Seeking has a distinct busy state and keeps the
+timeline visible but disabled. Add track and subtitle controls only when their
+underlying commands and observable states exist.
 
 ## HDR Lab and diagnostics
 

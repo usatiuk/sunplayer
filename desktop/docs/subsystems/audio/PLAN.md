@@ -52,7 +52,7 @@ explicit recovery semantics.
 * [ ] Negotiate a stable format for each audio-output epoch and rebuild
   libswresample when it changes.
 * [x] Implement preroll, drain, and short-underrun hold silence.
-* [ ] Implement gain and mute without changing media-clock progression.
+* [x] Implement gain and mute without changing media-clock progression.
 * [x] Expose submitted media frames, mapped presented media frames, raw cubeb
   playback position, reported latency, confidence, device-change capability,
   and underrun counters.
@@ -68,7 +68,7 @@ explicit recovery semantics.
 * [x] Map presented backend frames back to normalized media time.
 * [x] Feed the existing `MediaClockSnapshot` and `VideoFrameScheduler` without
   giving the audio backend ownership of playback policy.
-* [ ] Keep mute advancing media time; distinguish source silence from
+* [x] Keep mute advancing media time; distinguish source silence from
   underrun/recovery hold silence.
 * [x] Invalidate packets, decoded frames, PCM, metadata, and observations on one
   seek generation boundary.
@@ -80,7 +80,7 @@ explicit recovery semantics.
   no presentation consumer is active.
 * [ ] Cover sustained underrun, latency change, and large-discontinuity
   recovery through the controlled sink.
-* [ ] Add ordinary audio/video position, queue, underrun, and drop diagnostics
+* [x] Add ordinary audio/video position, queue, underrun, and drop diagnostics
   without logging from the callback.
 
 ## Milestone 4: device recovery and supported platforms
@@ -112,3 +112,5 @@ explicit recovery semantics.
 * Arbitrary DSP graphs and audio-backend plugins.
 * Continuous audio-rate correction without measured need.
 * Gapless switching, crossfade, and per-device calibration databases.
+* Click-free gain ramps until real callback cadence measurements establish an
+  appropriate bounded ramp policy.

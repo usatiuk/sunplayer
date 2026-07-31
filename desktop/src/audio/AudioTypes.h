@@ -2,6 +2,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string>
 #include <vector>
 
 struct AudioStreamFormat {
@@ -43,4 +45,31 @@ struct AudioPresentationSnapshot {
     // from AudioSink::failureReason() outside the real-time boundary.
     bool failed = false;
     bool valid = false;
+};
+
+// Low-rate, immutable observation for diagnostics and support tooling. This is
+// sampled outside the real-time callback; implementations publish callback
+// counters through atomics or their existing synchronized control boundary.
+struct AudioSinkDiagnostics {
+    bool operator==(const AudioSinkDiagnostics &) const = default;
+
+    std::string backendName;
+    std::string errorMessage;
+    AudioStreamFormat format;
+    std::size_t queueCapacityFrames = 0;
+    std::size_t maximumSubmitFrames = 0;
+    std::size_t queuedFrames = 0;
+    std::size_t maximumQueuedFrames = 0;
+    std::uint32_t requestedLatencyFrames = 0;
+    std::optional<std::uint32_t> reportedLatencyFrames;
+    std::uint64_t mediaFramesSubmitted = 0;
+    std::uint64_t mediaFramesPresented = 0;
+    std::uint64_t deviceFramesWritten = 0;
+    std::optional<std::uint64_t> deviceFramesPresented;
+    std::uint64_t underrunFrames = 0;
+    std::uint64_t deviceRevision = 0;
+    bool streamOpen = false;
+    bool positionAvailable = false;
+    bool deviceNotificationsAvailable = false;
+    bool clockReliable = false;
 };

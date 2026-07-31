@@ -310,7 +310,7 @@ Documentation: `docs/subsystems/video-rendering/`
 * [x] Bounded controlled PCM buffering
 * [x] Real-time-safe Windows device callback and default-endpoint lifecycle
 * [x] Production session output and presented-audio master clock
-* [ ] Volume and mute
+* [x] Session-lifetime volume and mute at the audio-output boundary
 * [ ] Device changes and recovery
 
 Documentation: `docs/subsystems/audio/`
@@ -342,7 +342,7 @@ Documentation: `docs/subsystems/subtitles/`
 * [ ] Jump backward and forward
 * [ ] Audio-track selection
 * [ ] Subtitle-track selection
-* [ ] Volume and mute
+* [x] Volume and mute
 * [ ] Fullscreen
 * [x] Continuous video loading and media error presentation
 * [ ] Continuous buffering presentation
@@ -360,7 +360,7 @@ Documentation: `docs/subsystems/ui/`
 * [ ] Pipeline capability and fallback report
 * [ ] Queue, buffering, and stall telemetry
 * [ ] Decode and render timing
-* [ ] Frame-drop and audio-underrun reporting
+* [x] Initial frame-drop and audio-underrun reporting
 * [ ] CPU and GPU copy reporting where detectable
 * [ ] Active graphics-adapter reporting
 * [ ] Recovery diagnostics

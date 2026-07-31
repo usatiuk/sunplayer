@@ -49,9 +49,13 @@ general telemetry platform in advance.
 The controlled sink already exposes typed generation, running state,
 submitted/presented frame counts, media position, queue depth, and observed
 capacity for deterministic tests. The cubeb sink and audio-master session are
-now wired; structured clock, queue, underrun, and recovery telemetry remains
-the next diagnostics slice.
+now wired. A common low-rate sink snapshot exposes backend, PCM occupancy,
+submitted/presented counts, clock reliability, and underruns; `MediaSession`
+adds the current clock source. The Player renders the backend, clock source,
+PCM occupancy, and underruns; high-rate timing and recovery traces remain.
 
+* [x] Publish a typed low-rate audio sink and playback-clock snapshot without
+  logging or signaling from the callback.
 * [ ] Record the selected master clock and clock-anchor revisions.
 * [ ] Track audio submitted/presented estimates, video selection/presentation,
   drift correction, underruns, and dropped frames.

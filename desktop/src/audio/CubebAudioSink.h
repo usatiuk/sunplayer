@@ -11,28 +11,6 @@
 #include "audio/AudioSink.h"
 #include "audio/RealtimePcmQueue.h"
 
-struct CubebAudioDiagnostics {
-    std::string backendName;
-    std::string errorMessage;
-    AudioStreamFormat format;
-    std::size_t queueCapacityFrames = 0;
-    std::size_t maximumSubmitFrames = 0;
-    std::size_t queuedFrames = 0;
-    std::size_t maximumQueuedFrames = 0;
-    std::uint32_t requestedLatencyFrames = 0;
-    std::optional<std::uint32_t> reportedLatencyFrames;
-    std::uint64_t mediaFramesSubmitted = 0;
-    std::uint64_t mediaFramesPresented = 0;
-    std::uint64_t deviceFramesWritten = 0;
-    std::optional<std::uint64_t> deviceFramesPresented;
-    std::uint64_t underrunFrames = 0;
-    std::uint64_t deviceRevision = 0;
-    bool streamOpen = false;
-    bool positionAvailable = false;
-    bool deviceNotificationsAvailable = false;
-    bool clockReliable = false;
-};
-
 // Physical shared-mode audio sink. The cubeb callback touches only the
 // preallocated PCM queue, fixed-capacity output ledger, and atomics. Stream
 // lifecycle, device queries, and error formatting remain on control/decode
@@ -53,10 +31,11 @@ public:
     void finish(std::uint64_t playbackGeneration) override;
     void start() override;
     void pause() override;
+    void setGain(float linearGain) override;
     AudioPresentationSnapshot snapshot() const override;
     std::string failureReason() const override;
 
-    CubebAudioDiagnostics diagnostics() const;
+    AudioSinkDiagnostics diagnostics() const override;
 
 private:
     enum class Error {
@@ -96,6 +75,7 @@ private:
     std::atomic<std::uint64_t> m_underrunFrames{0};
     std::atomic<std::uint64_t> m_deviceRevision{0};
     std::atomic<std::size_t> m_maximumSubmitFrames{0};
+    std::atomic<float> m_gain{1.0F};
     std::atomic_bool m_wantsRunning{false};
     std::atomic_bool m_streamStarted{false};
     std::atomic_bool m_producerFinished{false};

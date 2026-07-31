@@ -43,6 +43,7 @@ public:
 
 private slots:
     void separatesSubmittedAndPresentedMediaTime();
+    void gainChangesSamplesWithoutChangingPresentation();
     void boundsPcmAndWakesBlockedGeneration();
     void reportsGenerationScopedFailure();
 };
@@ -102,6 +103,50 @@ separatesSubmittedAndPresentedMediaTime() {
     QVERIFY(!observation.valid);
     QVERIFY(observation.terminalPositionValid);
     QCOMPARE(observation.mediaPositionMicroseconds, 520'000);
+}
+
+void ControlledAudioSinkTest::
+gainChangesSamplesWithoutChangingPresentation() {
+    ControlledAudioSink sink(16);
+    sink.setGain(0.5F);
+    sink.reset(8, {48'000, 2});
+    QVERIFY(sink.submit(block(8, 0, 250'000, 4, 0.8F)));
+    QVERIFY(sink.submit(block(8, 4, 250'083, 4, 0.6F)));
+    sink.start();
+
+    const ControlledAudioRender attenuated = sink.render(4);
+    QCOMPARE(attenuated.frames, 4U);
+    QVERIFY(std::all_of(
+        attenuated.samples.cbegin(),
+        attenuated.samples.cend(),
+        [](float sample) {
+            return qFuzzyCompare(sample, 0.4F);
+        }));
+    sink.advancePresentedFrames(attenuated.frames);
+    const std::int64_t afterAudible =
+        sink.snapshot().mediaPositionMicroseconds;
+
+    sink.setGain(0.0F);
+    const ControlledAudioRender muted = sink.render(4);
+    QCOMPARE(muted.frames, 4U);
+    QVERIFY(std::all_of(
+        muted.samples.cbegin(),
+        muted.samples.cend(),
+        [](float sample) { return sample == 0.0F; }));
+    sink.advancePresentedFrames(muted.frames);
+
+    const AudioPresentationSnapshot presentation = sink.snapshot();
+    QCOMPARE(presentation.submittedFrames, 8U);
+    QCOMPARE(presentation.presentedFrames, 8U);
+    QVERIFY(presentation.mediaPositionMicroseconds > afterAudible);
+    QVERIFY(!presentation.advancing);
+
+    const AudioSinkDiagnostics diagnostics = sink.diagnostics();
+    QCOMPARE(diagnostics.backendName, std::string("controlled"));
+    QCOMPARE(diagnostics.queuedFrames, 0U);
+    QCOMPARE(diagnostics.mediaFramesSubmitted, 8U);
+    QCOMPARE(diagnostics.mediaFramesPresented, 8U);
+    QVERIFY(diagnostics.clockReliable);
 }
 
 void ControlledAudioSinkTest::

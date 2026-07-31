@@ -138,9 +138,10 @@ video scheduler compares normalized frame PTS
 wait / present / drop / discard stale generation
 ```
 
-Muted playback keeps the audio stream advancing at zero gain when practical,
-preserving the same clock. Media without an audio track uses a monotonic-clock
-master.
+Muted playback keeps the audio stream advancing at zero output gain, preserving
+the same clock and PCM-to-media mapping. Volume and mute never pause the sink
+or rewrite decoded timestamps. Media without an audio track uses a
+monotonic-clock master.
 
 Seeking re-anchors the clock explicitly through a replacement generation.
 Suspend/resume, device replacement, large discontinuities, and any measured

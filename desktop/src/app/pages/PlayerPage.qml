@@ -30,6 +30,21 @@ VideoPage {
             : totalMinutes + ":" + paddedSeconds
     }
 
+    function clockSourceText(source) {
+        switch (source) {
+        case MediaSession.PresentedAudio:
+            return qsTr("audio master")
+        case MediaSession.FrozenAudio:
+            return qsTr("audio clock held")
+        case MediaSession.ProvisionalMonotonic:
+            return qsTr("audio clock starting")
+        case MediaSession.PostAudioMonotonic:
+            return qsTr("post-audio clock")
+        default:
+            return qsTr("monotonic clock")
+        }
+    }
+
     videoViewportRect:
         Qt.rect(videoFrame.x, videoFrame.y,
                 videoFrame.width, videoFrame.height)
@@ -57,7 +72,9 @@ VideoPage {
         id: videoFrame
 
         x: 24
-        y: 72
+        y: root.sessionActive
+            ? sessionStatusBar.y + sessionStatusBar.height + 12
+            : 72
         width: Math.max(1, root.width - 48)
         height: Math.max(
             1,
@@ -209,6 +226,9 @@ VideoPage {
     }
 
     Rectangle {
+        id: sessionStatusBar
+        objectName: "sessionStatusBar"
+
         anchors {
             left: parent.left
             right: parent.right
@@ -277,6 +297,22 @@ VideoPage {
                         .arg(root.session.droppedVideoFrames)
                         .arg(root.session.queuedVideoFrames)
                     color: "#778195"
+                    elide: Text.ElideRight
+                }
+
+                Label {
+                    objectName: "audioDiagnosticsLabel"
+                    Layout.fillWidth: true
+                    visible: root.session.hasAudioOutput
+                    text: qsTr("%1 · %2 · %3 ms PCM queued · %4 underrun frames")
+                        .arg(root.session.audioBackend)
+                        .arg(root.clockSourceText(
+                            root.session.mediaClockSource))
+                        .arg(root.session.audioQueuedMilliseconds)
+                        .arg(root.session.audioUnderrunFrames)
+                    color: root.session.audioClockReliable
+                        ? "#778195"
+                        : "#d2a85d"
                     elide: Text.ElideRight
                 }
             }
@@ -379,6 +415,32 @@ VideoPage {
                 color: "#9ca6b8"
                 font.features: {
                     "tnum": 1
+                }
+            }
+
+            Button {
+                objectName: "muteButton"
+                visible: root.session.hasAudioOutput
+                text: root.session.muted
+                    ? qsTr("Unmute")
+                    : qsTr("Mute")
+                onClicked: root.session.muted = !root.session.muted
+            }
+
+            Slider {
+                id: volumeSlider
+                objectName: "volumeSlider"
+                visible: root.session.hasAudioOutput
+                Layout.preferredWidth: 120
+                from: 0
+                to: 1
+                enabled: !root.session.muted
+                onMoved: root.session.volume = value
+
+                Binding on value {
+                    when: !volumeSlider.pressed
+                    value: root.session.volume
+                    restoreMode: Binding.RestoreBinding
                 }
             }
         }

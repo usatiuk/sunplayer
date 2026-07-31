@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <condition_variable>
 #include <cstdlib>
 #include <memory>
@@ -171,6 +172,7 @@ public:
 private slots:
     void opensRealMediaOffThread();
     void synchronizedPlaybackUsesPresentedAudioClock();
+    void mutedPlaybackKeepsPresentedAudioAsMaster();
     void staggeredStarts_data();
     void staggeredStarts();
     void playbackProgressDoesNotRequirePresentationConsumer();
@@ -426,6 +428,99 @@ synchronizedPlaybackUsesPresentedAudioClock() {
     QVERIFY(audioSink->snapshot().drained);
     QCOMPARE(session.positionMilliseconds(), 3'000);
     QVERIFY(!session.playing());
+}
+
+void MediaSessionTest::
+mutedPlaybackKeepsPresentedAudioAsMaster() {
+    auto audioSink =
+        std::make_shared<ControlledAudioSink>(4'096);
+    MediaSession session(
+        VideoTargetReadback::Disabled,
+        [](
+                const FfmpegMediaDecodeRequest &request,
+                const FfmpegVideoFrameSink &videoSink,
+                const FfmpegAudioOutputSink &audioOutput,
+                const FfmpegMediaStreamSink &streamSink,
+                std::stop_token stopToken) {
+            return decodeMediaFrames(
+                request,
+                videoSink,
+                audioOutput,
+                streamSink,
+                stopToken);
+        },
+        audioSink);
+    session.setVolume(0.35);
+    session.setMuted(true);
+    QCOMPARE(session.volume(), 0.35);
+    QVERIFY(session.muted());
+
+    session.openMedia(
+        QUrl::fromLocalFile(synchronizedFixturePath()));
+    std::uint64_t mutedFramesPresented = 0;
+    QElapsedTimer timer;
+    timer.start();
+    while (mutedFramesPresented < 30'000
+            && timer.elapsed() < 10'000) {
+        QCoreApplication::processEvents(
+            QEventLoop::AllEvents, 5);
+        const ControlledAudioRender rendered =
+            audioSink->render(480);
+        if (rendered.frames != 0) {
+            QVERIFY(std::all_of(
+                rendered.samples.cbegin(),
+                rendered.samples.cend(),
+                [](float sample) { return sample == 0.0F; }));
+            audioSink->advancePresentedFrames(rendered.frames);
+            mutedFramesPresented += rendered.frames;
+        }
+        session.videoSource().prepareForPresentation(
+            std::chrono::steady_clock::now()
+                + std::chrono::hours(24));
+        QThread::yieldCurrentThread();
+    }
+
+    QVERIFY(mutedFramesPresented >= 30'000);
+    QCOMPARE(session.state(), MediaSession::State::Ready);
+    QVERIFY(session.playing());
+    QVERIFY(session.positionMilliseconds() >= 625);
+    QTRY_VERIFY_WITH_TIMEOUT(session.hasAudioOutput(), 1'000);
+    QCOMPARE(session.audioBackend(), QStringLiteral("controlled"));
+    QCOMPARE(
+        session.mediaClockSource(),
+        MediaSession::MediaClockSource::PresentedAudio);
+    QVERIFY(session.audioClockReliable());
+    QVERIFY(session.audioPresentedFrames() >= 24'000);
+    QCOMPARE(session.audioUnderrunFrames(), 0U);
+    QVERIFY(session.audioQueuedMilliseconds() >= 0);
+
+    session.setMuted(false);
+    QVERIFY(!session.muted());
+    QCOMPARE(session.volume(), 0.35);
+    bool heardNonzeroSample = false;
+    timer.restart();
+    while (audioSink->presentedFrames() < 76'000
+            && timer.elapsed() < 5'000) {
+        const ControlledAudioRender rendered =
+            audioSink->render(480);
+        if (rendered.frames != 0) {
+            heardNonzeroSample = heardNonzeroSample
+                || std::any_of(
+                    rendered.samples.cbegin(),
+                    rendered.samples.cend(),
+                    [](float sample) {
+                        return std::abs(sample) > 0.0001F;
+                    });
+            audioSink->advancePresentedFrames(rendered.frames);
+        }
+        session.videoSource().prepareForPresentation(
+            std::chrono::steady_clock::now()
+                + std::chrono::hours(24));
+        QCoreApplication::processEvents(
+            QEventLoop::AllEvents, 5);
+    }
+    QVERIFY(audioSink->presentedFrames() >= 76'000);
+    QVERIFY(heardNonzeroSample);
 }
 
 void MediaSessionTest::staggeredStarts_data() {

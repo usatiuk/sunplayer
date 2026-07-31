@@ -121,6 +121,10 @@ Benefits:
   for audio-first startup.
 * The cubeb callback has a small, explicit real-time contract.
 * The video scheduler remains clock-source-neutral.
+* Output gain and mute share the same sink contract in deterministic and
+  physical implementations and cannot redefine clock progression.
+* Low-rate audio diagnostics share one typed contract without making the
+  callback log, allocate, or signal Qt.
 
 Costs and current limits:
 

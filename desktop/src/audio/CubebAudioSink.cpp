@@ -1,6 +1,7 @@
 #include "audio/CubebAudioSink.h"
 
 #include <algorithm>
+#include <cmath>
 #include <condition_variable>
 #include <deque>
 #include <functional>
@@ -22,6 +23,7 @@ extern "C" {
 
 namespace {
 constexpr AudioStreamFormat supportedFormat{48'000, 2};
+static_assert(std::atomic<float>::is_always_lock_free);
 
 std::optional<std::int64_t> timestampForFrame(
         std::int64_t firstTimestamp,
@@ -419,6 +421,14 @@ void CubebAudioSink::pause() {
     });
 }
 
+void CubebAudioSink::setGain(float linearGain) {
+    if (!std::isfinite(linearGain))
+        linearGain = 1.0F;
+    m_gain.store(
+        std::clamp(linearGain, 0.0F, 1.0F),
+        std::memory_order_release);
+}
+
 AudioPresentationSnapshot CubebAudioSink::snapshot() const {
     return m_impl->invoke([this] {
         const Error error = m_error.load(
@@ -492,7 +502,7 @@ std::string CubebAudioSink::failureReason() const {
     return errorMessage(m_error.load(std::memory_order_acquire));
 }
 
-CubebAudioDiagnostics CubebAudioSink::diagnostics() const {
+AudioSinkDiagnostics CubebAudioSink::diagnostics() const {
     return m_impl->invoke([this] {
         std::optional<std::uint32_t> reportedLatency;
         if (m_impl->stream) {
@@ -524,7 +534,7 @@ CubebAudioDiagnostics CubebAudioSink::diagnostics() const {
         const bool reliable = hasDevicePosition
             && outputPosition.has_value()
             && error == Error::None;
-        return CubebAudioDiagnostics{
+        return AudioSinkDiagnostics{
             .backendName = m_backendName,
             .errorMessage = errorMessage(error),
             .format = m_format,
@@ -652,6 +662,14 @@ long CubebAudioSink::render(
     const RealtimePcmRead read = m_queue.consume(
         std::span<float>(output, samples),
         frames);
+    const float gain = m_gain.load(std::memory_order_acquire);
+    if (gain != 1.0F) {
+        std::transform(
+            output,
+            output + samples,
+            output,
+            [gain](float sample) { return sample * gain; });
+    }
     if (read.silentFrames != 0
             && m_producerFinished.load(
                 std::memory_order_acquire)) {

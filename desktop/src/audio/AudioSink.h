@@ -27,8 +27,15 @@ public:
     virtual void finish(std::uint64_t playbackGeneration) = 0;
     virtual void start() = 0;
     virtual void pause() = 0;
+    // Gain is applied to samples at the output boundary. Zero gain must not
+    // stop the stream or change media-clock progression.
+    virtual void setGain(float linearGain) = 0;
     // snapshot().failed is generation-scoped; read the human-readable reason
     // only after observing that flag for the current generation.
     virtual AudioPresentationSnapshot snapshot() const = 0;
+    // Low-rate support observation. A physical implementation may synchronize
+    // with its control thread and query the device; never call this from the
+    // real-time callback or an unbounded presentation path.
+    virtual AudioSinkDiagnostics diagnostics() const = 0;
     virtual std::string failureReason() const = 0;
 };

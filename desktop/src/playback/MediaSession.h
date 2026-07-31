@@ -59,6 +59,24 @@ class MediaSession final
                READ droppedFrameCount NOTIFY playbackMetricsChanged)
     Q_PROPERTY(int queuedVideoFrames
                READ queuedVideoFrames NOTIFY playbackMetricsChanged)
+    Q_PROPERTY(qreal volume READ volume WRITE setVolume NOTIFY volumeChanged)
+    Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)
+    Q_PROPERTY(bool hasAudioOutput
+               READ hasAudioOutput NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(QString audioBackend
+               READ audioBackend NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(MediaClockSource mediaClockSource
+               READ mediaClockSource NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(bool audioClockReliable
+               READ audioClockReliable NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(int audioQueuedMilliseconds
+               READ audioQueuedMilliseconds NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(qulonglong audioSubmittedFrames
+               READ audioSubmittedFrames NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(qulonglong audioPresentedFrames
+               READ audioPresentedFrames NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(qulonglong audioUnderrunFrames
+               READ audioUnderrunFrames NOTIFY audioDiagnosticsChanged)
 
 public:
     enum class State {
@@ -68,6 +86,15 @@ public:
         Error,
     };
     Q_ENUM(State)
+
+    enum class MediaClockSource {
+        Monotonic,
+        ProvisionalMonotonic,
+        PresentedAudio,
+        FrozenAudio,
+        PostAudioMonotonic,
+    };
+    Q_ENUM(MediaClockSource)
 
     using DecodeOperation = std::function<
         FfmpegVideoDecodeResult(
@@ -119,6 +146,16 @@ public:
     std::size_t queuedFrameCount() const;
     std::size_t maximumQueuedFrameCount() const;
     int queuedVideoFrames() const;
+    qreal volume() const;
+    bool muted() const;
+    bool hasAudioOutput() const;
+    QString audioBackend() const;
+    MediaClockSource mediaClockSource() const;
+    bool audioClockReliable() const;
+    int audioQueuedMilliseconds() const;
+    qulonglong audioSubmittedFrames() const;
+    qulonglong audioPresentedFrames() const;
+    qulonglong audioUnderrunFrames() const;
     std::optional<AudioPresentationSnapshot>
         currentAudioPresentation() const;
 
@@ -133,6 +170,8 @@ public:
     Q_INVOKABLE void retry();
     Q_INVOKABLE void play();
     Q_INVOKABLE void pause();
+    void setVolume(qreal volume);
+    void setMuted(bool muted);
     Q_INVOKABLE void seekToMilliseconds(
         qlonglong positionMilliseconds);
 
@@ -140,6 +179,9 @@ signals:
     void sessionChanged();
     void playbackMetricsChanged();
     void timelineChanged();
+    void volumeChanged();
+    void mutedChanged();
+    void audioDiagnosticsChanged();
 
 private:
     struct OpenRequest {
@@ -188,6 +230,11 @@ private:
     void resetDiagnostics();
     void resetPlayback(
         std::int64_t positionMicroseconds = 0);
+    void applyAudioGain();
+    void resetAudioDiagnostics();
+    void updateAudioClockDiagnostics(
+        const AudioPresentationSnapshot &presentation);
+    void sampleAudioSinkDiagnostics();
     void publishSessionAndPlaybackMetrics(
         std::uint64_t generation);
     void applyDiagnostics(
@@ -240,6 +287,8 @@ private:
     bool m_graphicsRecoverySeeking = false;
     bool m_hardwareImportFallbackConsumed = false;
     bool m_userWantsPlaying = true;
+    qreal m_volume = 1.0;
+    bool m_muted = false;
     bool m_decoderDrained = false;
     bool m_ended = false;
     bool m_seekable = false;
@@ -252,6 +301,9 @@ private:
     std::int64_t m_clockAnchorMediaMicroseconds = 0;
     bool m_audioClockEstablished = false;
     bool m_audioTailClockActive = false;
+    AudioSinkDiagnostics m_audioSinkDiagnostics;
+    MediaClockSource m_mediaClockSource =
+        MediaClockSource::Monotonic;
     std::uint64_t m_selectedFrameCount = 0;
     std::uint64_t m_droppedFrameCount = 0;
     std::uint64_t m_pendingPublicationGeneration = 0;

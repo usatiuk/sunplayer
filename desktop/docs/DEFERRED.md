@@ -155,9 +155,13 @@ through the same media operation, so audio never requires a second
 Terminal audio-output failure currently becomes a visible session error. The
 player still lacks buffering/recovery states for sustained underrun, default
 device replacement, Bluetooth reconnect, sleep/wake, and service interruption.
-It also lacks volume/mute, subtitles, track selection, persistent settings, and
-a general diagnostics view. macOS and Linux physical audio backends are not yet
-packaged or validated.
+Volume and mute now apply at the output boundary without changing audio-clock
+progression, and `MediaSession` exposes the active clock, PCM queue, submitted
+and presented frames, and underrun count through a typed low-rate snapshot.
+The visible Player summary currently renders the clock, backend, PCM queue,
+and underruns. It still lacks click-free gain ramps, persistence, subtitles,
+track selection, and a general diagnostics view. macOS and Linux physical
+audio backends are not yet packaged or validated.
 
 The current seek implementation reopens and reprobes a local file for each
 restart. A future persistent-context optimization requires an explicit
