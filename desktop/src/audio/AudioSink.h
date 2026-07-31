@@ -17,7 +17,9 @@ public:
     virtual bool submit(
         PcmAudioBlock block,
         std::stop_token stopToken = {}) = 0;
-    virtual void finish() = 0;
+    // End-of-stream is generation-scoped so a superseded decoder cannot mark
+    // a replacement output epoch finished.
+    virtual void finish(std::uint64_t playbackGeneration) = 0;
     virtual void start() = 0;
     virtual void pause() = 0;
     virtual AudioPresentationSnapshot snapshot() const = 0;

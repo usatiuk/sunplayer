@@ -42,9 +42,9 @@ implementation, `ControlledAudioSink`, is bounded and deterministic and keeps
 submitted and presented cursors separate. It intentionally uses locks and is
 not a real-time callback implementation.
 
-The intended physical implementation is a pinned cubeb backend. The real-time
-callback will read from preallocated PCM and metadata storage, apply bounded
-gain or silence, and update fixed-capacity observations only. It will not
+The physical implementation is a pinned cubeb backend. The real-time callback
+reads from preallocated PCM and metadata storage, writes bounded hold silence,
+and updates fixed-capacity observations only. It does not
 decode, allocate, block, log synchronously, invoke Qt, or perform recovery.
 Device lifecycle and recovery remain control-thread responsibilities.
 
@@ -73,7 +73,7 @@ Benefits:
   unrelated per-stream hard caps.
 * Deterministic scenarios can exercise real demux, decode, resampling, queueing,
   and clock mapping without opening an audio device.
-* The later cubeb callback has a small, explicit real-time contract.
+* The cubeb callback has a small, explicit real-time contract.
 * The video scheduler remains clock-source-neutral.
 
 Costs and current limits:
@@ -85,10 +85,10 @@ Costs and current limits:
 * One aggregate packet cap cannot guarantee fairness for an arbitrary
   container interleave. Production telemetry and unreliable-source scenarios
   must establish whether soft watermarks or reservations are needed.
-* `ControlledAudioSink` proves queue and cursor behavior, not real device
-  latency or callback safety.
-* Device epochs, hold-silence mapping, cubeb recovery, and an audio-backed
-  production clock remain later slices.
+* `ControlledAudioSink` proves deterministic queue and cursor behavior; the
+  physical sink's default-endpoint tests do not prove real playback latency.
+* Hold-silence mapping exists. Device recovery and an audio-backed production
+  clock remain later slices.
 * cubeb is maintained as a project-local overlay because the pinned registry
   package is substantially older than the reviewed upstream revision.
 

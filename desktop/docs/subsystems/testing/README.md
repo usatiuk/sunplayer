@@ -124,10 +124,11 @@ Early likely seams are:
 * A controlled `MediaClockSnapshot` passed through the production scheduler at
   the `prepareForPresentation` selector seam.
 
-Later seams include an audio-clock observation that produces the existing
-snapshot value, source-fault adapter, and test-control endpoint. They should
-arrive with the subsystem behavior they enable rather than as a speculative
-framework.
+The controlled and physical audio sinks now both produce the shared
+`AudioPresentationSnapshot`; production scheduling has not adopted it yet.
+Later seams include a source-fault adapter and test-control endpoint. They
+should arrive with the subsystem behavior they enable rather than as a
+speculative framework.
 
 ## Verification
 
@@ -136,7 +137,9 @@ Current verified coverage:
 | Boundary | State |
 | --- | --- |
 | Configured Windows Debug build | Builds successfully |
-| Focused automated tests | Fourteen CTest targets cover presentation-target and aspect-fit policy, video-viewport state, bounded video queues/timeline, active-source routing, media-session playback lifecycle, real QML shell publication and production registration, rendered-video and decoded-frame lifecycle, two dependency boundaries, and two real GPU paths |
+| Focused automated tests | Twenty-three CTest targets cover presentation policy, UI/session lifecycle, bounded media/audio queues, timing and generation behavior, dependency boundaries, real FFmpeg A/V decode/resampling, a silent real-WASAPI sink lifecycle, and real GPU paths |
+| Audio callback boundary | Whole-block SPSC publication, sticky cancellation, bounded output-to-media mapping, hold silence, generation-safe drain, and the max-block/preroll deadlock regression pass deterministically |
+| Real Windows audio boundary | The pinned cubeb WASAPI backend opens the default endpoint on a dedicated MTA thread and repeatedly passes silent start, presented-position observation, pause, reset, drain, and destruction |
 | libplacebo dependency boundary | The real DLL loads; pinned version, installed D3D11/Shaderc/built-in-DOVI configuration, disabled Vulkan/OpenGL/external-libdovi features, runtime staging, and log lifecycle pass |
 | FFmpeg dependency boundary | The three selected DLLs load; pinned major versions, D3D11VA, native H.264/HEVC decoders, disabled Vulkan/swscale configuration, and explicit runtime staging pass |
 | Real QRhi/libplacebo capture | Factory-selected D3D11 domain; shared QRhi device and immediate context; persistent libplacebo renderer; fixed-size persistent software input; distinct per-input-frame and per-output-render transfer diagnostics; direct wrapped RGBA16F target; aligned pattern layout; relative sRGB with an explicit 100-nit mastering maximum plus stale HDR10+/CIE-Y luminance normalized at 80, 100, and 203-nit output reference whites; an exact 203-nit PQ patch at surface `1.0`; one fixed 1000-nit PQ signal against one 600-nit target at those reference-white levels; source-upload reuse across target-only changes; no expansion while the source fits; compression into reduced headroom; exactly one final reference-white-to-scRGB scale; minimum-target value/known-state contract; zero output copies; pixel-validated resize/rewrap and producer rebinding; final composition readbacks; and a non-gating 60-frame throughput probe pass |

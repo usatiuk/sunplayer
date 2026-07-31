@@ -334,7 +334,7 @@ streamsRealDecodeThroughBoundedSink() {
                     std::move(block), stopToken);
             },
             stopToken);
-        sink.finish();
+        sink.finish(40);
         completedPromise.set_value();
     });
 

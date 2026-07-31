@@ -62,7 +62,7 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 
 As of 2026-07-31, the repository contains a Windows presentation foundation,
 continuous video-only local-file playback, and the first synchronized audio
-decode/test boundary:
+decode plus physical-output boundaries:
 
 * A factory-selected graphics-device domain owns the current D3D11 QRhi,
   same-device libplacebo GPU, FFmpeg D3D11VA device, shared immediate-context
@@ -116,9 +116,13 @@ decode/test boundary:
   and libswresample produce 48 kHz stereo interleaved float32 PCM for a bounded
   controlled sink with distinct submitted and presented cursors. Video-only
   and synchronized decoding now feed one hardware-capable packet decoder. This
-  path is not yet wired into `MediaSession` or a physical device; production
-  migration must pass the active graphics capability and preserve fallback,
-  not reopen the file.
+  path is not yet wired into `MediaSession`; production migration must pass
+  the active graphics capability and preserve fallback, not reopen the file.
+* A Windows `CubebAudioSink` opens the default WASAPI endpoint from one
+  dedicated MTA control thread. Its real-time callback consumes preallocated
+  PCM, records bounded output-to-media mappings, and represents short underruns
+  as hold silence. The sink exposes separate media/device positions, optional
+  latency and device-notification capabilities, and generation-safe drain.
 * Frame selection uses integer FFmpeg timestamps, a clock-source-neutral
   `MediaClockSnapshot`, and a focused `VideoFrameScheduler`; the current clock
   producer is monotonic and video-only. The presentation thread retains early
@@ -175,8 +179,8 @@ Playback now exposes normalized position/duration and seeking through a
 generation-scoped, keyframe-anchored decoder restart shared by user seek,
 hardware-import fallback, and graphics-device recovery. Audio decoding,
 resampling, and a deterministic sink boundary exist alongside the production
-session. Shared-session migration, cubeb output, and the audio-backed master
-clock are the next playback boundaries. Playback uses libplacebo as its video renderer; the procedural
+  session. Shared-session migration and the audio-backed master clock are the
+  next playback boundaries. Playback uses libplacebo as its video renderer; the procedural
 producer remains HDR-Lab-only diagnostic tooling.
 
 ## Subsystems
@@ -291,7 +295,7 @@ Documentation: `docs/subsystems/video-rendering/`
 * [x] Audio-output backend direction and pinned cubeb dependency
 * [x] Initial real FFmpeg audio decoding and libswresample conversion
 * [x] Bounded controlled PCM buffering
-* [ ] Real-time-safe device callback
+* [x] Real-time-safe Windows device callback and default-endpoint lifecycle
 * [ ] Volume and mute
 * [ ] Device changes and recovery
 * [ ] Audio-backed master clock

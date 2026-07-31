@@ -30,7 +30,7 @@ public:
     bool submit(
         PcmAudioBlock block,
         std::stop_token stopToken = {}) override;
-    void finish() override;
+    void finish(std::uint64_t playbackGeneration) override;
     void start() override;
     void pause() override;
     AudioPresentationSnapshot snapshot() const override;

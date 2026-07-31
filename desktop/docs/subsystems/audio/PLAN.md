@@ -42,18 +42,22 @@ explicit recovery semantics.
 
 ## Milestone 2: physical cubeb output
 
-* [ ] Add a preallocated SPSC PCM and timestamp-metadata boundary.
-* [ ] Implement `CubebAudioSink` with no allocation, blocking, application
+* [x] Add a preallocated SPSC PCM and timestamp-metadata boundary.
+* [x] Implement `CubebAudioSink` with no allocation, blocking, application
   locks, synchronous logging, Qt calls, decode, or recovery in its callback.
 * [ ] Negotiate a stable format for each audio-output epoch and rebuild
   libswresample when it changes.
-* [ ] Implement gain, mute, preroll, drain, and short-underrun silence.
-* [ ] Expose submitted position, cubeb playback position, observation time,
-  reported latency, confidence, device identity where available, callback
-  cadence, and underrun counters.
+* [x] Implement preroll, drain, and short-underrun hold silence.
+* [ ] Implement gain and mute without changing media-clock progression.
+* [x] Expose submitted media frames, mapped presented media frames, raw cubeb
+  playback position, reported latency, confidence, device-change capability,
+  and underrun counters.
+* [ ] Add monotonic observation time, device identity where available, and
+  callback cadence/jitter diagnostics.
 * [ ] Verify default-device playback and position monotonicity on Windows.
-* [ ] In the device-backed suite, initialize COM explicitly, request WASAPI by
-  name, and report endpoint unavailability separately from packaging failure.
+* [x] In the device-backed suite, initialize COM on the sink's dedicated MTA
+  thread, request WASAPI by name, and distinguish stream-open failure from
+  dependency loading.
 
 ## Milestone 3: audio-master playback
 

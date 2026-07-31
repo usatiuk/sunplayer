@@ -86,7 +86,7 @@ separatesSubmittedAndPresentedMediaTime() {
     QVERIFY(!sink.snapshot().advancing);
 
     sink.start();
-    sink.finish();
+    sink.finish(7);
     sink.advancePresentedFrames(10'000);
     observation = sink.snapshot();
     QCOMPARE(observation.presentedFrames, 960U);
@@ -102,6 +102,8 @@ boundsPcmAndWakesBlockedGeneration() {
 
     ControlledAudioSink sink(8);
     sink.reset(11, {48'000, 2});
+    sink.finish(10);
+    QVERIFY(!sink.snapshot().producerFinished);
     QVERIFY(sink.submit(block(11, 0, 0, 8, 0.0F)));
     sink.start();
     QCOMPARE(sink.render(8).frames, 8U);

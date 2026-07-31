@@ -94,9 +94,12 @@ bool ControlledAudioSink::submit(
     return true;
 }
 
-void ControlledAudioSink::finish() {
+void ControlledAudioSink::finish(
+        std::uint64_t playbackGeneration) {
     {
         std::lock_guard lock(m_mutex);
+        if (playbackGeneration != m_playbackGeneration)
+            return;
         m_finished = true;
     }
     m_wake.notify_all();

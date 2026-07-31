@@ -13,6 +13,14 @@ qt_add_executable(sunroom_controlled_audio_sink_tests
         unit/audio/tst_ControlledAudioSink.cpp
 )
 
+qt_add_executable(sunroom_audio_output_ledger_tests
+        unit/audio/tst_AudioOutputLedger.cpp
+)
+
+qt_add_executable(sunroom_realtime_pcm_queue_tests
+        unit/audio/tst_RealtimePcmQueue.cpp
+)
+
 qt_add_executable(sunroom_ffmpeg_media_decoder_tests
         integration/media/tst_FfmpegMediaDecoder.cpp
 )
@@ -85,6 +93,10 @@ qt_add_executable(sunroom_qml_shell_tests
 if (WIN32)
     qt_add_executable(sunroom_cubeb_dependency_tests
             integration/audio/tst_CubebDependency.cpp
+    )
+
+    qt_add_executable(sunroom_cubeb_audio_sink_tests
+            integration/audio/tst_CubebAudioSink.cpp
     )
 
     qt_add_executable(sunroom_ffmpeg_dependency_tests
@@ -219,6 +231,18 @@ target_link_libraries(sunroom_controlled_audio_sink_tests
         sunroom_audio
 )
 
+target_link_libraries(sunroom_audio_output_ledger_tests
+        PRIVATE
+        Qt6::Test
+        sunroom_audio
+)
+
+target_link_libraries(sunroom_realtime_pcm_queue_tests
+        PRIVATE
+        Qt6::Test
+        sunroom_audio
+)
+
 target_compile_definitions(
         sunroom_ffmpeg_media_decoder_tests
         PRIVATE
@@ -309,6 +333,12 @@ if (WIN32)
             cubeb::cubeb
     )
 
+    target_link_libraries(sunroom_cubeb_audio_sink_tests
+            PRIVATE
+            Qt6::Test
+            sunroom_audio
+    )
+
     target_link_libraries(sunroom_ffmpeg_dependency_tests
             PRIVATE
             Qt6::Test
@@ -325,6 +355,8 @@ if (WIN32)
             sunroom_presentation_target_tests
             sunroom_application_log_tests
             sunroom_controlled_audio_sink_tests
+            sunroom_audio_output_ledger_tests
+            sunroom_realtime_pcm_queue_tests
             sunroom_ffmpeg_media_decoder_tests
             sunroom_rendered_video_surface_tests
             sunroom_video_viewport_tests
@@ -335,6 +367,7 @@ if (WIN32)
             sunroom_video_frame_queue_tests
             sunroom_active_video_source_tests
             sunroom_cubeb_dependency_tests
+            sunroom_cubeb_audio_sink_tests
             sunroom_qml_shell_tests
             sunroom_libplacebo_dependency_tests)
         sunroom_stage_windows_runtime(${test_target})
@@ -364,6 +397,16 @@ add_test(
 add_test(
         NAME controlled-audio-sink
         COMMAND sunroom_controlled_audio_sink_tests
+)
+
+add_test(
+        NAME audio-output-ledger
+        COMMAND sunroom_audio_output_ledger_tests
+)
+
+add_test(
+        NAME realtime-pcm-queue
+        COMMAND sunroom_realtime_pcm_queue_tests
 )
 
 add_test(
@@ -437,6 +480,16 @@ if (WIN32)
             LABELS "audio;dependency;integration;windows"
             TIMEOUT 30
     )
+    add_test(
+            NAME cubeb-audio-sink
+            COMMAND sunroom_cubeb_audio_sink_tests
+    )
+    set_tests_properties(
+            cubeb-audio-sink
+            PROPERTIES
+            LABELS "audio;device;integration;windows"
+            TIMEOUT 30
+    )
 endif ()
 
 set_tests_properties(
@@ -454,6 +507,20 @@ set_tests_properties(
 
 set_tests_properties(
         controlled-audio-sink
+        PROPERTIES
+        LABELS "audio;concurrency;unit"
+        TIMEOUT 30
+)
+
+set_tests_properties(
+        audio-output-ledger
+        PROPERTIES
+        LABELS "audio;unit"
+        TIMEOUT 30
+)
+
+set_tests_properties(
+        realtime-pcm-queue
         PROPERTIES
         LABELS "audio;concurrency;unit"
         TIMEOUT 30

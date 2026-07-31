@@ -17,9 +17,10 @@ Windows QRhi presentation path plus asynchronous continuous video playback,
 so useful tests cover display-target policy, resource-generation contracts,
 real QRhi composition, bounded frame-mailbox backpressure, stop-aware packet
 channels, timestamp-driven selection, active-source/session lifecycle, and
-retained software/D3D11VA `AVFrame`s. As libass and audio arrive,
-deterministic whole-pipeline scenarios should become the bulk of behavioral
-coverage.
+retained software/D3D11VA `AVFrame`s, single-pass A/V decode and resampling,
+callback-safe PCM/metadata buffering, and a real default-WASAPI lifecycle
+boundary. As libass and audio-master playback arrive, deterministic
+whole-pipeline scenarios should become the bulk of behavioral coverage.
 
 The central principle is:
 

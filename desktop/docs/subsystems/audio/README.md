@@ -2,8 +2,9 @@
 
 ## Status
 
-Sunroom now has the first non-device audio boundary, but the application does
-not yet produce audible playback.
+Sunroom now has both the deterministic audio boundary and the first physical
+Windows output implementation, but the application does not yet route decoded
+audio into that sink and therefore does not yet produce audible playback.
 
 The dependency graph includes FFmpeg libswresample and a pinned current cubeb
 overlay. A shared FFmpeg media operation opens and probes one source once,
@@ -25,6 +26,13 @@ submission, presentation, pause, reset, and media-position mapping without an
 operating-system device. It is deliberately lock-based and must not be reused
 as cubeb's real-time callback buffer.
 
+`CubebAudioSink` opens the default WASAPI output through the pinned cubeb
+build. All cubeb lifecycle and position calls run on one dedicated MTA control
+thread. Its callback consumes a preallocated SPSC float queue, writes bounded
+underrun silence, and publishes fixed-capacity output-to-media spans. It does
+not allocate, block, take application locks, decode, log, invoke Qt, or perform
+device recovery.
+
 ## Accepted pipeline
 
 ```text
@@ -38,7 +46,7 @@ one AVFormatContext
                               +----------------------------+----------------+
                               |                                             |
                     ControlledAudioSink                              CubebAudioSink
-                    deterministic tests                         physical device later
+                    deterministic tests                      default Windows device
 ```
 
 The demux owner alone calls `av_read_frame()`. Packet queues are logically per
@@ -79,18 +87,24 @@ draining converter delay. Playback owns timeline normalization, generation
 invalidation, queue bounds, and discontinuity policy. The sink owns device
 negotiation and presentation observations; it does not reinterpret media PTS.
 
-The initial controlled format is 48 kHz stereo because it gives stable fixture
-expectations. A real cubeb output epoch will use one negotiated fixed format and
-recreate its resampler when that format changes.
+The initial controlled and physical formats are 48 kHz stereo because that
+gives stable fixture expectations and one proven device epoch. Format
+renegotiation and rebuilding libswresample for a changed device epoch remain
+recovery work.
+
+Each physical epoch fixes both its preroll and maximum accepted PCM block size.
+The maximum is no greater than `queue capacity - preroll`, so an accepted block
+can never wait for a callback that cannot start until that same block is
+published. FFmpeg output must be split before this boundary if a future format
+can produce a larger block.
 
 ## Device and clock direction
 
-The intended production backend is cubeb in shared mode. Sunroom will follow
-the default output unless the product later exposes an explicit device choice.
-The real-time callback receives only prepared PCM and bounded metadata. It may
-copy samples, apply gain or mute, write silence, and update fixed-capacity
-counters. It may not decode, allocate, block, lock application mutexes, log
-synchronously, invoke Qt, or recover a device.
+The production backend is cubeb in shared mode. Sunroom follows the default
+output unless the product later exposes an explicit device choice. Context
+collection-change notification is capability-reported; stream-level device
+change callbacks are not assumed because the pinned WASAPI backend does not
+provide them.
 
 The playback position reported by cubeb is the primary presentation
 observation. Sunroom must not subtract reported latency from that position a
@@ -103,6 +117,11 @@ User intent remains separate from temporary ability to play. Pause freezes the
 timeline. Device loss or sustained underrun will freeze it in a recovery or
 buffering state, create a new audio-output epoch, preroll current-generation
 PCM, and re-anchor before resuming if the user still wants playback.
+
+A short underrun is represented as hold silence in the output ledger. Cubeb's
+device-frame position continues to advance while its media-frame mapping stays
+fixed, then resumes from the next real PCM frame. End-of-stream is
+generation-scoped so a stale decoder cannot finish a newer sink epoch.
 
 ## Verification
 
@@ -119,9 +138,18 @@ sink tests verify that submitted audio does not become presented until the
 controlled device advances, pause freezes presentation, capacity is bounded,
 and generation reset wakes blocked work.
 
-These tests do not prove real callback safety, backend position semantics, or
-speaker-to-display A/V offset. Those require real cubeb tests and later physical
-flash/impulse measurement.
+The callback-boundary tests additionally verify ring wrap, whole-block atomic
+publication, sticky stop/reset cancellation, zero fill, hold-silence mapping,
+and bounded ledger overwrite. A Windows integration scenario explicitly
+selects cubeb's WASAPI backend, opens the default endpoint on the sink's MTA
+thread, and exercises silent preroll, start, position observation, pause,
+generation reset, drain, and destruction. A focused regression proves that a
+PCM block cannot create a preroll/capacity dependency cycle.
+
+These tests do not yet prove audible decoded playback, device migration,
+callback timing under pressure, injected cubeb failures, or
+speaker-to-display A/V offset. Those require production session integration,
+real-device fault scenarios, and later physical flash/impulse measurement.
 
 See [the plan](PLAN.md) and
 [ADR 0011](../../decisions/0011-single-pass-media-routing-and-audio-output-boundary.md).

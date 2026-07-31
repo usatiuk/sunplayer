@@ -135,7 +135,7 @@ application test covers the normal deployed runtime, but a future early
 bootstrap or launcher should capture loader/platform initialization failures
 without duplicating Sunroom's command-line and logging policy.
 
-### Playback has no physical audio output, audio master, or unified buffering recovery
+### Playback has no connected audio output, audio master, or unified buffering recovery
 
 The thin QML Player now continuously demuxes, decodes, schedules, and presents
 local video with bounded packet/frame channels, working play/pause/replay, and
@@ -145,8 +145,9 @@ preserve the logical position.
 
 A separate synchronized decoder slice now proves one-open A/V packet routing,
 real FFmpeg audio decode, libswresample conversion, a common nonzero timeline,
-and bounded controlled submission/presentation. It is not yet adopted by
-`MediaSession` and does not open a physical device. Both decode operations now
+and bounded controlled submission/presentation. A separate `CubebAudioSink`
+now opens the default WASAPI device behind a callback-safe PCM/metadata
+boundary, but it is not yet adopted by `MediaSession`. Both decode operations now
 share the hardware-capable video packet decoder, but the current synchronized
 regression requests software frames. Production migration must pass the active
 graphics capability and preserve whole-operation hardware fallback; a second
