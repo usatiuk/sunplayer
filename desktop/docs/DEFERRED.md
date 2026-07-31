@@ -135,7 +135,7 @@ application test covers the normal deployed runtime, but a future early
 bootstrap or launcher should capture loader/platform initialization failures
 without duplicating Sunroom's command-line and logging policy.
 
-### Playback has no connected audio output, audio master, or unified buffering recovery
+### Playback lacks unified buffering and audio-device recovery
 
 The thin QML Player now continuously demuxes, decodes, schedules, and presents
 local video with bounded packet/frame channels, working play/pause/replay, and
@@ -143,19 +143,21 @@ a position/duration seek timeline. Seeking, hardware-import fallback, and
 graphics-device recovery share a fresh-context, keyframe-anchored restart and
 preserve the logical position.
 
-A separate synchronized decoder slice now proves one-open A/V packet routing,
-real FFmpeg audio decode, libswresample conversion, a common nonzero timeline,
-and bounded controlled submission/presentation. A separate `CubebAudioSink`
-now opens the default WASAPI device behind a callback-safe PCM/metadata
-boundary, but it is not yet adopted by `MediaSession`. Both decode operations now
-share the hardware-capable video packet decoder, but the current synchronized
-regression requests software frames. Production migration must pass the active
-graphics capability and preserve whole-operation hardware fallback; a second
-`AVFormatContext` for audio is not an acceptable migration shortcut.
+The production session now uses one-open A/V packet routing, real FFmpeg audio
+decode, libswresample conversion, a common nonzero timeline, and either bounded
+controlled output or the default Windows WASAPI device through cubeb. Presented
+audio is the ordinary master clock; video-only media uses a monotonic clock,
+and video continuing after audio drain uses an explicitly anchored monotonic
+tail. The active graphics capability and whole-operation hardware fallback pass
+through the same media operation, so audio never requires a second
+`AVFormatContext`.
 
-The player still does not expose audible output, audio-master scheduling,
-subtitles, track selection, source-stall buffering/recovery, persistent
-settings, or a general diagnostics view.
+Terminal audio-output failure currently becomes a visible session error. The
+player still lacks buffering/recovery states for sustained underrun, default
+device replacement, Bluetooth reconnect, sleep/wake, and service interruption.
+It also lacks volume/mute, subtitles, track selection, persistent settings, and
+a general diagnostics view. macOS and Linux physical audio backends are not yet
+packaged or validated.
 
 The current seek implementation reopens and reprobes a local file for each
 restart. A future persistent-context optimization requires an explicit
@@ -169,10 +171,11 @@ mounted filesystem blocked uninterruptibly inside the kernel can still stall
 final shutdown. Helper-process containment remains the intended stronger
 boundary for unreliable network filesystems.
 
-The deterministic session scenario reaches real FFmpeg decode and fills the
-production frame mailbox, but it drives
-`DecodedVideoSource::prepareForPresentation()` directly. A multi-frame
-`RhiPresentationEngine` cadence test and an actual-process open/play/pause
-scenario remain missing. The packet channel's count/byte limits are enforced
-by production code but do not yet have direct saturation diagnostics or a
-fixture large enough to assert demux blocking at that boundary.
+The deterministic session scenarios reach real FFmpeg decode, fill the
+production frame mailbox, and now prove bounded playback reaches end of stream
+without any presentation consumer. A registered actual-process audio-first
+scenario also requires two distinct frames to traverse the production
+QRhi/libplacebo swapchain while the real Cubeb clock advances. Command-driven
+actual-process play/pause/seek/error scenarios remain missing. Direct router
+saturation/cancellation tests exist, but no real media fixture deliberately
+exhausts the startup packet budget with pathological stream interleave.

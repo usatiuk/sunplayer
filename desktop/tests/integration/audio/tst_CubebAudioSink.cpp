@@ -38,6 +38,18 @@ bool waitUntil(Predicate predicate) {
     }
     return true;
 }
+
+bool remainsUndrainedFor(
+        const CubebAudioSink &sink,
+        std::chrono::milliseconds duration) {
+    const auto deadline = std::chrono::steady_clock::now() + duration;
+    while (std::chrono::steady_clock::now() < deadline) {
+        if (sink.snapshot().drained)
+            return false;
+        std::this_thread::yield();
+    }
+    return true;
+}
 }
 
 class CubebAudioSinkTest final : public QObject {
@@ -87,6 +99,12 @@ opensDefaultOutputWithoutStartingPlayback() {
     QCOMPARE(snapshot.playbackGeneration, 9U);
     QVERIFY(!snapshot.valid);
     QVERIFY(!snapshot.advancing);
+
+    sink.cancel(8);
+    QVERIFY(sink.diagnostics().streamOpen);
+    sink.cancel(9);
+    QVERIFY(!sink.diagnostics().streamOpen);
+    QVERIFY(!sink.snapshot().valid);
 }
 
 void CubebAudioSinkTest::
@@ -123,8 +141,9 @@ void CubebAudioSinkTest::startsPausesAndDrainsSilentPcm() {
     QCOMPARE(drained.playbackGeneration, 20U);
     QCOMPARE(drained.submittedFrames, 12'000U);
     QCOMPARE(drained.presentedFrames, 12'000U);
-    QVERIFY(drained.valid);
+    QVERIFY(drained.valid || drained.terminalPositionValid);
     QVERIFY(drained.drained);
+    QVERIFY(drained.terminalPositionValid);
     QVERIFY(!drained.advancing);
 
     const CubebAudioDiagnostics drainedDiagnostics =
@@ -139,10 +158,21 @@ void CubebAudioSinkTest::startsPausesAndDrainsSilentPcm() {
     QVERIFY(!sink.snapshot().producerFinished);
     sink.start();
     QVERIFY(sink.submit(silentBlock(21, 0, 24'000)));
-    QVERIFY(waitUntil([&] { return sink.snapshot().advancing; }));
+    sink.finish(21);
+    QVERIFY(waitUntil([&] {
+        const AudioPresentationSnapshot current = sink.snapshot();
+        return current.advancing
+            && current.presentedFrames < current.submittedFrames;
+    }));
     sink.pause();
-    QVERIFY(!sink.snapshot().advancing);
+    QVERIFY(remainsUndrainedFor(sink, 100ms));
+    const AudioPresentationSnapshot paused = sink.snapshot();
+    QVERIFY(paused.producerFinished);
+    QVERIFY(!paused.advancing);
+    QVERIFY(!paused.drained);
     QVERIFY(sink.diagnostics().streamOpen);
+    sink.start();
+    QVERIFY(waitUntil([&] { return sink.snapshot().drained; }));
 }
 
 QTEST_APPLESS_MAIN(CubebAudioSinkTest)

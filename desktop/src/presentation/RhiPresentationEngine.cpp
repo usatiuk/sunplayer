@@ -180,9 +180,9 @@ void RhiPresentationEngine::renderFrame() {
     // QML synchronization can switch the active page/source. Let a visible
     // source select its frame first because preparation may change producer
     // configuration, content, or display geometry.
-    const bool videoLayerRenderable =
+    const bool videoViewportActive =
         m_videoViewport.isRenderable();
-    if (videoLayerRenderable) {
+    if (videoViewportActive) {
         m_videoSource.prepareForPresentation(
             std::chrono::steady_clock::now());
     }
@@ -196,7 +196,9 @@ void RhiPresentationEngine::renderFrame() {
 
     QRect videoRect;
     std::optional<RenderedVideoSurfaceState> requestedSurface;
-    if (videoLayerRenderable) {
+    const std::optional<double> displayAspectRatio =
+        m_videoSource.displayAspectRatio();
+    if (videoViewportActive && displayAspectRatio) {
         const QRectF viewport = m_videoViewport.rect();
         const QRectF scaledViewport(
             viewport.x() * scaleX,
@@ -206,7 +208,7 @@ void RhiPresentationEngine::renderFrame() {
         videoRect = aspectFitVideoRect(
             scaledViewport.toAlignedRect().intersected(
                 QRect(QPoint{}, pixelSize)),
-            m_videoSource.displayAspectRatio());
+            displayAspectRatio);
     }
 
     if (!videoRect.isEmpty()) {
@@ -445,7 +447,11 @@ void RhiPresentationEngine::renderFrame() {
     }
 
     m_retriedFrameError = false;
-    scheduleNextFrame(requestedSurface.has_value());
+    if (requestedSurface) {
+        emit videoFramePresented(
+            requestedSurface->contentRevision);
+    }
+    scheduleNextFrame(videoViewportActive);
 }
 
 void RhiPresentationEngine::requestFrame() {
@@ -841,8 +847,8 @@ void RhiPresentationEngine::updateBackendState() {
     m_outputState.setBackendState(state);
 }
 
-void RhiPresentationEngine::scheduleNextFrame(bool videoLayerActive) {
-    if ((videoLayerActive && m_videoSource.wantsContinuousFrames())
+void RhiPresentationEngine::scheduleNextFrame(bool videoViewportActive) {
+    if ((videoViewportActive && m_videoSource.wantsContinuousFrames())
         || m_quickUi->isDirty()) {
         requestFrame();
     }

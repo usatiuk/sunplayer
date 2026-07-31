@@ -1,0 +1,26 @@
+file = "sdr-bt709-ffv1-video-late-flac.mkv"
+sha256 = "3182e5e996c147ef817a7b9b43ff63e3e3b1f110111372ef6ff8ad34bcf5685d"
+provenance = "Generated locally from FFmpeg lavfi sources; no external source data"
+purpose = "Lossless five-second A/V fixture whose selected video starts one second after audio"
+generator = "FFmpeg 8.1.2-full_build-www.gyan.dev"
+license = "CC0-1.0"
+
+[generation]
+command = '''
+ffmpeg -hide_banner -loglevel error -nostdin -y -itsoffset 1 -f lavfi -i "color=c=black:size=96x64:rate=4:duration=4,format=yuv420p,drawbox=x=0:y=0:w=iw:h=ih:color=white:t=fill:enable='between(t,0.5,0.749)+between(t,2.5,2.749)',setparams=range=limited:color_primaries=bt709:color_trc=bt709:colorspace=bt709" -f lavfi -i "aevalsrc=if(eq(n\,16000)+eq(n\,80000)\,0.8\,0):s=32000:d=5" -map 0:v:0 -map 1:a:0 -c:v ffv1 -level 3 -coder 1 -context 1 -g 1 -threads:v 1 -c:a flac -compression_level 12 -sample_fmt s16 -fflags +bitexact -flags:v +bitexact -flags:a +bitexact -map_metadata -1 sdr-bt709-ffv1-video-late-flac.mkv
+'''
+
+[expected]
+video_start_microseconds = 1000000
+audio_start_microseconds = 0
+duration_microseconds = 5000000
+video_codec = "ffv1"
+video_frame_count = 16
+audio_codec = "flac"
+audio_sample_rate = 32000
+audio_channel_count = 1
+audio_source_frames = 160000
+output_audio_frames = 240000
+
+[coverage]
+features = ["single-pass-av", "empty-video-lead", "audio-before-video"]

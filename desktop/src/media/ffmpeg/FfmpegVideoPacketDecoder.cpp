@@ -144,8 +144,7 @@ FfmpegVideoDecodeResult decodeFfmpegVideoPackets(
             const std::optional<std::int64_t> duration =
                 observedPlaybackDurationMicroseconds(
                     result.observedEndMicroseconds,
-                    std::nullopt,
-                    false);
+                    std::nullopt);
             if (duration) {
                 result.diagnostics.durationMicroseconds =
                     duration;

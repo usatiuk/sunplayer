@@ -2,7 +2,7 @@
 
 ## Status
 
-`MediaSession` owns the initial continuous video lifecycle:
+`MediaSession` owns the initial continuous media lifecycle:
 
 * `Empty`.
 * `Opening`.
@@ -11,10 +11,12 @@
 
 Opening, demuxing, and decoding happen off the GUI thread. A nonzero playback
 generation belongs to each request; cancellation or a newer request invalidates
-older frames, notifications, and completion. One persistent supervisor retains
-only the latest pending request. Each active operation owns a demux worker,
-byte-bounded packet channel, decoder, and generation-scoped decoded-frame
-mailbox. Cancel/replacement requests stop without joining the GUI thread.
+older packets, frames, PCM, sink observations, notifications, and completion.
+One persistent supervisor retains only the latest pending request. Each active
+operation owns one FFmpeg demux context, a shared-budget audio/video packet
+router, decoder workers, a bounded audio sink, and the generation-scoped
+decoded-frame mailbox. Cancel/replacement requests stop without joining the GUI
+thread or reopening the source separately for audio.
 
 The decoded-frame mailbox has a hard capacity of three because retained
 D3D11VA frames reserve decoder-pool surfaces. Full frame capacity blocks decode;
@@ -27,10 +29,19 @@ selector for the frame due at the supplied presentation time. `MediaSession`
 publishes a `MediaClockSnapshot`; `VideoFrameScheduler` applies due/drop/end
 policy to that value and the bounded queue. The source still publishes only
 the selected immutable frame and the renderer still knows nothing about decode
-queues or clock sources.
-Opening becomes `Ready` when the first frame is selected, and local video
-autoplays. Play/pause/replay change user intent without recreating the decoder
-unless replay follows end of stream.
+queues or clock sources. A coarse playback-owned monitor invokes the same
+selection boundary while the renderer is inactive, hidden, or unexposed, so
+presentation demand cannot stall the bounded media pipeline. Visible rendering
+continues to drive the fine-grained cadence.
+Opening becomes `Ready` once stream discovery establishes a usable timeline.
+If an audio presentation clock is not available yet, a provisional monotonic
+clock advances video and prevents bounded startup queues from waiting on one
+another. The first valid audio presentation observation then becomes the
+master clock; video waits or drops to follow it. The video layer may still be
+empty when audio precedes the first video frame, and that future frame remains
+queued until its presentation time. Local media autoplays. Play/pause/replay
+change user intent without recreating the decoder unless replay follows end of
+stream.
 
 The initial monotonic clock and its snapshots stay in integer microseconds.
 Valid FFmpeg PTS is mapped against one stable container/stream origin. If the
@@ -76,22 +87,44 @@ If device invalidation interrupts a user seek, the pending seeking state and
 latest requested position remain replaceable while the session waits for the
 new graphics capability.
 
-There is still no production audio clock or unified buffering state. The
-monotonic clock is deliberately one producer of the shared
-`MediaClockSnapshot` value, not a claim of A/V synchronization. A bounded
-controlled audio sink and one-pass FFmpeg A/V decode scenario now prove the
-next deterministic boundary, but neither is wired into `MediaSession` or a
-physical device yet.
+There is still no unified buffering or device-recovery state. Sources with
+audio use the current generation's cubeb presented-frame observation as the
+production clock; sources without audio use the monotonic producer of the same
+`MediaClockSnapshot` contract. Startup is timeline-driven rather than gated on
+both streams producing a first payload. An audio epoch begins at the requested
+position, using timeline-advancing source silence when selected audio starts
+later; audio may advance while the video layer remains empty when video starts
+later. Clean audio EOF with no output for the requested interval creates no
+audio epoch. When audio ends before video, a monotonic tail clock continues
+from the final presented audio position. A terminal output failure or sustained
+loss of the live audio position cancels the generation and becomes a visible
+session error.
+
+The playback monitor emits throttled timeline notifications during normal
+audio-only intervals and monotonic video tails. It begins during opening for
+startup/drain observation but treats clock unavailability as terminal only
+after the session has established `Ready`; a device clock that has not yet
+started is not a lost clock.
 
 ## Clock ownership
 
 The playback core owns the media timeline. Audio and platform backends report
 timestamped observations; they do not mutate session position directly.
 
-During ordinary playback with an audio track, the estimated position already
-rendered by the audio device is the master observation. It combines submitted
-sample counts, device/backend presentation position, output latency, monotonic
-sample time, playback rate, and the current seek/pause anchor.
+During ordinary playback with an audio track, the position already presented
+by the audio backend is the master observation. Cubeb's reported position is
+mapped through a bounded output-to-media ledger; reported latency is diagnostic
+and is not subtracted a second time.
+
+Before that first valid audio observation, playback uses its provisional
+monotonic clock. This is startup progress, not a competing long-lived master:
+as soon as audio becomes observable, subsequent video selection follows audio.
+If the provisional video position is ahead at handoff, the current frame is
+held until audio catches up; audio is not skipped or retimed to preserve the
+temporary video estimate. Loss of an established clock never falls back to
+the provisional clock. This milestone reports sustained loss as a terminal
+error; later device-recovery work will freeze at the last confident audio
+position, create a new output epoch, preroll, and re-anchor before resuming.
 
 Conceptually:
 
@@ -109,9 +142,10 @@ Muted playback keeps the audio stream advancing at zero gain when practical,
 preserving the same clock. Media without an audio track uses a monotonic-clock
 master.
 
-Small drift may be corrected gradually. Seeking, suspend/resume, device
-replacement, or another large discontinuity re-anchors the clock explicitly
-rather than hiding the jump through prolonged drift correction.
+Seeking re-anchors the clock explicitly through a replacement generation.
+Suspend/resume, device replacement, large discontinuities, and any measured
+need for gradual drift correction remain recovery work rather than implicit
+clock smoothing.
 
 ## Audio-device recovery
 
@@ -140,7 +174,7 @@ seeks, logs synchronously, or calls into Qt.
 Every decoded frame has a playback generation independent of its PTS. PTS may
 be missing or repeated and is not frame identity.
 
-The initial video-only scheduler uses predicted presentation time:
+The clock-source-neutral scheduler uses the supplied media position:
 
 * Early frame: retain.
 * One due frame: select for presentation.
@@ -172,10 +206,19 @@ session endpoint independently of the clock producer. Queue tests cover hard
 backpressure plus stop/generation wakeups;
 timeline tests cover valid, missing, repeated, and non-monotonic timestamps.
 
-The controlled sink currently verifies submitted-versus-presented position,
-pause, bounded backpressure, and generation reset. The later audio-clock suite
-still needs integrated session play/pause/seek/drain, hold silence, underrun,
-latency change, device replacement, and large-discontinuity cases.
+The controlled-sink session scenario crosses the production shared FFmpeg A/V
+operation, resampling, bounded PCM and frame queues, presented-audio position,
+video selection, play/pause, seek, generation invalidation, and drain. Pinned
+unequal-duration and opposite-offset fixtures verify the post-audio video tail,
+clean zero-output audio after a seek, timeline-advancing leading source
+silence, audio-before-video playback, and that a future first video frame is
+not displayed early. Drained audio retains a terminal endpoint even if live
+position observation disappears. Hidden post-decode sink failure and sustained
+clock loss become visible errors without requiring a presentation request. A
+real-FFmpeg no-presentation-consumer scenario proves playback-owned selection
+continues draining the three-frame mailbox and reaches end of stream.
+Session-level sustained underrun, latency change, device replacement, and
+large-discontinuity recovery remain missing.
 
 Later physical verification uses synchronized audio impulses and visual flashes
 to measure actual speaker-to-display output timing. Software timestamps alone

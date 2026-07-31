@@ -14,6 +14,10 @@ public:
     ~PresentationWindow() override;
 
     void openMedia(const QUrl &url);
+    const class MediaSession &mediaSession() const;
+
+signals:
+    void videoFramePresented(qulonglong contentRevision);
 
 protected:
     void exposeEvent(QExposeEvent *event) override;

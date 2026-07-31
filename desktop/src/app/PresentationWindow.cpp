@@ -40,6 +40,11 @@ PresentationWindow::PresentationWindow() {
         *m_diagnosticVideoSource,
         *m_mediaSession,
         *m_videoViewport);
+    connect(
+        m_engine.get(),
+        &RhiPresentationEngine::videoFramePresented,
+        this,
+        &PresentationWindow::videoFramePresented);
 
     setMinimumSize({760, 560});
     resize(1100, 760);
@@ -52,6 +57,10 @@ PresentationWindow::~PresentationWindow() = default;
 
 void PresentationWindow::openMedia(const QUrl &url) {
     m_mediaSession->openMedia(url);
+}
+
+const MediaSession &PresentationWindow::mediaSession() const {
+    return *m_mediaSession;
 }
 
 void PresentationWindow::exposeEvent(QExposeEvent *) {

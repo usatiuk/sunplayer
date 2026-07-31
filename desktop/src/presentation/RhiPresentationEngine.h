@@ -49,6 +49,12 @@ public:
 
     QQuickWindow *quickWindow() const;
 
+signals:
+    // Emitted only after the swapchain accepts a frame containing the active
+    // video surface. Application scenarios can observe real presentation
+    // progress without reaching into renderer internals or using screenshots.
+    void videoFramePresented(qulonglong contentRevision);
+
 private:
     void renderFrame();
     bool initializeDevice();
@@ -65,7 +71,7 @@ private:
         const char *operation, VideoOperationResult result);
     void scheduleDeviceRecovery();
     void updateBackendState();
-    void scheduleNextFrame(bool videoLayerActive);
+    void scheduleNextFrame(bool videoViewportActive);
     void requestSwapChainRecreation();
     void scheduleOutputVerification();
     void verifyOutput();

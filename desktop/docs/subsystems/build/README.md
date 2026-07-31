@@ -5,8 +5,8 @@
 The current CMake project builds the Windows player prototype and its focused
 Qt Test targets. Qt, a pinned D3D11-only libplacebo dependency, minimal official
 FFmpeg components including libswresample, and a pinned cubeb dependency are
-integrated. cubeb is dependency-validated but is not yet wired to production
-audio output. libass and complete distributable packaging are not integrated.
+integrated. cubeb provides production default-device output on Windows. libass
+and complete distributable packaging are not integrated.
 
 The currently validated configuration is:
 
@@ -215,12 +215,15 @@ See [../testing/PLAN.md](../testing/PLAN.md).
 
 ## Verification
 
-The complete Debug build and all 19 registered CTest cases pass in the current
+The complete Debug build and all 24 registered CTest cases pass in the current
 Windows/MSVC/Ninja environment after initializing the Visual Studio developer
 environment. The dependency graph is built under the project-local clang-cl
 triplet; the Sunroom executable remains MSVC-built. This includes the cubeb
 ABI/backend check, FFmpeg libswresample boundary, one-pass synchronized decode,
 bounded controlled sink, real D3D11VA decode/import, and GPU compositor tests.
+A bounded application scenario additionally opens an audio-first fixture in
+the built executable and observes live default-device clock progress plus two
+distinct video revisions reaching the swapchain before automatic exit.
 A build-local install-tree generation also succeeds and stages the expected
 Qt runtime, `libplacebo-360.dll`, `spirv-cross-c-sharedd.dll`, and selected
 FFmpeg DLLs.

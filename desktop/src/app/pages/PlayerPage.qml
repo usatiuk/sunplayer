@@ -8,10 +8,12 @@ VideoPage {
 
     required property MediaSession session
 
-    readonly property bool ready:
-        session.state === MediaSession.Ready && session.hasFrame
+    readonly property bool sessionReady:
+        session.state === MediaSession.Ready
+    readonly property bool frameReady:
+        sessionReady && session.hasFrame
     readonly property bool sessionActive:
-        ready || session.seeking
+        sessionReady || session.seeking
 
     function formatTime(milliseconds) {
         if (milliseconds < 0)
@@ -32,7 +34,7 @@ VideoPage {
         Qt.rect(videoFrame.x, videoFrame.y,
                 videoFrame.width, videoFrame.height)
     videoViewportVisible:
-        visible && ready
+        visible && sessionReady
 
     FileDialog {
         id: openDialog
@@ -47,7 +49,7 @@ VideoPage {
 
     Rectangle {
         anchors.fill: parent
-        visible: !root.ready
+        visible: !root.frameReady
         color: "#090b10"
     }
 
@@ -65,7 +67,7 @@ VideoPage {
         Rectangle {
             anchors.fill: parent
             color: "transparent"
-            border.color: root.ready ? "#303746" : "transparent"
+            border.color: root.frameReady ? "#303746" : "transparent"
             border.width: 1
         }
     }
@@ -85,7 +87,7 @@ VideoPage {
 
         Label {
             Layout.alignment: Qt.AlignHCenter
-            text: qsTr("Video playback is available; audio comes next.")
+            text: qsTr("Video and audio playback are available.")
             color: "#8e97a8"
         }
 
@@ -94,6 +96,24 @@ VideoPage {
             Layout.alignment: Qt.AlignHCenter
             text: qsTr("Open media…")
             onClicked: openDialog.open()
+        }
+    }
+
+    ColumnLayout {
+        objectName: "waitingForVideoState"
+        anchors.centerIn: parent
+        visible: root.sessionReady && !root.session.hasFrame
+        spacing: 12
+
+        BusyIndicator {
+            Layout.alignment: Qt.AlignHCenter
+            running: parent.visible
+        }
+
+        Label {
+            Layout.alignment: Qt.AlignHCenter
+            text: qsTr("Preparing video…")
+            color: "#c7ccd6"
         }
     }
 

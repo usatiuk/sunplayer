@@ -249,6 +249,8 @@ void CubebAudioSink::reset(
         m_streamStarted.store(false, std::memory_order_relaxed);
         m_producerFinished.store(false, std::memory_order_relaxed);
         m_drained.store(false, std::memory_order_relaxed);
+        m_ignoreDrainUntilStarted.store(
+            false, std::memory_order_relaxed);
         m_maximumSubmitFrames.store(0, std::memory_order_relaxed);
         m_queue.reset(playbackGeneration, supportedFormat);
         m_outputLedger.reset();
@@ -361,6 +363,24 @@ bool CubebAudioSink::submit(
     return true;
 }
 
+void CubebAudioSink::cancel(
+        std::uint64_t playbackGeneration) {
+    m_impl->invoke([this, playbackGeneration] {
+        if (playbackGeneration
+                != m_playbackGeneration.load(
+                    std::memory_order_acquire)) {
+            return;
+        }
+        m_wantsRunning.store(false, std::memory_order_release);
+        destroyStream();
+        m_playbackGeneration.store(0, std::memory_order_release);
+        m_format = {};
+        m_producerFinished.store(false, std::memory_order_release);
+        m_drained.store(false, std::memory_order_release);
+        m_outputLedger.reset();
+    });
+}
+
 void CubebAudioSink::finish(
         std::uint64_t playbackGeneration) {
     m_impl->invoke([this, playbackGeneration] {
@@ -387,6 +407,8 @@ void CubebAudioSink::pause() {
                     std::memory_order_acquire)) {
             return;
         }
+        m_ignoreDrainUntilStarted.store(
+            true, std::memory_order_release);
         if (cubeb_stream_stop(m_impl->stream) != CUBEB_OK) {
             failEpoch(Error::StreamStop);
             cubeb_stream_destroy(m_impl->stream);
@@ -399,6 +421,8 @@ void CubebAudioSink::pause() {
 
 AudioPresentationSnapshot CubebAudioSink::snapshot() const {
     return m_impl->invoke([this] {
+        const Error error = m_error.load(
+            std::memory_order_acquire);
         const std::optional<std::int64_t> firstMedia =
             m_queue.firstMediaTimestampMicroseconds();
         std::uint64_t presentedFrames = 0;
@@ -415,17 +439,26 @@ AudioPresentationSnapshot CubebAudioSink::snapshot() const {
             ? m_outputLedger.positionForOutputFrame(
                 presentedFrames)
             : std::nullopt;
+        const bool drained = m_drained.load(
+            std::memory_order_acquire);
+        const bool terminalPositionAvailable = drained
+            && firstMedia.has_value();
+        const std::uint64_t terminalMediaFrames =
+            m_outputLedger.mediaFrames();
         const std::optional<std::int64_t> position =
-            firstMedia && outputPosition
+            firstMedia && (outputPosition
+                || terminalPositionAvailable)
             ? timestampForFrame(
                 *firstMedia,
-                outputPosition->mediaFrame,
+                outputPosition
+                    ? outputPosition->mediaFrame
+                    : terminalMediaFrames,
                 m_format.sampleRate)
             : std::nullopt;
         const bool valid = hasPosition
+            && outputPosition.has_value()
             && position.has_value()
-            && m_error.load(std::memory_order_acquire)
-                == Error::None;
+            && error == Error::None;
         return AudioPresentationSnapshot{
             .playbackGeneration =
                 m_playbackGeneration.load(
@@ -433,21 +466,30 @@ AudioPresentationSnapshot CubebAudioSink::snapshot() const {
             .submittedFrames = m_outputLedger.mediaFrames(),
             .presentedFrames = outputPosition
                 ? outputPosition->mediaFrame
-                : 0,
-            .mediaPositionMicroseconds = valid
+                : terminalPositionAvailable
+                    ? terminalMediaFrames
+                    : 0,
+            .mediaPositionMicroseconds = position
                 ? *position
                 : firstMedia.value_or(0),
             .producerFinished = m_producerFinished.load(
                 std::memory_order_acquire),
-            .drained = m_drained.load(
-                std::memory_order_acquire),
+            .drained = drained,
             .advancing = valid
                 && m_streamStarted.load(
                     std::memory_order_acquire)
+                && !drained
                 && !outputPosition->holding,
+            .terminalPositionValid = terminalPositionAvailable
+                && position.has_value(),
+            .failed = error != Error::None,
             .valid = valid,
         };
     });
+}
+
+std::string CubebAudioSink::failureReason() const {
+    return errorMessage(m_error.load(std::memory_order_acquire));
 }
 
 CubebAudioDiagnostics CubebAudioSink::diagnostics() const {
@@ -635,6 +677,8 @@ long CubebAudioSink::render(
 void CubebAudioSink::handleState(int state) {
     switch (static_cast<cubeb_state>(state)) {
     case CUBEB_STATE_STARTED:
+        m_ignoreDrainUntilStarted.store(
+            false, std::memory_order_release);
         m_streamStarted.store(true, std::memory_order_release);
         break;
     case CUBEB_STATE_STOPPED:
@@ -642,7 +686,14 @@ void CubebAudioSink::handleState(int state) {
         break;
     case CUBEB_STATE_DRAINED:
         m_streamStarted.store(false, std::memory_order_release);
-        m_drained.store(true, std::memory_order_release);
+        if (!m_ignoreDrainUntilStarted.load(
+                    std::memory_order_acquire)
+                && m_producerFinished.load(
+                    std::memory_order_acquire)
+                && m_wantsRunning.load(
+                    std::memory_order_acquire)) {
+            m_drained.store(true, std::memory_order_release);
+        }
         break;
     case CUBEB_STATE_ERROR:
         failEpoch(Error::Callback);

@@ -201,7 +201,7 @@ public:
     void setState(State state, bool hasFrame = false) {
         m_state = state;
         m_hasFrame = hasFrame;
-        m_playing = state == State::Ready && hasFrame;
+        m_playing = state == State::Ready;
         m_ended = false;
         m_seeking = false;
         if (state == State::Ready) {

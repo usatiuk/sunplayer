@@ -44,6 +44,7 @@ public:
 private slots:
     void separatesSubmittedAndPresentedMediaTime();
     void boundsPcmAndWakesBlockedGeneration();
+    void reportsGenerationScopedFailure();
 };
 
 void ControlledAudioSinkTest::
@@ -93,7 +94,14 @@ separatesSubmittedAndPresentedMediaTime() {
     QCOMPARE(observation.mediaPositionMicroseconds, 520'000);
     QVERIFY(observation.producerFinished);
     QVERIFY(observation.drained);
+    QVERIFY(observation.terminalPositionValid);
     QVERIFY(!observation.advancing);
+
+    sink.setPositionAvailable(false);
+    observation = sink.snapshot();
+    QVERIFY(!observation.valid);
+    QVERIFY(observation.terminalPositionValid);
+    QCOMPARE(observation.mediaPositionMicroseconds, 520'000);
 }
 
 void ControlledAudioSinkTest::
@@ -155,7 +163,61 @@ boundsPcmAndWakesBlockedGeneration() {
     QVERIFY(!cancellationAccepted.load());
     cancelledProducer.join();
 
+    std::promise<void> invalidatedStarted;
+    std::future<void> invalidatedReady =
+        invalidatedStarted.get_future();
+    std::promise<void> invalidatedCompleted;
+    std::future<void> invalidationCompleted =
+        invalidatedCompleted.get_future();
+    std::atomic_bool invalidatedAccepted = true;
+    std::jthread invalidatedProducer(
+        [&](std::stop_token stopToken) {
+            invalidatedStarted.set_value();
+            invalidatedAccepted = sink.submit(
+                block(12, 8, 166, 1, 0.0F),
+                stopToken);
+            invalidatedCompleted.set_value();
+        });
+    invalidatedReady.wait();
+    QVERIFY(invalidationCompleted.wait_for(0ms)
+        == std::future_status::timeout);
+    sink.cancel(11);
+    QVERIFY(invalidationCompleted.wait_for(0ms)
+        == std::future_status::timeout);
+    sink.cancel(12);
+    QVERIFY(invalidationCompleted.wait_for(2s)
+        == std::future_status::ready);
+    QVERIFY(!invalidatedAccepted.load());
+    QVERIFY(!sink.snapshot().valid);
+    invalidatedProducer.join();
+
     QCOMPARE(sink.maximumObservedBufferedFrames(), 8U);
+}
+
+void ControlledAudioSinkTest::reportsGenerationScopedFailure() {
+    ControlledAudioSink sink(16);
+    sink.reset(21, {48'000, 2});
+    QVERIFY(sink.submit(block(21, 0, 0, 8, 0.25F)));
+    sink.start();
+
+    sink.fail(20, "stale failure");
+    QVERIFY(!sink.snapshot().failed);
+    QVERIFY(sink.failureReason().empty());
+
+    sink.fail(21, "device disappeared");
+    const AudioPresentationSnapshot failed = sink.snapshot();
+    QVERIFY(failed.failed);
+    QVERIFY(!failed.valid);
+    QVERIFY(!failed.advancing);
+    QCOMPARE(
+        QString::fromStdString(sink.failureReason()),
+        QStringLiteral("device disappeared"));
+    QCOMPARE(sink.render(8).frames, 0U);
+    QVERIFY(!sink.submit(block(21, 8, 166, 1, 0.25F)));
+
+    sink.reset(22, {48'000, 2});
+    QVERIFY(!sink.snapshot().failed);
+    QVERIFY(sink.failureReason().empty());
 }
 
 QTEST_APPLESS_MAIN(ControlledAudioSinkTest)

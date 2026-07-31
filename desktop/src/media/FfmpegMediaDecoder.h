@@ -57,6 +57,28 @@ using FfmpegPcmAudioSink = std::function<bool(
     const FfmpegAudioStreamDiagnostics &,
     std::stop_token)>;
 
+// Complete decoded-audio lifecycle. endOfStream is published by the audio
+// worker immediately after its decoder and resampler have drained; it does
+// not wait for video decoding or physical presentation to finish.
+struct FfmpegAudioOutputSink {
+    FfmpegPcmAudioSink submit;
+    std::function<void(std::uint64_t)> endOfStream;
+
+    bool isValid() const;
+};
+
+struct FfmpegMediaStreamSelection {
+    bool audioStreamPresent = false;
+    // False when selected-stream timing proves that the requested interval
+    // begins at or after the audio endpoint. The stream remains selected for
+    // diagnostics, but playback need not wait for an output epoch.
+    bool audioOutputExpected = false;
+    FfmpegVideoStreamDiagnostics videoDiagnostics;
+};
+
+using FfmpegMediaStreamSink = std::function<void(
+    const FfmpegMediaStreamSelection &)>;
+
 // Opens and probes the source once, then routes referenced packets for the
 // selected video and audio streams under one shared byte/count budget. This
 // selected video path feeds the same hardware-capable packet decoder as the
@@ -69,4 +91,14 @@ FfmpegMediaDecodeResult decodeMediaFrames(
     const FfmpegMediaDecodeRequest &request,
     const FfmpegVideoFrameSink &videoSink,
     const FfmpegPcmAudioSink &audioSink,
+    std::stop_token stopToken = {});
+
+// Production boundary with early stream discovery and an explicit decoded
+// audio end-of-stream event. Stream discovery is emitted exactly once after
+// probing and seek setup succeed, before either decoder worker starts.
+FfmpegMediaDecodeResult decodeMediaFrames(
+    const FfmpegMediaDecodeRequest &request,
+    const FfmpegVideoFrameSink &videoSink,
+    const FfmpegAudioOutputSink &audioSink,
+    const FfmpegMediaStreamSink &streamSink,
     std::stop_token stopToken = {});

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <functional>
@@ -10,10 +11,13 @@
 
 #include <QObject>
 #include <QString>
+#include <QTimer>
 #include <QUrl>
 #include <QtQml/qqmlregistration.h>
 
+#include "audio/AudioSink.h"
 #include "media/DecodedVideoFrame.h"
+#include "media/FfmpegMediaDecoder.h"
 #include "media/FfmpegVideoDecoder.h"
 #include "media/FfmpegHardwareDevice.h"
 #include "playback/CoalescedGenerationWake.h"
@@ -70,6 +74,13 @@ public:
             const FfmpegVideoDecodeRequest &,
             const FfmpegVideoFrameSink &,
             std::stop_token)>;
+    using MediaDecodeOperation = std::function<
+        FfmpegMediaDecodeResult(
+            const FfmpegMediaDecodeRequest &,
+            const FfmpegVideoFrameSink &,
+            const FfmpegAudioOutputSink &,
+            const FfmpegMediaStreamSink &,
+            std::stop_token)>;
 
     explicit MediaSession(
         VideoTargetReadback readback,
@@ -77,6 +88,11 @@ public:
     MediaSession(
         VideoTargetReadback readback,
         DecodeOperation decodeOperation,
+        QObject *parent = nullptr);
+    MediaSession(
+        VideoTargetReadback readback,
+        MediaDecodeOperation decodeOperation,
+        std::shared_ptr<AudioSink> audioSink,
         QObject *parent = nullptr);
     ~MediaSession() override;
 
@@ -103,6 +119,8 @@ public:
     std::size_t queuedFrameCount() const;
     std::size_t maximumQueuedFrameCount() const;
     int queuedVideoFrames() const;
+    std::optional<AudioPresentationSnapshot>
+        currentAudioPresentation() const;
 
     DecodedVideoSource &videoSource();
     const DecodedVideoSource &videoSource() const;
@@ -126,7 +144,7 @@ signals:
 private:
     struct OpenRequest {
         std::uint64_t generation = 0;
-        FfmpegVideoDecodeRequest decode;
+        FfmpegMediaDecodeRequest decode;
     };
 
     void startOpen(
@@ -149,7 +167,7 @@ private:
     void workerLoop(std::stop_token workerStopToken);
     void completeDecode(
         std::uint64_t generation,
-        FfmpegVideoDecodeResult result);
+        FfmpegMediaDecodeResult result);
     void postFramesAvailable(
         std::uint64_t generation);
     bool recordDecodedFrame(
@@ -165,6 +183,7 @@ private:
     void handlePresentationFailure(
         const VideoFailure &failure);
     void shutdownWorker();
+    void cancelAudioOutput();
     void advanceGeneration();
     void resetDiagnostics();
     void resetPlayback(
@@ -173,15 +192,34 @@ private:
         std::uint64_t generation);
     void applyDiagnostics(
         const FfmpegVideoStreamDiagnostics &diagnostics);
+    bool observeAudioOutput(
+        std::chrono::steady_clock::time_point now,
+        std::optional<AudioPresentationSnapshot> &observation);
+    bool updateAudioOutputState(
+        std::chrono::steady_clock::time_point now,
+        const AudioPresentationSnapshot &snapshot);
+    bool failCurrentAudioOutput(
+        const AudioPresentationSnapshot &snapshot,
+        const QString &fallbackReason = {});
     MediaClockSnapshot mediaClockSnapshotAt(
-        std::chrono::steady_clock::time_point now) const;
+        std::chrono::steady_clock::time_point now,
+        const AudioPresentationSnapshot *audio = nullptr) const;
+    bool currentGenerationUsesAudioClock() const;
+    bool currentGenerationStreamsDiscovered() const;
+    std::optional<FfmpegVideoStreamDiagnostics>
+        currentGenerationInitialVideoDiagnostics() const;
+    bool enterReady(
+        std::chrono::steady_clock::time_point now);
+    void updateVideoSummary(const QueuedVideoFrame &frame);
+    void monitorPlayback();
 
     std::shared_ptr<const DecodedVideoFrame>
         selectFrameForPresentation(
             std::chrono::steady_clock::time_point now) override;
     bool wantsContinuousVideoFrames() const override;
 
-    DecodeOperation m_decodeOperation;
+    MediaDecodeOperation m_decodeOperation;
+    std::shared_ptr<AudioSink> m_audioSink;
     DecodedVideoSource m_videoSource;
     VideoFrameQueue m_frameQueue;
     VideoFrameScheduler m_frameScheduler;
@@ -212,6 +250,8 @@ private:
     std::optional<std::chrono::steady_clock::time_point>
         m_clockAnchorTime;
     std::int64_t m_clockAnchorMediaMicroseconds = 0;
+    bool m_audioClockEstablished = false;
+    bool m_audioTailClockActive = false;
     std::uint64_t m_selectedFrameCount = 0;
     std::uint64_t m_droppedFrameCount = 0;
     std::uint64_t m_pendingPublicationGeneration = 0;
@@ -220,6 +260,19 @@ private:
     std::uint64_t m_playbackGeneration = 1;
     CoalescedGenerationWake m_frameWake;
     CoalescedGenerationWake m_metricsWake;
+    mutable std::mutex m_streamDiscoveryMutex;
+    std::uint64_t m_streamDiscoveryGeneration = 0;
+    bool m_streamDiscoveryComplete = false;
+    bool m_audioOutputExpected = false;
+    bool m_audioOutputEndedWithoutFrames = false;
+    std::optional<FfmpegVideoStreamDiagnostics>
+        m_initialVideoDiagnostics;
+    std::optional<std::chrono::steady_clock::time_point>
+        m_audioClockUnavailableSince;
+    QTimer m_playbackMonitorTimer;
+    std::atomic<std::uint64_t> m_audioSinkGeneration{0};
+    std::atomic_bool m_audioPlayIntent{true};
+    mutable std::mutex m_audioSinkLifecycleMutex;
     mutable std::mutex m_playbackMetricsMutex;
     std::uint64_t m_playbackMetricsGeneration = 1;
     std::uint64_t m_decodedFrameCount = 0;

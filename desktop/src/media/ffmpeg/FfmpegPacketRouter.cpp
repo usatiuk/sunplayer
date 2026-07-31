@@ -34,15 +34,7 @@ bool FfmpegPacketRouter::push(
                     != FfmpegPacketRouterTerminal::Open) {
                 return true;
             }
-            const bool countAvailable =
-                m_queuedPacketCount < m_limits.packetCount;
-            const bool bytesAvailable =
-                m_queuedPacketCount == 0
-                || bytes <= m_limits.packetBytes
-                    - std::min(
-                        m_queuedBytes,
-                        m_limits.packetBytes);
-            return countAvailable && bytesAvailable;
+            return canAccept(bytes);
         });
     --m_waitingProducerCount;
     if (!ready
@@ -51,21 +43,7 @@ bool FfmpegPacketRouter::push(
         return false;
     }
 
-    queue(stream).push_back({
-        .packet = std::move(packet),
-        .bytes = bytes,
-    });
-    ++m_queuedPacketCount;
-    m_queuedBytes += bytes;
-    m_maximumQueuedPacketCount = std::max(
-        m_maximumQueuedPacketCount,
-        m_queuedPacketCount);
-    m_maximumQueuedPacketBytes = std::max(
-        m_maximumQueuedPacketBytes,
-        m_queuedBytes);
-    m_largestQueuedPacketBytes = std::max(
-        m_largestQueuedPacketBytes,
-        bytes);
+    enqueue(stream, std::move(packet), bytes);
     lock.unlock();
     m_wake.notify_all();
     return true;
@@ -143,4 +121,34 @@ FfmpegPacketRouter::queue(FfmpegPacketStream stream) {
     return stream == FfmpegPacketStream::Video
         ? m_videoPackets
         : m_audioPackets;
+}
+
+bool FfmpegPacketRouter::canAccept(std::size_t bytes) const {
+    const bool countAvailable =
+        m_queuedPacketCount < m_limits.packetCount;
+    const bool bytesAvailable = m_queuedPacketCount == 0
+        || bytes <= m_limits.packetBytes
+            - std::min(m_queuedBytes, m_limits.packetBytes);
+    return countAvailable && bytesAvailable;
+}
+
+void FfmpegPacketRouter::enqueue(
+        FfmpegPacketStream stream,
+        FfmpegAvPacketPtr packet,
+        std::size_t bytes) {
+    queue(stream).push_back({
+        .packet = std::move(packet),
+        .bytes = bytes,
+    });
+    ++m_queuedPacketCount;
+    m_queuedBytes += bytes;
+    m_maximumQueuedPacketCount = std::max(
+        m_maximumQueuedPacketCount,
+        m_queuedPacketCount);
+    m_maximumQueuedPacketBytes = std::max(
+        m_maximumQueuedPacketBytes,
+        m_queuedBytes);
+    m_largestQueuedPacketBytes = std::max(
+        m_largestQueuedPacketBytes,
+        bytes);
 }

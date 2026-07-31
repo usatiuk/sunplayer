@@ -49,10 +49,12 @@ public:
     bool submit(
         PcmAudioBlock block,
         std::stop_token stopToken = {}) override;
+    void cancel(std::uint64_t playbackGeneration) override;
     void finish(std::uint64_t playbackGeneration) override;
     void start() override;
     void pause() override;
     AudioPresentationSnapshot snapshot() const override;
+    std::string failureReason() const override;
 
     CubebAudioDiagnostics diagnostics() const;
 
@@ -99,6 +101,9 @@ private:
     std::atomic_bool m_producerFinished{false};
     std::atomic_bool m_drained{false};
     std::atomic_bool m_streamReady{false};
+    // An explicit pause/stop can provoke a backend DRAINED callback. Ignore
+    // drain until a subsequent STARTED callback proves a new running epoch.
+    std::atomic_bool m_ignoreDrainUntilStarted{false};
     std::atomic_bool m_deviceNotificationsAvailable{false};
     std::unique_ptr<Impl> m_impl;
 };

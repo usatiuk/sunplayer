@@ -34,6 +34,14 @@ std::optional<VideoTimelineOrigin> ffmpegSharedTimelineOrigin(
     const AVStream *audioStream,
     const std::optional<VideoTimelineOrigin> &requested);
 
+// Best declared end of one stream on the normalized playback timeline. Uses
+// AVStream timing first and the Matroska/WebM DURATION tag fallback emitted by
+// FFmpeg when the public duration field is unavailable.
+std::optional<std::int64_t> ffmpegDeclaredStreamEndMicroseconds(
+    const AVFormatContext &formatContext,
+    const AVStream &stream,
+    const std::optional<VideoTimelineOrigin> &origin);
+
 // Returns FFmpeg's best duration estimate at open time. The public format and
 // stream fields are durations, not endpoints, so start_time must not be
 // subtracted. Some containers can nevertheless include a leading empty
@@ -43,10 +51,11 @@ std::optional<std::int64_t> ffmpegProvisionalDurationMicroseconds(
     const AVFormatContext &formatContext,
     const AVStream &stream);
 
-// Finalizes the selected playback range only when every selected primary
-// stream contributed an observed endpoint. This deliberately ignores the
-// provisional header estimate once complete EOF evidence is available.
+// Finalizes the selected playback range from the required video endpoint and
+// an audio endpoint when decoded audio exists in the requested interval. A
+// clean selected-audio interval with no samples does not invalidate the video
+// endpoint. This deliberately ignores the provisional header estimate once
+// complete EOF evidence is available.
 std::optional<std::int64_t> observedPlaybackDurationMicroseconds(
     std::optional<std::int64_t> videoEndMicroseconds,
-    std::optional<std::int64_t> audioEndMicroseconds,
-    bool audioSelected);
+    std::optional<std::int64_t> audioEndMicroseconds);

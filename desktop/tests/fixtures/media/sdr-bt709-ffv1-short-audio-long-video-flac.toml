@@ -1,0 +1,27 @@
+file = "sdr-bt709-ffv1-short-audio-long-video-flac.mkv"
+sha256 = "f70f9e51e83aa49c41774343e7616ed5255ffe95b1761c45ac5e557a95857eba"
+provenance = "Generated locally from FFmpeg lavfi sources; no external source data"
+purpose = "Eight-second 60 fps lossless video whose selected audio ends after one second"
+generator = "FFmpeg 8.1.2-full_build-www.gyan.dev"
+license = "CC0-1.0"
+
+[generation]
+command = '''
+ffmpeg -hide_banner -loglevel error -nostdin -y -f lavfi -i "color=c=black:size=96x64:rate=60:duration=8,format=yuv420p,drawbox=x=0:y=0:w=iw:h=ih:color=white:t=fill:enable='between(t,0.5,0.516)+between(t,7.5,7.516)',setparams=range=limited:color_primaries=bt709:color_trc=bt709:colorspace=bt709" -f lavfi -i "aevalsrc=if(eq(n\,16000)\,0.8\,0):s=32000:d=1" -map 0:v:0 -map 1:a:0 -c:v ffv1 -level 3 -coder 1 -context 1 -g 1 -threads:v 1 -c:a flac -compression_level 12 -sample_fmt s16 -fflags +bitexact -flags:v +bitexact -flags:a +bitexact -map_metadata -1 sdr-bt709-ffv1-short-audio-long-video-flac.mkv
+'''
+
+[expected]
+video_start_microseconds = 0
+audio_start_microseconds = 0
+audio_end_microseconds = 1000000
+duration_microseconds = 8000000
+video_codec = "ffv1"
+video_frame_rate = 60
+video_frame_count = 480
+audio_codec = "flac"
+audio_sample_rate = 32000
+audio_channel_count = 1
+output_audio_frames = 48000
+
+[coverage]
+features = ["post-audio-seek-liveness", "selected-audio-empty-interval", "packet-budget-exceeding-tail"]

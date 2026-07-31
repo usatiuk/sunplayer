@@ -1,10 +1,13 @@
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
+#include <cstdlib>
 #include <memory>
 #include <mutex>
 
 #include <QCryptographicHash>
 #include <QFile>
+#include <QElapsedTimer>
 #include <QSignalSpy>
 #include <QtTest>
 
@@ -13,6 +16,7 @@
 #endif
 
 #include "media/DecodedVideoFrame.h"
+#include "audio/ControlledAudioSink.h"
 #include "playback/MediaSession.h"
 
 namespace {
@@ -26,6 +30,36 @@ QString playbackFixturePath() {
     return QStringLiteral(
         SUNROOM_TEST_FIXTURE_DIR
         "/media/sdr-bt709-ffv1-playback.mkv");
+}
+
+QString synchronizedFixturePath() {
+    return QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-ffv1-flac-sync.mkv");
+}
+
+QString shortAudioFixturePath() {
+    return QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-ffv1-short-flac.mkv");
+}
+
+QString audioLateFixturePath() {
+    return QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-ffv1-audio-late-long-flac.mkv");
+}
+
+QString videoLateFixturePath() {
+    return QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-ffv1-video-late-flac.mkv");
+}
+
+QString longVideoTailFixturePath() {
+    return QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-ffv1-short-audio-long-video-flac.mkv");
 }
 
 QString interFrameSeekFixturePath() {
@@ -136,6 +170,14 @@ public:
 
 private slots:
     void opensRealMediaOffThread();
+    void synchronizedPlaybackUsesPresentedAudioClock();
+    void staggeredStarts_data();
+    void staggeredStarts();
+    void playbackProgressDoesNotRequirePresentationConsumer();
+    void trailingVideoContinuesAfterAudioDrains();
+    void longPostAudioSeekDoesNotStall();
+    void audioOutputFailureBecomesSessionError();
+    void unavailableAudioClockBecomesSessionError();
     void readyNotificationCanCancelWithoutRepublishing();
     void openingNotificationKeepsNewestRequest();
     void continuousPlaybackIsBoundedAndPauseable();
@@ -223,6 +265,640 @@ void MediaSessionTest::opensRealMediaOffThread() {
             ->identity()
             .playbackGeneration,
         session.playbackGeneration());
+}
+
+void MediaSessionTest::
+synchronizedPlaybackUsesPresentedAudioClock() {
+    auto audioSink =
+        std::make_shared<ControlledAudioSink>(4'096);
+    std::atomic_int decodeOperations = 0;
+    MediaSession session(
+        VideoTargetReadback::Disabled,
+        [&decodeOperations](
+                const FfmpegMediaDecodeRequest &request,
+                const FfmpegVideoFrameSink &videoSink,
+                const FfmpegAudioOutputSink &audioOutput,
+                const FfmpegMediaStreamSink &streamSink,
+                std::stop_token stopToken) {
+            ++decodeOperations;
+            return decodeMediaFrames(
+                request,
+                videoSink,
+                audioOutput,
+                streamSink,
+                stopToken);
+        },
+        audioSink);
+
+    const auto servicePlayback = [&] {
+        QCoreApplication::processEvents(
+            QEventLoop::AllEvents, 5);
+        const ControlledAudioRender rendered =
+            audioSink->render(257);
+        if (rendered.frames != 0) {
+            audioSink->advancePresentedFrames(
+                rendered.frames);
+        }
+        session.videoSource().prepareForPresentation(
+            std::chrono::steady_clock::now()
+                + std::chrono::hours(24));
+        QCoreApplication::processEvents(
+            QEventLoop::AllEvents, 5);
+        return rendered.frames;
+    };
+    const auto waitUntil = [&](auto predicate, int timeoutMs) {
+        QElapsedTimer timer;
+        timer.start();
+        while (!predicate() && timer.elapsed() < timeoutMs) {
+            servicePlayback();
+            QThread::yieldCurrentThread();
+        }
+        return predicate();
+    };
+
+    session.openMedia(
+        QUrl::fromLocalFile(synchronizedFixturePath()));
+    QVERIFY(waitUntil(
+        [&] {
+            return session.state() == MediaSession::State::Ready
+                && session.hasFrame();
+        },
+        10'000));
+    QCOMPARE(decodeOperations.load(), 1);
+    QVERIFY(session.hasFrame());
+    QVERIFY(session.playing());
+
+    for (int iteration = 0; iteration != 20; ++iteration) {
+        session.videoSource().prepareForPresentation(
+            std::chrono::steady_clock::now()
+                + std::chrono::hours(24));
+        QCoreApplication::processEvents(
+            QEventLoop::AllEvents, 1);
+    }
+    const qlonglong stablePosition =
+        session.positionMilliseconds();
+    const std::uint64_t stableFrame = session.videoSource()
+        .currentFrame()->identity().frameId;
+    for (int iteration = 0; iteration != 20; ++iteration) {
+        session.videoSource().prepareForPresentation(
+            std::chrono::steady_clock::now()
+                + std::chrono::hours(24));
+        QCoreApplication::processEvents(
+            QEventLoop::AllEvents, 1);
+    }
+    QCOMPARE(session.positionMilliseconds(), stablePosition);
+    QCOMPARE(
+        session.videoSource().currentFrame()->identity().frameId,
+        stableFrame);
+
+    const std::uint64_t advanceTarget =
+        audioSink->presentedFrames() + 12'000;
+    QVERIFY(waitUntil(
+        [&] {
+            return audioSink->presentedFrames()
+                >= advanceTarget;
+        },
+        10'000));
+    const qlonglong expectedAudioPosition =
+        static_cast<qlonglong>(
+            audioSink->presentedFrames() * 1'000 / 48'000);
+    QVERIFY(std::abs(
+        session.positionMilliseconds()
+            - expectedAudioPosition) <= 1);
+    QVERIFY(session.positionMilliseconds() > stablePosition);
+
+    ControlledAudioRender submittedNotPresented;
+    QElapsedTimer submitTimer;
+    submitTimer.start();
+    while (submittedNotPresented.frames == 0
+            && submitTimer.elapsed() < 3'000) {
+        QCoreApplication::processEvents(
+            QEventLoop::AllEvents, 5);
+        submittedNotPresented = audioSink->render(257);
+        QThread::yieldCurrentThread();
+    }
+    QVERIFY(submittedNotPresented.frames != 0);
+    const AudioPresentationSnapshot inFlight =
+        audioSink->snapshot();
+    QVERIFY(inFlight.submittedFrames > inFlight.presentedFrames);
+    session.videoSource().prepareForPresentation(
+        std::chrono::steady_clock::now()
+            + std::chrono::hours(24));
+    QCOMPARE(
+        session.positionMilliseconds(),
+        static_cast<qlonglong>(
+            inFlight.presentedFrames * 1'000 / 48'000));
+    audioSink->advancePresentedFrames(
+        submittedNotPresented.frames);
+
+    session.pause();
+    const qlonglong pausedPosition =
+        session.positionMilliseconds();
+    QCOMPARE(servicePlayback(), 0U);
+    QCOMPARE(session.positionMilliseconds(), pausedPosition);
+
+    session.seekToMilliseconds(1'250);
+    QCOMPARE(session.state(), MediaSession::State::Opening);
+    QVERIFY(waitUntil(
+        [&] {
+            return session.state() == MediaSession::State::Ready
+                && session.hasFrame();
+        },
+        10'000));
+    QCOMPARE(decodeOperations.load(), 2);
+    QVERIFY(!session.playing());
+    QCOMPARE(session.positionMilliseconds(), 1'250);
+    QCOMPARE(
+        session.videoSource().currentFrame()
+            ->identity().playbackGeneration,
+        session.playbackGeneration());
+
+    QTest::qWait(1'200);
+    QCOMPARE(session.state(), MediaSession::State::Ready);
+    QVERIFY(!session.playing());
+    QVERIFY(session.errorMessage().isEmpty());
+
+    session.play();
+    QVERIFY(waitUntil(
+        [&] { return session.ended(); },
+        15'000));
+    QCOMPARE(decodeOperations.load(), 2);
+    QVERIFY(audioSink->snapshot().drained);
+    QCOMPARE(session.positionMilliseconds(), 3'000);
+    QVERIFY(!session.playing());
+}
+
+void MediaSessionTest::staggeredStarts_data() {
+    QTest::addColumn<QString>("path");
+    QTest::addColumn<QByteArray>("sha256");
+    QTest::addColumn<bool>("videoStartsLate");
+
+    QTest::newRow("audio-starts-four-seconds-late-at-60fps")
+        << audioLateFixturePath()
+        << QByteArray(
+            "4d1a1969a9e5b24a9a5e7eacd788d537"
+            "ef5db9a882dcb5a303a73d0c5cc4f6d4")
+        << false;
+    QTest::newRow("video-starts-one-second-late")
+        << videoLateFixturePath()
+        << QByteArray(
+            "3182e5e996c147ef817a7b9b43ff63e3"
+            "e3b1f110111372ef6ff8ad34bcf5685d")
+        << true;
+}
+
+void MediaSessionTest::staggeredStarts() {
+    QFETCH(QString, path);
+    QFETCH(QByteArray, sha256);
+    QFETCH(bool, videoStartsLate);
+
+    QFile fixture(path);
+    QVERIFY(fixture.open(QIODevice::ReadOnly));
+    QCOMPARE(
+        QCryptographicHash::hash(
+            fixture.readAll(), QCryptographicHash::Sha256),
+        QByteArray::fromHex(sha256));
+
+    auto audioSink =
+        std::make_shared<ControlledAudioSink>(4'096);
+    MediaSession session(
+        VideoTargetReadback::Disabled,
+        [](
+                const FfmpegMediaDecodeRequest &request,
+                const FfmpegVideoFrameSink &videoSink,
+                const FfmpegAudioOutputSink &audioOutput,
+                const FfmpegMediaStreamSink &streamSink,
+                std::stop_token stopToken) {
+            return decodeMediaFrames(
+                request,
+                videoSink,
+                audioOutput,
+                streamSink,
+                stopToken);
+        },
+        audioSink);
+    auto presentationTime = std::chrono::steady_clock::now();
+    const auto service = [&] {
+        QCoreApplication::processEvents(
+            QEventLoop::AllEvents, 5);
+        ControlledAudioRender rendered =
+            audioSink->render(480);
+        if (rendered.frames != 0)
+            audioSink->advancePresentedFrames(rendered.frames);
+        presentationTime += std::chrono::milliseconds(10);
+        session.videoSource().prepareForPresentation(
+            presentationTime);
+        QCoreApplication::processEvents(
+            QEventLoop::AllEvents, 5);
+        return rendered;
+    };
+
+    session.openMedia(QUrl::fromLocalFile(path));
+    const auto frameFailure = [&] {
+        return QStringLiteral(
+            "position=%1 decoded=%2 queued=%3 selected=%4 audioPresented=%5 state=%6 error=%7")
+            .arg(session.positionMilliseconds())
+            .arg(session.decodedFrameCount())
+            .arg(session.queuedFrameCount())
+            .arg(session.selectedFrameCount())
+            .arg(audioSink->presentedFrames())
+            .arg(static_cast<int>(session.state()))
+            .arg(session.errorMessage());
+    };
+    QElapsedTimer timer;
+    timer.start();
+    while (session.state() != MediaSession::State::Ready
+            && timer.elapsed() < 5'000) {
+        service();
+        QThread::yieldCurrentThread();
+    }
+    QCOMPARE(session.state(), MediaSession::State::Ready);
+    QVERIFY(session.positionMilliseconds() <= 10);
+    timer.restart();
+
+    if (videoStartsLate) {
+        QVERIFY(!session.hasFrame());
+        while (audioSink->presentedFrames() < 43'200
+                && timer.elapsed() < 3'000) {
+            service();
+            QVERIFY(!session.hasFrame());
+        }
+        QVERIFY(audioSink->presentedFrames() >= 43'200);
+        QTest::qWait(120);
+        QVERIFY(!session.hasFrame());
+        while (!session.hasFrame()
+                && timer.elapsed() < 5'000) {
+            service();
+        }
+        QVERIFY2(
+            session.hasFrame(),
+            qPrintable(frameFailure()));
+        QVERIFY(session.positionMilliseconds() >= 1'000);
+    } else {
+        while (!session.hasFrame()
+                && timer.elapsed() < 5'000) {
+            service();
+        }
+        QVERIFY2(
+            session.hasFrame(),
+            qPrintable(frameFailure()));
+        while (audioSink->presentedFrames() < 204'000
+                && timer.elapsed() < 5'000) {
+            const ControlledAudioRender rendered = service();
+            if (audioSink->presentedFrames() <= 192'000) {
+                QVERIFY(std::all_of(
+                    rendered.samples.cbegin(),
+                    rendered.samples.cend(),
+                    [](float sample) { return sample == 0.0F; }));
+            }
+        }
+        QVERIFY(audioSink->presentedFrames() >= 204'000);
+        QVERIFY(session.positionMilliseconds() >= 4'250);
+        while (session.decodedFrameCount() <= 128U
+                && timer.elapsed() < 5'000) {
+            service();
+            QThread::yieldCurrentThread();
+        }
+        QVERIFY(session.decodedFrameCount() > 128U);
+    }
+    QVERIFY(session.state() != MediaSession::State::Error);
+    session.cancel();
+}
+
+void MediaSessionTest::
+playbackProgressDoesNotRequirePresentationConsumer() {
+    auto audioSink =
+        std::make_shared<ControlledAudioSink>(4'096);
+    MediaSession session(
+        VideoTargetReadback::Disabled,
+        [](
+                const FfmpegMediaDecodeRequest &request,
+                const FfmpegVideoFrameSink &videoSink,
+                const FfmpegAudioOutputSink &audioOutput,
+                const FfmpegMediaStreamSink &streamSink,
+                std::stop_token stopToken) {
+            return decodeMediaFrames(
+                request,
+                videoSink,
+                audioOutput,
+                streamSink,
+                stopToken);
+        },
+        audioSink);
+    QSignalSpy timelineChanges(
+        &session, &MediaSession::timelineChanged);
+
+    session.openMedia(
+        QUrl::fromLocalFile(shortAudioFixturePath()));
+    QElapsedTimer timer;
+    timer.start();
+    while (!session.ended() && timer.elapsed() < 6'000) {
+        const ControlledAudioRender rendered =
+            audioSink->render(480);
+        if (rendered.frames != 0)
+            audioSink->advancePresentedFrames(rendered.frames);
+        QTest::qWait(10);
+    }
+
+    QVERIFY(session.ended());
+    QCOMPARE(session.state(), MediaSession::State::Ready);
+    QCOMPARE(session.positionMilliseconds(), 3'000);
+    QCOMPARE(
+        session.selectedFrameCount()
+            + session.droppedFrameCount(),
+        12U);
+    QVERIFY(session.maximumQueuedFrameCount()
+        <= VideoFrameQueue::capacity);
+    QVERIFY(timelineChanges.count() >= 10);
+    QVERIFY(session.errorMessage().isEmpty());
+}
+
+void MediaSessionTest::trailingVideoContinuesAfterAudioDrains() {
+    QFile fixture(shortAudioFixturePath());
+    QVERIFY(fixture.open(QIODevice::ReadOnly));
+    QCOMPARE(
+        QCryptographicHash::hash(
+            fixture.readAll(), QCryptographicHash::Sha256),
+        QByteArray::fromHex(
+            "a053d298cf6f53e06b8022579f0f0efb"
+            "40d12e8b2c4b8bc09a609fa678148156"));
+
+    auto audioSink =
+        std::make_shared<ControlledAudioSink>(4'096);
+    std::atomic_int decodeOperations = 0;
+    MediaSession session(
+        VideoTargetReadback::Disabled,
+        [&decodeOperations](
+                const FfmpegMediaDecodeRequest &request,
+                const FfmpegVideoFrameSink &videoSink,
+                const FfmpegAudioOutputSink &audioOutput,
+                const FfmpegMediaStreamSink &streamSink,
+                std::stop_token stopToken) {
+            ++decodeOperations;
+            return decodeMediaFrames(
+                request,
+                videoSink,
+                audioOutput,
+                streamSink,
+                stopToken);
+        },
+        audioSink);
+
+    auto presentationTime = std::chrono::steady_clock::now();
+    const auto servicePlayback = [&] {
+        QCoreApplication::processEvents(
+            QEventLoop::AllEvents, 5);
+        const ControlledAudioRender rendered =
+            audioSink->render(257);
+        if (rendered.frames != 0) {
+            audioSink->advancePresentedFrames(rendered.frames);
+            if (audioSink->snapshot().drained)
+                audioSink->setPositionAvailable(false);
+        }
+        presentationTime += std::chrono::milliseconds(50);
+        session.videoSource().prepareForPresentation(
+            presentationTime);
+        QCoreApplication::processEvents(
+            QEventLoop::AllEvents, 5);
+    };
+
+    session.openMedia(
+        QUrl::fromLocalFile(shortAudioFixturePath()));
+    QElapsedTimer timer;
+    timer.start();
+    while (!session.ended() && timer.elapsed() < 10'000) {
+        servicePlayback();
+        QThread::yieldCurrentThread();
+    }
+
+    QVERIFY(session.ended());
+    QCOMPARE(decodeOperations.load(), 1);
+    QCOMPARE(session.durationMilliseconds(), 3'000);
+    QCOMPARE(session.positionMilliseconds(), 3'000);
+    QCOMPARE(
+        session.selectedFrameCount()
+            + session.droppedFrameCount(),
+        12U);
+    QCOMPARE(
+        session.videoSource().currentFrame()
+            ->timing().ptsMicroseconds(),
+        std::optional<std::int64_t>(7'750'000));
+    QVERIFY(audioSink->snapshot().drained);
+
+    session.seekToMilliseconds(2'000);
+    timer.restart();
+    while ((session.state() != MediaSession::State::Ready
+                || !session.hasFrame())
+            && timer.elapsed() < 5'000) {
+        servicePlayback();
+        QThread::yieldCurrentThread();
+    }
+    QCOMPARE(session.state(), MediaSession::State::Ready);
+    QVERIFY(session.hasFrame());
+    QCOMPARE(decodeOperations.load(), 2);
+    QCOMPARE(session.positionMilliseconds(), 2'000);
+    QVERIFY(!session.playing());
+
+    presentationTime = std::chrono::steady_clock::now();
+    session.play();
+    timer.restart();
+    while (!session.ended() && timer.elapsed() < 5'000) {
+        servicePlayback();
+        QThread::yieldCurrentThread();
+    }
+    QVERIFY(session.ended());
+    QCOMPARE(session.state(), MediaSession::State::Ready);
+    QCOMPARE(session.positionMilliseconds(), 3'000);
+    QVERIFY(session.errorMessage().isEmpty());
+}
+
+void MediaSessionTest::longPostAudioSeekDoesNotStall() {
+    QFile fixture(longVideoTailFixturePath());
+    QVERIFY(fixture.open(QIODevice::ReadOnly));
+    QCOMPARE(
+        QCryptographicHash::hash(
+            fixture.readAll(), QCryptographicHash::Sha256),
+        QByteArray::fromHex(
+            "f70f9e51e83aa49c41774343e7616ed5"
+            "255ffe95b1761c45ac5e557a95857eba"));
+
+    auto audioSink =
+        std::make_shared<ControlledAudioSink>(4'096);
+    MediaSession session(
+        VideoTargetReadback::Disabled,
+        [](
+                const FfmpegMediaDecodeRequest &request,
+                const FfmpegVideoFrameSink &videoSink,
+                const FfmpegAudioOutputSink &audioOutput,
+                const FfmpegMediaStreamSink &streamSink,
+                std::stop_token stopToken) {
+            return decodeMediaFrames(
+                request,
+                videoSink,
+                audioOutput,
+                streamSink,
+                stopToken);
+        },
+        audioSink);
+
+    auto presentationTime = std::chrono::steady_clock::now();
+    const auto service = [&] {
+        QCoreApplication::processEvents(
+            QEventLoop::AllEvents, 5);
+        const ControlledAudioRender rendered =
+            audioSink->render(480);
+        if (rendered.frames != 0)
+            audioSink->advancePresentedFrames(rendered.frames);
+        presentationTime += std::chrono::milliseconds(25);
+        session.videoSource().prepareForPresentation(
+            presentationTime);
+        QCoreApplication::processEvents(
+            QEventLoop::AllEvents, 5);
+    };
+    const auto serviceUntil = [&](auto predicate, int timeoutMs) {
+        QElapsedTimer timer;
+        timer.start();
+        while (!predicate() && timer.elapsed() < timeoutMs) {
+            service();
+            QThread::yieldCurrentThread();
+        }
+        return predicate();
+    };
+
+    session.openMedia(
+        QUrl::fromLocalFile(longVideoTailFixturePath()));
+    QVERIFY(serviceUntil(
+        [&] {
+            return session.state() == MediaSession::State::Ready
+                && session.hasFrame();
+        },
+        5'000));
+    session.pause();
+    session.seekToMilliseconds(4'000);
+    QVERIFY(serviceUntil(
+        [&] {
+            return session.state() == MediaSession::State::Ready
+                && session.hasFrame();
+        },
+        5'000));
+    QCOMPARE(session.positionMilliseconds(), 4'000);
+    QVERIFY(!session.playing());
+    QVERIFY(!audioSink->snapshot().valid);
+
+    QTest::qWait(1'200);
+    QCOMPARE(session.state(), MediaSession::State::Ready);
+    QVERIFY(session.errorMessage().isEmpty());
+
+    presentationTime = std::chrono::steady_clock::now();
+    session.play();
+    QVERIFY(serviceUntil([&] { return session.ended(); }, 10'000));
+    QVERIFY(session.durationMilliseconds() >= 7'990);
+    QCOMPARE(
+        session.positionMilliseconds(),
+        session.durationMilliseconds());
+    QVERIFY(session.decodedFrameCount() > 128U);
+    QVERIFY(session.errorMessage().isEmpty());
+}
+
+void MediaSessionTest::audioOutputFailureBecomesSessionError() {
+    auto audioSink =
+        std::make_shared<ControlledAudioSink>(4'096);
+    MediaSession session(
+        VideoTargetReadback::Disabled,
+        [](
+                const FfmpegMediaDecodeRequest &request,
+                const FfmpegVideoFrameSink &videoSink,
+                const FfmpegAudioOutputSink &audioOutput,
+                const FfmpegMediaStreamSink &streamSink,
+                std::stop_token stopToken) {
+            return decodeMediaFrames(
+                request,
+                videoSink,
+                audioOutput,
+                streamSink,
+                stopToken);
+        },
+        audioSink);
+
+    auto presentationTime = std::chrono::steady_clock::now();
+    QElapsedTimer timer;
+    timer.start();
+    session.openMedia(
+        QUrl::fromLocalFile(synchronizedFixturePath()));
+    while ((!audioSink->snapshot().producerFinished
+                || session.state() != MediaSession::State::Ready)
+            && timer.elapsed() < 10'000) {
+        QCoreApplication::processEvents(
+            QEventLoop::AllEvents, 5);
+        const ControlledAudioRender rendered =
+            audioSink->render(257);
+        if (rendered.frames != 0)
+            audioSink->advancePresentedFrames(rendered.frames);
+        presentationTime += std::chrono::milliseconds(10);
+        session.videoSource().prepareForPresentation(
+            presentationTime);
+        QThread::yieldCurrentThread();
+    }
+    QVERIFY(audioSink->snapshot().producerFinished);
+    QCOMPARE(session.state(), MediaSession::State::Ready);
+
+    constexpr auto reason = "Injected post-decode device failure";
+    audioSink->fail(session.playbackGeneration(), reason);
+    QTRY_COMPARE_WITH_TIMEOUT(
+        session.state(), MediaSession::State::Error, 1'000);
+    QCOMPARE(session.errorMessage(), QString::fromLatin1(reason));
+    QVERIFY(!session.hasFrame());
+    QVERIFY(!session.playing());
+}
+
+void MediaSessionTest::unavailableAudioClockBecomesSessionError() {
+    auto audioSink =
+        std::make_shared<ControlledAudioSink>(4'096);
+    MediaSession session(
+        VideoTargetReadback::Disabled,
+        [](
+                const FfmpegMediaDecodeRequest &request,
+                const FfmpegVideoFrameSink &videoSink,
+                const FfmpegAudioOutputSink &audioOutput,
+                const FfmpegMediaStreamSink &streamSink,
+                std::stop_token stopToken) {
+            return decodeMediaFrames(
+                request,
+                videoSink,
+                audioOutput,
+                streamSink,
+                stopToken);
+        },
+        audioSink);
+
+    session.openMedia(
+        QUrl::fromLocalFile(synchronizedFixturePath()));
+    QElapsedTimer timer;
+    timer.start();
+    while ((session.state() != MediaSession::State::Ready
+                || !audioSink->snapshot().valid)
+            && timer.elapsed() < 3'000) {
+        QCoreApplication::processEvents(
+            QEventLoop::AllEvents, 5);
+        const ControlledAudioRender rendered =
+            audioSink->render(257);
+        if (rendered.frames != 0)
+            audioSink->advancePresentedFrames(rendered.frames);
+        session.videoSource().prepareForPresentation(
+            std::chrono::steady_clock::now());
+        QThread::yieldCurrentThread();
+    }
+    QCOMPARE(session.state(), MediaSession::State::Ready);
+    QVERIFY(audioSink->snapshot().valid);
+
+    audioSink->setPositionAvailable(false);
+    QTRY_COMPARE_WITH_TIMEOUT(
+        session.state(), MediaSession::State::Error, 2'000);
+    QCOMPARE(
+        session.errorMessage(),
+        QStringLiteral(
+            "The audio presentation clock became unavailable."));
+    QVERIFY(!session.hasFrame());
 }
 
 void MediaSessionTest::
@@ -672,7 +1348,21 @@ futureSeekFrameAdvancesClockAnchor() {
     session.seekToMilliseconds(600);
     QTRY_COMPARE_WITH_TIMEOUT(
         session.state(), MediaSession::State::Ready, 5000);
-    QCOMPARE(session.positionMilliseconds(), 750);
+    QCOMPARE(session.positionMilliseconds(), 600);
+    QVERIFY(!session.hasFrame());
+
+    session.play();
+    QElapsedTimer timer;
+    timer.start();
+    while (!session.hasFrame() && timer.elapsed() < 1'000) {
+        session.videoSource().prepareForPresentation(
+            std::chrono::steady_clock::now());
+        QCoreApplication::processEvents(
+            QEventLoop::AllEvents, 5);
+        QThread::yieldCurrentThread();
+    }
+    QVERIFY(session.hasFrame());
+    QVERIFY(session.positionMilliseconds() >= 750);
     QCOMPARE(
         session.videoSource()
             .currentFrame()

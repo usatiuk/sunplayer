@@ -263,6 +263,24 @@ public:
         };
     }
 
+    AudioConvertResult primeLeadingGap(
+            std::optional<std::int64_t> expectedAudioStart,
+            QString &error) {
+        if (!expectedAudioStart)
+            return AudioConvertResult::Converted;
+        const std::int64_t playbackStart = m_request.video.start
+            .targetPositionMicroseconds.value_or(0);
+        // AVStream::start_time is the selected stream's declared first media
+        // timestamp. Publishing that complete interval as source silence lets
+        // bounded video and packet queues make progress without guessing a
+        // fixed startup horizon. Decoded timestamps still validate the
+        // boundary when the first real frame arrives.
+        return *expectedAudioStart > playbackStart
+            ? publishSilence(
+                playbackStart, *expectedAudioStart, error)
+            : AudioConvertResult::Converted;
+    }
+
     AudioConvertResult convert(
             const AVFrame &frame,
             QString &error) {
@@ -292,15 +310,19 @@ public:
                 checkedTimestampSubtract(
                     *frameTime,
                     *m_expectedNextMediaMicroseconds);
-            if (!difference
-                    || *difference < -tolerance
-                    || *difference > tolerance) {
+            if (!difference || *difference < -tolerance) {
                 error = QStringLiteral(
-                    "Decoded audio timestamp discontinuity is not "
-                    "supported yet (expected %1 us, got %2 us)")
+                    "Decoded audio overlaps the previous timeline "
+                    "region (expected %1 us, got %2 us)")
                     .arg(*m_expectedNextMediaMicroseconds)
                     .arg(*frameTime);
                 return AudioConvertResult::Failed;
+            }
+            if (*difference > tolerance) {
+                const AudioConvertResult gap = beginForwardGap(
+                    *frameTime, error);
+                if (gap != AudioConvertResult::Converted)
+                    return gap;
             }
         }
         const std::int64_t effectiveFrameTime = frameTime
@@ -406,6 +428,36 @@ public:
     }
 
 private:
+    AudioConvertResult beginForwardGap(
+            std::int64_t nextFrameTimeMicroseconds,
+            QString &error) {
+        const AudioConvertResult flushed = flush(error);
+        if (flushed != AudioConvertResult::Converted)
+            return flushed;
+
+        const std::int64_t playbackStart = m_request.video.start
+            .targetPositionMicroseconds.value_or(0);
+        const std::int64_t silenceStart = std::max(
+            playbackStart,
+            m_observedEndMicroseconds.value_or(
+                m_expectedNextMediaMicroseconds.value_or(
+                    playbackStart)));
+        const AudioConvertResult silence = publishSilence(
+            silenceStart, nextFrameTimeMicroseconds, error);
+        if (silence != AudioConvertResult::Converted)
+            return silence;
+
+        swr_close(m_swr.get());
+        if (swr_init(m_swr.get()) < 0) {
+            error = QStringLiteral(
+                "Could not reset audio conversion after a timestamp gap");
+            return AudioConvertResult::Failed;
+        }
+        m_anchorMediaMicroseconds = nextFrameTimeMicroseconds;
+        m_convertedFrames = 0;
+        return AudioConvertResult::Converted;
+    }
+
     bool ensureContext(
             const AVFrame &frame,
             QString &error) {
@@ -550,10 +602,127 @@ private:
                 "Trimmed audio timestamp range is not representable");
             return AudioConvertResult::Failed;
         }
+        const std::int64_t playbackStart = m_request.video.start
+            .targetPositionMicroseconds.value_or(0);
+        if (!m_outputAnchorMediaMicroseconds
+                && *mediaStart > playbackStart) {
+            const AudioConvertResult gap = publishSilence(
+                playbackStart, *mediaStart, error);
+            if (gap != AudioConvertResult::Converted)
+                return gap;
+        }
+        return submitSamples(
+            *mediaStart, std::move(samples), keptFrames, error);
+    }
+
+    AudioConvertResult publishSilence(
+            std::int64_t startMicroseconds,
+            std::int64_t endMicroseconds,
+            QString &error) {
+        startMicroseconds = std::max(
+            startMicroseconds,
+            m_request.video.start.targetPositionMicroseconds
+                .value_or(0));
+        if (endMicroseconds <= startMicroseconds)
+            return AudioConvertResult::Converted;
+        const std::int64_t frameCount = av_rescale_q_rnd(
+            endMicroseconds - startMicroseconds,
+            AV_TIME_BASE_Q,
+            {1, m_request.audioOutput.sampleRate},
+            AV_ROUND_DOWN);
+        if (frameCount <= 0)
+            return AudioConvertResult::Converted;
+        constexpr std::size_t maximumBlockFrames = 4'096;
+        std::uint64_t remaining = static_cast<std::uint64_t>(frameCount);
+        while (remaining != 0) {
+            if (m_stopToken.stop_requested())
+                return AudioConvertResult::Cancelled;
+            const std::size_t frames = static_cast<std::size_t>(
+                std::min<std::uint64_t>(
+                    remaining, maximumBlockFrames));
+            const std::optional<std::int64_t> blockStart =
+                checkedTimestampAdd(
+                    startMicroseconds,
+                    av_rescale_q(
+                        static_cast<std::int64_t>(
+                            static_cast<std::uint64_t>(frameCount)
+                            - remaining),
+                        {1, m_request.audioOutput.sampleRate},
+                        AV_TIME_BASE_Q));
+            if (!blockStart) {
+                error = QStringLiteral(
+                    "Leading audio gap is not representable");
+                return AudioConvertResult::Failed;
+            }
+            std::vector<float> silence(
+                frames * static_cast<std::size_t>(
+                    m_request.audioOutput.channelCount),
+                0.0F);
+            const AudioConvertResult submitted = submitSamples(
+                *blockStart,
+                std::move(silence),
+                frames,
+                error);
+            if (submitted != AudioConvertResult::Converted)
+                return submitted;
+            remaining -= frames;
+        }
+        return AudioConvertResult::Converted;
+    }
+
+    AudioConvertResult submitSamples(
+            std::int64_t mediaStartMicroseconds,
+            std::vector<float> samples,
+            std::size_t frameCount,
+            QString &error) {
+        if (!m_outputAnchorMediaMicroseconds) {
+            m_outputAnchorMediaMicroseconds = mediaStartMicroseconds;
+        } else {
+            const std::optional<std::int64_t> expected =
+                checkedTimestampAdd(
+                    *m_outputAnchorMediaMicroseconds,
+                    av_rescale_q(
+                        static_cast<std::int64_t>(m_streamFrameIndex),
+                        {1, m_request.audioOutput.sampleRate},
+                        AV_TIME_BASE_Q));
+            if (!expected) {
+                error = QStringLiteral(
+                    "Audio output timeline is not representable");
+                return AudioConvertResult::Failed;
+            }
+            const std::int64_t oneFrameMicroseconds =
+                std::max<std::int64_t>(
+                    1,
+                    av_rescale_q(
+                        1,
+                        {1, m_request.audioOutput.sampleRate},
+                        AV_TIME_BASE_Q));
+            const std::optional<std::int64_t> difference =
+                checkedTimestampSubtract(
+                    mediaStartMicroseconds, *expected);
+            if (!difference
+                    || *difference < -oneFrameMicroseconds) {
+                error = QStringLiteral(
+                    "Decoded audio overlaps the published output timeline");
+                return AudioConvertResult::Failed;
+            }
+            if (*difference > oneFrameMicroseconds) {
+                const AudioConvertResult gap = publishSilence(
+                    *expected, mediaStartMicroseconds, error);
+                if (gap != AudioConvertResult::Converted)
+                    return gap;
+                return submitSamples(
+                    mediaStartMicroseconds,
+                    std::move(samples),
+                    frameCount,
+                    error);
+            }
+            mediaStartMicroseconds = *expected;
+        }
         m_observedEndMicroseconds = checkedTimestampAdd(
-            *mediaStart,
+            mediaStartMicroseconds,
             av_rescale_q(
-                static_cast<std::int64_t>(keptFrames),
+                static_cast<std::int64_t>(frameCount),
                 {1, m_request.audioOutput.sampleRate},
                 AV_TIME_BASE_Q));
         if (!m_observedEndMicroseconds) {
@@ -564,7 +733,7 @@ private:
         PcmAudioBlock block{
             .playbackGeneration = requestGeneration(),
             .streamFrameIndex = m_streamFrameIndex,
-            .mediaStartMicroseconds = *mediaStart,
+            .mediaStartMicroseconds = mediaStartMicroseconds,
             .format = m_request.audioOutput,
             .samples = std::move(samples),
         };
@@ -576,7 +745,7 @@ private:
                 ? AudioConvertResult::Cancelled
                 : AudioConvertResult::Stopped;
         }
-        m_streamFrameIndex += keptFrames;
+        m_streamFrameIndex += frameCount;
         return AudioConvertResult::Converted;
     }
 
@@ -607,6 +776,7 @@ private:
     std::optional<std::int64_t> m_expectedNextMediaMicroseconds;
     std::uint64_t m_convertedFrames = 0;
     std::uint64_t m_streamFrameIndex = 0;
+    std::optional<std::int64_t> m_outputAnchorMediaMicroseconds;
     std::optional<std::int64_t> m_observedEndMicroseconds;
 };
 
@@ -617,6 +787,7 @@ AudioWorkerStatus decodeAudioPackets(
         int streamIndex,
         const AVCodec &decoder,
         std::optional<VideoTimelineOrigin> origin,
+        std::optional<std::int64_t> expectedAudioStartMicroseconds,
         FfmpegPacketRouter &router,
         const FfmpegPcmAudioSink &sink,
         std::stop_source &operationStop) {
@@ -660,7 +831,25 @@ AudioWorkerStatus decodeAudioPackets(
         std::move(origin),
         sink,
         stopToken);
-
+    QString primeError;
+    const AudioConvertResult primed = converter.primeLeadingGap(
+        expectedAudioStartMicroseconds, primeError);
+    if (primed != AudioConvertResult::Converted) {
+        if (primed == AudioConvertResult::Cancelled) {
+            result.cancelled = true;
+            return result;
+        }
+        if (primed == AudioConvertResult::Stopped) {
+            result.stopped = true;
+            result.diagnostics = converter.diagnostics();
+            result.outputFrames = converter.outputFrames();
+            result.observedEndMicroseconds =
+                converter.observedEndMicroseconds();
+            stopSibling(router, operationStop);
+            return result;
+        }
+        return fail(primeError);
+    }
     enum class Drain {
         NeedInput,
         Drained,
@@ -813,6 +1002,11 @@ bool FfmpegAudioStreamDiagnostics::isValid() const {
         && (!timelineOrigin || timelineOrigin->isValid());
 }
 
+bool FfmpegAudioOutputSink::isValid() const {
+    return static_cast<bool>(submit)
+        && static_cast<bool>(endOfStream);
+}
+
 bool FfmpegMediaDecodeRequest::isValid() const {
     return video.isValid()
         && (!decodeSelectedAudio
@@ -827,7 +1021,6 @@ bool FfmpegMediaDecodeResult::isSuccess() const {
         && !audioStopped
         && (!audioStreamPresent
             || (audio && audio->isValid()
-                && outputAudioFrames != 0
                 && audioEndOfStream));
 }
 
@@ -848,6 +1041,23 @@ FfmpegMediaDecodeResult decodeMediaFrames(
         const FfmpegVideoFrameSink &videoSink,
         const FfmpegPcmAudioSink &audioSink,
         std::stop_token stopToken) {
+    return decodeMediaFrames(
+        request,
+        videoSink,
+        FfmpegAudioOutputSink{
+            .submit = audioSink,
+            .endOfStream = [](std::uint64_t) {},
+        },
+        {},
+        stopToken);
+}
+
+FfmpegMediaDecodeResult decodeMediaFrames(
+        const FfmpegMediaDecodeRequest &request,
+        const FfmpegVideoFrameSink &videoSink,
+        const FfmpegAudioOutputSink &audioSink,
+        const FfmpegMediaStreamSink &streamSink,
+        std::stop_token stopToken) {
     FfmpegMediaDecodeResult result;
     const auto fail = [&](QString error) {
         result.error = std::move(error);
@@ -855,7 +1065,8 @@ FfmpegMediaDecodeResult decodeMediaFrames(
         return result;
     };
     if (!request.isValid() || !videoSink
-            || (request.decodeSelectedAudio && !audioSink)) {
+            || (request.decodeSelectedAudio
+                && !audioSink.isValid())) {
         return fail(QStringLiteral("Media decode request is invalid"));
     }
 
@@ -952,6 +1163,25 @@ FfmpegMediaDecodeResult decodeMediaFrames(
         return fail(QStringLiteral(
             "The synchronized media timeline has no stable origin"));
     }
+    const std::optional<std::int64_t> audioStartMicroseconds =
+        audioStream
+        ? normalizedTimestampMicroseconds(
+            audioStream->start_time,
+            audioStream->time_base,
+            origin)
+        : std::nullopt;
+    const std::optional<std::int64_t> audioEndMicroseconds =
+        audioStream
+        ? ffmpegDeclaredStreamEndMicroseconds(
+            *formatContext, *audioStream, origin)
+        : std::nullopt;
+    const std::int64_t requestedStartMicroseconds =
+        request.video.start.targetPositionMicroseconds
+            .value_or(0);
+    const bool audioOutputExpected = audioStream
+        && (!audioEndMicroseconds
+            || requestedStartMicroseconds
+                < *audioEndMicroseconds);
 
     if (request.video.start.performDemuxSeek) {
         if (!formatContext->pb
@@ -1041,6 +1271,16 @@ FfmpegMediaDecodeResult decodeMediaFrames(
         audioTimeBase = audioStream->time_base;
     }
 
+    if (streamSink) {
+        streamSink({
+            .audioStreamPresent = audioStream != nullptr,
+            .audioOutputExpected = audioOutputExpected,
+            .videoDiagnostics = initialVideoDiagnostics,
+        });
+    }
+    if (operationStop.stop_requested())
+        return cancel();
+
     FfmpegPacketRouter router;
     FfmpegVideoDecodeResult videoResult;
     AudioWorkerStatus audioResult;
@@ -1066,9 +1306,16 @@ FfmpegMediaDecodeResult decodeMediaFrames(
                 audioIndex,
                 *audioDecoder,
                 origin,
+                audioStartMicroseconds,
                 router,
-                audioSink,
+                audioSink.submit,
                 operationStop);
+            if (audioResult.endOfStream
+                    && audioSink.endOfStream) {
+                audioSink.endOfStream(
+                    request.video.firstFrameIdentity
+                        .playbackGeneration);
+            }
         });
     }
 
@@ -1174,8 +1421,7 @@ FfmpegMediaDecodeResult decodeMediaFrames(
     const std::optional<std::int64_t> observedEnd =
         observedPlaybackDurationMicroseconds(
             result.video.observedEndMicroseconds,
-            result.observedAudioEndMicroseconds,
-            audioStream != nullptr);
+            result.observedAudioEndMicroseconds);
     if (observedEnd) {
         result.video.diagnostics.durationMicroseconds = observedEnd;
         result.video.diagnostics.durationFinal = true;

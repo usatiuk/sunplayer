@@ -1,0 +1,26 @@
+file = "sdr-bt709-ffv1-audio-late-long-flac.mkv"
+sha256 = "4d1a1969a9e5b24a9a5e7eacd788d537ef5db9a882dcb5a303a73d0c5cc4f6d4"
+provenance = "Generated locally from FFmpeg lavfi sources; no external source data"
+purpose = "Five-second 60 fps lossless A/V fixture whose audio begins after the startup packet budget would fill"
+generator = "FFmpeg 8.1.2-full_build-www.gyan.dev"
+license = "CC0-1.0"
+
+[generation]
+command = '''
+ffmpeg -hide_banner -loglevel error -nostdin -y -f lavfi -i "color=c=black:size=96x64:rate=60:duration=5,format=yuv420p,drawbox=x=0:y=0:w=iw:h=ih:color=white:t=fill:enable='between(t,0.5,0.516)+between(t,4.5,4.516)',setparams=range=limited:color_primaries=bt709:color_trc=bt709:colorspace=bt709" -itsoffset 4 -f lavfi -i "aevalsrc=if(eq(n\,16000)\,0.8\,0):s=32000:d=1" -map 0:v:0 -map 1:a:0 -c:v ffv1 -level 3 -coder 1 -context 1 -g 1 -threads:v 1 -c:a flac -compression_level 12 -sample_fmt s16 -fflags +bitexact -flags:v +bitexact -flags:a +bitexact -map_metadata -1 sdr-bt709-ffv1-audio-late-long-flac.mkv
+'''
+
+[expected]
+video_start_microseconds = 0
+audio_start_microseconds = 4000000
+duration_microseconds = 5000000
+video_codec = "ffv1"
+video_frame_rate = 60
+video_frame_count = 300
+audio_codec = "flac"
+audio_sample_rate = 32000
+audio_channel_count = 1
+output_audio_frames_including_source_silence = 240000
+
+[coverage]
+features = ["bounded-startup-liveness", "leading-audio-gap", "packet-budget-exceeding-offset"]

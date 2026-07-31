@@ -59,6 +59,49 @@ Audio and video retain one normalized media timeline and one playback
 generation. Seeking or replacement invalidates packets, frames, converted PCM,
 and sink observations from the old generation together.
 
+The production session uses the shared operation. Stream selection and initial
+video diagnostics are published before decoder workers start. Readiness is a
+timeline state, not a latch between the first audio and video payloads. A
+provisional monotonic clock advances video until the first valid audio
+presentation observation, after which audio becomes the master and video
+waits or drops to follow it. If the provisional position is ahead at handoff,
+the current video frame is held until presented audio catches up; audio is not
+discarded or retimed to preserve a startup estimate. Audio may start while the
+video layer is still empty, and a future first video frame is not displayed
+before its presentation time. The Player viewport remains active in this
+ready-without-frame interval so the presentation boundary can select a newly
+available frame; the renderer provisions no video surface until the source
+actually publishes display geometry.
+
+Every audio output epoch begins at the requested playback position. When the
+selected audio content begins later, the decoder publishes timeline-advancing
+source silence up to the first decoded sample. This is media silence, not
+underrun hold silence. It keeps the audio presentation clock continuous and
+prevents bounded audio, video, and packet queues from waiting circularly for a
+later stream. A selected audio stream that reaches clean end-of-stream without
+producing output for the requested interval creates no audio epoch; playback
+uses the no-audio clock for that interval. Decode failure remains terminal and
+is not reclassified as an empty interval.
+
+Both decoder workers start before demuxing, and packet admission is independent
+of first-frame or first-PCM readiness. Every selected packet passes through the
+same cancellable aggregate budget. Each decoded-output boundary remains
+bounded; the playback-owned monitor advances the video scheduler even when no
+window or page is requesting frames, preventing that downstream boundary from
+starving audio demuxing.
+
+Presented audio drives `MediaClockSnapshot` during the audio interval. One
+sink observation is reused for each presentation decision. A drained epoch
+publishes its final media endpoint independently of whether the backend still
+answers live position queries; if audio drains before video, playback
+continues from that endpoint with a monotonic tail clock. A live position
+observation may be briefly unavailable, but sustained loss and any explicit
+current-generation sink failure are terminal session state, not an implicit
+switch to the no-audio clock. Active sessions monitor this state even when no
+video frame is being requested. The same playback-owned monitor selects or
+drops due video frames while presentation is hidden or inactive, preventing
+the bounded frame mailbox from starving the shared audio demux path.
+
 Synchronized A/V currently requires a stable common origin from the request,
 container, or selected stream metadata before workers start. It rejects a
 source whose selected audio and video streams provide none; independently
@@ -73,22 +116,25 @@ Benefits:
   unrelated per-stream hard caps.
 * Deterministic scenarios can exercise real demux, decode, resampling, queueing,
   and clock mapping without opening an audio device.
+* A bounded Windows application scenario additionally proves the production
+  Cubeb clock, QML viewport, QRhi/libplacebo, compositor, and swapchain wiring
+  for audio-first startup.
 * The cubeb callback has a small, explicit real-time contract.
 * The video scheduler remains clock-source-neutral.
 
 Costs and current limits:
 
-* The video-only and shared A/V operations now feed one hardware-capable packet
-  decoder. The synchronized regression uses software frames; production
-  migration must pass the active graphics capability and preserve the existing
-  whole-operation hardware fallback without reopening the source.
+* The shared production operation feeds the hardware-capable video packet
+  decoder and passes the active graphics capability. Deterministic A/V clock
+  scenarios still use software frames so they do not depend on GPU capability.
 * One aggregate packet cap cannot guarantee fairness for an arbitrary
   container interleave. Production telemetry and unreliable-source scenarios
   must establish whether soft watermarks or reservations are needed.
 * `ControlledAudioSink` proves deterministic queue and cursor behavior; the
   physical sink's default-endpoint tests do not prove real playback latency.
-* Hold-silence mapping exists. Device recovery and an audio-backed production
-  clock remain later slices.
+* Hold-silence mapping and the audio-backed production clock exist. Unified
+  buffering and device recovery remain later slices; terminal device failure
+  currently becomes a visible session error.
 * cubeb is maintained as a project-local overlay because the pinned registry
   package is substantially older than the reviewed upstream revision.
 

@@ -1,0 +1,26 @@
+file = "sdr-bt709-ffv1-audio-gap-flac.mkv"
+sha256 = "00947436b22bb52d317c0896edeb173c6e06dd68f681447453f3b354ab06aa44"
+provenance = "Generated locally from FFmpeg lavfi sources; no external source data"
+purpose = "Two-second lossless A/V fixture with a real half-second gap in decoded audio timestamps"
+generator = "FFmpeg 8.1.2-full_build-www.gyan.dev"
+license = "CC0-1.0"
+
+[generation]
+command = '''
+ffmpeg -hide_banner -loglevel error -nostdin -y -f lavfi -i "color=c=black:size=96x64:rate=30:duration=2,format=yuv420p,setparams=range=limited:color_primaries=bt709:color_trc=bt709:colorspace=bt709" -f lavfi -i "aevalsrc=if(eq(n\,8000)+eq(n\,40000)\,0.8\,0):s=32000:d=2,aselect='not(between(t,0.5,0.999))'" -map 0:v:0 -map 1:a:0 -c:v ffv1 -level 3 -coder 1 -context 1 -g 1 -threads:v 1 -c:a flac -compression_level 12 -sample_fmt s16 -fflags +bitexact -flags:v +bitexact -flags:a +bitexact -map_metadata -1 sdr-bt709-ffv1-audio-gap-flac.mkv
+'''
+
+[expected]
+duration_microseconds = 2000000
+audio_gap_start_microseconds = 576000
+audio_gap_end_microseconds = 1088000
+video_codec = "ffv1"
+video_frame_rate = 30
+video_frame_count = 60
+audio_codec = "flac"
+audio_sample_rate = 32000
+audio_channel_count = 1
+output_audio_frames_including_source_silence = 96000
+
+[coverage]
+features = ["mid-stream-source-silence", "audio-timestamp-gap", "audio-video-continuity"]

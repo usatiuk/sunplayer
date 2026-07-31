@@ -26,9 +26,6 @@ VideoFrameScheduler::selectForPresentation(
         std::optional<std::int64_t>
             declaredDurationMicroseconds) {
     VideoFrameSelection selection;
-    if (!clock.advancing)
-        return selection;
-
     std::uint64_t dueFrames = 0;
     while (true) {
         const std::optional<QueuedVideoFrame> next =
@@ -48,7 +45,8 @@ VideoFrameScheduler::selectForPresentation(
             selection.droppedFrames = dueFrames - 1;
     }
 
-    if (!decoderDrained
+    if ((!clock.advancing && !clock.terminal)
+            || !decoderDrained
             || queue.size(playbackGeneration) != 0
             || !m_currentFrameTimeMicroseconds) {
         return selection;

@@ -313,18 +313,22 @@ schedulerUsesClockSnapshotForDropAndEndPolicy() {
             {}));
     }
 
-    const VideoFrameSelection paused =
+    const VideoFrameSelection fixedDue =
         scheduler.selectForPresentation(
             queue,
             9,
             {
-                .positionMicroseconds = 1'000'000,
+                .positionMicroseconds = 500'000,
                 .advancing = false,
             },
             true);
-    QVERIFY(!paused.frame);
-    QVERIFY(!paused.reachedEnd);
-    QCOMPARE(queue.size(9), 3U);
+    QVERIFY(fixedDue.frame);
+    QCOMPARE(
+        fixedDue.frame->frame->identity().frameId,
+        3U);
+    QCOMPARE(fixedDue.droppedFrames, 1U);
+    QVERIFY(!fixedDue.reachedEnd);
+    QCOMPARE(queue.size(9), 1U);
 
     VideoFrameSelection due =
         scheduler.selectForPresentation(
@@ -339,7 +343,7 @@ schedulerUsesClockSnapshotForDropAndEndPolicy() {
     QCOMPARE(
         due.frame->frame->identity().frameId,
         4U);
-    QCOMPARE(due.droppedFrames, 2U);
+    QCOMPARE(due.droppedFrames, 0U);
     QVERIFY(!due.reachedEnd);
     QCOMPARE(queue.size(9), 0U);
 
@@ -362,7 +366,8 @@ schedulerUsesClockSnapshotForDropAndEndPolicy() {
             9,
             {
                 .positionMicroseconds = 1'500'000,
-                .advancing = true,
+                .advancing = false,
+                .terminal = true,
             },
             true,
             1'500'000);

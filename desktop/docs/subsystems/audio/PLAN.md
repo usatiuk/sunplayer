@@ -29,15 +29,19 @@ explicit recovery semantics.
 * [x] Add focused router saturation/cancellation coverage before production
   adoption, including the one-oversized-packet exception.
 * [x] Decode real audio and video concurrently without fixed sleeps.
+* [x] Start both decoder workers before demuxing and keep packet admission
+  independent of first-frame or first-PCM readiness.
 * [x] Convert and fully drain 32 kHz mono audio into 48 kHz stereo float32 PCM.
 * [x] Preserve one nonzero timeline origin across both streams.
+* [x] Preserve non-coincident stream starts with leading source silence and
+  due-first-video scheduling.
 * [x] Add a hashed lossless flash/impulse fixture and behavioral seek/drain
   regression scenario.
 * [x] Route both video-only and synchronized operations through one
   hardware-capable packet decoder.
-* [ ] Pass the active graphics capability through synchronized production
+* [x] Pass the active graphics capability through synchronized production
   playback and preserve whole-operation hardware fallback.
-* [ ] Make `MediaSession` use the shared operation without retaining the old
+* [x] Make `MediaSession` use the shared operation without retaining the old
   video-only demux path in parallel.
 
 ## Milestone 2: physical cubeb output
@@ -61,15 +65,21 @@ explicit recovery semantics.
 
 ## Milestone 3: audio-master playback
 
-* [ ] Map presented backend frames back to normalized media time.
-* [ ] Feed the existing `MediaClockSnapshot` and `VideoFrameScheduler` without
+* [x] Map presented backend frames back to normalized media time.
+* [x] Feed the existing `MediaClockSnapshot` and `VideoFrameScheduler` without
   giving the audio backend ownership of playback policy.
 * [ ] Keep mute advancing media time; distinguish source silence from
   underrun/recovery hold silence.
-* [ ] Invalidate packets, decoded frames, PCM, metadata, and observations on one
+* [x] Invalidate packets, decoded frames, PCM, metadata, and observations on one
   seek generation boundary.
-* [ ] Cover play, pause, seek, drain, no-audio fallback, short underrun, and
-  large discontinuity through the controlled sink.
+* [x] Cover play, pause, seek, staggered starts, clean zero-output audio
+  intervals, drain without a live position, trailing video after audio drain,
+  terminal sink failure, and sustained presentation-clock loss through the
+  controlled sink.
+* [x] Keep bounded video selection and timeline notifications progressing when
+  no presentation consumer is active.
+* [ ] Cover sustained underrun, latency change, and large-discontinuity
+  recovery through the controlled sink.
 * [ ] Add ordinary audio/video position, queue, underrun, and drop diagnostics
   without logging from the callback.
 

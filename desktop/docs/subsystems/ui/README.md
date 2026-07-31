@@ -7,13 +7,21 @@ The QML scene has a thin `AppShell` with a default `PlayerPage` and retained
 navigation, and viewport boundary are production structure; HDR Lab remains
 developer tooling.
 
-Player opens a local file, starts continuous video-only playback through the
-production libplacebo path, and exposes working play, pause, and replay
-commands. A position/duration timeline performs seek through the session's
+Player opens a local file, starts synchronized playback through the production
+libplacebo video and default Windows audio paths, and exposes working play,
+pause, and replay commands. A position/duration timeline performs seek through
+the session's
 generation-scoped restart boundary and reports truthful seeking state. It
 reports decode path/fallback plus decoded, queued, selected, and dropped-frame
-counts. Track, subtitle, audio, and volume controls remain
-absent until those commands exist.
+counts. Track, subtitle, and volume controls remain absent until those commands
+exist.
+
+Session readiness and video-frame availability are distinct UI facts. When
+audio makes the session ready before the first video frame, Player keeps its
+controls and viewport contract active while showing a preparing state. The
+presentation engine can therefore select the first frame without QML claiming
+that video is already drawable or creating a viewport/`hasFrame` dependency
+cycle.
 
 ## Page structure
 
@@ -83,12 +91,13 @@ Inactive pages cannot compete for the viewport.
 
 ## Player page
 
-`PlayerPage` implements the initial continuous-video session:
+`PlayerPage` implements the initial continuous-media session:
 
 * Empty.
 * Opening.
 * Error.
-* Ready with playing, paused, or ended video and a retained displayed frame.
+* Ready with playing, paused, or ended media; video may still be waiting for
+  its first due frame.
 
 The Ready state exposes play/pause or replay, open another, and close. Queue
 and frame counters provide lightweight pipeline observability. Its non-live
@@ -135,16 +144,21 @@ and renderability. A non-presenting Qt Quick component test creates the real
 QML shell through the same initial-property contract, resizes it, and verifies
 that active-page geometry and visibility reach `VideoViewportState`. It also
 verifies Empty/Opening/Ready/Error visibility, cancel/retry/close and
-play/pause command wiring, Player/HDR-Lab route and viewport selection, and the diagnostic
-renderer switch's default and source binding. It also verifies timeline
+play/pause command wiring, Player/HDR-Lab route and viewport selection, and the
+diagnostic renderer switch's default and source binding. It explicitly covers
+`Ready` before `hasFrame`: playback chrome and the viewport remain active while
+the preparing state is visible, then the preparing state disappears after
+frame publication. It also verifies timeline
 formatting, backend position updates, one user seek command, and disabled
 seeking state without launching a native dialog. The real
 D3D11 capture verifies that zero video geometry and the compositor's fallback
 binding produce the normal background rather than sampling the retained video
 surface. It also destroys a bound diagnostic producer, creates the other
 implementation, rebinds the compositor, and captures the new result. The
-earlier diagnostic build passed a noninteractive build-tree startup smoke; the
-current Player shell still needs a registered actual-application scenario.
+registered audio-first application playback scenario crosses the production
+FFmpeg, Cubeb, QML, QRhi, libplacebo, and swapchain paths and exits
+noninteractively after observing real presentation plus continued clock
+progress.
 
 Extend Qt Quick component coverage as commands gain behavior. Add
 actual-application scenarios for file open, navigation, diagnostics access,

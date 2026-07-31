@@ -73,6 +73,11 @@ private:
     };
 
     std::deque<Entry> &queue(FfmpegPacketStream stream);
+    bool canAccept(std::size_t bytes) const;
+    void enqueue(
+        FfmpegPacketStream stream,
+        FfmpegAvPacketPtr packet,
+        std::size_t bytes);
 
     FfmpegPacketRouterLimits m_limits;
     mutable std::mutex m_mutex;

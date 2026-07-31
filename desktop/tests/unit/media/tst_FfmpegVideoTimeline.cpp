@@ -18,7 +18,7 @@ private slots:
     void includesNonzeroAndNegativeOrigins();
     void rejectsUnrepresentableTimestamp();
     void preservesFfmpegDurationSemantics();
-    void finalizesFromCompleteSelectedStreamEndpoints();
+    void finalizesFromObservedPlaybackEndpoints();
     void rejectsTimestampOverflow();
     void requiresTheLatestVideoFrameEndpoint();
     void resolvesOneSharedSelectedStreamOrigin();
@@ -115,23 +115,21 @@ preservesFfmpegDurationSemantics() {
 }
 
 void FfmpegVideoTimelineTest::
-finalizesFromCompleteSelectedStreamEndpoints() {
+finalizesFromObservedPlaybackEndpoints() {
     QCOMPARE(
         observedPlaybackDurationMicroseconds(
-            3'000'000, 3'000'000, true),
+            3'000'000, 3'000'000),
         std::optional<std::int64_t>(3'000'000));
     QCOMPARE(
         observedPlaybackDurationMicroseconds(
-            10'000'000, std::nullopt, false),
+            10'000'000, std::nullopt),
         std::optional<std::int64_t>(10'000'000));
     QCOMPARE(
         observedPlaybackDurationMicroseconds(
-            10'000'000, 12'000'000, true),
+            10'000'000, 12'000'000),
         std::optional<std::int64_t>(12'000'000));
     QVERIFY(!observedPlaybackDurationMicroseconds(
-        std::nullopt, 3'000'000, true));
-    QVERIFY(!observedPlaybackDurationMicroseconds(
-        3'000'000, std::nullopt, true));
+        std::nullopt, 3'000'000));
 }
 
 void FfmpegVideoTimelineTest::rejectsTimestampOverflow() {

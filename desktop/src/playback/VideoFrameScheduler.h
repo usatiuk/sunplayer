@@ -10,6 +10,9 @@
 struct MediaClockSnapshot {
     std::int64_t positionMicroseconds = 0;
     bool advancing = false;
+    // A terminal clock may select the last due frame and complete playback
+    // even though it is no longer advancing.
+    bool terminal = false;
 };
 
 struct VideoFrameSelection {

@@ -146,15 +146,21 @@ Implement alongside graphics milestone 1:
 * [x] Add a hashed lossless A/V fixture with a nonzero shared timeline, visual
   flashes, audio impulses, sample-rate conversion, channel rematrixing, and
   resampler drain.
-* [x] Exercise one real FFmpeg open/probe/read operation across both selected
-  streams and assert media/sample behavior without coupling to packet counts.
+* [x] Exercise one invocation of the production shared FFmpeg media operation
+  across both selected streams and assert media/sample behavior without
+  coupling the regression to private open, packet, or decoder-call counts.
 * [x] Assert aggregate packet count/byte observations stay within the declared
   budget or its explicit one-oversized-packet exception.
 * [x] Add a focused shared-router saturation scenario that proves demux
   backpressure and stop wakeup independently of fixture packet counts.
 * [x] Cover missing shared-origin rejection at the timing-policy boundary.
-* [ ] Drive the production session and video scheduler from the controlled
+* [x] Drive the production session and video scheduler from the controlled
   presented-audio clock.
+* [x] Cover shared-operation session seek/drain, opposite A/V start offsets,
+  clean zero-output audio intervals, video outlasting audio, drained terminal
+  position, hidden sink failure, sustained clock loss, and complete bounded
+  playback without a presentation consumer with real pinned A/V fixtures where
+  applicable.
 * [x] Cover seek-generation invalidation without fixed sleeps, including
   rapid replacement, decoded preroll, and sparse-GOP/B-frame media.
 * [ ] Add subtitle fixtures and extend audio fixtures only with implemented
@@ -162,8 +168,11 @@ Implement alongside graphics milestone 1:
 * [ ] Add structured completion events and diagnostics with generation IDs.
 * [ ] Introduce an out-of-process local control channel only when several
   actual-application scenarios benefit from shared orchestration.
-* [ ] Exercise startup, local-file open, playback commands, errors, and clean
-  termination through the real binary.
+* [x] Exercise audio-first startup and local-file playback through the real
+  binary, production audio/GPU dependencies, two distinct swapchain video
+  revisions, and automatic clean termination.
+* [ ] Extend real-binary scenarios to playback commands, errors, replacement,
+  and controlled shutdown when the shared control boundary is justified.
 
 ## Milestone 4: dedicated systems coverage
 

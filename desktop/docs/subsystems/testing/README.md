@@ -124,8 +124,10 @@ Early likely seams are:
 * A controlled `MediaClockSnapshot` passed through the production scheduler at
   the `prepareForPresentation` selector seam.
 
-The controlled and physical audio sinks now both produce the shared
-`AudioPresentationSnapshot`; production scheduling has not adopted it yet.
+The controlled and physical audio sinks both produce the shared
+`AudioPresentationSnapshot`. Production scheduling consumes it through the
+clock-source-neutral frame selector; the controlled sink substitutes only the
+physical device edge in deterministic session scenarios.
 Later seams include a source-fault adapter and test-control endpoint. They
 should arrive with the subsystem behavior they enable rather than as a
 speculative framework.
@@ -137,16 +139,16 @@ Current verified coverage:
 | Boundary | State |
 | --- | --- |
 | Configured Windows Debug build | Builds successfully |
-| Focused automated tests | Twenty-three CTest targets cover presentation policy, UI/session lifecycle, bounded media/audio queues, timing and generation behavior, dependency boundaries, real FFmpeg A/V decode/resampling, a silent real-WASAPI sink lifecycle, and real GPU paths |
+| Focused automated tests | Twenty-four CTest targets cover presentation policy, UI/session lifecycle, bounded media/audio queues, timing and generation behavior, dependency boundaries, real FFmpeg A/V decode/resampling, a silent real-WASAPI sink lifecycle, real GPU paths, and the bounded application playback scenario |
 | Audio callback boundary | Whole-block SPSC publication, sticky cancellation, bounded output-to-media mapping, hold silence, generation-safe drain, and the max-block/preroll deadlock regression pass deterministically |
 | Real Windows audio boundary | The pinned cubeb WASAPI backend opens the default endpoint on a dedicated MTA thread and repeatedly passes silent start, presented-position observation, pause, reset, drain, and destruction |
 | libplacebo dependency boundary | The real DLL loads; pinned version, installed D3D11/Shaderc/built-in-DOVI configuration, disabled Vulkan/OpenGL/external-libdovi features, runtime staging, and log lifecycle pass |
-| FFmpeg dependency boundary | The three selected DLLs load; pinned major versions, D3D11VA, native H.264/HEVC decoders, disabled Vulkan/swscale configuration, and explicit runtime staging pass |
+| FFmpeg dependency boundary | The four selected DLLs load; pinned major versions, D3D11VA, native H.264/HEVC decoders, libswresample, disabled Vulkan/swscale configuration, and explicit runtime staging pass |
 | Real QRhi/libplacebo capture | Factory-selected D3D11 domain; shared QRhi device and immediate context; persistent libplacebo renderer; fixed-size persistent software input; distinct per-input-frame and per-output-render transfer diagnostics; direct wrapped RGBA16F target; aligned pattern layout; relative sRGB with an explicit 100-nit mastering maximum plus stale HDR10+/CIE-Y luminance normalized at 80, 100, and 203-nit output reference whites; an exact 203-nit PQ patch at surface `1.0`; one fixed 1000-nit PQ signal against one 600-nit target at those reference-white levels; source-upload reuse across target-only changes; no expansion while the source fits; compression into reduced headroom; exactly one final reference-white-to-scRGB scale; minimum-target value/known-state contract; zero output copies; pixel-validated resize/rewrap and producer rebinding; final composition readbacks; and a non-gating 60-frame throughput probe pass |
 | FFmpeg video pipeline | Manifest-enforced SHA-256 for pinned PPM, Matroska/FFV1, and Matroska/H.264 fixtures; caller-owned unique identities; complete three-frame software and D3D11VA drain; retained AVFrame and side-data lifetime; stream/frame metadata precedence; hardware-plane description and generation compatibility; RGB24 and limited-range BT.709 YUV420P software upload; required D3D11VA NV12 direct import on the shared device; stale-generation import classified for software retry; exact YUV and tolerant linear-RGB capture; hardware/software differential capture; final RGB composition; zero hardware input transfer/copy and zero output copy/transfer; deterministic pre-publication fallback-policy test; real-container long-timeline seek beyond the 32-bit-microsecond boundary |
-| Initial video playback | Real off-thread local open plus controlled Opening/Ready/Error; a twelve-frame fixture that fills the three-frame mailbox and proves pause/backpressure, resume/refill, complete drain, replay, exact-zero/nonzero seek, paused/playing intent, seek-to-end, and maximum occupancy; nonseekable replay from a natural zero start; a sparse-GOP H.264/B-frame fixture that proves preceding-keyframe decode and requested-frame publication; exact stable-origin retention; duration-aware and PTS-lookahead preroll filtering; integer timestamp normalization; deterministic media-clock snapshot scheduling; due-frame dropping; nonblocking cancellation/replacement; cancel and failure during seek; superseding generation; shutdown; nonfatal presentation failure; position-preserving one-shot hardware-import software restart; repeated-failure rejection; graphics recovery through the replacement capability for software-backed playback; and latest pending-seek preservation across recovery |
-| Manual Player playback | User-reported smoke on the current Windows build plays real local movie files continuously through the production renderer; this is useful observation, not a pinned or automated scenario |
-| Built application startup | The built Player executable has a registered no-window check for packaged QML and production type registration. A prior diagnostic build passed a four-second GUI/device/swapchain liveness smoke; a full Player process and multi-frame `RhiPresentationEngine` cadence scenario remain missing |
+| Initial media playback | Real off-thread local open plus controlled Opening/Ready/Error; a twelve-frame fixture that fills the three-frame mailbox and proves pause/backpressure, resume/refill, complete drain, replay, exact-zero/nonzero seek, paused/playing intent, seek-to-end, and maximum occupancy; a shared A/V operation with a presented-audio master, timeline-driven readiness, opposite stream-start offsets, pause, seek, generation replacement, clean zero-output audio intervals, drain with a terminal endpoint, no-audio fallback, a shorter-audio video tail, hidden sink failure, sustained clock-loss failure, and complete real-FFmpeg drain without any presentation consumer; nonseekable replay from a natural zero start; a sparse-GOP H.264/B-frame fixture that proves preceding-keyframe decode and requested-frame publication; exact stable-origin retention; duration-aware and PTS-lookahead preroll filtering; integer timestamp normalization; due-frame dropping; nonblocking cancellation/replacement; shutdown; nonfatal presentation failure; position-preserving one-shot hardware-import software restart; repeated-failure rejection; graphics recovery through the replacement capability for software-backed playback; and latest pending-seek preservation across recovery |
+| Actual application playback | Registered CTest launches the built Player on a pinned audio-first FFV1+FLAC fixture and requires production FFmpeg decode, a valid and advancing current-generation default-device Cubeb clock, and two distinct QRhi/libplacebo video revisions reaching the swapchain; the QML component scenario separately protects viewport activation before `hasFrame` |
+| Built application startup | The built Player executable also has a registered no-window check for packaged QML and production type registration. The playback scenario proves one native-window, graphics-device, swapchain, and automatic-shutdown path; broader command/error/package scenarios remain missing |
 | Recorded SDR/HDR runtime matrix | Not implemented |
 | Representative compressed-media scenarios | Deterministic Matroska/FFV1 software YUV and Matroska/H.264 D3D11VA NV12 fixtures implemented; HEVC, P010/P012/P016, HDR metadata, and other hardware backends remain missing |
 | Pinned FFmpeg-decoded mastered PQ source across display targets | Not implemented |
@@ -157,8 +159,9 @@ until it is implemented or deliberately removed from scope.
 
 Focused tests are grouped by responsibility under `tests/unit/media/`,
 `tests/unit/playback/`, `tests/unit/presentation/`, `tests/unit/ui/`, and
-`tests/unit/video/`. Future
-actual-application scenarios
-use sibling trees when their first concrete tests arrive; the first GPU
-boundary test is under `tests/integration/presentation/`, and the libplacebo
-binary-boundary test is under `tests/integration/video/`.
+`tests/unit/video/`. The first actual-application scenario is a direct CTest
+registration of the production executable because it needs no separate runner;
+future scenario runners belong under an integration tree when shared control or
+observation code becomes concrete. The first GPU boundary test is under
+`tests/integration/presentation/`, and the libplacebo binary-boundary test is
+under `tests/integration/video/`.

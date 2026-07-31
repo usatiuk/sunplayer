@@ -48,8 +48,9 @@ general telemetry platform in advance.
 
 The controlled sink already exposes typed generation, running state,
 submitted/presented frame counts, media position, queue depth, and observed
-capacity for deterministic tests. Production telemetry begins when the cubeb
-sink and audio-master session are wired.
+capacity for deterministic tests. The cubeb sink and audio-master session are
+now wired; structured clock, queue, underrun, and recovery telemetry remains
+the next diagnostics slice.
 
 * [ ] Record the selected master clock and clock-anchor revisions.
 * [ ] Track audio submitted/presented estimates, video selection/presentation,

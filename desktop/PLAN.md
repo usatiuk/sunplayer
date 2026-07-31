@@ -60,9 +60,8 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 
 ## Current implementation status
 
-As of 2026-07-31, the repository contains a Windows presentation foundation,
-continuous video-only local-file playback, and the first synchronized audio
-decode plus physical-output boundaries:
+As of 2026-07-31, the repository contains a Windows presentation foundation
+and continuous synchronized local-file audio/video playback:
 
 * A factory-selected graphics-device domain owns the current D3D11 QRhi,
   same-device libplacebo GPU, FFmpeg D3D11VA device, shared immediate-context
@@ -104,28 +103,33 @@ decode plus physical-output boundaries:
 * The configured Windows Debug target builds successfully with Qt 6.11.1,
   MSVC, pinned D3D11-only libplacebo 7.360.1, and official minimal FFmpeg
   8.1.2 dependencies built through the project-local vcpkg configuration.
-* `MediaSession` opens a local file, automatically starts video-only playback,
-  and supports play, pause, and replay. A persistent supervisor gives one
-  `AVFormatContext` to a demux worker and keeps one `AVCodecContext` on the
-  decode worker. A count- and byte-bounded packet channel and a
-  generation-scoped three-frame mailbox propagate backpressure upstream.
-* A replacement media operation proves single-pass A/V routing: one
+* `MediaSession` opens a local file and supports play, pause, seek, and replay.
+  One shared media operation gives one `AVFormatContext` to the demux owner;
+  selected audio and video packets use one count/byte budget and independent
+  decoder workers, while the generation-scoped three-frame mailbox and bounded
+  PCM sink propagate backpressure upstream.
+* The production media operation provides single-pass A/V routing: one
   `AVFormatContext` opens, probes, seeks, and reads the source once; selected
   audio and video packets share one global count/byte budget; and independent
   decoder workers retain a common normalized timeline. Real FFmpeg FLAC decode
   and libswresample produce 48 kHz stereo interleaved float32 PCM for a bounded
   controlled sink with distinct submitted and presented cursors. Video-only
-  and synchronized decoding now feed one hardware-capable packet decoder. This
-  path is not yet wired into `MediaSession`; production migration must pass
-  the active graphics capability and preserve fallback, not reopen the file.
+  and synchronized decoding feed one hardware-capable packet decoder. The
+  session passes the active graphics capability without adding a parallel
+  audio demux context. Hardware fallback intentionally restarts the entire
+  playback generation with fresh shared contexts.
 * A Windows `CubebAudioSink` opens the default WASAPI endpoint from one
   dedicated MTA control thread. Its real-time callback consumes preallocated
   PCM, records bounded output-to-media mappings, and represents short underruns
   as hold silence. The sink exposes separate media/device positions, optional
   latency and device-notification capabilities, and generation-safe drain.
 * Frame selection uses integer FFmpeg timestamps, a clock-source-neutral
-  `MediaClockSnapshot`, and a focused `VideoFrameScheduler`; the current clock
-  producer is monotonic and video-only. The presentation thread retains early
+  `MediaClockSnapshot`, and a focused `VideoFrameScheduler`. Presented cubeb
+  frames are the master for sources with audio; video-only playback uses the
+  monotonic producer, and a monotonic tail continues if audio drains first.
+  Leading source-audio gaps become timeline-advancing silence, while a future
+  first video frame leaves the video layer empty until due. The presentation
+  thread retains early
   frames, publishes due frames, collapses multiple due frames to the newest,
   keeps the drained final frame visible, and stops continuous rendering while
   paused or ended.
@@ -155,8 +159,8 @@ decode plus physical-output boundaries:
   zero output copies/transfers, and tolerant agreement with the software-decode
   result.
 
-libass, physical audio output/audio-master scheduling, buffering recovery,
-drag-and-drop, subtitles, and persistence are not integrated. CTest/Qt Test
+libass, buffering/device recovery, drag-and-drop, subtitles, and persistence
+are not integrated. CTest/Qt Test
 coverage exists for pure
 presentation-target policy, video-viewport state, the real QML shell's
 viewport publication and diagnostic renderer selection, rendered-video surface
@@ -170,18 +174,25 @@ compression when available headroom falls below the source, and one final
 Windows scRGB scale. It also covers known pixels from the first
 FFmpeg-decoded frame at two SDR-white targets. A sustained headless probe
 exercises 60 animated 640×360 frames into a 1100×600 target without
-viewport-sized CPU generation. Whole-application playback scenarios, a pinned
-FFmpeg-decoded mastered-PQ fixture, HLG/dynamic-HDR mapping, actual display
-gamut propagation, P010/P012/P016 capture, cross-platform hardware import, and
-physical-output validation do not yet exist.
+viewport-sized CPU generation. A bounded Windows application scenario opens a
+pinned audio-first fixture through production FFmpeg and Cubeb, observes two
+distinct video content revisions at the swapchain, and requires continued live
+presented-audio clock progress. The QML component scenario separately protects
+the ready-without-frame viewport invariant. Playback-owned coarse selection
+also drains bounded video queues when the window or active page does not
+request rendering. Broader
+whole-application command/error scenarios, a pinned FFmpeg-decoded mastered-PQ
+fixture, HLG/dynamic-HDR mapping, actual display gamut propagation,
+P010/P012/P016 capture, cross-platform hardware import, and physical-output
+validation do not yet exist.
 
-Playback now exposes normalized position/duration and seeking through a
+Playback exposes normalized position/duration and seeking through a
 generation-scoped, keyframe-anchored decoder restart shared by user seek,
-hardware-import fallback, and graphics-device recovery. Audio decoding,
-resampling, and a deterministic sink boundary exist alongside the production
-  session. Shared-session migration and the audio-backed master clock are the
-  next playback boundaries. Playback uses libplacebo as its video renderer; the procedural
-producer remains HDR-Lab-only diagnostic tooling.
+hardware-import fallback, and graphics-device recovery. Audio decode,
+resampling, default-WASAPI output, presented-audio clocking, and synchronized
+session cancellation share that generation. Playback uses libplacebo as its
+video renderer; the procedural producer remains HDR-Lab-only diagnostic
+tooling.
 
 ## Subsystems
 
@@ -230,9 +241,11 @@ Documentation: `docs/subsystems/media/`
 * [x] Bounded packet and frame queues
 * [x] Continuous-pipeline cancellation and generation invalidation
 * [x] Generation-scoped local-video seeking
-* [x] Monotonic video-only clock and timestamp-driven frame selection
+* [x] Monotonic no-audio clock and timestamp-driven frame selection
 * [x] Clock-source-neutral media snapshot and video scheduler boundary
-* [ ] Audio/video clock and synchronization
+* [x] Initial presented-audio clock and audio-master video synchronization
+* [x] Staggered A/V starts, clean zero-audio seek intervals, final audio
+  endpoints, and bounded live-clock-loss handling
 * [ ] Buffering behavior
 * [x] Initial end-of-stream behavior
 * [ ] Track selection and switching
@@ -296,9 +309,9 @@ Documentation: `docs/subsystems/video-rendering/`
 * [x] Initial real FFmpeg audio decoding and libswresample conversion
 * [x] Bounded controlled PCM buffering
 * [x] Real-time-safe Windows device callback and default-endpoint lifecycle
+* [x] Production session output and presented-audio master clock
 * [ ] Volume and mute
 * [ ] Device changes and recovery
-* [ ] Audio-backed master clock
 
 Documentation: `docs/subsystems/audio/`
 
@@ -368,7 +381,10 @@ Documentation: `docs/subsystems/diagnostics/`
 * [x] Initial deterministic video playback scenario
 * [x] Generation-scoped video-seek and decoded-preroll tests
 * [x] Initial one-pass A/V decode, resample, sink, and seek scenario
-* [ ] Audio-master playback and device-output A/V seek tests
+* [x] Audio-master playback and deterministic A/V seek/drain tests
+* [x] Real staggered-start A/V, no-presentation-consumer, hidden sink-failure,
+  and clock-loss regression scenarios
+* [ ] Real-device output A/V seek, recovery, and physical-sync tests
 * [ ] Color-metadata normalization tests
 * [ ] Renderer image tests
 * [ ] Subtitle layout tests

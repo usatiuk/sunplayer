@@ -103,6 +103,9 @@ void AppShellTest::publishesActiveViewport() {
     QObject *const openingState =
         rootItem->findChild<QObject *>(
             QStringLiteral("openingState"));
+    QObject *const waitingForVideoState =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("waitingForVideoState"));
     QObject *const errorState =
         rootItem->findChild<QObject *>(
             QStringLiteral("errorState"));
@@ -132,6 +135,7 @@ void AppShellTest::publishesActiveViewport() {
             QStringLiteral("durationLabel"));
     QVERIFY(emptyState);
     QVERIFY(openingState);
+    QVERIFY(waitingForVideoState);
     QVERIFY(errorState);
     QVERIFY(cancelOpenButton);
     QVERIFY(retryMediaButton);
@@ -178,8 +182,19 @@ void AppShellTest::publishesActiveViewport() {
         mediaSession.state(),
         ShellTestMediaSession::State::Empty);
 
+    // Audio output can make the session ready before the first video frame.
+    // Keep the playback chrome and presentation viewport active so that frame
+    // selection can make progress instead of deadlocking behind hasFrame.
+    mediaSession.setState(
+        ShellTestMediaSession::State::Ready, false);
+    QTRY_VERIFY(videoViewport.visible());
+    QTRY_VERIFY(waitingForVideoState->property("visible").toBool());
+    QTRY_VERIFY(playPauseButton->property("visible").toBool());
+    QTRY_VERIFY(seekSlider->property("visible").toBool());
+
     mediaSession.setState(
         ShellTestMediaSession::State::Ready, true);
+    QTRY_VERIFY(!waitingForVideoState->property("visible").toBool());
     mediaSession.setState(
         ShellTestMediaSession::State::Error);
     QTRY_VERIFY(errorState->property("visible").toBool());

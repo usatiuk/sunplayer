@@ -51,6 +51,8 @@ void ControlledAudioSink::reset(
         m_maximumObservedBufferedFrames = 0;
         m_running = false;
         m_finished = false;
+        m_positionAvailable = true;
+        m_failureReason.clear();
     }
     m_wake.notify_all();
 }
@@ -74,6 +76,7 @@ bool ControlledAudioSink::submit(
         [this, generation, frames, format] {
             return generation != m_playbackGeneration
                 || m_finished
+                || !m_failureReason.empty()
                 || format != m_format
                 || outstandingFramesLocked()
                         <= m_maximumBufferedFrames - frames;
@@ -81,6 +84,7 @@ bool ControlledAudioSink::submit(
     if (!ready
             || generation != m_playbackGeneration
             || m_finished
+            || !m_failureReason.empty()
             || block.format != m_format) {
         return false;
     }
@@ -92,6 +96,26 @@ bool ControlledAudioSink::submit(
     lock.unlock();
     m_wake.notify_all();
     return true;
+}
+
+void ControlledAudioSink::cancel(
+        std::uint64_t playbackGeneration) {
+    {
+        std::lock_guard lock(m_mutex);
+        if (playbackGeneration != m_playbackGeneration)
+            return;
+        m_blocks.clear();
+        m_mapping.clear();
+        m_format = {};
+        m_playbackGeneration = 0;
+        m_submittedFrames = 0;
+        m_presentedFrames = 0;
+        m_bufferedFrames = 0;
+        m_running = false;
+        m_finished = false;
+        m_failureReason.clear();
+    }
+    m_wake.notify_all();
 }
 
 void ControlledAudioSink::finish(
@@ -107,7 +131,8 @@ void ControlledAudioSink::finish(
 
 void ControlledAudioSink::start() {
     std::lock_guard lock(m_mutex);
-    m_running = true;
+    if (m_failureReason.empty())
+        m_running = true;
 }
 
 void ControlledAudioSink::pause() {
@@ -117,28 +142,62 @@ void ControlledAudioSink::pause() {
 
 AudioPresentationSnapshot ControlledAudioSink::snapshot() const {
     std::lock_guard lock(m_mutex);
+    const bool drained = m_finished
+        && m_bufferedFrames == 0
+        && m_presentedFrames == m_submittedFrames;
     AudioPresentationSnapshot result{
         .playbackGeneration = m_playbackGeneration,
         .submittedFrames = m_submittedFrames,
         .presentedFrames = m_presentedFrames,
         .producerFinished = m_finished,
-        .drained = m_finished
-            && m_bufferedFrames == 0
-            && m_presentedFrames == m_submittedFrames,
+        .drained = drained,
+        .terminalPositionValid = drained
+            && !m_mapping.empty(),
         .valid = m_playbackGeneration != 0
             && m_format.isValid()
-            && !m_mapping.empty(),
+            && !m_mapping.empty()
+            && m_positionAvailable,
     };
     result.advancing = result.valid
         && m_running
         && !result.drained
         && m_presentedFrames < m_submittedFrames;
-    if (result.valid) {
+    result.failed = !m_failureReason.empty();
+    if (result.failed) {
+        result.valid = false;
+        result.advancing = false;
+    }
+    if (result.valid || result.terminalPositionValid) {
         result.mediaPositionMicroseconds =
             mediaPositionForPresentedFrameLocked(
                 m_presentedFrames);
     }
     return result;
+}
+
+std::string ControlledAudioSink::failureReason() const {
+    std::lock_guard lock(m_mutex);
+    return m_failureReason;
+}
+
+void ControlledAudioSink::fail(
+        std::uint64_t playbackGeneration,
+        std::string reason) {
+    {
+        std::lock_guard lock(m_mutex);
+        if (playbackGeneration != m_playbackGeneration)
+            return;
+        m_failureReason = reason.empty()
+            ? "Injected audio output failure"
+            : std::move(reason);
+        m_running = false;
+    }
+    m_wake.notify_all();
+}
+
+void ControlledAudioSink::setPositionAvailable(bool available) {
+    std::lock_guard lock(m_mutex);
+    m_positionAvailable = available;
 }
 
 ControlledAudioRender ControlledAudioSink::render(

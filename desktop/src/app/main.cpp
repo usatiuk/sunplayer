@@ -1,5 +1,9 @@
+#include <cstdio>
 #include <cstdlib>
+#include <optional>
+#include <string_view>
 
+#include <QByteArray>
 #include <QCommandLineParser>
 #include <QDebug>
 #include <QDir>
@@ -9,14 +13,46 @@
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QStyleHints>
+#include <QTimer>
 #include <QUrl>
 
 #include "app/PresentationWindow.h"
 #include "diagnostics/ApplicationLog.h"
 #include "diagnostics/LogCategories.h"
 #include "graphics/GraphicsBackendFactory.h"
+#include "playback/MediaSession.h"
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
+
+#ifdef Q_OS_WIN
+namespace {
+bool hasExactArgument(
+        int argc,
+        char *argv[],
+        std::string_view expected) {
+    for (int index = 1; index < argc; ++index) {
+        if (std::string_view(argv[index]) == expected)
+            return true;
+    }
+    return false;
+}
+}
+#endif
 
 int main(int argc, char *argv[]) {
+#ifdef Q_OS_WIN
+    // QGuiApplication initializes the platform plugin in its constructor.
+    // Suppress native failure dialogs before that boundary for the bounded
+    // noninteractive application scenario.
+    if (hasExactArgument(argc, argv, "--playback-smoke")) {
+        SetErrorMode(
+            SEM_FAILCRITICALERRORS
+            | SEM_NOGPFAULTERRORBOX
+            | SEM_NOOPENFILEERRORBOX);
+    }
+#endif
     QGuiApplication app(argc, argv);
     app.styleHints()->setColorScheme(Qt::ColorScheme::Dark);
     QCoreApplication::setApplicationName(
@@ -55,12 +91,27 @@ int main(int argc, char *argv[]) {
         QStringLiteral(
             "Disable the session log file; console/debugger logging remains."));
     parser.addOption(noLogFileOption);
+    const QCommandLineOption playbackSmokeOption(
+        QStringLiteral("playback-smoke"),
+        QStringLiteral(
+            "Run a bounded noninteractive real-application playback "
+            "scenario for the positional media file."));
+    parser.addOption(playbackSmokeOption);
     parser.process(app);
 
     if (parser.isSet(logFileOption)
             && parser.isSet(noLogFileOption)) {
         qCCritical(sunroomLogApplication).noquote()
             << "--log-file and --no-log-file cannot be used together.";
+        return EXIT_FAILURE;
+    }
+
+    const QStringList positionalArguments =
+        parser.positionalArguments();
+    if (parser.isSet(playbackSmokeOption)
+            && positionalArguments.size() != 1) {
+        qCCritical(sunroomLogApplication).noquote()
+            << "--playback-smoke requires exactly one positional media file.";
         return EXIT_FAILURE;
     }
 
@@ -161,13 +212,150 @@ int main(int argc, char *argv[]) {
     }
 
     PresentationWindow window;
-    const QStringList positionalArguments =
-        parser.positionalArguments();
     if (!positionalArguments.isEmpty()) {
         const QString absolutePath =
             QFileInfo(positionalArguments.constFirst())
                 .absoluteFilePath();
         window.openMedia(QUrl::fromLocalFile(absolutePath));
+    }
+
+    QTimer playbackSmokeDeadline;
+    QTimer playbackSmokePoll;
+    std::optional<qulonglong> firstVideoContentRevision;
+    bool distinctVideoContentPresented = false;
+    qlonglong firstPresentedPositionMilliseconds = -1;
+    if (parser.isSet(playbackSmokeOption)) {
+        playbackSmokeDeadline.setSingleShot(true);
+        playbackSmokeDeadline.setInterval(15'000);
+        QObject::connect(
+            &playbackSmokeDeadline,
+            &QTimer::timeout,
+            &app,
+            [&app,
+             &window,
+             &firstVideoContentRevision,
+             &distinctVideoContentPresented] {
+                const MediaSession &session =
+                    window.mediaSession();
+                const auto audio =
+                    session.currentAudioPresentation();
+                qCCritical(sunroomLogApplication).noquote()
+                    << "event=application.playback_smoke_timeout"
+                    << "state=" + QString::number(
+                        static_cast<int>(session.state()))
+                    << "hasFrame=" + QString(
+                        session.hasFrame()
+                        ? QStringLiteral("true")
+                        : QStringLiteral("false"))
+                    << "positionMs=" + QString::number(
+                        session.positionMilliseconds())
+                    << "error=" + session.errorMessage();
+                std::fprintf(
+                    stderr,
+                    "Sunroom playback smoke timed out: state=%d, "
+                    "hasFrame=%d, positionMs=%lld, "
+                    "audioPresented=%llu, audioValid=%d, "
+                    "firstVideoRevision=%llu, "
+                    "distinctVideoRevision=%d\n",
+                    static_cast<int>(session.state()),
+                    session.hasFrame() ? 1 : 0,
+                    static_cast<long long>(
+                        session.positionMilliseconds()),
+                    static_cast<unsigned long long>(
+                        audio ? audio->presentedFrames : 0),
+                    audio && audio->valid ? 1 : 0,
+                    static_cast<unsigned long long>(
+                        firstVideoContentRevision.value_or(0)),
+                    distinctVideoContentPresented ? 1 : 0);
+                std::fflush(stderr);
+                app.exit(EXIT_FAILURE);
+            });
+        QObject::connect(
+            &window,
+            &PresentationWindow::videoFramePresented,
+            &app,
+            [&window,
+             &firstVideoContentRevision,
+             &distinctVideoContentPresented,
+             &firstPresentedPositionMilliseconds](
+                    qulonglong contentRevision) {
+                if (!firstVideoContentRevision) {
+                    firstVideoContentRevision = contentRevision;
+                } else if (contentRevision
+                        != *firstVideoContentRevision) {
+                    distinctVideoContentPresented = true;
+                }
+                if (firstPresentedPositionMilliseconds < 0) {
+                    firstPresentedPositionMilliseconds =
+                        window.mediaSession()
+                            .positionMilliseconds();
+                }
+            });
+        playbackSmokePoll.setInterval(25);
+        QObject::connect(
+            &playbackSmokePoll,
+            &QTimer::timeout,
+            &app,
+            [&app,
+             &window,
+             &playbackSmokeDeadline,
+             &playbackSmokePoll,
+             &firstVideoContentRevision,
+             &distinctVideoContentPresented,
+             &firstPresentedPositionMilliseconds] {
+                const MediaSession &session =
+                    window.mediaSession();
+                if (session.state() == MediaSession::State::Error) {
+                    qCCritical(sunroomLogApplication).noquote()
+                        << "event=application.playback_smoke_failed"
+                        << "error=" + session.errorMessage();
+                    const QByteArray error =
+                        session.errorMessage().toUtf8();
+                    std::fprintf(
+                        stderr,
+                        "Sunroom playback smoke failed: %s\n",
+                        error.constData());
+                    std::fflush(stderr);
+                    playbackSmokeDeadline.stop();
+                    playbackSmokePoll.stop();
+                    app.exit(EXIT_FAILURE);
+                    return;
+                }
+
+                const qlonglong position =
+                    session.positionMilliseconds();
+                const auto audio =
+                    session.currentAudioPresentation();
+                if (!firstVideoContentRevision
+                        || !distinctVideoContentPresented
+                        || !session.hasFrame()
+                        || !audio
+                        || !audio->valid
+                        || !audio->advancing
+                        || audio->presentedFrames == 0
+                        || audio->mediaPositionMicroseconds
+                            < 1'500'000
+                        || position < 1'500
+                        || position
+                            < firstPresentedPositionMilliseconds
+                                + 250) {
+                    return;
+                }
+
+                qCInfo(sunroomLogApplication).noquote()
+                    << "event=application.playback_smoke_complete"
+                    << "positionMs=" + QString::number(position);
+                std::fprintf(
+                    stdout,
+                    "Sunroom playback smoke passed at %lld ms\n",
+                    static_cast<long long>(position));
+                std::fflush(stdout);
+                playbackSmokeDeadline.stop();
+                playbackSmokePoll.stop();
+                app.exit(EXIT_SUCCESS);
+            });
+        playbackSmokeDeadline.start();
+        playbackSmokePoll.start();
     }
     window.show();
 

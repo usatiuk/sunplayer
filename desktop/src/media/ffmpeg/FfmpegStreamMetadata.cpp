@@ -1,11 +1,13 @@
 #include "media/ffmpeg/FfmpegStreamMetadata.h"
 
 #include <algorithm>
+#include <cstring>
 #include <limits>
 
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/mathematics.h>
+#include <libavutil/parseutils.h>
 }
 
 #include "diagnostics/LogCategories.h"
@@ -134,6 +136,51 @@ std::optional<VideoTimelineOrigin> ffmpegSharedTimelineOrigin(
         : std::nullopt;
 }
 
+std::optional<std::int64_t> ffmpegDeclaredStreamEndMicroseconds(
+        const AVFormatContext &formatContext,
+        const AVStream &stream,
+        const std::optional<VideoTimelineOrigin> &origin) {
+    const std::optional<std::int64_t> originMicroseconds =
+        origin ? origin->microseconds() : std::nullopt;
+    if (!originMicroseconds)
+        return std::nullopt;
+
+    if (stream.start_time != AV_NOPTS_VALUE) {
+        const std::int64_t start = av_rescale_q(
+            stream.start_time,
+            stream.time_base,
+            AV_TIME_BASE_Q);
+        const std::optional<std::int64_t> normalizedStart =
+            checkedTimestampSubtract(start, *originMicroseconds);
+        const std::optional<std::int64_t> duration =
+            positiveDurationMicroseconds(
+                stream.duration, stream.time_base);
+        if (normalizedStart && duration)
+            return checkedTimestampAdd(*normalizedStart, *duration);
+    }
+
+    const char *formatName = formatContext.iformat
+        ? formatContext.iformat->name
+        : nullptr;
+    if (!formatName
+            || (!std::strstr(formatName, "matroska")
+                && !std::strstr(formatName, "webm"))) {
+        return std::nullopt;
+    }
+    const AVDictionaryEntry *durationTag = av_dict_get(
+        stream.metadata, "DURATION", nullptr, 0);
+    std::int64_t absoluteEndMicroseconds = 0;
+    if (!durationTag || !durationTag->value
+            || av_parse_time(
+                &absoluteEndMicroseconds,
+                durationTag->value,
+                1) < 0) {
+        return std::nullopt;
+    }
+    return checkedTimestampSubtract(
+        absoluteEndMicroseconds, *originMicroseconds);
+}
+
 std::optional<std::int64_t> ffmpegProvisionalDurationMicroseconds(
         const AVFormatContext &formatContext,
         const AVStream &stream) {
@@ -167,17 +214,18 @@ std::optional<std::int64_t> ffmpegProvisionalDurationMicroseconds(
 
 std::optional<std::int64_t> observedPlaybackDurationMicroseconds(
         std::optional<std::int64_t> videoEndMicroseconds,
-        std::optional<std::int64_t> audioEndMicroseconds,
-        bool audioSelected) {
+        std::optional<std::int64_t> audioEndMicroseconds) {
     if (!videoEndMicroseconds
-            || *videoEndMicroseconds <= 0
-            || (audioSelected
-                && (!audioEndMicroseconds
-                    || *audioEndMicroseconds <= 0))) {
+            || *videoEndMicroseconds <= 0) {
         return std::nullopt;
     }
-    if (!audioSelected)
+    // A selected stream can have no samples in the requested interval (for
+    // example a seek into a trailing video-only region). Clean audio EOS then
+    // contributes no endpoint instead of invalidating the observed video end.
+    if (!audioEndMicroseconds
+            || *audioEndMicroseconds <= 0) {
         return videoEndMicroseconds;
+    }
     return std::max(
         *videoEndMicroseconds,
         *audioEndMicroseconds);

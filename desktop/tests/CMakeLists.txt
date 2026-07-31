@@ -490,6 +490,19 @@ if (WIN32)
             LABELS "audio;device;integration;windows"
             TIMEOUT 30
     )
+    add_test(
+            NAME application-audio-first-playback
+            COMMAND $<TARGET_FILE:sunroom>
+                    --playback-smoke
+                    --no-log-file
+                    "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/media/sdr-bt709-ffv1-video-late-flac.mkv"
+    )
+    set_tests_properties(
+            application-audio-first-playback
+            PROPERTIES
+            LABELS "application;audio;ffmpeg;gpu;integration;windows"
+            TIMEOUT 30
+    )
 endif ()
 
 set_tests_properties(

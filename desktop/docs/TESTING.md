@@ -13,14 +13,18 @@ boundaries. The default regression test should therefore exercise the highest
 practical public boundary with real dependencies and representative data.
 
 The practical boundary changes as the player grows. Today the repository has a
-Windows QRhi presentation path plus asynchronous continuous video playback,
+Windows QRhi presentation path plus asynchronous synchronized A/V playback,
 so useful tests cover display-target policy, resource-generation contracts,
 real QRhi composition, bounded frame-mailbox backpressure, stop-aware packet
 channels, timestamp-driven selection, active-source/session lifecycle, and
 retained software/D3D11VA `AVFrame`s, single-pass A/V decode and resampling,
 callback-safe PCM/metadata buffering, and a real default-WASAPI lifecycle
-boundary. As libass and audio-master playback arrive, deterministic
-whole-pipeline scenarios should become the bulk of behavioral coverage.
+boundary. A deterministic production-session scenario now uses presented audio
+as the video scheduler's clock. A registered real-process scenario additionally
+crosses the production executable, default audio device, QML viewport,
+libplacebo render, and swapchain for an audio-first source. As libass,
+buffering, and device recovery arrive, deterministic whole-pipeline scenarios
+should become the bulk of behavioral coverage.
 
 The central principle is:
 
@@ -221,6 +225,12 @@ Early tests can call public subsystem APIs in-process. The out-of-process
 channel is justified when it removes duplicated orchestration and proves
 startup, shutdown, and application wiring that in-process tests cannot.
 
+The current `--playback-smoke` mode is deliberately narrower than that future
+channel. It opens one positional file, waits for two distinct video content
+revisions to reach the swapchain and for live Cubeb-derived audio-master clock
+progress, reports a process result, and exits. Keep it small until multiple
+application scenarios justify shared command/event orchestration.
+
 ## Focused deterministic tests
 
 Use focused tests where the oracle is stronger than an end-to-end result:
@@ -269,7 +279,10 @@ The first pipeline scenarios should grow with implementation milestones:
    dropping, and end of stream through the real session.
 6. Sparse-GOP/B-frame seek with decoded preroll and generation invalidation.
 7. Display-target change with rerender.
-8. Audio-backed playback and A/V synchronization.
+8. Audio-backed playback and A/V synchronization, including seek, unequal
+   stream duration, drain, and terminal output failure.
+9. Audio-first actual-application playback through production FFmpeg, Cubeb,
+   QML, QRhi, libplacebo, compositor, and swapchain boundaries.
 
 ## Media fixture corpus
 
@@ -307,6 +320,15 @@ Initial additions should be narrowly tied to milestones:
   A two-frame Matroska/FFV1 fixture places its second intra frame at 3000
   seconds and catches narrowing of long absolute seek positions through the
   real demux/decode boundary without requiring a large media file.
+* Six lossless Matroska/FFV1+FLAC fixtures cover the shared A/V operation,
+  resampling, shared nonzero timing, flash/impulse markers, and production
+  audio-master scheduling. They include equal three-second streams; short and
+  high-frame-rate video tails after one second of audio; opposite audio/video
+  start offsets including a packet-budget-exceeding late-audio case; and a
+  midstream audio gap. Together they exercise terminal audio position, clean
+  zero-output audio after a seek, clock handoff after drain, complete leading
+  source silence, due-first-video scheduling, startup liveness, and midstream
+  discontinuity handling.
 * One small HDR10 container with explicit mastering and content-light
   metadata.
 * Timeline, subtitle, audio, corruption, dynamic-HDR, and unusual-format

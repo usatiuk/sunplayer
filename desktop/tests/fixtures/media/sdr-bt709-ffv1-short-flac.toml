@@ -1,0 +1,27 @@
+file = "sdr-bt709-ffv1-short-flac.mkv"
+sha256 = "a053d298cf6f53e06b8022579f0f0efb40d12e8b2c4b8bc09a609fa678148156"
+provenance = "Generated analytically for Sunroom; no external source media"
+generator = "FFmpeg 8.1.2-full_build-www.gyan.dev"
+license = "CC0-1.0"
+
+generation_command = """
+ffmpeg -hide_banner -loglevel error -nostdin -y -f lavfi -i "color=c=black:size=96x64:rate=4:duration=3,format=yuv420p,drawbox=x=0:y=0:w=iw:h=ih:color=white:t=fill:enable='between(t,0.5,0.749)+between(t,1.5,1.749)+between(t,2.5,2.749)',setparams=range=limited:color_primaries=bt709:color_trc=bt709:colorspace=bt709" -f lavfi -i "aevalsrc=if(eq(n\\,16000)\\,0.8\\,0):s=32000:d=1" -map 0:v:0 -map 1:a:0 -c:v ffv1 -level 3 -coder 1 -context 1 -g 1 -threads:v 1 -c:a flac -compression_level 12 -sample_fmt s16 -output_ts_offset 5 -fflags +bitexact -flags:v +bitexact -flags:a +bitexact -map_metadata -1 sdr-bt709-ffv1-short-flac.mkv
+"""
+
+[expected]
+container = "matroska"
+raw_start_seconds = 5.0
+raw_duration_seconds = 8.0
+normalized_duration_seconds = 3.0
+video_codec = "ffv1"
+video_frame_count = 12
+audio_codec = "flac"
+audio_source_frames = 32000
+output_audio_frames = 48000
+
+[coverage]
+features = [
+    "single-pass-audio-video-demux",
+    "video-outlasts-audio",
+    "audio-master-to-monotonic-tail-clock",
+]

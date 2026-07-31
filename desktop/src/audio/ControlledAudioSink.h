@@ -7,6 +7,7 @@
 #include <mutex>
 #include <optional>
 #include <stop_token>
+#include <string>
 #include <vector>
 
 #include "audio/AudioSink.h"
@@ -30,10 +31,19 @@ public:
     bool submit(
         PcmAudioBlock block,
         std::stop_token stopToken = {}) override;
+    void cancel(std::uint64_t playbackGeneration) override;
     void finish(std::uint64_t playbackGeneration) override;
     void start() override;
     void pause() override;
     AudioPresentationSnapshot snapshot() const override;
+    std::string failureReason() const override;
+
+    // Deterministic device-failure injection for session and recovery tests.
+    // A stale generation cannot fail its replacement.
+    void fail(
+        std::uint64_t playbackGeneration,
+        std::string reason);
+    void setPositionAvailable(bool available);
 
     ControlledAudioRender render(std::size_t requestedFrames);
     void advancePresentedFrames(std::size_t frames);
@@ -72,4 +82,6 @@ private:
     std::size_t m_maximumObservedBufferedFrames = 0;
     bool m_running = false;
     bool m_finished = false;
+    bool m_positionAvailable = true;
+    std::string m_failureReason;
 };

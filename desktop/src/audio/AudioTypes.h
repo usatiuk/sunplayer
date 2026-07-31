@@ -35,5 +35,12 @@ struct AudioPresentationSnapshot {
     bool producerFinished = false;
     bool drained = false;
     bool advancing = false;
+    // A drained backend may stop exposing a live device position. In that
+    // case mediaPositionMicroseconds still carries the final presented media
+    // endpoint when terminalPositionValid is true.
+    bool terminalPositionValid = false;
+    // Terminal failure of this playback generation. The reason is obtained
+    // from AudioSink::failureReason() outside the real-time boundary.
+    bool failed = false;
     bool valid = false;
 };

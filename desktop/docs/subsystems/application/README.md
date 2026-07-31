@@ -6,8 +6,8 @@ The application shell is a single-window Windows presentation host with a thin
 QML `AppShell`, default Player page, and retained HDR Lab. It establishes
 startup, object ownership, native presentation events, redirected Qt Quick
 input, the active video-viewport boundary, and asynchronous continuous local
-video playback with a position/duration seek timeline. It does not yet provide
-audio, drag-and-drop, persistent settings, fullscreen behavior, general
+audio/video playback with a position/duration seek timeline. It does not yet
+provide drag-and-drop, persistent settings, fullscreen behavior, general
 structured errors, or a user-facing support-report interface. It now installs
 the shared Qt category logger and bounded session-file sink.
 
@@ -38,8 +38,12 @@ does not live in the application window or QML page.
 6. Enters the Qt event loop.
 
 One optional positional command-line path opens local media after construction.
-There is no full command-line model, single-instance policy, recent-file state,
-settings store, or application service container.
+`--playback-smoke` is a narrow noninteractive verification mode for that path:
+it requires two distinct video content revisions to reach the swapchain plus
+continued live Cubeb audio-master clock progress, then exits with a process
+result. It is not a general remote-control interface. There is no full command-line model,
+single-instance policy, recent-file state, settings store, or application
+service container.
 
 Application logging is installed after `QGuiApplication` construction and
 command-line parsing, but before Qt Quick backend selection, QML, graphics,
@@ -143,12 +147,14 @@ Viewport, active-source routing, and media-session lifecycle have focused Qt
 Test targets. A Qt Quick component target verifies root initial-property
 handoff, all four initial Player states, cancel/retry/close command wiring,
 Player/HDR-Lab route selection, and active-page viewport publication.
-A prior diagnostic build completed an automated four-second hidden startup
-liveness smoke without user interaction. The current Player executable has a
-registered no-window mode that loads its packaged QML module with production
-type registrations. A full process scenario still needs to prove native-window,
-graphics-device, and swapchain liveness; the module check and component tests
-do not cover those boundaries.
+The current Player executable has a registered no-window mode that loads its
+packaged QML module with production type registrations. A second registered,
+bounded application scenario opens a real audio-first A/V fixture through the
+production FFmpeg and Cubeb paths, shows the native presentation window, and
+waits for two distinct video content revisions plus continued live Cubeb
+audio-clock progress. It exits without user interaction and disables Windows
+error dialogs. The scenario proves startup and initial playback wiring; broader command,
+error, shutdown, and packaged-install scenarios remain future work.
 
 When features arrive, use:
 

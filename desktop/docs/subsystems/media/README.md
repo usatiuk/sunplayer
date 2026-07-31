@@ -68,17 +68,15 @@ passed through an incremental rational clock helper.
 Uninterruptible mounted-filesystem kernel waits remain outside the guarantee
 and may require helper-process containment.
 
-The production session still uses this selected-video pipeline. A parallel
-implementation slice now proves the replacement boundary: `decodeMediaFrames()`
-opens and probes one source once, routes referenced packets for the selected
-video and audio streams under one shared count/byte budget, decodes both on
-their own workers, and converts audio through libswresample. It is not yet wired
-into `MediaSession`. Both operations now feed one hardware-capable packet-level
-video decoder, so codec setup, D3D11VA negotiation, metadata, frame ownership,
-and drain behavior do not fork. The synchronized regression uses software
-frames; production audio must pass the active graphics capability through the
-single-pass path and retain whole-operation hardware fallback. It must not open
-a second format context for the same playback attempt.
+The production session uses `decodeMediaFrames()`: it opens and probes one
+source once, routes referenced packets for selected video and audio streams
+under one shared count/byte budget, decodes both on their own workers, and
+converts audio through libswresample. The active graphics capability passes
+through the same hardware-capable packet-level video decoder, so codec setup,
+D3D11VA negotiation, metadata, frame ownership, drain, and whole-operation
+software fallback do not fork. The deterministic synchronized regression uses
+software frames, while production may select hardware decode. Neither path
+opens a second format context for audio.
 
 At open time, FFmpeg's public duration fields are treated as provisional
 durations and `start_time` is never subtracted from them. At successful EOF,
@@ -154,14 +152,12 @@ rotated-content output still needs a dedicated fixture and capture.
 
 ## Next implementation
 
-1. Migrate `MediaSession` to the shared audio/video router without a second
-   source read, passing the active graphics capability and preserving fallback.
-2. Normalize complete stream, chapter, attachment, and provisional/final
+1. Normalize complete stream, chapter, attachment, and provisional/final
    session duration state.
-3. Dispatch subtitle packets without letting one selected stream prevent
+2. Dispatch subtitle packets without letting one selected stream prevent
    progress for another.
-4. Add packet byte/duration and decode-time diagnostics.
-5. Add equivalent native hardware-device negotiation on Linux and macOS when
+3. Add packet byte/duration and decode-time diagnostics.
+4. Add equivalent native hardware-device negotiation on Linux and macOS when
    their graphics domains are implemented.
 
 ## Verification
@@ -205,9 +201,20 @@ demux seek retains positions beyond the 32-bit-microsecond boundary.
 
 A separate hashed Matroska fixture combines twelve lossless FFV1 frames with
 lossless 32 kHz mono FLAC impulses on a nonzero timeline. The synchronized
-integration scenario opens and reads it once, exercises both real FFmpeg
-decoders, converts and drains 48 kHz stereo float32 PCM, verifies the common
-timeline and marker locations, and seeks without asserting FFmpeg packet or
-decoder-call counts. It also proves that the eight-second Matroska header value
-is kept provisional at open while the fully observed selected A/V endpoints
-finalize the normalized playback duration at three seconds.
+integration scenario invokes the production shared media operation, exercises
+both real FFmpeg decoders, converts and drains 48 kHz stereo float32 PCM,
+verifies the common timeline and marker locations, and seeks without asserting
+private FFmpeg open, packet, or decoder-call counts. It also proves that the
+eight-second Matroska header value is kept provisional at open while the fully
+observed selected A/V endpoints finalize the normalized playback duration at
+three seconds.
+
+The production-session scenario consumes one invocation of that operation
+through a controlled audio device, proving audio-master frame selection,
+pause, generation replacement, drain, and session completion. Five additional
+manifest-hashed fixtures cover a decoded timestamp gap, short and long
+post-audio video tails, and opposite audio and video start offsets. The
+short-audio fixture also verifies a clean video-only seek interval after
+selected audio has already ended. A no-presentation-consumer scenario proves
+the playback monitor drains the bounded frame mailbox so the shared demuxer
+and audio path keep making progress.
