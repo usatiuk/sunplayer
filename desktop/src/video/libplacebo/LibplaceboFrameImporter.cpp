@@ -2,6 +2,8 @@
 
 #include <utility>
 
+#include <QStringList>
+
 extern "C" {
 #include <libavutil/frame.h>
 }
@@ -10,8 +12,7 @@ extern "C" {
 #include <libplacebo/utils/libav.h>
 
 bool VideoFrameImportDiagnostics::isValid() const {
-    if (softwareFormat.isEmpty()
-            || synchronizationMode.isEmpty()) {
+    if (softwareFormat.isEmpty() || synchronizationMode.isEmpty()) {
         return false;
     }
 
@@ -24,24 +25,28 @@ bool VideoFrameImportDiagnostics::isValid() const {
     switch (path) {
     case VideoFrameImportPath::SoftwareUpload:
         return !hardware
+            && failure == VideoFrameImportFailure::None
             && knownCpuDownloadsPerFrame == 0
             && knownCpuUploadsPerFrame == 1
             && knownGpuCopiesPerFrame == 0
             && fallbackReason.isEmpty();
     case VideoFrameImportPath::DirectHardwareSurface:
         return hardware
+            && failure == VideoFrameImportFailure::None
             && knownCpuDownloadsPerFrame == 0
             && knownCpuUploadsPerFrame == 0
             && knownGpuCopiesPerFrame == 0
             && fallbackReason.isEmpty();
     case VideoFrameImportPath::SameDeviceGpuCopy:
         return hardware
+            && failure == VideoFrameImportFailure::None
             && knownCpuDownloadsPerFrame == 0
             && knownCpuUploadsPerFrame == 0
             && knownGpuCopiesPerFrame > 0
             && !fallbackReason.isEmpty();
     case VideoFrameImportPath::CpuRoundTrip:
         return hardware
+            && failure == VideoFrameImportFailure::None
             && knownCpuDownloadsPerFrame > 0
             && knownCpuUploadsPerFrame > 0
             && !fallbackReason.isEmpty();
@@ -49,9 +54,63 @@ bool VideoFrameImportDiagnostics::isValid() const {
         return knownCpuDownloadsPerFrame == 0
             && knownCpuUploadsPerFrame == 0
             && knownGpuCopiesPerFrame == 0
-            && !fallbackReason.isEmpty();
+            && !fallbackReason.isEmpty()
+            && failure != VideoFrameImportFailure::None;
     }
     return false;
+}
+
+QString describeLibplaceboMetadataPath(
+        const DecodedVideoFrame &frame,
+        const pl_frame *mappedFrame) {
+    const AVFrame &source = frame.ffmpegFrame();
+    QStringList paths;
+    if (mappedFrame
+            && mappedFrame->repr.sys == PL_COLOR_SYSTEM_DOLBYVISION
+            && mappedFrame->repr.dovi) {
+        paths.push_back(QStringLiteral(
+            "Dolby Vision reshape mapped by libplacebo"));
+    } else if (av_frame_get_side_data(
+            &source, AV_FRAME_DATA_DOVI_METADATA)) {
+        paths.push_back(mappedFrame
+            ? QStringLiteral(
+                "Dolby Vision parsed metadata not mapped; "
+                "decoded base-layer representation selected")
+            : QStringLiteral(
+                "Dolby Vision parsed metadata present; "
+                "mapping outcome unavailable"));
+    } else if (av_frame_get_side_data(
+            &source, AV_FRAME_DATA_DOVI_RPU_BUFFER)) {
+        paths.push_back(QStringLiteral(
+            "raw Dolby Vision RPU present; no parsed mapper input"));
+    }
+
+    if (const AVFrameSideData *hdr10Plus =
+            av_frame_get_side_data(
+                &source, AV_FRAME_DATA_DYNAMIC_HDR_PLUS);
+            hdr10Plus && hdr10Plus->size > 0) {
+        if (!mappedFrame) {
+            paths.push_back(QStringLiteral(
+                "HDR10+ metadata present; mapping outcome unavailable"));
+        } else if (pl_hdr_metadata_contains(
+                &mappedFrame->color.hdr,
+                PL_HDR_METADATA_HDR10PLUS)) {
+            paths.push_back(QStringLiteral(
+                "HDR10+ scene-luminance subset available on mapped frame"));
+        } else {
+            paths.push_back(QStringLiteral(
+                "HDR10+ metadata present but no usable mapped subset"));
+        }
+    }
+    if (const AVFrameSideData *icc = av_frame_get_side_data(
+            &source, AV_FRAME_DATA_ICC_PROFILE)) {
+        paths.push_back(QStringLiteral(
+            "source ICC profile present (%1 bytes); not applied")
+            .arg(icc->size));
+    }
+    if (paths.isEmpty())
+        paths.push_back(QStringLiteral("static/base color metadata"));
+    return paths.join(QStringLiteral(" · "));
 }
 
 LibplaceboFrameImporter::Mapping::Mapping(
@@ -113,17 +172,25 @@ LibplaceboFrameImporter::map(
             QStringLiteral(
                 "Decoded frame belongs to a stale graphics-device "
                 "generation"),
+            frame.storage().isHardware()
+                ? VideoFrameImportFailure::
+                    NativeHardwareImportUnavailable
+                : VideoFrameImportFailure::General,
             error);
     }
 
     if (frame.storage().kind
             != VideoFrameStorageKind::SoftwarePlanes) {
         QString hardwareError;
+        VideoFrameImportFailure hardwareFailure =
+            VideoFrameImportFailure::
+                NativeHardwareImportUnavailable;
         if (m_hardwareImporter
                 && m_hardwareImporter->map(
                     frame,
                     m_mappedFrame,
                     m_lastDiagnostics,
+                    hardwareFailure,
                     &hardwareError)) {
             m_mappingActive = true;
             m_hardwareMapping = true;
@@ -139,6 +206,7 @@ LibplaceboFrameImporter::map(
                 : QStringLiteral(
                     "No native importer is implemented for %1 frames")
                     .arg(frame.storage().hardwareFormat),
+            hardwareFailure,
             error);
     }
 
@@ -151,6 +219,7 @@ LibplaceboFrameImporter::map(
             QStringLiteral(
                 "Libplacebo cannot upload FFmpeg pixel format %1")
                 .arg(frame.signal().pixelFormat),
+            VideoFrameImportFailure::General,
             error);
     }
 
@@ -164,6 +233,7 @@ LibplaceboFrameImporter::map(
             frame,
             QStringLiteral(
                 "Libplacebo could not map decoded software frame"),
+            VideoFrameImportFailure::General,
             error);
     }
 
@@ -175,6 +245,9 @@ LibplaceboFrameImporter::map(
         .hardwareFormat = {},
         .softwareFormat =
             frame.storage().softwareFormat,
+        .sourceDescription = frame.signal().summary(),
+        .metadataPath = describeLibplaceboMetadataPath(
+            frame, &m_mappedFrame),
         .nativeResource = {},
         .synchronizationMode =
             QStringLiteral(
@@ -183,6 +256,7 @@ LibplaceboFrameImporter::map(
         .knownCpuUploadsPerFrame = 1,
         .knownGpuCopiesPerFrame = 0,
         .fallbackReason = {},
+        .failure = VideoFrameImportFailure::None,
     };
     Q_ASSERT(m_lastDiagnostics.isValid());
     return std::unique_ptr<Mapping>(
@@ -217,6 +291,7 @@ std::unique_ptr<LibplaceboFrameImporter::Mapping>
 LibplaceboFrameImporter::unavailable(
         const DecodedVideoFrame &frame,
         const QString &reason,
+        VideoFrameImportFailure failure,
         QString *error) {
     m_lastDiagnostics = {
         .storageKind = frame.storage().kind,
@@ -227,6 +302,8 @@ LibplaceboFrameImporter::unavailable(
             : QString(),
         .softwareFormat =
             frame.storage().softwareFormat,
+        .sourceDescription = frame.signal().summary(),
+        .metadataPath = describeLibplaceboMetadataPath(frame, nullptr),
         .nativeResource = {},
         .synchronizationMode =
             QStringLiteral("Not active"),
@@ -234,6 +311,7 @@ LibplaceboFrameImporter::unavailable(
         .knownCpuUploadsPerFrame = 0,
         .knownGpuCopiesPerFrame = 0,
         .fallbackReason = reason,
+        .failure = failure,
     };
     Q_ASSERT(m_lastDiagnostics.isValid());
     if (error)

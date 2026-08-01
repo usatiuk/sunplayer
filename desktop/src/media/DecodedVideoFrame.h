@@ -74,9 +74,8 @@ struct VideoFrameStorageDescription {
         std::uint64_t generation) const;
 };
 
-// Diagnostic snapshot of the decoded signal. The retained AVFrame remains
-// authoritative for exact side-data payloads such as HDR10+, Dolby Vision,
-// ICC profiles, and film grain.
+// Small diagnostic snapshot of the decoded signal. The retained AVFrame is
+// authoritative for color fields and side data consumed by libplacebo.
 struct VideoSignalDescription {
     QString pixelFormat;
     QString colorPrimaries;
@@ -88,6 +87,7 @@ struct VideoSignalDescription {
     bool interlaced = false;
 
     bool isValid() const;
+    QString summary() const;
 };
 
 // Immutable, reference-counted boundary between decoding, scheduling, and

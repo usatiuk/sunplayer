@@ -108,13 +108,12 @@ initial WinRT/QRhi implementation; it does not yet provide stable physical
 display identity, complete DisplayConfig/DXGI facts, provenance, confidence,
 or stale-query protection.
 
-The final decoded `AVFrame` is the authoritative source-color evidence
-boundary. FFmpeg may already have populated otherwise unspecified frame fields
-from codec context and stream-derived state, so Sunroom cannot infer a more
-specific origin from the returned value. ADR 0012 requires one immutable
-effective source description with honest provenance and explicit fallbacks;
-the current stream-to-frame mutation is transitional and will be removed in
-that implementation slice.
+The retained decoded `AVFrame` is the authoritative source-color boundary and
+the exact object consumed by libplacebo. `VideoSignalDescription` is only a
+small display snapshot of scalar names and component depth. FFmpeg already
+propagates ordinary scalar and static metadata; Sunroom only attaches global
+HDR10+ metadata when a decoded frame lacks it. Frame-local metadata otherwise
+wins by construction.
 
 libplacebo owns source interpretation, tone mapping, and gamut mapping.
 libplacebo's linear convention uses `1.0 = 203 nits`; Sunroom's rendered-video
@@ -134,12 +133,15 @@ residual processing. HLG and dynamic HDR therefore require the acceptance work
 in the active plan rather than inheriting the static-PQ formula or an overly
 broad support claim.
 
-The current prototype has not yet implemented that format gate: it constructs
-the same target for every mapped source and maps available Dolby Vision side
-data. HLG, HDR10+, and Dolby Vision can therefore produce an image today, but
-the target behavior is experimental rather than a support claim. The immediate
-next milestone will preserve working playback, classify the source and active
-base-layer/dynamic-metadata path, and validate or correct every target model.
+The importer reports the decoded transfer name, whether a usable HDR10+ scene-
+luminance subset is present on the mapped frame, and whether libplacebo mapped
+parsed Dolby Vision metadata. It inspects the retained and mapped frames
+directly. These diagnostics are best-effort and may settle on a later frame;
+playback does not build a parallel dynamic-metadata state machine
+merely to make every transient diagnostic snapshot atomic. HLG, HDR10+, and
+Dolby Vision can produce an image today, but
+their display-target behavior remains experimental until the acceptance matrix
+validates the corresponding target models.
 
 Those formats are required V1 scope. The current experimental label describes
 unverified color behavior, not a plan to omit HLG, HDR10+, or Dolby Vision from
@@ -157,12 +159,10 @@ contracts, but not storage behavior. Software planes require observable
 uploads. Hardware frames require backend-native import, synchronization, and
 lifetime retention and should be the normal playback path when supported.
 
-Before rendering, the future effective-source policy will make required
-fallbacks explicit and observable rather than relying on silent library
-inference. Relative SDR white and the 203-nit HDR reference-white anchor both
-map to surface `1.0`; PQ source values and mastering metadata remain source
-truth. The physical luminance of surface `1.0` follows the platform reference
-white at presentation.
+Relative SDR white and the 203-nit HDR reference-white anchor both map to
+surface `1.0`; PQ source values and mastering metadata remain source truth.
+The physical luminance of surface `1.0` follows the platform reference white
+at presentation.
 
 Embedded source ICC bytes are retained with the `AVFrame`, but the pinned
 libplacebo build has LCMS disabled and does not apply them. Source ICC rendering
@@ -191,7 +191,8 @@ Neither one reinterprets source video metadata or tone-maps the video again.
 | macOS | QRhi Metal/EDR domain with a narrow native import path | EDR behavior, VideoToolbox/IOSurface formats, and synchronization |
 
 Native graphics and decoder types remain in backend implementations. Playback,
-metadata policy, renderer policy, subtitles, and the compositor remain shared.
+best-effort diagnostics, renderer policy, subtitles, and the compositor remain
+shared.
 
 ## Implementation sequence
 

@@ -1,10 +1,13 @@
 #include "media/ffmpeg/FfmpegVideoPacketDecoder.h"
 
 #include <cstdint>
+#include <cstring>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <utility>
 
+#include <QByteArray>
 #include <QElapsedTimer>
 
 extern "C" {
@@ -16,7 +19,6 @@ extern "C" {
 #include "diagnostics/LogCategories.h"
 #include "media/DecodedVideoFrame.h"
 #include "media/FfmpegHardwareDevice.h"
-#include "media/ffmpeg/FfmpegFrameMetadata.h"
 #include "media/ffmpeg/FfmpegStreamMetadata.h"
 
 namespace {
@@ -89,6 +91,46 @@ const AVCodecHWConfig *hardwareConfiguration(
             return configuration;
         }
     }
+}
+
+QByteArray streamHdr10PlusMetadata(
+        const AVCodecParameters &parameters) {
+    if (const AVPacketSideData *hdr10Plus =
+            av_packet_side_data_get(
+                parameters.coded_side_data,
+                parameters.nb_coded_side_data,
+                AV_PKT_DATA_DYNAMIC_HDR10_PLUS)) {
+        if (hdr10Plus->size > 0
+                && hdr10Plus->size
+                    <= static_cast<std::size_t>(
+                        std::numeric_limits<qsizetype>::max())) {
+            return QByteArray(
+                reinterpret_cast<const char *>(hdr10Plus->data),
+                static_cast<qsizetype>(hdr10Plus->size));
+        }
+    }
+    return {};
+}
+
+bool attachStreamHdr10PlusMetadata(
+        AVFrame &frame,
+        const QByteArray &metadata) {
+    if (metadata.isEmpty()
+            || av_frame_get_side_data(
+                &frame, AV_FRAME_DATA_DYNAMIC_HDR_PLUS)) {
+        return true;
+    }
+    AVFrameSideData *sideData = av_frame_new_side_data(
+        &frame,
+        AV_FRAME_DATA_DYNAMIC_HDR_PLUS,
+        static_cast<std::size_t>(metadata.size()));
+    if (!sideData)
+        return false;
+    std::memcpy(
+        sideData->data,
+        metadata.constData(),
+        static_cast<std::size_t>(metadata.size()));
+    return true;
 }
 
 enum class DrainResult {
@@ -255,6 +297,8 @@ FfmpegVideoDecodeResult decodeFfmpegVideoPackets(
     std::uint64_t nextFrameId =
         request.firstFrameIdentity.frameId;
     ObservedVideoRange observedVideoRange;
+    const QByteArray hdr10PlusMetadata =
+        streamHdr10PlusMetadata(streamParameters);
 
     const auto drainDecoder =
         [&](bool flushing) -> DrainResult {
@@ -283,13 +327,6 @@ FfmpegVideoDecodeResult decodeFfmpegVideoPackets(
                     return DrainResult::Failed;
                 }
 
-                if (!mergeStreamVideoMetadata(
-                        *frame, streamParameters)) {
-                    av_frame_unref(frame.get());
-                    result.error = QStringLiteral(
-                        "Could not retain stream-level video metadata");
-                    return DrainResult::Failed;
-                }
                 if ((frame->sample_aspect_ratio.num <= 0
                         || frame->sample_aspect_ratio.den <= 0)
                         && streamAspectRatio.isValid()) {
@@ -315,6 +352,12 @@ FfmpegVideoDecodeResult decodeFfmpegVideoPackets(
                 const bool hardwareFrame =
                     frame->format == hardwareState.pixelFormat
                     && frame->hw_frames_ctx;
+                if (!attachStreamHdr10PlusMetadata(
+                        *frame, hdr10PlusMetadata)) {
+                    result.error = QStringLiteral(
+                        "Could not attach stream-level HDR10+ metadata");
+                    return DrainResult::Failed;
+                }
                 std::shared_ptr<const DecodedVideoFrame> decoded =
                     DecodedVideoFrame::clone(
                         *frame,

@@ -88,11 +88,12 @@ and continuous synchronized local-file audio/video playback:
   reference-white-relative virtual target in its fixed 203-nit coordinate
   system. This construction is capture-validated for relative SDR and an
   analytic static-PQ signal; exact source inspection shows it is not a valid
-  universal HLG target. The current prototype has not yet added source-format
-  classification, so HLG/dynamic-HDR files can render but their target behavior
-  remains experimental until the immediate FFmpeg/libplacebo format-acceptance milestone is
-  implemented. Source HDR values remain unchanged and no custom post-map
-  normalization runs.
+  universal HLG target. The importer now reports the retained FFmpeg signal
+  and best-effort HDR10+/Dolby Vision mapping evidence while leaving source
+  interpretation to FFmpeg/libplacebo. HLG/dynamic-HDR files can render, but
+  their target behavior remains experimental until the immediate
+  FFmpeg/libplacebo acceptance matrix is complete. Source HDR values remain
+  unchanged and no custom post-map normalization runs.
 * A narrow final QRhi pass places that already processed video surface,
   combines it with the UI, and presents extended-linear sRGB/scRGB when
   available, with an SDR fallback. It can also compose UI without an active
@@ -302,7 +303,8 @@ Documentation: `docs/subsystems/graphics/`
   path
 * [ ] Same-device GPU-copy and explicit CPU target fallbacks
 * [x] Persistent libplacebo GPU and renderer lifecycle
-* [ ] Immutable effective FFmpeg source metadata with honest provenance
+* [x] Retained final FFmpeg frame as source-color truth, with only the
+  evidenced stream-level HDR10+ fallback
 * [x] Deterministic software-backed RGBA32F diagnostic upload path
 * [x] FFmpeg software-frame importer and persistent upload reuse
 * [x] Shared hardware-frame import result/diagnostic contract
@@ -313,10 +315,10 @@ Documentation: `docs/subsystems/graphics/`
 * [x] Display-target and SDR-white updates
 * [x] Analytic reference-white-adaptive SDR/static-PQ display mapping without
   a post-map video scale
-* [ ] Real FFmpeg-decoded static-PQ fixture and effective-source validation
+* [ ] Real FFmpeg-decoded static-PQ fixture and retained-metadata validation
 * [ ] Actual display-gamut propagation
-* [ ] Physical-target-aware HLG model separate from the static-PQ virtual
-  target
+* [ ] HLG target-response validation through the shared FFmpeg/libplacebo
+  path, without a Sunroom-authored HLG pipeline
 * [ ] Production FFmpeg/libplacebo mapping acceptance, validation, and
   capability diagnostics for SDR, HDR10/PQ, HLG, HDR10+, and Dolby Vision as
   required for V1
@@ -409,7 +411,7 @@ Documentation: `docs/subsystems/diagnostics/`
 * [x] Real staggered-start A/V, no-presentation-consumer, hidden sink-failure,
   and clock-loss regression scenarios
 * [ ] Real-device output A/V seek, recovery, and physical-sync tests
-* [ ] Color-metadata normalization tests
+* [ ] Representative source-metadata and library-mapping tests
 * [ ] Renderer image tests
 * [ ] Subtitle layout tests
 * [x] Windows H.264 D3D11VA decode and zero-copy frame-import integration test

@@ -392,45 +392,18 @@ unsupported
 
 The selected path and any fallback reason belong in diagnostics.
 
-## 4.7 Frame metadata normalisation
+## 4.7 Decoded frame metadata
 
-Colour metadata can exist at stream, packet, and frame level. Some stream-level side data is not automatically copied onto every FFmpeg frame; libplacebo provides `pl_frame_copy_stream_props()` specifically to merge relevant stream properties into a mapped frame.
+The retained final FFmpeg `AVFrame` is the source-color truth. FFmpeg owns
+decoder and codec-context propagation; libplacebo owns rendering
+interpretation. Sunroom does not normalize the same metadata into a parallel
+policy model or blanket-copy stream properties after decode.
 
-A normalisation layer can preserve both:
-
-* The raw metadata supplied by FFmpeg.
-* The effective metadata passed to libplacebo.
-* Any compatibility correction or user override.
-* The origin of each value.
-
-Relevant information includes:
-
-* Pixel format and bit depth.
-* Limited or full range.
-* Chroma subsampling and chroma location.
-* Matrix coefficients.
-* Primaries.
-* Transfer function.
-* Mastering-display metadata.
-* MaxCLL and MaxFALL.
-* HDR10+ dynamic metadata.
-* Dolby Vision RPU metadata.
-* ICC profile.
-* Film-grain metadata.
-* Rotation and sample aspect ratio.
-
-Metadata policy can distinguish between:
-
-```text
-declared metadata
-container-level fallback
-codec-level fallback
-format-derived default
-compatibility override
-user override
-```
-
-This makes malformed or ambiguously tagged files diagnosable.
+A narrow exception is appropriate only when a pinned-library propagation gap
+is demonstrated by a real regression. The current exception snapshots global
+HDR10+ stream side data and attaches it only when the decoded frame has no
+frame-local value. Diagnostics inspect the retained frame and the mapped
+libplacebo result directly and are allowed to converge on a later frame.
 
 ## 4.8 Graphics host
 
@@ -1451,7 +1424,7 @@ src/
 
     video/
         decoded-frame model
-        colour metadata normalisation
+        source and mapping diagnostics
         frame importers
         libplacebo renderer
         render settings

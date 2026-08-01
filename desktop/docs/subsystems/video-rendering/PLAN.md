@@ -1,14 +1,15 @@
 # Video rendering and color-management plan
 
-This plan takes the current real-video renderer to trustworthy SDR, static PQ,
-HLG, and dynamic-HDR playback without introducing a second tone mapper or a
-parallel media operation. It complements the implementation summary in
+This plan takes the current real-video renderer to trustworthy SDR and HDR
+playback without introducing a second tone mapper, source parser, or parallel
+media operation. It complements the implementation summary in
 [README.md](README.md).
 
-Stages 1 through 5 are all V1 correctness work. They are dependency-ordered
-for implementation and may overlap, but HLG, HDR10+, and Dolby Vision are not
-post-V1 options. V1 cannot claim format-complete video playback until every
-format gate below passes.
+SDR, PQ, HLG, HDR10+, and Dolby Vision are all V1 inputs. They use one
+FFmpeg/libplacebo path whenever the libraries can decode and map them; Sunroom
+does not gate playback on a format-specific implementation. Color-correctness
+claims remain scoped to representative fixtures and target models that have
+actually been validated.
 
 ## Product invariants
 
@@ -50,25 +51,25 @@ library inputs, describe the display target without contradictory units, reset
 library state at discontinuities, and prove that the production path actually
 uses the expected library feature or documented fallback.
 
-The milestone is format-complete: no SDR/static-PQ-only subset counts as
-completion. The work may be reviewed in small commits, but those are boundary
-and verification slices rather than independent format implementations.
+The milestone proves that the one production path accepts representative SDR,
+PQ, HLG, HDR10+, and Dolby Vision inputs. Missing evidence narrows a
+color-correctness claim; it does not create a second renderer or deliberately
+reject a source the libraries can already show.
 
 ### Library boundary and diagnostics
 
-* [ ] Introduce the smallest useful immutable `EffectiveSourceDescription`
-  following ADR 0012, using final FFmpeg frame fields and side data as
-  authoritative evidence rather than rewriting them in a parallel policy
-  engine.
-* [ ] Remove redundant blanket stream-to-frame mutation while preserving the
+* [x] Keep `VideoSignalDescription` as a small scalar diagnostic snapshot and
+  inspect dynamic side data directly on the retained FFmpeg frame; do not
+  introduce a parallel source-color policy object.
+* [x] Remove redundant blanket stream-to-frame mutation while preserving the
   stream evidence that FFmpeg does not attach to every frame.
-* [ ] Expose source colorimetry, dynamic-metadata identity, libplacebo mapping
-  path, and explicit fallback in diagnostics. In particular, report whether a
-  Dolby Vision frame used RPU/reshape processing or an HDR10-compatible base
-  layer; appearance alone is not an oracle.
-* [ ] Preserve source ICC presence, size, hash, provenance, lifetime, conflict,
-  and `UnvalidatedUnsupported` status; do not claim an ICC transform while
-  LCMS is disabled.
+* [ ] Expose source colorimetry, dynamic-metadata presence, libplacebo mapping
+  path, and explicit fallback in diagnostics. In particular, report whether
+  parsed Dolby Vision metadata produced a libplacebo reshape or the decoded
+  base layer was shown; do not infer base-layer compatibility from appearance.
+* [x] Preserve source ICC bytes through the retained frame and report presence
+  and size; do not claim an ICC transform while LCMS is disabled. Detailed
+  profile validation remains deferred with application-managed ICC output.
 
 ### One display-target integration
 
@@ -86,19 +87,18 @@ and verification slices rather than independent format implementations.
 * [ ] Keep HDR10+ source metadata unchanged, including its source-authored
   targeted-system-display luminance, and supply the current physical display
   peak separately through the libplacebo destination.
-* [ ] Accept only the Dolby Vision paths the pinned FFmpeg/libplacebo stack
-  actually implements: supported reshaping metadata or an explicit compatible
-  base-layer fallback. Target-specific trims and enhancement-layer residuals
-  require additional upstream capability rather than implied support.
+* [ ] Report whether libplacebo applied Dolby Vision reshaping or displayed the
+  decoder's base-layer result. Do not parse Dolby Vision profiles or implement
+  missing trims/residual processing in Sunroom.
 * [ ] Reset libplacebo dynamic peak/scene state on open, seek, track change,
   generation replacement, and relevant discontinuity.
 
 ### Production-boundary acceptance matrix
 
-* [ ] Add small redistributable FFmpeg-decoded fixtures for BT.709 SDR,
-  BT.2020 SDR, PQ/HDR10, HLG, HDR10+ scene transitions, and supported Dolby
-  Vision profiles and fallbacks. These are integration evidence for FFmpeg and
-  libplacebo, not duplicate parsers or reference implementations.
+* [ ] Add small redistributable FFmpeg-decoded fixtures representing BT.709
+  SDR, BT.2020 SDR, PQ/HDR10, HLG, HDR10+ scene transitions, and Dolby Vision
+  reshape/base-layer behavior. These are integration evidence for FFmpeg and
+  libplacebo, not an exhaustive profile matrix or duplicate implementation.
 * [ ] Render every fixture through the production importer, persistent
   libplacebo renderer, RGBA16F target, and QRhi compositor at multiple
   reference-white/headroom targets.
@@ -108,20 +108,15 @@ and verification slices rather than independent format implementations.
   reset, and exactly one final Windows coordinate conversion appropriate to
   the active HDR scene-referred or SDR display-referred mode.
 
-Immediate milestone gate:
+Immediate milestone outcome:
 
-* SDR and SDR wide-gamut sources have verified interpretation.
-* HDR10/PQ has a verified static luminance model.
-* HLG uses the physical-display OOTF peak while adapting to active reference
-  white.
-* HDR10+ consumes current dynamic metadata without stale carry-over, preserves
-  its source-authored target luminance, and uses a separate physical display
-  destination.
-* Dolby Vision uses a documented supported reshape/profile path or explicit
-  compatible base-layer fallback; unsupported trims or residual processing are
-  not claimed.
-* No required input silently enters an unverified target model.
-* Real production-boundary regressions cover every format above.
+* All representative formats enter the same retained-frame/import/render path.
+* SDR and static PQ retain the validated numerical model.
+* HLG receives a physical OOTF peak distinct from working-space normalization.
+* HDR10+ metadata reaches libplacebo without stale carry-over.
+* Dolby Vision diagnostics distinguish mapped reshape from decoded base layer.
+* Unverified target behavior remains visible without blocking otherwise valid
+  playback.
 
 Existing files that already decode and render must remain playable while this
 milestone replaces experimental target behavior with verified support. A new
@@ -176,9 +171,9 @@ empty platform abstractions without a consumer.
   only.
 
 Gate: Windows presentation color correctness for the Stage 1 input formats is
-not claimed until the format-complete core, Stage 2 live-target facts, this
-stage's target-gamut and extended-composition checks, and the initial physical
-check pass.
+not claimed until representative core scenarios, Stage 2 live-target facts,
+this stage's target-gamut and extended-composition checks, and the initial
+physical check pass.
 
 ## Stage 4: Player color reliability and expanded corpus
 
@@ -206,8 +201,8 @@ check pass.
 
 Windows V1 color release gate:
 
-* The immediate Stage 1 FFmpeg/libplacebo acceptance gate passes for SDR,
-  PQ/HDR10, HLG, HDR10+, and Dolby Vision.
+* The single production FFmpeg/libplacebo path plays and diagnoses
+  representative SDR, PQ/HDR10, HLG, HDR10+, and Dolby Vision inputs.
 * Live Windows target facts, target gamut, composition, calibration ownership,
   and initial physical checks pass.
 * Player-level diagnostics identify source interpretation, dynamic-HDR/base

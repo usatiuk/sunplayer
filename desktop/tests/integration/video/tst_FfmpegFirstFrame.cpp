@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <memory>
 #include <optional>
@@ -13,7 +14,15 @@
 #include <QRegularExpression>
 #include <QtCore/qfloat16.h>
 #include <QtTest>
+
+extern "C" {
+#include <libavcodec/avcodec.h>
+#include <libavcodec/codec_par.h>
+#include <libavcodec/packet.h>
 #include <libavutil/frame.h>
+#include <libavutil/hdr_dynamic_metadata.h>
+}
+
 #include <rhi/qrhi.h>
 
 #ifdef Q_OS_WIN
@@ -26,6 +35,7 @@
 #include "media/FfmpegFirstFrameDecoder.h"
 #include "media/FfmpegHardwareDevice.h"
 #include "media/ffmpeg/FfmpegVideoDecodeFallback.h"
+#include "media/ffmpeg/FfmpegVideoPacketDecoder.h"
 #include "playback/VideoFrameQueue.h"
 #include "presentation/HdrCompositor.h"
 #include "video/DecodedVideoSource.h"
@@ -246,6 +256,7 @@ public:
     }
 
 private slots:
+    void retainsStreamHdr10PlusAtTheDecodeBoundary();
     void realDemuxDecodeImportAndComposition();
     void compressedYuvMetadataAndRendering();
     void continuousDecodeDrainsEveryFrame();
@@ -255,6 +266,147 @@ private slots:
     void continuousD3d11DecodeRetainsBoundedFrames();
     void d3d11HardwareDecodeDirectImport();
 };
+
+void FfmpegFirstFrameTest::
+retainsStreamHdr10PlusAtTheDecodeBoundary() {
+    const AVCodec *decoder = avcodec_find_decoder(AV_CODEC_ID_RAWVIDEO);
+    QVERIFY(decoder);
+
+    const auto freeParameters = [](AVCodecParameters *parameters) {
+        avcodec_parameters_free(&parameters);
+    };
+    std::unique_ptr<AVCodecParameters, decltype(freeParameters)> parameters(
+        avcodec_parameters_alloc(), freeParameters);
+    QVERIFY(parameters);
+    parameters->codec_type = AVMEDIA_TYPE_VIDEO;
+    parameters->codec_id = AV_CODEC_ID_RAWVIDEO;
+    parameters->format = AV_PIX_FMT_RGB24;
+    parameters->width = 2;
+    parameters->height = 2;
+    parameters->color_primaries = AVCOL_PRI_BT2020;
+    parameters->color_trc = AVCOL_TRC_SMPTE2084;
+    parameters->color_space = AVCOL_SPC_RGB;
+    parameters->color_range = AVCOL_RANGE_JPEG;
+
+    AVPacketSideData *streamMetadata = av_packet_side_data_new(
+        &parameters->coded_side_data,
+        &parameters->nb_coded_side_data,
+        AV_PKT_DATA_DYNAMIC_HDR10_PLUS,
+        sizeof(AVDynamicHDRPlus),
+        0);
+    QVERIFY(streamMetadata);
+    std::memset(
+        streamMetadata->data,
+        0,
+        streamMetadata->size);
+    auto *hdr10Plus = reinterpret_cast<AVDynamicHDRPlus *>(
+        streamMetadata->data);
+    hdr10Plus->itu_t_t35_country_code = 0xb5;
+    hdr10Plus->application_version = 0;
+    hdr10Plus->num_windows = 1;
+    hdr10Plus->params[0].maxscl[0] = {1, 1};
+    hdr10Plus->params[0].maxscl[1] = {4, 5};
+    hdr10Plus->params[0].maxscl[2] = {3, 5};
+    hdr10Plus->params[0].average_maxrgb = {1, 2};
+
+    std::array<FfmpegAvPacketPtr, 2> packets;
+    for (std::size_t index = 0; index < packets.size(); ++index) {
+        AVPacket *rawPacket = av_packet_alloc();
+        QVERIFY(rawPacket);
+        QVERIFY(av_new_packet(rawPacket, 2 * 2 * 3) >= 0);
+        std::memset(rawPacket->data, 0x80, rawPacket->size);
+        rawPacket->pts = static_cast<std::int64_t>(index);
+        rawPacket->duration = 1;
+        packets[index].reset(rawPacket);
+    }
+
+    auto *packetMetadata = reinterpret_cast<AVDynamicHDRPlus *>(
+        av_packet_new_side_data(
+            packets[0].get(),
+            AV_PKT_DATA_DYNAMIC_HDR10_PLUS,
+            sizeof(AVDynamicHDRPlus)));
+    QVERIFY(packetMetadata);
+    std::memset(packetMetadata, 0, sizeof(*packetMetadata));
+    packetMetadata->itu_t_t35_country_code = 0xb5;
+    packetMetadata->application_version = 0;
+    packetMetadata->num_windows = 1;
+    packetMetadata->params[0].maxscl[0] = {1, 1};
+    packetMetadata->params[0].maxscl[1] = {4, 5};
+    packetMetadata->params[0].maxscl[2] = {3, 5};
+    packetMetadata->params[0].average_maxrgb = {3, 4};
+
+    std::size_t nextPacket = 0;
+    std::vector<std::shared_ptr<const DecodedVideoFrame>> decodedFrames;
+    bool hardwareSelected = false;
+
+    const FfmpegVideoDecodeResult result = decodeFfmpegVideoPackets(
+        {
+            .path = QStringLiteral("memory:hdr10plus"),
+            .firstFrameIdentity = {
+                .playbackGeneration = 31,
+                .decoderRevision = 1,
+                .frameId = 1,
+            },
+        },
+        *decoder,
+        *parameters,
+        {1, 24},
+        {1, 1},
+        {
+            .containerFormat = QStringLiteral("rawvideo-test"),
+            .decoderName = QString::fromLatin1(decoder->name),
+            .decodePath = QStringLiteral("Software"),
+            .videoStreamIndex = 0,
+        },
+        [&packets, &nextPacket](std::stop_token) {
+            FfmpegVideoPacketRead read;
+            if (nextPacket < packets.size()) {
+                read.packet = std::move(packets[nextPacket++]);
+            } else {
+                read.terminal =
+                    FfmpegVideoPacketTerminal::EndOfStream;
+            }
+            return read;
+        },
+        [&decodedFrames](
+                std::shared_ptr<const DecodedVideoFrame> frame,
+                const FfmpegVideoStreamDiagnostics &) {
+            decodedFrames.push_back(std::move(frame));
+            return true;
+        },
+        {},
+        &hardwareSelected);
+
+    QVERIFY2(result.isSuccess(), qPrintable(result.error));
+    QVERIFY(!hardwareSelected);
+    QCOMPARE(decodedFrames.size(), std::size_t(2));
+
+    const auto retainedHdr10Plus = [&decodedFrames](std::size_t index) {
+        const AVFrameSideData *retained = av_frame_get_side_data(
+            &decodedFrames[index]->ffmpegFrame(),
+            AV_FRAME_DATA_DYNAMIC_HDR_PLUS);
+        if (!retained
+                || retained->size < sizeof(AVDynamicHDRPlus)) {
+            return static_cast<const AVDynamicHDRPlus *>(nullptr);
+        }
+        return reinterpret_cast<const AVDynamicHDRPlus *>(
+            retained->data);
+    };
+
+    const AVDynamicHDRPlus *first = retainedHdr10Plus(0);
+    QVERIFY(first);
+    QCOMPARE(first->application_version, 0);
+    QCOMPARE(first->num_windows, 1);
+    QCOMPARE(first->params[0].average_maxrgb.num, 3);
+    QCOMPARE(first->params[0].average_maxrgb.den, 4);
+
+    const AVDynamicHDRPlus *second = retainedHdr10Plus(1);
+    QVERIFY(second);
+    QCOMPARE(second->application_version, 0);
+    QCOMPARE(second->num_windows, 1);
+    QCOMPARE(second->params[0].average_maxrgb.num, 1);
+    QCOMPARE(second->params[0].average_maxrgb.den, 2);
+}
 
 void FfmpegFirstFrameTest::
 realDemuxDecodeImportAndComposition() {
@@ -1199,6 +1351,45 @@ d3d11HardwareDecodeDirectImport() {
     QVERIFY2(
         hardwareCapture.isSuccess(),
         qPrintable(hardwareCapture.error));
+
+    const auto freeFrame = [](AVFrame *frame) {
+        av_frame_free(&frame);
+    };
+    std::unique_ptr<AVFrame, decltype(freeFrame)> malformedSource(
+        av_frame_clone(&hardware.frame->ffmpegFrame()),
+        freeFrame);
+    QVERIFY(malformedSource);
+    av_frame_remove_side_data(
+        malformedSource.get(), AV_FRAME_DATA_DOVI_METADATA);
+    AVFrameSideData *truncatedDovi = av_frame_new_side_data(
+        malformedSource.get(), AV_FRAME_DATA_DOVI_METADATA, 1);
+    QVERIFY(truncatedDovi);
+    truncatedDovi->data[0] = 0;
+
+    QString malformedError;
+    const auto malformedFrame = DecodedVideoFrame::clone(
+        *malformedSource,
+        {
+            .playbackGeneration = 23,
+            .decoderRevision = 1,
+            .frameId = 1,
+        },
+        hardware.frame->timing().timeBase,
+        graphics->generation(),
+        &malformedError);
+    QVERIFY2(malformedFrame, qPrintable(malformedError));
+    const DecodedFrameCapture malformedCapture =
+        captureDecodedFrame(*graphics, malformedFrame);
+    QVERIFY(!malformedCapture.isSuccess());
+    QCOMPARE(
+        malformedCapture.input.failure,
+        VideoFrameImportFailure::General);
+    QCOMPARE(
+        malformedCapture.producer.failureKind,
+        VideoFailureKind::General);
+    QVERIFY(malformedCapture.error.contains(
+        QStringLiteral("Dolby Vision metadata is truncated")));
+
     DecodedFrameCapture softwareCapture =
         captureDecodedFrame(
             *graphics, software.frame);

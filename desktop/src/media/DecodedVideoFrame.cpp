@@ -202,6 +202,19 @@ bool VideoSignalDescription::isValid() const {
         && componentDepth > 0;
 }
 
+QString VideoSignalDescription::summary() const {
+    return QStringLiteral(
+        "%1 · %2 · %3-bit · matrix %4 · range %5 · chroma %6 · "
+        "retained FFmpeg-decoded AVFrame")
+        .arg(
+            colorPrimaries,
+            transferFunction,
+            QString::number(componentDepth),
+            matrixCoefficients,
+            colorRange,
+            chromaLocation);
+}
+
 std::shared_ptr<const DecodedVideoFrame>
 DecodedVideoFrame::clone(
         const AVFrame &frame,
@@ -313,15 +326,13 @@ DecodedVideoFrame::clone(
     signal.colorRange =
         ffmpegName(av_color_range_name(frame.color_range));
     signal.chromaLocation =
-        ffmpegName(av_chroma_location_name(
-            frame.chroma_location));
-    signal.componentDepth =
-        componentDepth(signalDescriptor);
-    signal.interlaced =
-        frame.flags & AV_FRAME_FLAG_INTERLACED;
-    if (!signal.isValid())
+        ffmpegName(av_chroma_location_name(frame.chroma_location));
+    signal.componentDepth = componentDepth(signalDescriptor);
+    signal.interlaced = frame.flags & AV_FRAME_FLAG_INTERLACED;
+    if (!signal.isValid()) {
         return fail(QStringLiteral(
             "Decoded frame signal description is invalid"));
+    }
 
     AVFrame *retainedFrame = av_frame_clone(&frame);
     if (!retainedFrame) {

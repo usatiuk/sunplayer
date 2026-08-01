@@ -122,7 +122,8 @@ LibplaceboDecodedVideoProducer::render(
         return beginResult;
 
     QString renderError;
-    bool hardwareImportUnavailable = false;
+    VideoFrameImportFailure importFailure =
+        VideoFrameImportFailure::None;
     if (!m_mapping || m_mappedSourceFrame != frame) {
         m_mapping.reset();
         m_mappedSourceFrame.reset();
@@ -131,8 +132,8 @@ LibplaceboDecodedVideoProducer::render(
         if (m_mapping) {
             m_mappedSourceFrame = frame;
         } else {
-            hardwareImportUnavailable =
-                frame->storage().isHardware();
+            importFailure =
+                m_importer->lastDiagnostics().failure;
         }
     }
 
@@ -163,7 +164,9 @@ LibplaceboDecodedVideoProducer::render(
             ? QStringLiteral(
                 "Could not import or render decoded video frame")
             : renderError,
-            hardwareImportUnavailable
+            importFailure
+                    == VideoFrameImportFailure::
+                        NativeHardwareImportUnavailable
                 ? VideoFailureKind::
                     HardwareFrameImportUnavailable
                 : VideoFailureKind::General);
@@ -259,6 +262,14 @@ LibplaceboDecodedVideoProducer::diagnostics() const {
             result.inputPath = QStringLiteral(
                 "FFmpeg frame import unavailable");
             break;
+        }
+        if (!input.sourceDescription.isEmpty()) {
+            result.inputPath += QStringLiteral(" · %1")
+                .arg(input.sourceDescription);
+        }
+        if (!input.metadataPath.isEmpty()) {
+            result.inputPath += QStringLiteral(" · %1")
+                .arg(input.metadataPath);
         }
         result.knownInputCpuTransfersPerInputFrame =
             input.knownCpuDownloadsPerFrame

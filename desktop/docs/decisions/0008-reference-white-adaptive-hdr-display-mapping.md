@@ -91,13 +91,12 @@ For Windows SDR Advanced Color/WCG, working white maps to display-referred
 scRGB `1.0`; ordinary SDR with Advanced Color inactive uses the unmanaged sRGB
 fallback.
 
-The accepted scope is narrower than the current prototype implementation: the
-renderer still constructs this virtual destination without classifying the
-source transfer. HLG, HDR10+, and Dolby Vision may therefore render today, but
-their output is experimental and not proof of correct target semantics. The
-immediate format-complete milestone must preserve working decode/render paths,
-identify the active base-layer/dynamic-metadata path, and replace or validate
-the target behavior before support is claimed.
+The renderer constructs this destination without a separate Sunroom path for
+each source transfer. HLG, HDR10+, and Dolby Vision are accepted through the
+same FFmpeg/libplacebo route; diagnostics identify the observed reshape,
+dynamic-metadata, or base-layer result. Representative acceptance tests scope
+our color-correctness claims without duplicating library parsers or mapping
+implementations.
 
 The policy and composition contract are platform-independent. macOS and Linux
 adapters must preserve them while using their native EDR/color-management

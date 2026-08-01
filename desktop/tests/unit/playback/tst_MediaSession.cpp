@@ -992,6 +992,13 @@ void MediaSessionTest::sustainedAudioUnderrunEntersBuffering() {
         MediaSession::PlaybackInterruption::None);
     QTRY_VERIFY_WITH_TIMEOUT(
         audioSink->bufferedFrames() != 0, 1'000);
+    QTRY_VERIFY_WITH_TIMEOUT(
+        ([&session] {
+            session.videoSource().prepareForPresentation(
+                std::chrono::steady_clock::now());
+            return session.videoSource().currentFrame() != nullptr;
+        }()),
+        1'000);
 
     const auto holdStarted =
         std::chrono::steady_clock::now();
@@ -1578,11 +1585,14 @@ interFrameSeekPublishesRequestedFrame() {
         session.state(), MediaSession::State::Ready, 5000);
     QVERIFY(!session.seeking());
     QCOMPARE(session.positionMilliseconds(), 3'250);
+    QTRY_VERIFY_WITH_TIMEOUT(
+        session.videoSource().currentFrame() != nullptr,
+        1'000);
+    const std::shared_ptr<const DecodedVideoFrame> currentFrame =
+        session.videoSource().currentFrame();
+    QVERIFY(currentFrame);
     QCOMPARE(
-        session.videoSource()
-            .currentFrame()
-            ->timing()
-            .ptsMicroseconds(),
+        currentFrame->timing().ptsMicroseconds(),
         std::optional<std::int64_t>(3'250'000));
     QVERIFY(session.decodedFrameCount() > 1);
 }

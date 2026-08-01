@@ -1,4 +1,4 @@
-# 0012: Use final decoded frames as effective source-color evidence
+# 0012: Use final decoded frames as source-color truth
 
 * Status: Accepted
 * Date: 2026-08-01
@@ -7,73 +7,56 @@
 
 ## Context
 
-Rendering needs one immutable description of what decoded pixels mean. FFmpeg
+Rendering needs one stable boundary describing what decoded pixels mean. FFmpeg
 can obtain color fields and coded side data from the bitstream, codec
 parameters, or codec context, and its decode core fills unspecified frame
 fields from that context. At Sunroom's returned-frame boundary, a populated
 field cannot always be attributed more narrowly than “final FFmpeg-decoded
 value.”
 
-Sunroom currently copies selected stream metadata onto its private retained
-frame. Libplacebo also offers `pl_frame_copy_stream_props`. Neither operation
-defines conflict precedence, confidence, or fallback policy, and a late copy
-can obscure valid frame evidence.
+Libplacebo also offers `pl_frame_copy_stream_props`, but using it as a blanket
+merge would duplicate FFmpeg propagation and obscure which object rendering
+actually consumes.
 
 ## Decision
 
-The retained final `AVFrame` is the authoritative evidence boundary for pixel
-storage, scalar color fields, and per-frame/coded side data. Sunroom will
-derive one immutable `EffectiveSourceDescription` from it.
-
-The description will contain typed values for representation, range, matrix,
-transfer, signal primaries, target/mastering metadata, chroma location, alpha,
-and relevant dynamic metadata. Each effective field records honest
-provenance, confidence, and any fallback or contradiction. Unknown remains
-unknown unless an explicit, documented policy supplies a fallback.
+The retained final `AVFrame` is the authoritative input for pixel storage,
+scalar color fields, and side data. The existing `VideoSignalDescription`
+remains a small display-only snapshot of names and component depth. Dynamic
+metadata diagnostics inspect the retained frame and libplacebo's mapped frame
+when needed; Sunroom does not build a parallel metadata model. FFmpeg and
+libplacebo remain responsible for interpretation.
 
 Timing, frame identity, storage, and geometry remain in their existing
 `DecodedVideoFrame` components. The color description references those facts
 when a policy needs them but does not become a second frame descriptor.
 
-Provenance for an ordinary populated final-frame field is “final
-FFmpeg-decoded value, possibly context-propagated.” Sunroom will not claim to
-distinguish a decoder-provided value from FFmpeg's context fallback where the
-public result no longer carries that distinction.
+Diagnostics label an ordinary populated field simply as a final
+FFmpeg-decoded value. Sunroom does not try to reconstruct whether the decoder
+or FFmpeg's context fallback originally supplied it.
 
-Stream state may be frozen as supporting evidence when FFmpeg does not
-propagate a required property, but it is not copied wholesale onto the
-retained frame. `pl_frame_copy_stream_props` is not called after policy
-resolution. Importers map storage, then apply the already-resolved source
-description to the libplacebo frame.
+Stream state may be frozen when FFmpeg demonstrably does not propagate a
+required property. The initial exception is global HDR10+ metadata: if the
+decoded frame lacks it, the packet decoder attaches that one stream payload
+before retaining the frame for libplacebo. There is no blanket stream copy and
+no call to `pl_frame_copy_stream_props`.
 
-For non-transforming ICC retention, current-frame ICC side data is primary
-evidence. A snapshotted stream ICC may always be retained as supporting
-evidence, but it is a fallback candidate only when the final frame has no ICC
-payload and never overwrites the frame. If both are present and differ,
-diagnostics retain both hashes and report the contradiction. No profile becomes
-applicable until an actual validator accepts it under a later source-ICC
-decision.
-
-Embedded source ICC bytes are retained and described by presence, size, hash,
-provenance, and validation/application status. Their current status is
-`UnvalidatedUnsupported`: the LCMS-disabled build neither semantically
-validates nor applies them. Enabling source-ICC rendering requires reviewed
-LCMS packaging, profile validation, a coherent ICC-versus-scalar policy, and
-explicit HDR-plus-ICC tests. Initial support should be limited to validated
-SDR RGB profiles because libplacebo's ICC path replaces the frame's complete
-HDR metadata rather than combining mastering or dynamic HDR metadata
-afterward.
+Embedded source ICC bytes remain owned by the retained frame. Import
+diagnostics report presence and size; the LCMS-disabled build neither validates
+nor applies them. Profile parsing and application-managed ICC rendering are
+deferred until a real product path requires them.
 
 ## Consequences
 
-* One immutable object becomes the source-color truth used by rendering,
-  caching, and diagnostics.
-* Dynamic metadata cannot leak forward from an earlier frame.
-* Fallbacks and contradictions become observable instead of being hidden in a
-  frame mutation or library inference.
+* The retained `AVFrame` stays the single rendering truth; diagnostics do not
+  duplicate libplacebo policy.
+* The one global HDR10+ fallback is attached to each decoded frame only when
+  frame metadata is absent, before that frame is retained.
+* Dynamic-metadata diagnostics are best-effort and may become current on a
+  later frame; atomic diagnostic perfection is not a rendering requirement.
 * Existing frame retention and zero-copy storage ownership remain unchanged.
-* The initial implementation may use a smaller set of typed fields driven by
-  the real static-PQ fixture, but it must preserve the seam and unknown states.
+* New metadata handling requires a concrete format fixture or observed
+  library propagation gap rather than speculative completeness.
 * Removing redundant stream-to-frame mutation can change diagnostics for
   media whose only usable metadata was not propagated by FFmpeg; such cases
   require a targeted, evidenced supporting-field rule rather than restoring a
@@ -81,18 +64,18 @@ afterward.
 
 ## Alternatives considered
 
-### Keep mutating the retained frame
+### Copy all stream metadata onto every frame
 
-Rejected. It erases evidence boundaries and makes ordering determine the
-result.
+Rejected. FFmpeg already handles ordinary propagation, and duplicating it
+creates more policy and stale-state risk than value. A narrow, evidenced copy
+onto the current decoded frame before retention is acceptable.
 
-### Let libplacebo infer every unspecified value silently
+### Replace library inference with a Sunroom metadata policy engine
 
-Rejected. Some inference is useful, but product-visible fallback choices must
-be explicit and diagnosable. In particular, libplacebo can infer a YCbCr
-system from dimensions when the matrix is unknown.
+Rejected. Product-significant fallback should be diagnosed, but duplicating
+FFmpeg/libplacebo interpretation would be more complex and less trustworthy.
 
 ### Implement a complete metadata framework before the first fixture
 
-Rejected. The boundary and provenance rules are fixed now; fields should be
-added with concrete format support and regression scenarios.
+Rejected. The ownership boundary is fixed now; special handling should be
+added only for a concrete library gap backed by a regression scenario.

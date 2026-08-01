@@ -132,13 +132,12 @@ The Sunroom wrapper snapshots:
 * Software or known hardware storage kind.
 * Pixel-format and signal diagnostics.
 
-The final decoded frame is the authoritative color-evidence boundary. FFmpeg
-8.1.2 may already have filled otherwise unspecified scalar fields and coded
-side data from codec-context or stream-derived state, so Sunroom cannot recover
-more specific provenance from a populated result. Blanket stream-to-frame
-metadata copying is transitional and will be replaced by the immutable
-effective-source policy in ADR 0012. Explicit supporting stream evidence is
-permitted only where a documented property is not propagated. Effective sample
+The retained decoded frame is the authoritative color boundary. FFmpeg 8.1.2
+already fills ordinary scalar and static side data from decoder/stream state.
+Sunroom therefore removed its blanket metadata copier. It snapshots only
+global HDR10+ data that FFmpeg does not reliably propagate to every frame;
+missing HDR10+ is attached before the decoded frame is retained and handed to
+libplacebo. Effective sample
 aspect ratio prefers the decoded frame and then the snapshotted stream/codec
 default while those contexts remain alive. Published frames do not retain or
 expose mutable format, stream, or decoder contexts.
@@ -160,9 +159,8 @@ rotated-content output still needs a dedicated fixture and capture.
 
 ## Next implementation
 
-1. Derive the first immutable effective source-color description from final
-   decoded-frame evidence and remove redundant blanket stream-to-frame
-   metadata mutation.
+1. Complete the FFmpeg/libplacebo SDR, PQ, HLG, HDR10+, and Dolby Vision
+   acceptance fixtures and display-target experiments.
 2. Normalize complete stream, chapter, attachment, and provisional/final
    session duration state.
 3. Dispatch subtitle packets without letting one selected stream prevent

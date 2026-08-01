@@ -1,12 +1,9 @@
 #include <cmath>
 #include <cstdint>
-#include <cstring>
 
 #include <QtTest>
 
 extern "C" {
-#include <libavcodec/codec_par.h>
-#include <libavcodec/packet.h>
 #include <libavutil/buffer.h>
 #include <libavutil/display.h>
 #include <libavutil/frame.h>
@@ -19,7 +16,6 @@ extern "C" {
 #endif
 
 #include "media/DecodedVideoFrame.h"
-#include "media/ffmpeg/FfmpegFrameMetadata.h"
 
 class DecodedVideoFrameTest final : public QObject {
     Q_OBJECT
@@ -36,7 +32,6 @@ public:
 
 private slots:
     void retainsSoftwareStorageAndSnapshotsSemantics();
-    void retainsSideDataAndFrameMetadataWins();
     void describesHardwareFromItsSoftwarePlanes();
     void rejectsInvalidIdentityAndCrop();
 };
@@ -135,54 +130,6 @@ retainsSoftwareStorageAndSnapshotsSemantics() {
     QVERIFY(av_frame_get_side_data(
         &frame->ffmpegFrame(),
         AV_FRAME_DATA_DISPLAYMATRIX));
-}
-
-void DecodedVideoFrameTest::
-retainsSideDataAndFrameMetadataWins() {
-    AVCodecParameters *parameters =
-        avcodec_parameters_alloc();
-    QVERIFY(parameters);
-    parameters->color_primaries = AVCOL_PRI_BT2020;
-    parameters->color_trc = AVCOL_TRC_SMPTE2084;
-    parameters->color_space = AVCOL_SPC_BT2020_NCL;
-    parameters->color_range = AVCOL_RANGE_MPEG;
-    parameters->chroma_location = AVCHROMA_LOC_LEFT;
-
-    AVPacketSideData *streamMatrix =
-        av_packet_side_data_new(
-            &parameters->coded_side_data,
-            &parameters->nb_coded_side_data,
-            AV_PKT_DATA_DISPLAYMATRIX,
-            9 * sizeof(std::int32_t),
-            0);
-    QVERIFY(streamMatrix);
-    std::memset(streamMatrix->data, 0x11, streamMatrix->size);
-
-    AVFrame *frame = av_frame_alloc();
-    QVERIFY(frame);
-    frame->color_primaries = AVCOL_PRI_BT709;
-    AVFrameSideData *frameMatrix =
-        av_frame_new_side_data(
-            frame,
-            AV_FRAME_DATA_DISPLAYMATRIX,
-            streamMatrix->size);
-    QVERIFY(frameMatrix);
-    std::memset(frameMatrix->data, 0x22, frameMatrix->size);
-
-    QVERIFY(mergeStreamVideoMetadata(*frame, *parameters));
-    QCOMPARE(frame->color_primaries, AVCOL_PRI_BT709);
-    QCOMPARE(frame->color_trc, AVCOL_TRC_SMPTE2084);
-    QCOMPARE(frame->colorspace, AVCOL_SPC_BT2020_NCL);
-    QCOMPARE(frame->color_range, AVCOL_RANGE_MPEG);
-    QCOMPARE(frame->chroma_location, AVCHROMA_LOC_LEFT);
-    const AVFrameSideData *retainedMatrix =
-        av_frame_get_side_data(
-            frame, AV_FRAME_DATA_DISPLAYMATRIX);
-    QVERIFY(retainedMatrix);
-    QCOMPARE(retainedMatrix->data[0], 0x22);
-
-    av_frame_free(&frame);
-    avcodec_parameters_free(&parameters);
 }
 
 void DecodedVideoFrameTest::

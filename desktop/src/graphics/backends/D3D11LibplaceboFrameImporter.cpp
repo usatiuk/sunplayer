@@ -115,7 +115,10 @@ public:
             const DecodedVideoFrame &frame,
             pl_frame &mappedFrame,
             VideoFrameImportDiagnostics &diagnostics,
+            VideoFrameImportFailure &failure,
             QString *error) override {
+        failure = VideoFrameImportFailure::
+            NativeHardwareImportUnavailable;
         const auto fail = [error](const QString &reason) {
             if (error)
                 *error = reason;
@@ -266,12 +269,11 @@ public:
         mappedFrame.repr.bits.bit_shift = formats.bitShift;
 #ifdef PL_HAVE_LAV_DOLBY_VISION
         m_doviMetadata = {};
-        if (const AVFrameSideData *dovi =
-                av_frame_get_side_data(
-                    &avFrame,
-                    AV_FRAME_DATA_DOVI_METADATA)) {
+        if (const AVFrameSideData *dovi = av_frame_get_side_data(
+                &avFrame, AV_FRAME_DATA_DOVI_METADATA)) {
             if (dovi->size < sizeof(AVDOVIMetadata)) {
                 mappedFrame = {};
+                failure = VideoFrameImportFailure::General;
                 return fail(QStringLiteral(
                     "The decoded Dolby Vision metadata is truncated"));
             }
@@ -289,6 +291,9 @@ public:
             .path = VideoFrameImportPath::DirectHardwareSurface,
             .hardwareFormat = frame.storage().hardwareFormat,
             .softwareFormat = frame.storage().softwareFormat,
+            .sourceDescription = frame.signal().summary(),
+            .metadataPath = describeLibplaceboMetadataPath(
+                frame, &mappedFrame),
             .nativeResource = QStringLiteral(
                 "DXGI %1 · array slice %2 · %3/%4 plane views")
                 .arg(

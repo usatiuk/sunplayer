@@ -18,7 +18,7 @@ unimplemented.
 Track under the backend-realization section of
 `docs/subsystems/graphics/PLAN.md`.
 
-### Incomplete decoded-video metadata and cross-platform hardware import
+### Incomplete decoded-video acceptance and cross-platform hardware import
 
 The explicit video surface, narrow final compositor, persistent libplacebo
 renderer, and direct D3D11 QRhi target bridge now exist. Their analytic input
@@ -30,8 +30,8 @@ highlight compression when it does not, and exactly one final Windows scRGB
 scale. A retained software `AVFrame` path now demuxes and decodes a pinned
 lossless RGB fixture, uploads it through libplacebo, and preserves relative SDR
 white across target changes. It does not yet cover an FFmpeg-decoded mastered
-PQ fixture, HLG's target-dependent OOTF, dynamic HDR metadata, representative
-HDR YUV/chroma/range combinations, or full metadata provenance. A deterministic
+PQ fixture, HLG's target-dependent OOTF, dynamic HDR metadata, or representative
+HDR YUV/chroma/range combinations. A deterministic
 FFV1 fixture covers compressed limited-range BT.709 YUV420P and non-square-pixel
 aspect fitting. The Windows graphics domain owns a video-capable,
 multithread-protected D3D11 device; an H.264 scenario proves D3D11VA NV12 direct
@@ -40,25 +40,12 @@ P010/P012/P016 capture, same-device-copy and CPU fallback paths, real
 device-loss injection, and the other platform importers remain required.
 General display-matrix rotation still lacks a dedicated render capture.
 
-The existing `203 * physicalPeak / referenceWhite` destination is explicitly
-limited to relative SDR and static PQ. Exact libplacebo 7.360.1 source
-inspection shows that its destination maximum becomes HLG's physical OOTF
-peak, so the virtual destination would evaluate HLG against the wrong physical
-display. HLG needs an API/policy that separates physical target peak from
-output normalization. HDR10+ and Dolby Vision target-luminance semantics also
-remain unverified and must not inherit the static-PQ formula automatically.
-The current renderer does not yet gate those formats and still constructs the
-same virtual target for every mapped source. Until the next effective-source
-slice classifies and validates them, a resulting HLG or dynamic-HDR image is
-experimental prototype behavior rather than proof of correct playback. The
-next slice must preserve existing decodability while exposing whether Dolby
-Vision metadata or only an HDR10-compatible base layer was used.
-
-This is active work in the immediate FFmpeg/libplacebo format-acceptance
-milestone, not a later static-PQ follow-up. HLG, HDR10+, and Dolby Vision are
-required V1 inputs and remain listed here only as current integration
-limitations until that milestone passes; Sunroom is not implementing parallel
-format decoders or color pipelines.
+All SDR, PQ/HDR10, HLG, HDR10+, and Dolby Vision inputs use the same
+FFmpeg/libplacebo path. Static PQ has the strongest target-response evidence;
+representative HLG and dynamic-HDR fixtures still need to scope what the pinned
+libraries produce for the display-relative target. This is an immediate
+acceptance and validation task, not a reason to add parallel decoders, source
+parsers, or color pipelines.
 
 Sunroom also does not yet propagate actual target display primaries to
 libplacebo. The extended-linear BT.709 surface can encode wide-gamut

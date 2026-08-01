@@ -184,7 +184,8 @@ playback should prefer the later platform hardware importer when available.
   boundary.
 * [x] Preserve the decoded frame so target-only changes can rerender it without
   another input upload.
-* [ ] Normalize full effective color metadata with provenance.
+* [x] Retain the final FFmpeg frame as source-color truth and leave
+  interpretation to FFmpeg/libplacebo.
 * [x] Apply decoded sample aspect ratio to an aspect-preserving content
   rectangle.
 * [ ] Capture-validate general display-matrix orientation.

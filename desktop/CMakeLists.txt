@@ -153,8 +153,6 @@ add_library(sunroom_media STATIC
         src/media/FfmpegMediaDecoder.h
         src/media/FfmpegVideoDecoder.cpp
         src/media/FfmpegVideoDecoder.h
-        src/media/ffmpeg/FfmpegFrameMetadata.cpp
-        src/media/ffmpeg/FfmpegFrameMetadata.h
         src/media/ffmpeg/FfmpegPacketRouter.cpp
         src/media/ffmpeg/FfmpegPacketRouter.h
         src/media/ffmpeg/FfmpegStreamMetadata.cpp

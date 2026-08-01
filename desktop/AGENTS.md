@@ -56,6 +56,15 @@ Research notes and architecture notes are not automatically current project trut
   implementation can be exercised immediately.
 * Keep modules cohesive, with narrow responsibilities and explicit contracts at subsystem boundaries.
 * Make designs as simple as possible, but not simpler than correctness, lifecycle, recovery, platform behavior, and observability require.
+* Prefer designs that converge quickly to the correct user-visible state over
+  machinery that makes every transient frame, diagnostic snapshot, or event
+  interleaving perfect. Add strict ordering, revisioning, and reconciliation
+  only when stale state can cause wrong media, unsafe lifetimes, persistent
+  incorrect output, or another demonstrated product failure.
+* Treat diagnostics and non-critical capability observations as eventually
+  consistent unless a concrete requirement needs an atomic snapshot. Do not
+  turn best-effort library integration into a duplicate policy engine merely
+  to cover theoretical interleavings.
 * Prefer a small number of purposeful abstractions over layers introduced only
   for architectural symmetry.
 * Prefer mature libraries and operating-system facilities over custom implementations where appropriate.

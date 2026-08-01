@@ -3,7 +3,7 @@
 * Status: Accepted
 * Date: 2026-07-29
 * Amended by:
-  [0012: Use final decoded frames as effective source-color evidence](0012-use-final-decoded-frames-as-color-evidence.md)
+  [0012: Use final decoded frames as source-color truth](0012-use-final-decoded-frames-as-color-evidence.md)
 
 ## Context
 
@@ -41,16 +41,14 @@ Sunroom snapshots stable values needed outside FFmpeg:
 * Software or hardware storage kind and graphics-device generation.
 * Human-readable signal diagnostics.
 
-The final FFmpeg-decoded frame is the authoritative color-evidence boundary.
-FFmpeg may already have filled otherwise unspecified frame fields from codec
-context and stream-derived state. Under ADR 0012, Sunroom will stop
-blanket-copying stream metadata onto the private retained frame; the current
-implementation still performs a transitional fill of unspecified fields and
-absent side data. Supporting stream evidence will be snapshotted only where an
-explicit effective-source policy needs it. A published frame therefore does
-not depend on a live `AVStream`,
-`AVFormatContext`, or `AVCodecContext`; the immutable policy and provenance
-rules are defined by ADR 0012.
+The final FFmpeg-decoded frame is the authoritative source-color boundary.
+FFmpeg has already applied its decoder and codec-context propagation rules.
+Sunroom does not maintain a second metadata policy engine or blanket-copy
+stream fields. It snapshots and supplies only stream-level HDR10+ side data,
+which the pinned FFmpeg version does not otherwise propagate, and only when a
+decoded frame has no frame-local value. A published frame therefore does not
+depend on a live `AVStream`, `AVFormatContext`, or `AVCodecContext`; ADR 0012
+defines this deliberately narrow exception.
 
 Importers borrow the retained storage. Software frames use libplacebo's FFmpeg
 mapping helper and reusable upload textures. Native importers wrap or copy a

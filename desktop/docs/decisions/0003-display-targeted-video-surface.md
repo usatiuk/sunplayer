@@ -56,12 +56,12 @@ invalidate it. A recorded render becomes completed and reusable only after the
 owning QRhi frame ends successfully; failed frame submission discards the
 pending state.
 
-FFmpeg will normalize effective source metadata and libplacebo will perform
-source decoding, chroma reconstruction, transfer and gamut conversion, tone
+FFmpeg supplies the final decoded frame and libplacebo performs source
+interpretation, chroma reconstruction, transfer and gamut conversion, tone
 mapping, scaling, and dithering as applicable. SDR, HDR10/PQ, HLG, dynamic HDR,
 and other supported source forms therefore converge on this one consumer
-contract. This decision defines the convergence point; it does not claim those
-source formats are implemented yet.
+contract. Sunroom validates representative paths and reports observed
+capabilities instead of reimplementing either library's format policy.
 
 Platform display adapters own native observation and report physical display
 facts. Shared presentation policy resolves those facts into the effective

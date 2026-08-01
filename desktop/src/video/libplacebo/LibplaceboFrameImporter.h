@@ -17,6 +17,12 @@ enum class VideoFrameImportPath {
     CpuRoundTrip,
 };
 
+enum class VideoFrameImportFailure {
+    None,
+    NativeHardwareImportUnavailable,
+    General,
+};
+
 struct VideoFrameImportDiagnostics {
     VideoFrameStorageKind storageKind =
         VideoFrameStorageKind::SoftwarePlanes;
@@ -24,15 +30,23 @@ struct VideoFrameImportDiagnostics {
         VideoFrameImportPath::Unavailable;
     QString hardwareFormat;
     QString softwareFormat;
+    QString sourceDescription;
+    QString metadataPath;
     QString nativeResource;
     QString synchronizationMode;
     std::uint32_t knownCpuDownloadsPerFrame = 0;
     std::uint32_t knownCpuUploadsPerFrame = 0;
     std::uint32_t knownGpuCopiesPerFrame = 0;
     QString fallbackReason;
+    VideoFrameImportFailure failure =
+        VideoFrameImportFailure::None;
 
     bool isValid() const;
 };
+
+QString describeLibplaceboMetadataPath(
+    const DecodedVideoFrame &frame,
+    const pl_frame *mappedFrame);
 
 // Backend implementation for native decoded surfaces. It maps one retained
 // hardware AVFrame into libplacebo planes without defining fallback policy.
@@ -44,6 +58,7 @@ public:
         const DecodedVideoFrame &frame,
         pl_frame &mappedFrame,
         VideoFrameImportDiagnostics &diagnostics,
+        VideoFrameImportFailure &failure,
         QString *error) = 0;
     virtual void unmap(pl_frame &mappedFrame) = 0;
 };
@@ -96,6 +111,7 @@ private:
     std::unique_ptr<Mapping> unavailable(
         const DecodedVideoFrame &frame,
         const QString &reason,
+        VideoFrameImportFailure failure,
         QString *error);
 
     pl_gpu m_gpu = nullptr;

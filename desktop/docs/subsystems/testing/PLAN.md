@@ -91,14 +91,13 @@ Implement alongside graphics milestone 1:
   practical.
 * [x] Render known sRGB and BT.2020/PQ software-backed frames through real
   libplacebo.
-* [x] Assert effective SDR input metadata, target description, plane mapping,
+* [x] Assert decoded SDR signal fields, target description, plane mapping,
   lifetime, synchronization, and copy path.
 * [x] Add one pinned SDR media container and manifest.
 * [ ] Add one pinned HDR10 media container and manifest.
-* [ ] Cover retained source ICC presence, size, hash, lifetime, frame/stream
-  provenance, differing-profile diagnostics, malformed/unvalidated status,
-  and `applied=false` with the LCMS-disabled build. This is a focused ownership
-  and policy test, not a pixel-transform claim.
+* [ ] Cover retained source ICC presence, size, lifetime, and `applied=false`
+  diagnostics with the LCMS-disabled build. This is an ownership test, not a
+  pixel-transform claim or a second ICC policy engine.
 * [x] Seed the fixture layout with a pinned, hashed lossless RGB image and
   decode its first frame with real FFmpeg through the production libplacebo
   and QRhi capture path.
@@ -128,34 +127,31 @@ Implement alongside graphics milestone 1:
   scale.
 * [ ] Repeat the fixed mastered-PQ scenario with a small pinned FFmpeg-decoded
   HDR10 fixture containing useful neutral luminance patches and real
-  mastering/content-light metadata. Validate effective-source provenance,
-  target-only rerender without re-import, reference-white anchoring,
-  no-expansion, monotonic bounded compression, and the single final
-  mode-appropriate Windows coordinate conversion through production
-  boundaries.
+  mastering/content-light metadata. Validate retained metadata, target-only
+  rerender without re-import, reference-white anchoring, no-expansion,
+  monotonic bounded compression, and the single final mode-appropriate
+  Windows coordinate conversion through production boundaries.
 * [ ] Add a real BT.2020 SDR fixture to the immediate acceptance matrix and
   verify source interpretation against a simulated wide-gamut target without
   treating 10-bit or BT.2020 signaling as HDR.
-* [ ] Establish an HLG target model that keeps the physical OOTF peak separate
-  from display-relative output normalization, then cover it with a real
-  multi-target FFmpeg-decoded HLG fixture. The static-PQ virtual target is known
-  to be unsafe for HLG.
+* [ ] Cover HLG target response with a real multi-target FFmpeg-decoded fixture
+  through the same libplacebo path. Keep any claim scoped to observed output;
+  do not add a parallel Sunroom HLG implementation.
 * [ ] Add real FFmpeg-decoded HDR10+ scene-transition coverage for current
   dynamic metadata, reset, and no stale carry-over. Assert that the
   source-authored targeted-display luminance remains unchanged while the
   physical display destination varies separately.
-* [ ] Add profile-specific Dolby Vision fixtures that distinguish RPU/reshape,
-  enhancement-layer, HDR10-compatible base-layer, and explicit fallback paths
-  in both diagnostics and captured output. Do not claim target-trim or
-  enhancement-layer residual processing unless the pinned upstream stack gains
-  and passes that capability.
-* [ ] Treat the real SDR, PQ/HDR10, HLG, HDR10+, and Dolby Vision scenarios as
-  one immediate FFmpeg/libplacebo acceptance milestone; a passing static-PQ
-  subset is not completion, and the tests must not duplicate either library's
-  parser or color implementation.
+* [ ] Add representative Dolby Vision fixtures that distinguish a parsed
+  reshape path from decoded base-layer fallback in diagnostics and captured
+  output. Report the pinned upstream stack's observed capability without
+  duplicating its profile parser.
+* [ ] Treat real SDR, PQ/HDR10, HLG, HDR10+, and Dolby Vision files as one
+  immediate FFmpeg/libplacebo input-acceptance milestone. Keep color claims
+  scoped to tested paths and never duplicate either library's parser or color
+  implementation.
 * [ ] Compare a metadata-bearing P010 HDR fixture through software decoding and
-  D3D11VA import. Assert equivalent effective source evidence, mapping path,
-  and capture within backend tolerance; capability-gate unverified hardware
+  D3D11VA import. Assert equivalent retained-frame signal, mapping path, and
+  capture within backend tolerance; capability-gate unverified hardware
   formats.
 * [x] Keep the procedural and libplacebo diagnostic inputs aligned to the same
   pattern layout so their output differences exercise rendering policy.
