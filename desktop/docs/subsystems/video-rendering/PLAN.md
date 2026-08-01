@@ -73,25 +73,47 @@ reject a source the libraries can already show.
 
 ### One display-target integration
 
-* [ ] Pin the selected libplacebo tone mapper, gamut mapper, inverse-mapping,
-  peak-detection, and scene-state behavior.
+The current renderer already disables inverse tone mapping, peak detection,
+and dithering. It inherits libplacebo 7.360.1's spline tone mapper and
+perceptual gamut mapper through default parameter structs. The immediate
+policy change is intentionally small: assign those same choices explicitly,
+give the policy a diagnostic identity, and protect it with production-boundary
+captures. This freezes today's appearance without enabling another processing
+stage or prematurely adding quality presets.
+
+* [ ] Explicitly select libplacebo spline tone mapping and perceptual gamut
+  mapping, keep inverse tone mapping disabled, keep peak detection disabled,
+  and keep dithering disabled for the RGBA16F target. Report this initial
+  policy in diagnostics so a future library upgrade cannot silently redefine
+  playback.
+* [ ] Add a source-discontinuity reset hook to the persistent renderer and
+  drive it from open, seek, track change, and generation replacement. The hook
+  clears libplacebo temporal source state with `pl_renderer_flush_cache()`
+  when such state is in use; it does not recreate the renderer, graphics
+  device, target, or retained source upload. Display-target and window changes
+  are not source discontinuities and must not reset it.
+* [ ] Keep dynamic peak detection disabled for the first acceptance pass.
+  Consider enabling it only if representative missing or unreliable source
+  metadata demonstrates a visible benefit and its cost and seek/scene behavior
+  pass the same production-boundary tests.
 * [ ] Express the physical display peak, active reference white, and output
   normalization through supported libplacebo semantics for every input. The
   existing relative/static-PQ adapter may be retained only where its virtual
   coordinate construction has been numerically validated; its destination
   values are deliberately not described as literal physical nits.
-* [ ] Resolve the known HLG mismatch without a Sunroom tone mapper: use an
-  existing libplacebo interface if source verification finds one, otherwise
-  pursue an upstream-quality API correction or narrow dependency patch that
-  separates physical HLG OOTF peak from output normalization.
+* [ ] Render a controlled HLG fixture through the current adapter and compare
+  its target response at multiple physical peaks and reference whites. Source
+  inspection identifies a plausible OOTF/virtual-target mismatch, but the
+  experiment decides whether it is material in the production path. If it is,
+  first use an existing libplacebo-supported configuration; otherwise take a
+  focused issue or API proposal upstream. Do not add a Sunroom HLG mapper or
+  preselect a dependency patch before the result exists.
 * [ ] Keep HDR10+ source metadata unchanged, including its source-authored
   targeted-system-display luminance, and supply the current physical display
   peak separately through the libplacebo destination.
 * [ ] Report whether libplacebo applied Dolby Vision reshaping or displayed the
   decoder's base-layer result. Do not parse Dolby Vision profiles or implement
   missing trims/residual processing in Sunroom.
-* [ ] Reset libplacebo dynamic peak/scene state on open, seek, track change,
-  generation replacement, and relevant discontinuity.
 
 ### Production-boundary acceptance matrix
 
@@ -112,7 +134,9 @@ Immediate milestone outcome:
 
 * All representative formats enter the same retained-frame/import/render path.
 * SDR and static PQ retain the validated numerical model.
-* HLG receives a physical OOTF peak distinct from working-space normalization.
+* HLG's observed target response is recorded; an incorrect result is fixed at
+  the libplacebo integration/API boundary rather than hidden by a second
+  Sunroom color pipeline.
 * HDR10+ metadata reaches libplacebo without stale carry-over.
 * Dolby Vision diagnostics distinguish mapped reshape from decoded base layer.
 * Unverified target behavior remains visible without blocking otherwise valid
@@ -124,7 +148,24 @@ failure is acceptable only when FFmpeg/libplacebo genuinely lacks a valid path
 for that source and the fallback or error is explicit; it is not a reason to
 build a competing Sunroom implementation.
 
-## Stage 2: Live Windows presentation environment
+## Stage 2: Harden the live Windows presentation environment
+
+This is not a greenfield display observer. The current implementation already:
+
+* [x] Binds WinRT `DisplayInformation` to the native window and observes
+  `AdvancedColorInfoChanged`.
+* [x] Publishes active HDR mode, SDR white, minimum luminance, and maximum
+  luminance, with QRhi swapchain HDR information as a fallback.
+* [x] Reacts to `QWindow::screenChanged` and debounced window movement, then
+  reattaches/reprobes the provider and recreates the swapchain when the
+  presentation mode changes.
+* [x] Converts material target changes into a `displayTargetRevision`; the
+  rendered-video key consumes that revision, so a paused frame rerenders for a
+  detected reference-white/headroom change while ordinary UI changes only
+  recompose.
+
+The remaining work replaces heuristic identity and capability selection with
+stronger Windows facts and stress-proves the existing reconciliation path.
 
 * [ ] Evolve `PresentationOutputState` into a window-associated presentation
   snapshot with stable display identity, selection revision, provenance, and
@@ -137,6 +178,9 @@ build a competing Sunroom implementation.
   invalidation guard.
 * [ ] Coalesce expensive reprobes and reject late results whose window,
   selection, provider, or topology revision is stale.
+* [ ] Reprobe after display hotplug, Advanced Color/HDR changes, topology
+  invalidation, and resume from sleep; converge to the newest observable state
+  rather than requiring every transient callback to be globally ordered.
 * [ ] Distinguish reported peak, full-frame peak, and conservatively selected
   usable peak. Preserve unknown values rather than presenting an estimate as a
   measurement.

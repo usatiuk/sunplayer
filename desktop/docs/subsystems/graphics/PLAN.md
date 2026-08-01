@@ -21,9 +21,15 @@ The current prototype establishes:
 * [x] Extended-linear sRGB/scRGB presentation with SDR fallback.
 * [x] Initial combined QRhi, Qt screen, and Windows Advanced Color state.
 * [x] Initial center-screen window movement and display-mode invalidation.
+* [x] Live Windows SDR-white/minimum/maximum updates through WinRT
+  `AdvancedColorInfoChanged`, with QRhi swapchain HDR information as fallback.
+* [x] Display-target revisions invalidate display-dependent video surfaces, so
+  a detected target change rerenders paused content.
 * [ ] Stable Windows display identity, DisplayConfig/DXGI capability facts,
   greatest-intersection selection, provenance, confidence, and stale-query
   protection.
+* [ ] Topology/hotplug and sleep/wake invalidation plus deterministic
+  two-display reconciliation tests.
 * [x] Demand-driven render scheduling with explicit animation.
 * [x] Resize, surface destruction, swapchain invalidation, and bounded
   device-loss recovery.
@@ -139,6 +145,10 @@ Replace the temporary producer with a persistent libplacebo renderer.
   the cancelling pre-output normalization, and capture one fixed PQ signal at
   80, 100, and 203 nits.
 * [x] Reuse the renderer across size, source, and display changes.
+* [ ] Explicitly pin the current spline/perceptual, inverse-mapping-off,
+  peak-detection-off, and RGBA16F-dithering-off renderer policy; reset
+  source-temporal state at playback discontinuities without recreating the
+  renderer.
 * [x] Expose backend, render target, zero-copy, synchronization, and failure
   diagnostics.
 * [x] Keep the animated diagnostic input at a persistent source-frame size

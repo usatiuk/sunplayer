@@ -364,10 +364,12 @@ one fixed mastered signal independent of target changes. The compositor does
 not know about libplacebo's coordinate system.
 
 That virtual destination is currently validated only for relative SDR and an
-analytic static-PQ input. It must not be reused as a universal HLG or
+analytic static-PQ input. It is not assumed to be a universal HLG or
 dynamic-HDR construction: libplacebo 7.360.1 uses the destination maximum as
-HLG's physical OOTF peak. A real FFmpeg-decoded PQ fixture and a separate
-physical-target-aware HLG model are tracked in the video-rendering plan.
+HLG's physical OOTF peak. The production renderer still accepts HLG through
+the same path. A real FFmpeg-decoded PQ fixture and a controlled HLG
+target-response experiment are tracked in the video-rendering plan; only an
+observed material mismatch justifies changing the libplacebo integration.
 
 The surface also preserves minimum target luminance as a value plus a known
 state. The backend converts a positive physical minimum into the same virtual

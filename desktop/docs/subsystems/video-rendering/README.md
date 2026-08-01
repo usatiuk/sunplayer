@@ -123,15 +123,28 @@ the producer currently expresses headroom as
 bridge for those inputs. Source pixels and HDR-transfer metadata remain
 unchanged, and no custom pre-output multiplier runs after tone mapping.
 
-This virtual destination is deliberately scoped to static PQ. In libplacebo
-7.360.1, the HDR destination maximum becomes the HLG source's physical OOTF
-peak; passing a virtual peak can therefore change HLG contrast for the wrong
-physical display. HDR10+'s source-authored targeted-display luminance must stay
+The renderer currently inherits libplacebo 7.360.1's spline tone mapper and
+perceptual gamut mapper, explicitly disables inverse tone mapping, and passes
+null peak-detection and dithering parameters. Null peak detection means there
+is no smoothed measured-peak state affecting playback today. The active plan
+will make spline/perceptual explicit and publish a stable policy identity while
+retaining the current peak-detection-off baseline. If a later evidence-backed
+quality profile enables temporal peak detection or frame mixing, open, seek,
+track change, and generation replacement must flush that source-temporal state
+without destroying the persistent renderer. A target-only rerender is not a
+source discontinuity.
+
+The virtual destination's validated target-response claim is deliberately
+scoped to static PQ. The same production renderer currently accepts HLG and
+dynamic-HDR frames, but libplacebo 7.360.1 also uses the HDR destination
+maximum as HLG's physical OOTF peak. A virtual peak can therefore change HLG
+contrast under a potentially incorrect physical assumption. That is an
+experiment to resolve, not a separate playback gate or a reason to add another
+renderer. HDR10+'s source-authored targeted-display luminance must stay
 separate from the current display destination. The pinned Dolby Vision helper
 supports selected reshaping metadata but not target trims or enhancement-layer
-residual processing. HLG and dynamic HDR therefore require the acceptance work
-in the active plan rather than inheriting the static-PQ formula or an overly
-broad support claim.
+residual processing. Representative acceptance captures determine the support
+claims for these paths.
 
 The importer reports the decoded transfer name, whether a usable HDR10+ scene-
 luminance subset is present on the mapped frame, and whether libplacebo mapped
@@ -181,6 +194,27 @@ blends other described layers in the same reference-white-relative convention,
 and converts the final composition to the selected presentation convention.
 The platform presentation backend owns swapchain choice and OS output encoding.
 Neither one reinterprets source video metadata or tone-maps the video again.
+
+## Current Windows display observation
+
+Windows display adaptation is already live. The provider binds WinRT
+`DisplayInformation` to the native window, listens for
+`AdvancedColorInfoChanged`, and publishes HDR mode, SDR white, minimum
+luminance, and maximum luminance. QRhi swapchain HDR information supplies a
+fallback. `PresentationOutputState` responds to screen changes, while the
+presentation engine verifies debounced window movement and recreates the
+swapchain when needed. A material target change advances
+`displayTargetRevision`, which invalidates the rendered-video key and rerenders
+even a paused frame.
+
+This is sufficient for the current single-display development path, but it is
+not final multi-display capability discovery. The remaining Windows work is
+stable DisplayConfig/DXGI identity, greatest-intersection selection for
+spanning windows, target primaries, richer peak/full-frame capability facts,
+topology and sleep/wake invalidation, stale asynchronous-result rejection, and
+deterministic two-display stress coverage. These refinements should converge to
+the newest state; diagnostics do not require atomic perfection across every
+transient event.
 
 ## Platform backends
 

@@ -94,13 +94,19 @@ and continuous synchronized local-file audio/video playback:
   their target behavior remains experimental until the immediate
   FFmpeg/libplacebo acceptance matrix is complete. Source HDR values remain
   unchanged and no custom post-map normalization runs.
+  The current renderer uses libplacebo 7.360.1's spline/perceptual defaults,
+  explicitly disables inverse mapping, peak detection, and dithering, and will
+  make the first two selections explicit before treating the rendering policy
+  as upgrade-stable.
 * A narrow final QRhi pass places that already processed video surface,
   combines it with the UI, and presents extended-linear sRGB/scRGB when
   available, with an SDR fallback. It can also compose UI without an active
   video layer.
 * Qt screen state, QRhi swapchain HDR information, and an initial WinRT
   Advanced Color observer feed a shared presentation snapshot and diagnostic
-  UI. Stable Windows display identity, DisplayConfig/DXGI capability
+  UI. Live Advanced Color changes already update SDR white and luminance;
+  target revisions rerender a paused frame when those effective values change.
+  Stable Windows display identity, DisplayConfig/DXGI capability
   provenance, robust spanning-window selection, topology revisions, and stale
   asynchronous-query rejection remain planned.
 * Diagnostics distinguish the producer input path and its CPU transfers from

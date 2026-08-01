@@ -132,11 +132,14 @@ Costs and limitations:
   This adapter behavior must remain documented and capture-tested.
 * Sunroom does not yet supply actual target display primaries, so the current
   libplacebo target gamut is inferred as BT.709.
-* The virtual target is not valid as a universal HDR construction. In
+* The virtual target is not assumed valid as a universal HDR construction. In
   libplacebo 7.360.1 the HDR destination `max_luma` becomes the HLG source's
   physical target peak for OOTF inference; a virtual maximum can therefore
-  change HLG contrast using the wrong physical peak. HLG is blocked on a
-  target model that separates physical OOTF peak from output normalization.
+  change HLG contrast using the wrong physical peak. HLG remains playable
+  through the common renderer, but its color-correctness claim is blocked on a
+  controlled target-response experiment and, if the mismatch is material, a
+  libplacebo integration that separates physical OOTF peak from output
+  normalization.
 * HDR10+'s source-authored targeted-system-display luminance must remain
   unchanged while the current display peak is supplied separately through the
   destination; it must not inherit the static-PQ construction by default.
@@ -177,7 +180,9 @@ duplicate them.
 ### Patch or fork libplacebo immediately
 
 Not selected for static PQ. The existing API can express and capture-prove the
-current SDR/static-PQ policy. Exact source inspection has already established a
-real HLG limitation, so an upstream destination-reference-white/physical-peak
-separation is preferable before considering a narrowly maintained dependency
-patch. A project-local tone-mapping fork remains rejected.
+current SDR/static-PQ policy. Source inspection identifies a plausible HLG
+integration limitation, but the production-boundary experiment comes before a
+patch decision. If the mismatch is material and no supported configuration
+solves it, an upstream destination-reference-white/physical-peak separation is
+preferable to a narrowly maintained dependency patch. A project-local
+tone-mapping fork remains rejected.
