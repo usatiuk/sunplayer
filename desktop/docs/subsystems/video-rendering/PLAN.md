@@ -264,11 +264,16 @@ Windows V1 color release gate:
   accounting, device recovery, and comparison with a shared-MoltenVK
   alternative.
 * [ ] Add the VideoToolbox/IOSurface importer with the macOS graphics domain,
-  and add Vulkan/DRM PRIME/VAAPI importers with the Linux graphics domain.
+  and add Vulkan/DRM PRIME/VAAPI importers with the Wayland Linux graphics
+  domain.
 * [ ] Implement Wayland color-management-v1 surface descriptions and preferred
   description revisions; use an honest SDR fallback when unavailable.
-* [ ] Treat both supported paths as `SystemManaged`; keep X11 and unsupported
-  Wayland environments `UnmanagedSrgb` unless stronger evidence is available.
+* [ ] Treat the managed macOS and Wayland paths as `SystemManaged`; use
+  `UnmanagedSrgb` only as the explicit SDR fallback inside a supported Wayland
+  session when stronger compositor support is unavailable.
+
+X11 and XWayland are unsupported and do not receive a presentation backend,
+fallback path, packaging claim, or validation matrix.
 
 ## Stage 7: Reliability, performance, and physical validation
 

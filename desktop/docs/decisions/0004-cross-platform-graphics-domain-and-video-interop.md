@@ -4,15 +4,17 @@
 * Date: 2026-07-28
 * Superseded in part by:
   [0014: Prefer native Metal presentation for the macOS graphics domain](0014-prefer-native-metal-presentation-on-macos.md)
+* Linux desktop scope:
+  [0015: Target Wayland and leave X11 unsupported](0015-wayland-only-linux-desktop.md)
 
 ## Context
 
-Sunroom will use libplacebo on Windows, Linux, and macOS, while final
-composition remains in QRhi. The native device, texture-sharing, and
+Sunroom will use libplacebo on Windows, native Wayland Linux, and macOS, while
+final composition remains in QRhi. The native device, texture-sharing, and
 synchronization mechanisms necessarily differ:
 
 * Windows can share one D3D11 device and texture.
-* Linux can share Vulkan devices and images but requires explicit queue,
+* Wayland Linux can share Vulkan devices and images but requires explicit queue,
   layout, and semaphore ownership.
 * macOS must first validate a shared Vulkan/MoltenVK path and may require a
   MoltenVK-to-Metal texture bridge for native EDR presentation.
@@ -72,7 +74,7 @@ The initial intended paths are:
   device to FFmpeg, enables immediate-context multithread protection, and
   serializes decoder callbacks with QRhi/libplacebo GPU resource, command, and
   teardown phases through one backend scope.
-* Linux: QRhi and libplacebo share one Vulkan device; image layout,
+* Wayland Linux: QRhi and libplacebo share one Vulkan device; image layout,
   queue-family ownership, and semaphore state are explicit in the Vulkan
   backend.
 * macOS: first validate QRhi Vulkan and libplacebo Vulkan over one MoltenVK
@@ -134,6 +136,6 @@ bridge between them.
   single window owns one domain.
 * The final Vulkan queue and semaphore strategy.
 * Whether shared MoltenVK presentation satisfies macOS EDR and energy goals.
-* Hardware-decoder input import details for Linux and macOS.
+* Hardware-decoder input import details for Wayland Linux and macOS.
 * Which direct-import failures justify same-device GPU-copy or CPU fallback
   instead of the implemented one-shot software re-decode.

@@ -2,6 +2,12 @@
 
 This project is a cross-platform HDR video player built around Qt, QRhi, FFmpeg, libplacebo, and libass.
 
+The supported Linux desktop target is Wayland. X11 and XWayland presentation
+are out of scope: do not add compatibility paths, fallbacks, packaging claims,
+or test requirements for them unless a later architecture decision explicitly
+changes that product scope. Linux audio and media work should still use the
+appropriate native services available on supported Wayland systems.
+
 Use your own judgement when designing and implementing solutions. Prefer simple, coherent designs over rigid adherence to illustrative architecture notes. The guidance in this file is a set of defaults, not a substitute for judgement; scale process and abstraction to the actual risk and complexity of the work.
 
 ## Project context

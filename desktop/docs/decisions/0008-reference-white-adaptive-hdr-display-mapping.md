@@ -98,9 +98,9 @@ dynamic-metadata, or base-layer result. Representative acceptance tests scope
 our color-correctness claims without duplicating library parsers or mapping
 implementations.
 
-The policy and composition contract are platform-independent. macOS and Linux
-adapters must preserve them while using their native EDR/color-management
-representations.
+The policy and composition contract are platform-independent. macOS and
+Wayland Linux adapters must preserve them while using their native
+EDR/color-management representations.
 
 An optional reference-monitoring mode may later preserve nominal PQ luminance,
 but it must be explicit and must not change normal playback defaults.

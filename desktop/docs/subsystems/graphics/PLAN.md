@@ -260,8 +260,8 @@ exercises and refines them from evidence without changing their semantic
 responsibilities.
 
 * [ ] Implement macOS Metal/EDR presentation and display observation.
-* [ ] Implement Linux Vulkan presentation and available compositor/display
-  observation.
+* [ ] Implement native Wayland Linux Vulkan presentation and compositor/surface
+  color-management observation. X11 and XWayland are unsupported.
 * [ ] Validate backend-neutral orientation, texture, synchronization, and
   device-generation contracts.
 * [ ] Measure native import feasibility and costs before promising zero-copy

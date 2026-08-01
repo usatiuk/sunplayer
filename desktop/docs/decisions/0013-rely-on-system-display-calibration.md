@@ -52,6 +52,8 @@ display-profile transform to that swapchain path.
 The intended macOS EDR and Wayland color-management-v1 paths are
 `SystemManaged`. Sunroom will declare an extended-linear presentation space
 and will not request a second platform media tone mapper after libplacebo.
+X11 and XWayland are not unmanaged fallbacks; they are unsupported by
+[ADR 0015](0015-wayland-only-linux-desktop.md).
 
 Display primaries and luminance capabilities may still guide libplacebo's
 target gamut and HDR mapping. That perceptual content mapping is not the same

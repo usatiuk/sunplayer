@@ -442,7 +442,8 @@ A later physical lab may add:
 
 * At least one SDR and one HDR-capable display.
 * Displays with materially different HDR behavior.
-* Supported Windows, macOS, and Linux hosts.
+* Supported Windows, macOS, and native Wayland Linux hosts. X11 and XWayland
+  are outside the support and test matrix.
 * A colorimeter or spectroradiometer.
 * Photodiode and audio-loopback equipment for end-to-end A/V sync.
 * Repeatable ambient conditions.

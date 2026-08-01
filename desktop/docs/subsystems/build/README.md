@@ -178,7 +178,8 @@ not yet define:
   libplacebo and other LGPL components.
 * Windows installer or portable layout.
 * macOS signing, notarization, and bundle policy.
-* Linux package formats and compositor/runtime requirements.
+* Wayland Linux package formats and compositor/runtime requirements. X11 and
+  XWayland compatibility are not packaging targets.
 * Runtime feature and dependency-version reporting.
 * Clean-machine package verification.
 

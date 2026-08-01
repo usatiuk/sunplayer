@@ -221,7 +221,7 @@ transient event.
 | Platform | Intended first path | Main unresolved risk |
 | --- | --- | --- |
 | Windows | Shared video-capable D3D11 device; D3D11VA plane import and direct RGBA16F target | P010/P012/P016 capture, real device-loss injection, and GPU/CPU copy fallbacks |
-| Linux | Shared Vulkan device and image | Layout, queue, and semaphore ownership |
+| Wayland Linux | Shared Vulkan device and image | Layout, queue, semaphore ownership, and compositor color-management support |
 | macOS | QRhi Metal/EDR domain with a narrow native import path | EDR behavior, VideoToolbox/IOSurface formats, and synchronization |
 
 Native graphics and decoder types remain in backend implementations. Playback,
@@ -246,7 +246,7 @@ shared.
    constant 600-nit target.
 7. [x] Make libplacebo the HDR Lab default while retaining procedural QRhi as
    an explicit diagnostic comparison only.
-8. [ ] Add the Vulkan implementation and exercise it on Linux.
+8. [ ] Add the Vulkan implementation and exercise it on native Wayland Linux.
 9. [ ] Validate QRhi Metal/EDR presentation and the narrow
    MoltenVK/Vulkan-to-IOSurface/Metal video bridge on macOS; retain shared
    MoltenVK presentation only as an evidence-driven alternative.

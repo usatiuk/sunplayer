@@ -52,7 +52,7 @@ The future subsystem boundary also includes:
 * A display-targeted video surface produced by libplacebo.
 * Subtitle and diagnostic layers.
 * Non-Windows native texture import hidden behind shared interfaces.
-* Platform graphics and display adapters for macOS and Linux.
+* Platform graphics and display adapters for macOS and native Wayland Linux.
 
 It does not own demuxing, decoding, media clocks, frame scheduling, audio, or
 track selection.

@@ -2,7 +2,8 @@
 
 ## Goals
 
-* **Cross-platform by design.** Support Windows, macOS, and Linux while maximizing shared code and consistent behavior.
+* **Cross-platform by design.** Support Windows, macOS, and Wayland-based
+  Linux desktops while maximizing shared code and consistent behavior.
 * **Reuse mature components.** Prefer Qt, QRhi, FFmpeg, libplacebo, libass, and operating-system facilities over custom implementations where they fit.
 * **Correct modern HDR and color handling.** Support HDR and SDR content, modern platform HDR pipelines, multiple displays, dynamic display changes, SDR white level, display capabilities, operating-system color information, and relevant HDR metadata.
 * **Simple and opinionated.** Provide sane defaults and a small user-facing option surface.
@@ -24,6 +25,8 @@
 * Perfect support for every obscure codec, container, subtitle feature, or HDR profile.
 * Perfect zero-copy behavior on every platform in the first implementation.
 * Platform-specific optimization branches before profiling shows they are needed.
+* X11 or XWayland presentation, color management, packaging compatibility, or
+  fallback behavior. Linux desktop support targets native Wayland.
 * A complex library or browser interface before playback is dependable.
 
 Temporary capability differences between platforms are acceptable. The overall architecture and rendering model should remain shared.
@@ -285,7 +288,7 @@ Documentation: `docs/subsystems/playback/`
   and narrow final pass exist; subtitles do not)
 * [x] Windows extended-linear HDR and SDR swapchain presentation
 * [ ] macOS EDR and SDR swapchain presentation
-* [ ] Linux HDR and SDR swapchain presentation
+* [ ] Wayland Linux HDR and SDR swapchain presentation
 * [x] Shared presentation and display-state model
 * [x] Initial Windows window-movement and Advanced Color observation
 * [x] Initial Windows dynamic Advanced Color notification
@@ -294,7 +297,7 @@ Documentation: `docs/subsystems/playback/`
 * [ ] Windows DisplayConfig/DXGI capability, provenance, confidence, and stale
   query model
 * [ ] macOS display adapter
-* [ ] Linux display adapter
+* [ ] Wayland display adapter
 * [x] Graphics-device loss and recreation
 
 Documentation: `docs/subsystems/graphics/`
@@ -440,7 +443,7 @@ Documentation: `docs/TESTING.md` and `docs/subsystems/testing/`
 * [ ] Cross-platform libplacebo dependency configurations
 * [ ] Windows packaging
 * [ ] macOS packaging
-* [ ] Linux packaging
+* [ ] Wayland Linux packaging and runtime requirements
 * [ ] Runtime capability reporting for optional dependency features
 
 Documentation: `docs/subsystems/build/`
