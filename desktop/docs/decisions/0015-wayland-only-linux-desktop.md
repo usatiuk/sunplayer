@@ -1,7 +1,9 @@
 # 0015: Target Wayland and leave X11 unsupported
 
-* Status: Accepted
+* Status: Accepted; unmanaged Wayland fallback superseded by ADR 0017
 * Date: 2026-08-01
+* Related:
+  [0017: Require color-management-v1 for the first Linux release](0017-require-wayland-color-management-v1.md)
 
 ## Context
 
@@ -27,7 +29,9 @@ Sunroom will:
 * Build the Linux graphics and presentation path around Vulkan, Wayland, and
   color-management-v1 where available.
 * Use an honest SDR Wayland fallback when the active Wayland compositor lacks
-  HDR or color-management support.
+  HDR or color-management support. This fallback is superseded for Linux V1 by
+  ADR 0017, which requires color-management-v1 and keeps SDR presentation
+  inside its managed gamma-2.2 path.
 * Keep Linux media, hardware decode, and audio choices independent from this
   window-system decision; PipeWire, PulseAudio compatibility, VAAPI, and DRM
   PRIME remain valid on supported Wayland desktops.
@@ -39,8 +43,10 @@ Sunroom will:
 ## Consequences
 
 * Linux presentation can target one modern surface and color-management model.
-* Unsupported Wayland HDR/color-management capability degrades to SDR within
-  Wayland; it does not switch the application to X11 or XWayland.
+* The original decision allowed unsupported Wayland HDR/color-management
+  capability to degrade to SDR. ADR 0017 narrows Linux V1 to managed gamma-2.2
+  SDR or managed extended-linear HDR and rejects missing color-management-v1;
+  it still never switches to X11 or XWayland.
 * Linux packages may require a native Wayland Qt platform integration and may
   fail clearly when launched in an X11-only session.
 * Cross-platform shared contracts still cover Windows, macOS, and Wayland, but

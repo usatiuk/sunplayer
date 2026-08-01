@@ -27,6 +27,10 @@
 * Platform-specific optimization branches before profiling shows they are needed.
 * X11 or XWayland presentation, color management, packaging compatibility, or
   fallback behavior. Linux desktop support targets native Wayland.
+* Legacy or unmanaged Wayland presentation without the required
+  color-management-v1 capability set in the first Linux release. Modern
+  Wayland SDR monitors remain supported through compositor-managed gamma-2.2
+  SDR; an HDR monitor is not required.
 * A complex library or browser interface before playback is dependable.
 
 Temporary capability differences between platforms are acceptable. The overall architecture and rendering model should remain shared.
