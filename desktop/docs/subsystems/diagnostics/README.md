@@ -141,6 +141,15 @@ The long-term support snapshot should compose:
 * Presentation backend, active display revision, output format, and recovery.
 * Relevant operation progress and last structured failure.
 
+For color work, “effective” must include field-level provenance, confidence,
+unknown/fallback state, contradictions, semantic revision, source ICC
+presence/hash/application status, and dynamic-metadata identity. Presentation
+state must distinguish `SystemManaged` from `UnmanagedSrgb`, record the surface
+encoding, target-gamut provenance, reference white, selected usable peak,
+physical-display/window-selection revisions, calibration or description
+revision, and the last invalidation reason. Diagnostics must not imply that
+retained ICC bytes were applied while LCMS is disabled.
+
 Snapshots publish at bounded/coalesced points. Worker threads must not drive
 the UI or allocate a new object for every frame.
 

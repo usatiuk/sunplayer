@@ -132,12 +132,20 @@ The Sunroom wrapper snapshots:
 * Software or known hardware storage kind.
 * Pixel-format and signal diagnostics.
 
-Stream-level scalar color defaults, rotation, mastering-display, content-light,
-and HDR10+ metadata are copied onto the private frame when the decoder did not
-propagate them. Effective sample aspect ratio prefers the decoded frame and
-then the snapshotted stream/codec default while those contexts remain alive.
-Published frames do not retain or expose mutable format, stream, or decoder
-contexts.
+The final decoded frame is the authoritative color-evidence boundary. FFmpeg
+8.1.2 may already have filled otherwise unspecified scalar fields and coded
+side data from codec-context or stream-derived state, so Sunroom cannot recover
+more specific provenance from a populated result. Blanket stream-to-frame
+metadata copying is transitional and will be replaced by the immutable
+effective-source policy in ADR 0012. Explicit supporting stream evidence is
+permitted only where a documented property is not propagated. Effective sample
+aspect ratio prefers the decoded frame and then the snapshotted stream/codec
+default while those contexts remain alive. Published frames do not retain or
+expose mutable format, stream, or decoder contexts.
+
+Embedded source ICC bytes remain alive through the retained `AVFrame` and will
+be preserved and diagnosed. The current libplacebo build has LCMS disabled, so
+the player does not yet claim to apply source ICC transforms.
 
 Hardware frame descriptions require the graphics-device generation that
 created them and derive their signal format and component depth from
@@ -152,12 +160,15 @@ rotated-content output still needs a dedicated fixture and capture.
 
 ## Next implementation
 
-1. Normalize complete stream, chapter, attachment, and provisional/final
+1. Derive the first immutable effective source-color description from final
+   decoded-frame evidence and remove redundant blanket stream-to-frame
+   metadata mutation.
+2. Normalize complete stream, chapter, attachment, and provisional/final
    session duration state.
-2. Dispatch subtitle packets without letting one selected stream prevent
+3. Dispatch subtitle packets without letting one selected stream prevent
    progress for another.
-3. Add packet byte/duration and decode-time diagnostics.
-4. Add equivalent native hardware-device negotiation on Linux and macOS when
+4. Add packet byte/duration and decode-time diagnostics.
+5. Add equivalent native hardware-device negotiation on Linux and macOS when
    their graphics domains are implemented.
 
 ## Verification

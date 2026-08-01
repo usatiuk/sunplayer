@@ -2,6 +2,8 @@
 
 * Status: Accepted
 * Date: 2026-07-28
+* Amended by:
+  [0013: Rely on system display calibration on managed presentation paths](0013-rely-on-system-display-calibration.md)
 
 ## Context
 
@@ -52,8 +54,9 @@ The current priority order is:
 Benefits:
 
 * The final compositor can combine video and SDR UI in linear light.
-* The operating system remains responsible for mapping the desktop
-  extended-linear signal to the physical display.
+* On a correctly tagged managed path, the operating system remains responsible
+  for mapping the desktop extended-linear signal through active display
+  calibration to the physical display.
 * SDR fallback has an explicit clamp and sRGB encoding path.
 * Asynchronous telemetry cannot make the shader encode for a swapchain format
   that has not actually been created.
@@ -68,6 +71,8 @@ Costs and limitations:
 * A display-targeted video texture may need rerendering after output changes,
   including while paused.
 * Windows is the only implemented platform adapter.
+* Ordinary Windows DirectX SDR presentation with Advanced Color inactive is an
+  unmanaged sRGB-assumed fallback, not a color-calibrated path.
 * The current diagnostic shader's tone mapping is temporary; libplacebo must
   own real video color processing.
 
@@ -100,5 +105,9 @@ This decision does not settle:
   [0003](0003-display-targeted-video-surface.md); libplacebo integration will
   define the source-side mapping.
 * How macOS EDR and Linux compositor protocols supply equivalent state.
-* User overrides, calibration, or confidence policy for unreliable display
-  metadata.
+* User overrides or confidence policy for unreliable display metadata.
+
+Display-calibration ownership is decided by
+[0013](0013-rely-on-system-display-calibration.md): Sunroom relies on the OS
+or compositor on managed paths, and application-managed display ICC remains
+deferred.

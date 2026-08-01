@@ -60,7 +60,7 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 
 ## Current implementation status
 
-As of 2026-07-31, the repository contains a Windows presentation foundation
+As of 2026-08-01, the repository contains a Windows presentation foundation
 and continuous synchronized local-file audio/video playback:
 
 * A factory-selected graphics-device domain owns the current D3D11 QRhi,
@@ -86,14 +86,22 @@ and continuous synchronized local-file audio/video playback:
 * On Windows, libplacebo directly wraps the QRhi-owned RGBA16F D3D11 texture,
   shares QRhi's immediate context without an output copy, and receives a
   reference-white-relative virtual target in its fixed 203-nit coordinate
-  system. Source HDR values remain unchanged; no custom post-map normalization
-  runs.
+  system. This construction is capture-validated for relative SDR and an
+  analytic static-PQ signal; exact source inspection shows it is not a valid
+  universal HLG target. The current prototype has not yet added source-format
+  classification, so HLG/dynamic-HDR files can render but their target behavior
+  remains experimental until the immediate FFmpeg/libplacebo format-acceptance milestone is
+  implemented. Source HDR values remain unchanged and no custom post-map
+  normalization runs.
 * A narrow final QRhi pass places that already processed video surface,
   combines it with the UI, and presents extended-linear sRGB/scRGB when
   available, with an SDR fallback. It can also compose UI without an active
   video layer.
-* Qt screen state, QRhi swapchain HDR information, and Windows Advanced Color
-  telemetry feed a shared presentation snapshot and diagnostic UI.
+* Qt screen state, QRhi swapchain HDR information, and an initial WinRT
+  Advanced Color observer feed a shared presentation snapshot and diagnostic
+  UI. Stable Windows display identity, DisplayConfig/DXGI capability
+  provenance, robust spanning-window selection, topology revisions, and stale
+  asynchronous-query rejection remain planned.
 * Diagnostics distinguish the producer input path and its CPU transfers from
   output-target GPU copies, output CPU transfers, synchronization, and fallback
   reason.
@@ -272,9 +280,12 @@ Documentation: `docs/subsystems/playback/`
 * [ ] macOS EDR and SDR swapchain presentation
 * [ ] Linux HDR and SDR swapchain presentation
 * [x] Shared presentation and display-state model
-* [x] Windows multiple-display and window-movement observation
-* [x] Windows dynamic display-property notifications
-* [x] Windows display adapter
+* [x] Initial Windows window-movement and Advanced Color observation
+* [x] Initial Windows dynamic Advanced Color notification
+* [ ] Stable Windows display identity, topology observation, and
+  greatest-intersection window/output selection
+* [ ] Windows DisplayConfig/DXGI capability, provenance, confidence, and stale
+  query model
 * [ ] macOS display adapter
 * [ ] Linux display adapter
 * [x] Graphics-device loss and recreation
@@ -291,19 +302,24 @@ Documentation: `docs/subsystems/graphics/`
   path
 * [ ] Same-device GPU-copy and explicit CPU target fallbacks
 * [x] Persistent libplacebo GPU and renderer lifecycle
-* [ ] Effective FFmpeg metadata mapping
+* [ ] Immutable effective FFmpeg source metadata with honest provenance
 * [x] Deterministic software-backed RGBA32F diagnostic upload path
 * [x] FFmpeg software-frame importer and persistent upload reuse
 * [x] Shared hardware-frame import result/diagnostic contract
 * [x] D3D11VA NV12/P010/P012/P016 direct importer
 * [ ] Vulkan, VAAPI, and DRM PRIME importer
-* [ ] VideoToolbox, IOSurface, and MoltenVK importer
+* [ ] VideoToolbox/IOSurface importer and macOS Metal/MoltenVK interop
 * [x] Offscreen HDR render-target contract and temporary QRhi producer
 * [x] Display-target and SDR-white updates
-* [x] Reference-white-adaptive SDR/PQ display mapping without a post-map
-  video scale
-* [ ] Actual display-gamut propagation and fixed-source HLG validation
-* [ ] HDR10, HLG, HDR10+, and Dolby Vision capability reporting
+* [x] Analytic reference-white-adaptive SDR/static-PQ display mapping without
+  a post-map video scale
+* [ ] Real FFmpeg-decoded static-PQ fixture and effective-source validation
+* [ ] Actual display-gamut propagation
+* [ ] Physical-target-aware HLG model separate from the static-PQ virtual
+  target
+* [ ] Production FFmpeg/libplacebo mapping acceptance, validation, and
+  capability diagnostics for SDR, HDR10/PQ, HLG, HDR10+, and Dolby Vision as
+  required for V1
 * [ ] Quality and energy profiles
 * [x] Initial rendering-path and copy/transfer diagnostics
 
@@ -442,6 +458,12 @@ docs/
         0006-asynchronous-media-session-and-stable-active-video-source.md
         0007-bound-continuous-video-and-select-on-presentation-thread.md
         0008-reference-white-adaptive-hdr-display-mapping.md
+        0009-generation-scoped-seek-restart.md
+        0010-qt-category-logging-and-bounded-session-files.md
+        0011-single-pass-media-routing-and-audio-output-boundary.md
+        0012-use-final-decoded-frames-as-color-evidence.md
+        0013-rely-on-system-display-calibration.md
+        0014-prefer-native-metal-presentation-on-macos.md
 
     research/
         README.md
@@ -451,6 +473,13 @@ docs/
         2026-07-29-compressed-sdr-fixture.md
         2026-07-29-ffmpeg-continuous-decode-and-backpressure.md
         2026-07-30-reference-white-adaptive-hdr-mapping.md
+        2026-07-30-ffmpeg-keyframe-seek-and-restart.md
+        2026-07-30-large-network-matroska-seek-observability.md
+        2026-07-31-chatgpt-audio.md
+        2026-07-31-ffmpeg-duration-semantics.md
+        2026-07-31-cubeb-wasapi-device-recovery.md
+        2026-08-01-color.md
+        2026-08-01-pinned-color-source-verification.md
 
     subsystems/
         application/
@@ -460,6 +489,10 @@ docs/
             README.md
 
         graphics/
+            README.md
+            PLAN.md
+
+        video-rendering/
             README.md
             PLAN.md
 
@@ -476,8 +509,6 @@ docs/
         ui/
             README.md
 
-        video-rendering/
-            README.md
 ```
 
 Subsystem folders and subsystem plans should be created when enough concrete architecture or active work exists to justify them.

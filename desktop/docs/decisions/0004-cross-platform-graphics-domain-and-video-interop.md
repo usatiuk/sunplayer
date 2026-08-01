@@ -2,6 +2,8 @@
 
 * Status: Accepted
 * Date: 2026-07-28
+* Superseded in part by:
+  [0014: Prefer native Metal presentation for the macOS graphics domain](0014-prefer-native-metal-presentation-on-macos.md)
 
 ## Context
 

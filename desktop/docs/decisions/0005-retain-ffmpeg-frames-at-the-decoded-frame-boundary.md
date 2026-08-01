@@ -2,6 +2,8 @@
 
 * Status: Accepted
 * Date: 2026-07-29
+* Amended by:
+  [0012: Use final decoded frames as effective source-color evidence](0012-use-final-decoded-frames-as-color-evidence.md)
 
 ## Context
 
@@ -39,10 +41,16 @@ Sunroom snapshots stable values needed outside FFmpeg:
 * Software or hardware storage kind and graphics-device generation.
 * Human-readable signal diagnostics.
 
-Stream-level display matrix, mastering-display, content-light, and HDR10+
-properties are copied onto the private retained frame when absent there. A
-published frame therefore does not depend on a live `AVStream`,
-`AVFormatContext`, or `AVCodecContext`.
+The final FFmpeg-decoded frame is the authoritative color-evidence boundary.
+FFmpeg may already have filled otherwise unspecified frame fields from codec
+context and stream-derived state. Under ADR 0012, Sunroom will stop
+blanket-copying stream metadata onto the private retained frame; the current
+implementation still performs a transitional fill of unspecified fields and
+absent side data. Supporting stream evidence will be snapshotted only where an
+explicit effective-source policy needs it. A published frame therefore does
+not depend on a live `AVStream`,
+`AVFormatContext`, or `AVCodecContext`; the immutable policy and provenance
+rules are defined by ADR 0012.
 
 Importers borrow the retained storage. Software frames use libplacebo's FFmpeg
 mapping helper and reusable upload textures. Native importers wrap or copy a

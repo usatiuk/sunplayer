@@ -13,14 +13,19 @@ without an output copy. A real FFmpeg software `AVFrame` now maps through
 libplacebo with one reusable input upload and retains its source across
 target-only rerenders. Supported D3D11VA frames map their retained NV12, P010,
 P012, or P016 texture-array slice directly into libplacebo plane views with no
-input copy or CPU transfer. Dolby Vision side data is explicitly mapped into
-mapping-owned libplacebo metadata. Same-device-copy and CPU target fallbacks, and
-non-Windows native importers, are not implemented.
+input copy or CPU transfer. Dolby Vision side data can be retained and mapped
+into mapping-owned libplacebo metadata, but its target semantics and profile
+support are not yet validated and no Dolby Vision product claim is made.
+Same-device-copy and CPU target fallbacks, and non-Windows native importers,
+are not implemented.
 
 The broad investigation in
 [../../ARCHITECTURE_NOTES.md](../../ARCHITECTURE_NOTES.md) is non-binding
 research. The accepted device and target boundary is recorded in
 [ADR 0004](../../decisions/0004-cross-platform-graphics-domain-and-video-interop.md).
+The preferred macOS presentation realization is recorded in
+[ADR 0014](../../decisions/0014-prefer-native-metal-presentation-on-macos.md).
+The active color and rendering roadmap is [PLAN.md](PLAN.md).
 
 ## Accepted structure
 
@@ -98,23 +103,47 @@ fallback chain.
 
 Native display adapters observe platform-specific facts in physical units.
 Shared presentation policy resolves them into one effective display target,
-including reference white and target peak. Source metadata normalization and
-the libplacebo producer then own source transfer, primaries, range, tone
-mapping, and the conversion into Sunroom's platform-neutral surface contract.
+including reference white and target peak. The current Windows observer is an
+initial WinRT/QRhi implementation; it does not yet provide stable physical
+display identity, complete DisplayConfig/DXGI facts, provenance, confidence,
+or stale-query protection.
 
-libplacebo's linear convention uses `1.0 = 203 nits`. Sunroom's rendered-video
-surface uses `1.0 = active reference white`. The producer expresses the target
-in libplacebo's coordinate system as
-`max_luma = 203 * targetPeakHeadroom`, so libplacebo's numerical output already
-has Sunroom's required meaning. Source pixels and HDR-transfer metadata remain
-unchanged, and no custom pre-output multiplier runs after tone mapping. A
-render-local color-space copy anchors relative SDR transfers to libplacebo's
-203-nit normalized white even when decoded mastering metadata reports a
-different physical maximum. It preserves source mastering primaries but
-removes absolute mastering, HDR10+, and CIE-Y luminance candidates so stale
-metadata cannot override the relative transfer. The fixed diagnostic PQ signal
-uses 203-nit HDR reference white and does not change when the output target
-changes.
+The final decoded `AVFrame` is the authoritative source-color evidence
+boundary. FFmpeg may already have populated otherwise unspecified frame fields
+from codec context and stream-derived state, so Sunroom cannot infer a more
+specific origin from the returned value. ADR 0012 requires one immutable
+effective source description with honest provenance and explicit fallbacks;
+the current stream-to-frame mutation is transitional and will be removed in
+that implementation slice.
+
+libplacebo owns source interpretation, tone mapping, and gamut mapping.
+libplacebo's linear convention uses `1.0 = 203 nits`; Sunroom's rendered-video
+surface uses `1.0 = active reference white`. For relative SDR and static PQ,
+the producer currently expresses headroom as
+`max_luma = 203 * targetPeakHeadroom`. Analytic capture proves that numerical
+bridge for those inputs. Source pixels and HDR-transfer metadata remain
+unchanged, and no custom pre-output multiplier runs after tone mapping.
+
+This virtual destination is deliberately scoped to static PQ. In libplacebo
+7.360.1, the HDR destination maximum becomes the HLG source's physical OOTF
+peak; passing a virtual peak can therefore change HLG contrast for the wrong
+physical display. HDR10+'s source-authored targeted-display luminance must stay
+separate from the current display destination. The pinned Dolby Vision helper
+supports selected reshaping metadata but not target trims or enhancement-layer
+residual processing. HLG and dynamic HDR therefore require the acceptance work
+in the active plan rather than inheriting the static-PQ formula or an overly
+broad support claim.
+
+The current prototype has not yet implemented that format gate: it constructs
+the same target for every mapped source and maps available Dolby Vision side
+data. HLG, HDR10+, and Dolby Vision can therefore produce an image today, but
+the target behavior is experimental rather than a support claim. The immediate
+next milestone will preserve working playback, classify the source and active
+base-layer/dynamic-metadata path, and validate or correct every target model.
+
+Those formats are required V1 scope. The current experimental label describes
+unverified color behavior, not a plan to omit HLG, HDR10+, or Dolby Vision from
+the player or to deliberately break files that already render.
 
 Minimum target luminance and whether it is known are also part of the surface
 description supplied to libplacebo. Sunroom preserves a measured physical zero
@@ -128,13 +157,24 @@ contracts, but not storage behavior. Software planes require observable
 uploads. Hardware frames require backend-native import, synchronization, and
 lifetime retention and should be the normal playback path when supported.
 
-Before rendering, shared policy resolves unspecified source color fields
-through libplacebo. Relative SDR white and the 203-nit HDR reference-white
-anchor both map to surface `1.0`; PQ source values and mastering metadata remain
-source truth. The physical luminance of surface `1.0` follows the platform
-reference white at presentation. HLG is target-dependent in libplacebo and
-still requires dedicated multi-target capture before equivalent correctness is
-claimed.
+Before rendering, the future effective-source policy will make required
+fallbacks explicit and observable rather than relying on silent library
+inference. Relative SDR white and the 203-nit HDR reference-white anchor both
+map to surface `1.0`; PQ source values and mastering metadata remain source
+truth. The physical luminance of surface `1.0` follows the platform reference
+white at presentation.
+
+Embedded source ICC bytes are retained with the `AVFrame`, but the pinned
+libplacebo build has LCMS disabled and does not apply them. Source ICC rendering
+is deferred until packaging, semantic profile validation, and SDR RGB behavior
+are tested. ICC combined with PQ, HLG, HDR10+, or Dolby Vision remains
+unsupported pending a separate model. Display calibration is a different
+responsibility: on a system-managed path Sunroom declares the final
+presentation encoding and lets the OS/compositor apply the active display
+profile once to the entire composition. Ordinary Windows SDR with Advanced
+Color inactive is currently an unmanaged sRGB-assumed fallback.
+Application-managed display ICC is deferred and, if added, belongs after QRhi
+composition rather than inside the video renderer.
 
 The final QRhi compositor only places the resulting linear BT.709 surface,
 blends other described layers in the same reference-white-relative convention,
@@ -148,7 +188,7 @@ Neither one reinterprets source video metadata or tone-maps the video again.
 | --- | --- | --- |
 | Windows | Shared video-capable D3D11 device; D3D11VA plane import and direct RGBA16F target | P010/P012/P016 capture, real device-loss injection, and GPU/CPU copy fallbacks |
 | Linux | Shared Vulkan device and image | Layout, queue, and semaphore ownership |
-| macOS | Shared Vulkan/MoltenVK domain, with Metal interop if required | EDR behavior, IOSurface formats, and cross-API synchronization |
+| macOS | QRhi Metal/EDR domain with a narrow native import path | EDR behavior, VideoToolbox/IOSurface formats, and synchronization |
 
 Native graphics and decoder types remain in backend implementations. Playback,
 metadata policy, renderer policy, subtitles, and the compositor remain shared.
@@ -172,8 +212,9 @@ metadata policy, renderer policy, subtitles, and the compositor remain shared.
 7. [x] Make libplacebo the HDR Lab default while retaining procedural QRhi as
    an explicit diagnostic comparison only.
 8. [ ] Add the Vulkan implementation and exercise it on Linux.
-9. [ ] Validate MoltenVK presentation on macOS before choosing shared Vulkan or a
-   Metal interop backend.
+9. [ ] Validate QRhi Metal/EDR presentation and the narrow
+   MoltenVK/Vulkan-to-IOSurface/Metal video bridge on macOS; retain shared
+   MoltenVK presentation only as an evidence-driven alternative.
 10. [x] Add the retained FFmpeg `AVFrame` contract, software-plane importer,
     persistent upload reuse, and real decoded-frame capture.
 11. [x] Make the Windows graphics domain own a video-capable,
@@ -228,6 +269,7 @@ rectangle. A pinned H.264 case uses the production shared-device D3D11VA
 decoder and direct NV12 plane importer, asserts no input download/upload or GPU
 copy and no output copy/transfer, captures its display-targeted output, and
 compares representative pixels against the software decode. Physical display
-correctness, HLG/dynamic-HDR mapping, actual display-gamut propagation,
+correctness, a real decoded mastered-PQ fixture, HLG/dynamic-HDR target
+semantics, actual display-gamut propagation,
 P010/P012/P016 capture, general display-matrix rotation, macOS EDR viability,
 and Vulkan synchronization remain unproven.

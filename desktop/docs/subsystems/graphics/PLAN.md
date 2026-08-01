@@ -19,8 +19,11 @@ The current prototype establishes:
 * [x] Qt Quick redirected into an application-owned RGBA16F texture.
 * [x] Final fullscreen QRhi composition pass.
 * [x] Extended-linear sRGB/scRGB presentation with SDR fallback.
-* [x] Combined QRhi, Qt screen, and Windows Advanced Color state.
-* [x] Window movement and display-mode invalidation.
+* [x] Initial combined QRhi, Qt screen, and Windows Advanced Color state.
+* [x] Initial center-screen window movement and display-mode invalidation.
+* [ ] Stable Windows display identity, DisplayConfig/DXGI capability facts,
+  greatest-intersection selection, provenance, confidence, and stale-query
+  protection.
 * [x] Demand-driven render scheduling with explicit animation.
 * [x] Resize, surface destruction, swapchain invalidation, and bounded
   device-loss recovery.
@@ -131,9 +134,10 @@ Replace the temporary producer with a persistent libplacebo renderer.
 * [x] Create persistent libplacebo log, GPU, and renderer objects.
 * [x] Render known sRGB and BT.2020/PQ software-backed images into the video
   surface.
-* [x] Express active reference white and physical headroom through
-  libplacebo's 203-nit target coordinate, remove the cancelling pre-output
-  normalization, and capture one fixed PQ signal at 80, 100, and 203 nits.
+* [x] Express active reference white and physical headroom for relative SDR and
+  analytic static PQ through libplacebo's 203-nit target coordinate, remove
+  the cancelling pre-output normalization, and capture one fixed PQ signal at
+  80, 100, and 203 nits.
 * [x] Reuse the renderer across size, source, and display changes.
 * [x] Expose backend, render target, zero-copy, synchronization, and failure
   diagnostics.
@@ -158,6 +162,9 @@ The direct D3D11 approach and reference-white normalization are verified
 against the pinned library and Qt versions. Completion of the broader renderer
 milestone still requires a maintained image corpus, render timing, and
 realization of non-direct target paths if supported hardware requires them.
+The virtual target is not considered valid for HLG or dynamic HDR; their
+physical-target semantics are tracked in
+[the video-rendering plan](../video-rendering/PLAN.md).
 
 ## Milestone 4: first decoded video frame
 

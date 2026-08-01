@@ -37,7 +37,12 @@ general telemetry platform in advance.
 
 * [x] Migrate remaining raw graphics/video/presentation/platform messages to
   the shared categories.
-* [ ] Publish effective source/target color state and its revision.
+* [ ] Publish effective source/target color state, field provenance,
+  confidence, contradictions, and semantic revision.
+* [ ] Publish source ICC presence/hash/application status and presentation
+  calibration ownership without implying an unavailable transform.
+* [ ] Publish window/display selection identity, capability provenance,
+  presentation mode, surface encoding, and last target invalidation reason.
 * [ ] Publish decoder/import/render/presentation adapter identity and device
   generation.
 * [ ] Reconcile known CPU/GPU copies, synchronization mode, and fallback

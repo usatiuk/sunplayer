@@ -2,13 +2,15 @@
 
 * Status: Accepted
 * Date: 2026-07-30
+* Scope amendment: 2026-08-01
 
 ## Context
 
 Sunroom composes video, subtitles, and UI in one linear surface where `1.0`
 means the active platform SDR/reference-white luminance. On Windows the final
-FP16 scRGB conversion multiplies that composed value by
-`referenceWhiteNits / 80`.
+FP16 scene-referred scRGB conversion for an HDR Advanced Color output
+multiplies that composed value by `referenceWhiteNits / 80`. SDR Advanced
+Color/WCG FP16 is display-referred and uses working white `1.0` directly.
 
 Libplacebo's linear convention is fixed at `1.0 = 203 nits`. The previous
 adapter rendered against the display's physical peak and then multiplied video
@@ -38,8 +40,9 @@ policy:
 * Retained decoded source values and metadata remain unchanged. The render
   adapter preserves source gamut information but removes absolute and dynamic
   luminance candidates from the effective metadata of relative SDR transfers,
-  then normalizes their range to libplacebo's 203-nit coordinate anchor. PQ,
-  HLG, and other HDR-transfer metadata remain source-absolute.
+  then normalizes their range to libplacebo's 203-nit coordinate anchor. PQ
+  absolute-luminance metadata and HLG or dynamic-HDR source metadata remain
+  unchanged; HLG itself remains relative and display-dependent.
 * Libplacebo owns source transfer interpretation, tone mapping, and gamut
   mapping.
 * Inverse tone mapping is disabled: a source that fits is not stretched to the
@@ -47,8 +50,9 @@ policy:
 * The final compositor performs no second video tone map or video-only
   brightness scale.
 
-Sunroom expresses the desired display-relative destination through
-libplacebo's existing 203-nit coordinate system:
+For relative SDR and static PQ, Sunroom currently expresses the desired
+display-relative destination through libplacebo's existing 203-nit coordinate
+system:
 
 ```text
 targetMaxLuma =
@@ -66,8 +70,9 @@ Unknown or known-zero target minimum uses `PL_COLOR_HDR_BLACK` at the
 libplacebo boundary because zero means unknown to libplacebo. Shared state
 continues to preserve the platform value and its known state.
 
-No pre-output normalization hook is used. Libplacebo's resulting linear
-numbers already satisfy Sunroom's surface contract:
+No pre-output normalization hook is used. For the capture-validated analytic
+SDR/static-PQ cases, libplacebo's resulting linear numbers satisfy Sunroom's
+surface contract:
 
 ```text
 1.0 = active platform reference white
@@ -75,11 +80,24 @@ targetPeakHeadroom = physical display peak / reference white
 ```
 
 Platform presentation converts the complete composed surface into native
-output coordinates exactly once. The current Windows conversion remains:
+output coordinates exactly once. For a Windows HDR Advanced Color output, the
+conversion is:
 
 ```text
 scRGB = composedLinear * referenceWhiteNits / 80
 ```
+
+For Windows SDR Advanced Color/WCG, working white maps to display-referred
+scRGB `1.0`; ordinary SDR with Advanced Color inactive uses the unmanaged sRGB
+fallback.
+
+The accepted scope is narrower than the current prototype implementation: the
+renderer still constructs this virtual destination without classifying the
+source transfer. HLG, HDR10+, and Dolby Vision may therefore render today, but
+their output is experimental and not proof of correct target semantics. The
+immediate format-complete milestone must preserve working decode/render paths,
+identify the active base-layer/dynamic-metadata path, and replace or validate
+the target behavior before support is claimed.
 
 The policy and composition contract are platform-independent. macOS and Linux
 adapters must preserve them while using their native EDR/color-management
@@ -96,8 +114,9 @@ Benefits:
   UI, and future subtitles.
 * Display peak and reference white jointly define the actual highlight
   headroom seen by libplacebo.
-* The renderer can preserve source highlights when they fit and compress only
-  when required.
+* With inverse tone mapping disabled, the renderer does not deliberately
+  expand a lower-peak source merely to consume target headroom. Gamut mapping,
+  black-point handling, and the selected tone curve can still modify pixels.
 * The retained source signal and its metadata are never rewritten to encode
   display state. A render-local copy discards absolute mastering-luminance and
   stale dynamic-luminance interpretation for relative SDR transfers so encoded
@@ -114,8 +133,17 @@ Costs and limitations:
   This adapter behavior must remain documented and capture-tested.
 * Sunroom does not yet supply actual target display primaries, so the current
   libplacebo target gamut is inferred as BT.709.
-* HLG is target-dependent in libplacebo and needs dedicated multi-target
-  capture before Sunroom claims equivalent correctness for HLG.
+* The virtual target is not valid as a universal HDR construction. In
+  libplacebo 7.360.1 the HDR destination `max_luma` becomes the HLG source's
+  physical target peak for OOTF inference; a virtual maximum can therefore
+  change HLG contrast using the wrong physical peak. HLG is blocked on a
+  target model that separates physical OOTF peak from output normalization.
+* HDR10+'s source-authored targeted-system-display luminance must remain
+  unchanged while the current display peak is supplied separately through the
+  destination; it must not inherit the static-PQ construction by default.
+* The pinned Dolby Vision helper supports selected reshaping metadata but not
+  target-specific trims or enhancement-layer residuals. Support claims must be
+  limited to verified reshape/profile or compatible base-layer fallback paths.
 * Dynamic peak detection remains disabled pending quality and performance
   validation.
 * Software capture cannot prove emitted luminance; physical HDR validation
@@ -149,7 +177,8 @@ duplicate them.
 
 ### Patch or fork libplacebo immediately
 
-Not selected. The existing API can express and capture-prove the current
-SDR/PQ policy. If HLG or dynamic-metadata validation exposes a real limitation,
-an upstream destination-reference-white API is preferable to a project-local
-fork.
+Not selected for static PQ. The existing API can express and capture-prove the
+current SDR/static-PQ policy. Exact source inspection has already established a
+real HLG limitation, so an upstream destination-reference-white/physical-peak
+separation is preferable before considering a narrowly maintained dependency
+patch. A project-local tone-mapping fork remains rejected.

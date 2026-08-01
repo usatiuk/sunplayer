@@ -275,12 +275,23 @@ window re-evaluates the output associated with the window center. Position
 changes are debounced for 100 milliseconds before the engine verifies whether
 the swapchain belongs to the same screen.
 
+This is an initial observer, not the final multi-display model. It does not yet
+provide stable DisplayConfig/DXGI identity, complete color-volume provenance,
+greatest-intersection selection for spanning windows, topology revisions, or
+stale asynchronous-query rejection. Those requirements are active work in the
+video-rendering roadmap.
+
 ### Swapchain selection
 
 The engine prefers `QRhiSwapChain::HDRExtendedSrgbLinear` whenever the
 swapchain reports support. Otherwise it creates an SDR swapchain. Extended
 linear sRGB is treated as the desktop HDR/extended-range working convention;
-the operating system performs the final mapping to the physical display.
+while Windows Advanced Color is active and the surface is tagged correctly,
+the operating system performs the final calibrated mapping to the physical
+display. HDR Advanced Color uses scene-referred scRGB with `1.0 = 80 nits`;
+SDR Advanced Color/WCG FP16 is display-referred and maps working white to
+`1.0`. With Advanced Color inactive, the SDR DirectX fallback is unmanaged and
+assumes sRGB behavior.
 
 The current backend is fixed to D3D11:
 
@@ -352,6 +363,12 @@ is required. SDR diagnostic input remains relative, while the PQ diagnostic is
 one fixed mastered signal independent of target changes. The compositor does
 not know about libplacebo's coordinate system.
 
+That virtual destination is currently validated only for relative SDR and an
+analytic static-PQ input. It must not be reused as a universal HLG or
+dynamic-HDR construction: libplacebo 7.360.1 uses the destination maximum as
+HLG's physical OOTF peak. A real FFmpeg-decoded PQ fixture and a separate
+physical-target-aware HLG model are tracked in the video-rendering plan.
+
 The surface also preserves minimum target luminance as a value plus a known
 state. The backend converts a positive physical minimum into the same virtual
 coordinate system. Libplacebo treats numeric zero as unknown and otherwise
@@ -363,6 +380,12 @@ not necessarily the physical target gamut. Sunroom does not yet propagate
 actual display primaries into libplacebo's separate target-gamut metadata, so
 the current target gamut is inferred as BT.709 and wide-gamut output is not yet
 claimed.
+
+Target gamut mapping is separate from monitor calibration. The Windows
+Advanced Color path relies on the OS to apply the active display profile once
+to the complete tagged composition. Sunroom does not apply display ICC inside
+the video renderer. Application-managed display ICC is deferred and would
+require a post-composition transform covering video, UI, and subtitles.
 
 The final compositor does not know the source peak, pattern phase, tone-map
 setting, source transfer function, or HDR metadata. It places the video layer,

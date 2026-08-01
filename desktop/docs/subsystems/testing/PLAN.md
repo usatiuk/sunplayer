@@ -26,6 +26,11 @@ to run.
   * [x] Windows HDR luminance precedence over QRhi data.
   * [x] Unknown luminance and SDR-white fallback.
   * [x] Current, potential, and effective headroom.
+  * [ ] `SystemManaged` versus `UnmanagedSrgb` ownership.
+  * [ ] HDR scene-referred versus SDR Advanced Color/WCG display-referred
+    output coordinates.
+  * [ ] Exactly one display-calibration owner and presentation-only profile
+    revisions that do not unnecessarily invalidate rendered video.
 * [x] Label focused deterministic tests `unit` and the first real graphics test
   `gpu;windows`; add further labels only with new execution classes.
 * [ ] Record the first guided Windows presentation matrix with OS, GPU, driver,
@@ -80,6 +85,8 @@ Implement alongside graphics milestone 1:
   installed D3D11, Shaderc, and built-in DOVI configuration, disabled Vulkan,
   OpenGL, and external libdovi features, runtime staging, and basic public-API
   lifecycle.
+* [ ] Assert the installed libplacebo configuration has LCMS disabled until an
+  explicit source-ICC milestone changes the dependency and tests.
 * [ ] Run the pinned libplacebo upstream suite as dependency validation where
   practical.
 * [x] Render known sRGB and BT.2020/PQ software-backed frames through real
@@ -88,6 +95,10 @@ Implement alongside graphics milestone 1:
   lifetime, synchronization, and copy path.
 * [x] Add one pinned SDR media container and manifest.
 * [ ] Add one pinned HDR10 media container and manifest.
+* [ ] Cover retained source ICC presence, size, hash, lifetime, frame/stream
+  provenance, differing-profile diagnostics, malformed/unvalidated status,
+  and `applied=false` with the LCMS-disabled build. This is a focused ownership
+  and policy test, not a pixel-transform claim.
 * [x] Seed the fixture layout with a pinned, hashed lossless RGB image and
   decode its first frame with real FFmpeg through the production libplacebo
   and QRhi capture path.
@@ -115,10 +126,37 @@ Implement alongside graphics milestone 1:
   verify an exact 203-nit patch at surface `1.0`, no expansion while the source
   fits, highlight compression when it does not, and the final Windows scRGB
   scale.
-* [ ] Repeat the fixed mastered-PQ scenario with a pinned FFmpeg-decoded HDR
-  fixture and effective source metadata.
-* [ ] Validate a fixed HLG source across the same physical targets because its
-  libplacebo OOTF is target-dependent.
+* [ ] Repeat the fixed mastered-PQ scenario with a small pinned FFmpeg-decoded
+  HDR10 fixture containing useful neutral luminance patches and real
+  mastering/content-light metadata. Validate effective-source provenance,
+  target-only rerender without re-import, reference-white anchoring,
+  no-expansion, monotonic bounded compression, and the single final
+  mode-appropriate Windows coordinate conversion through production
+  boundaries.
+* [ ] Add a real BT.2020 SDR fixture to the immediate acceptance matrix and
+  verify source interpretation against a simulated wide-gamut target without
+  treating 10-bit or BT.2020 signaling as HDR.
+* [ ] Establish an HLG target model that keeps the physical OOTF peak separate
+  from display-relative output normalization, then cover it with a real
+  multi-target FFmpeg-decoded HLG fixture. The static-PQ virtual target is known
+  to be unsafe for HLG.
+* [ ] Add real FFmpeg-decoded HDR10+ scene-transition coverage for current
+  dynamic metadata, reset, and no stale carry-over. Assert that the
+  source-authored targeted-display luminance remains unchanged while the
+  physical display destination varies separately.
+* [ ] Add profile-specific Dolby Vision fixtures that distinguish RPU/reshape,
+  enhancement-layer, HDR10-compatible base-layer, and explicit fallback paths
+  in both diagnostics and captured output. Do not claim target-trim or
+  enhancement-layer residual processing unless the pinned upstream stack gains
+  and passes that capability.
+* [ ] Treat the real SDR, PQ/HDR10, HLG, HDR10+, and Dolby Vision scenarios as
+  one immediate FFmpeg/libplacebo acceptance milestone; a passing static-PQ
+  subset is not completion, and the tests must not duplicate either library's
+  parser or color implementation.
+* [ ] Compare a metadata-bearing P010 HDR fixture through software decoding and
+  D3D11VA import. Assert equivalent effective source evidence, mapping path,
+  and capture within backend tolerance; capability-gate unverified hardware
+  formats.
 * [x] Keep the procedural and libplacebo diagnostic inputs aligned to the same
   pattern layout so their output differences exercise rendering policy.
 * [x] Exercise a persistent 640×360 animated diagnostic input into a 1100×600
@@ -184,6 +222,10 @@ Implement alongside graphics milestone 1:
   the production decode attempt; the current deterministic test starts at the
   fallback-policy boundary.
 * [ ] Real operating-system display changes and multi-monitor movement.
+* [ ] Add a deterministic two-display provider with stable identities,
+  window/output revisions, out-of-order query completion, paused-frame
+  rerendering, and stale-result rejection before relying only on manual
+  movement tests.
 * [x] Controlled continuous-pipeline cancellation, queue stop wakeup, and
   stale-completion scenarios.
 * [ ] Controlled unreliable continuous-source scenarios.

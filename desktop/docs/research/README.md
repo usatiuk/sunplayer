@@ -30,3 +30,5 @@ the newer note or decision rather than silently rewriting the investigation.
 * [2026-07-31: Audio architecture research draft](2026-07-31-chatgpt-audio.md)
 * [2026-07-31: FFmpeg duration semantics on a normalized timeline](2026-07-31-ffmpeg-duration-semantics.md)
 * [2026-07-31: Cubeb WASAPI device-recovery semantics](2026-07-31-cubeb-wasapi-device-recovery.md)
+* [2026-08-01: Video-rendering and color-management milestone review](2026-08-01-color.md)
+* [2026-08-01: Pinned color-pipeline source verification](2026-08-01-pinned-color-source-verification.md)

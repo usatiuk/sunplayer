@@ -4,6 +4,8 @@
 * Date: 2026-07-28
 * Amended by:
   [0008: Anchor normal HDR playback to the platform reference white](0008-reference-white-adaptive-hdr-display-mapping.md)
+* Related:
+  [0013: Rely on system display calibration on managed presentation paths](0013-rely-on-system-display-calibration.md)
 
 ## Context
 
@@ -65,14 +67,22 @@ Platform display adapters own native observation and report physical display
 facts. Shared presentation policy resolves those facts into the effective
 target—including minimum luminance when known—supplied to the producer. The
 producer must describe the destination so renderer output already satisfies
-this surface contract. For libplacebo, the target range is expressed in its
-fixed 203-nit normalized coordinate system: target maximum is
-`203 * targetPeakHeadroom`, and target minimum is converted by the same
-reference-white-relative relationship. No video-only normalization runs after
-the display map. The final compositor remains unaware of libplacebo's internal
-coordinate system and of the source format. Platform presentation then maps
-the complete final composition to the selected OS swapchain convention without
-tone-mapping video again.
+this surface contract. For relative SDR and static PQ, the current libplacebo
+bridge expresses the target range in its fixed 203-nit normalized coordinate
+system: target maximum is `203 * targetPeakHeadroom`, and target minimum is
+converted by the same reference-white-relative relationship. HLG and dynamic
+HDR require format-specific target semantics and must not inherit that formula
+uncritically. No video-only normalization runs after the display map. The final
+compositor remains unaware of libplacebo's internal coordinate system and of
+the source format. Platform presentation then maps the complete final
+composition to the selected OS swapchain convention without tone-mapping video
+again.
+
+The producer's target gamut and content mapping do not apply the monitor's ICC
+calibration. On a system-managed path, the platform applies that final
+calibration once to the complete tagged composition. Any future
+application-managed display ICC mode must likewise operate after composition,
+not inside the video producer.
 
 Sunroom preserves the distinction between unknown minimum luminance and a
 known physical zero. Renderer adapters translate that representation at their

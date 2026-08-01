@@ -1,8 +1,9 @@
 # Deferred work and known limitations
 
-This file records important issues that are intentionally outside the current
-implementation slice. Items here are not accepted behavior merely because they
-are documented; move them into a subsystem plan when they become active work.
+This file records both deferred work and important limitations of the current
+implementation. An active limitation must also appear in its subsystem plan;
+the subsystem plan is authoritative for sequencing and acceptance. No item is
+accepted behavior merely because it is documented here.
 
 ## Graphics and display
 
@@ -38,6 +39,26 @@ plane import, zero input copies/transfers, and observable software fallback.
 P010/P012/P016 capture, same-device-copy and CPU fallback paths, real
 device-loss injection, and the other platform importers remain required.
 General display-matrix rotation still lacks a dedicated render capture.
+
+The existing `203 * physicalPeak / referenceWhite` destination is explicitly
+limited to relative SDR and static PQ. Exact libplacebo 7.360.1 source
+inspection shows that its destination maximum becomes HLG's physical OOTF
+peak, so the virtual destination would evaluate HLG against the wrong physical
+display. HLG needs an API/policy that separates physical target peak from
+output normalization. HDR10+ and Dolby Vision target-luminance semantics also
+remain unverified and must not inherit the static-PQ formula automatically.
+The current renderer does not yet gate those formats and still constructs the
+same virtual target for every mapped source. Until the next effective-source
+slice classifies and validates them, a resulting HLG or dynamic-HDR image is
+experimental prototype behavior rather than proof of correct playback. The
+next slice must preserve existing decodability while exposing whether Dolby
+Vision metadata or only an HDR10-compatible base layer was used.
+
+This is active work in the immediate FFmpeg/libplacebo format-acceptance
+milestone, not a later static-PQ follow-up. HLG, HDR10+, and Dolby Vision are
+required V1 inputs and remain listed here only as current integration
+limitations until that milestone passes; Sunroom is not implementing parallel
+format decoders or color pipelines.
 
 Sunroom also does not yet propagate actual target display primaries to
 libplacebo. The extended-linear BT.709 surface can encode wide-gamut
@@ -110,6 +131,37 @@ Color data and QRhi swapchain data. It does not expose confidence, source
 provenance, maximum full-frame luminance, brightness changes, calibration, or
 user overrides. Expand the model when libplacebo target selection requires
 those distinctions.
+
+The current Windows observer also identifies the active `QScreen` from the
+window center and listens to WinRT `AdvancedColorInfoChanged`. It does not yet
+provide stable DisplayConfig/DXGI display identity, greatest-intersection
+selection for spanning windows, topology revision guards, coalesced capability
+reprobes, or stale asynchronous-result rejection. These are active in the
+video-rendering plan rather than accepted as complete multi-display support.
+
+### ICC transforms and calibration fallbacks
+
+The pinned libplacebo build has LCMS disabled. Embedded source ICC bytes remain
+owned by retained FFmpeg frames and can be preserved and diagnosed, but they
+are not currently applied. Enabling source-ICC rendering requires reviewed
+LCMS packaging, semantic profile validation, and an ICC-versus-scalar policy.
+Initial support should be limited to validated SDR RGB profiles; ICC combined
+with PQ, HLG, HDR10+, or Dolby Vision remains unsupported pending a separate
+target model or upstream-supported integration.
+
+Sunroom relies on the operating system or compositor for final display-profile
+calibration on managed paths: Windows Advanced Color, future macOS
+ColorSync/EDR, and future Wayland color-management-v1. Ordinary Windows
+DirectX SDR output with Advanced Color inactive is an unmanaged sRGB-assumed
+fallback. Application-managed display ICC is deferred; if implemented it must
+transform the complete post-QRhi composition rather than video alone.
+
+### HDR Lab target control affects production playback state
+
+HDR Lab's manual target-headroom control currently shares presentation
+settings with the Player. A later player-reliability slice must separate the
+diagnostic override from production display policy so experiments cannot
+silently alter ordinary playback.
 
 ## Build and tooling
 

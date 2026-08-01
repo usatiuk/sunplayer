@@ -26,3 +26,6 @@ with a new decision when the accepted choice changes materially.
 * [0009: Use generation-scoped decode restarts for seeking and recovery](0009-generation-scoped-seek-restart.md)
 * [0010: Use Qt category logging with bounded session files](0010-qt-category-logging-and-bounded-session-files.md)
 * [0011: Route selected media once and separate decoded audio from device output](0011-single-pass-media-routing-and-audio-output-boundary.md)
+* [0012: Use final decoded frames as effective source-color evidence](0012-use-final-decoded-frames-as-color-evidence.md)
+* [0013: Rely on system display calibration on managed presentation paths](0013-rely-on-system-display-calibration.md)
+* [0014: Prefer native Metal presentation for the macOS graphics domain](0014-prefer-native-metal-presentation-on-macos.md)
