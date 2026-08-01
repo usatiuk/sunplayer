@@ -1,4 +1,4 @@
 interface:
   display_name: "Ship Change"
-  short_description: "Implement, review, and finish substantial changes"
-  default_prompt: "Use $ship-change to implement this change through research, validation, independent review, and clean handoff."
+  short_description: "Ship substantial changes with proportional review"
+  default_prompt: "Use $ship-change to research, plan, implement, validate, review, and finish this change with judgment proportional to its risk."

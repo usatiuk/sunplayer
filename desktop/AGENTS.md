@@ -88,14 +88,12 @@ Research notes and architecture notes are not automatically current project trut
 ## Change workflow
 
 For substantial implementation, refactoring, architecture, testing, or
-documentation work, use the project-local `$ship-change` skill. It is the one
-source of truth for the research–plan–implement–validate–review–rethink–finish
-workflow, including research into how comparable production projects solve the
-problem. Apply it proportionally and review the plan itself with judgement;
-the workflow is not a requirement to preserve an overbuilt plan. Substantial
-multi-step work keeps its decision-complete execution plan under `docs/plans/`
-as described in `docs/plans/README.md`; trivial edits and mechanical fixes do
-not require a plan file.
+documentation work, use the project-local `$ship-change` skill. It is the
+shared research–plan–implement–validate–review–rethink–finish workflow,
+including production-project research and multi-lens review when they improve
+confidence. Apply it with judgment proportional to actual risk and complexity;
+trivial or obvious edits do not require plans or reviewer subagents merely to
+satisfy process.
 
 `AGENTS.md` remains authoritative for project principles, documentation roles,
 testing discipline, and local instructions. The skill does not grant authority
