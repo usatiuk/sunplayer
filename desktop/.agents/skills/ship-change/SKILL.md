@@ -39,11 +39,19 @@ materially improves confidence or speed; keep tightly coupled work local.
 
 ## 3. Shape and challenge the plan
 
-Maintain a short working plan for multi-step work. Define the smallest coherent
-vertical slices, their behavioral acceptance, validation, documentation, and
-commit boundaries. Review the plan with the same judgement as code: remove
-speculative abstractions, redundant states, unnecessary compatibility, and
-steps whose only purpose is to satisfy an earlier plan.
+For substantial multi-step work, create or select a durable execution plan at
+the repository's documented plan location before implementation begins. A
+draft may retain unresolved research questions; mark it active only when it is
+decision-complete enough that an implementer does not need to invent product or
+architecture choices. Trivial edits and mechanical fixes do not need a plan
+file merely to satisfy process.
+
+Define the smallest coherent vertical slices, their behavioral acceptance,
+validation, documentation, and useful commit boundaries. Review the plan with
+the same judgement as code: remove speculative abstractions, redundant states,
+unnecessary compatibility, and steps whose only purpose is to satisfy an
+earlier plan. A separate plan-only commit is optional unless risk, duration,
+review, or coordination makes that checkpoint useful.
 
 Prefer latest-value reconciliation and eventual user-visible correctness for
 capabilities, diagnostics, and transient platform state. Require strict
@@ -54,7 +62,9 @@ invariant.
 When a concrete axis already has materially different consumers, ownership,
 or lifecycles, establish its narrow shared contract with the first
 implementation. Do not add wrappers merely because something could vary.
-Update the working plan when evidence changes the design.
+Update the durable plan when evidence changes the design. Supersede it
+explicitly rather than leaving two apparently active plans for the same
+outcome.
 
 ## 4. Implement a coherent slice
 
@@ -118,6 +128,8 @@ external state clearly rather than manufacturing certainty.
 ## 9. Finish cleanly
 
 Run final relevant checks after review fixes. Inspect the final diff and status,
-then summarize the outcome, validation evidence, remaining gaps, and deferred
-work. Commit, push, deploy, or publish only when authorized; each is a separate
-authority unless repository or user instructions explicitly combine them.
+then update the execution plan with its actual outcome, validation evidence,
+remaining gaps, and resulting commit subjects or links when useful. Summarize
+the same material in the handoff. Commit, push, deploy, or publish only when
+authorized; each is a separate authority unless repository or user
+instructions explicitly combine them.

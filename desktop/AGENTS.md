@@ -42,6 +42,8 @@ Use each document type for its intended purpose:
 * `PLAN.md`: goals, scope, subsystem index, and high-level progress.
 * Subsystem `README.md`: current accepted architecture and behavior.
 * Subsystem `PLAN.md`: active subsystem work when additional detail is useful.
+* `docs/plans/<subsystem>/`: durable execution plans for concrete substantial
+  changes and their final delivery evidence.
 * Decision record: why a significant architectural choice was made.
 * Research note: evidence, experiments, alternatives, and unresolved findings.
 * `DEFERRED.md`: known work that is intentionally not being addressed yet.
@@ -90,7 +92,10 @@ documentation work, use the project-local `$ship-change` skill. It is the one
 source of truth for the research–plan–implement–validate–review–rethink–finish
 workflow, including research into how comparable production projects solve the
 problem. Apply it proportionally and review the plan itself with judgement;
-the workflow is not a requirement to preserve an overbuilt plan.
+the workflow is not a requirement to preserve an overbuilt plan. Substantial
+multi-step work keeps its decision-complete execution plan under `docs/plans/`
+as described in `docs/plans/README.md`; trivial edits and mechanical fixes do
+not require a plan file.
 
 `AGENTS.md` remains authoritative for project principles, documentation roles,
 testing discipline, and local instructions. The skill does not grant authority
