@@ -33,6 +33,8 @@ thread. Its callback consumes a preallocated SPSC float queue, writes bounded
 underrun silence, applies one atomically published linear gain, and publishes
 fixed-capacity output-to-media spans. It does not allocate, block, take
 application locks, decode, log, invoke Qt, or perform device recovery.
+Production reserves up to 30 seconds of decoded PCM so ordinary source jitter
+can be absorbed without increasing the three-frame decoded-video queue.
 
 The sink passes a null output device to cubeb, so cubeb and the platform sound
 service own normal system-default route migration inside one cubeb-stream

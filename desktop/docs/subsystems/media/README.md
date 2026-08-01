@@ -78,10 +78,11 @@ software fallback do not fork. The deterministic synchronized regression uses
 software frames, while production may select hardware decode. Neither path
 opens a second format context for audio.
 
-The shared A/V packet router defaults to 128 packets and 8 MiB. This queue is
-after FFmpeg source reads and demuxing: it is bounded encoded-packet
-backpressure, not a byte-level source cache. It can absorb short decoder or
-source jitter but may represent less than a second of high-bitrate UHD media.
+The shared A/V packet router defaults to 8,192 packets and 512 MiB. This queue
+is after FFmpeg source reads and demuxing: it is bounded encoded-packet
+backpressure, not a byte-level source cache. The deliberately generous reserve
+lets the single FFmpeg operation read well ahead through interleaved audio and
+video on typical high-bitrate UHD media.
 Remote URL input, duration-aware read-ahead, source-stall behavior, and the
 evidence-gated custom-AVIO direction are documented in
 [media input and source buffering](../media-io/README.md).

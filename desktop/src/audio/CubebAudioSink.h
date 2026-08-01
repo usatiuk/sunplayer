@@ -18,7 +18,7 @@
 class CubebAudioSink final : public AudioSink {
 public:
     explicit CubebAudioSink(
-        std::size_t queueCapacityFrames = 96'000);
+        std::size_t queueCapacityFrames = 30U * 48'000U);
     ~CubebAudioSink() override;
 
     void reset(

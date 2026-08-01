@@ -30,8 +30,8 @@ struct FfmpegRoutedPacket {
 };
 
 struct FfmpegPacketRouterLimits {
-    std::size_t packetCount = 128;
-    std::size_t packetBytes = 8U * 1024U * 1024U;
+    std::size_t packetCount = 8'192;
+    std::size_t packetBytes = 512U * 1024U * 1024U;
 };
 
 struct FfmpegPacketRouterStatistics {

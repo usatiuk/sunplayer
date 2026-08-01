@@ -9,13 +9,13 @@ The FFmpeg interrupt callback observes cancellation, but a mounted-filesystem
 read blocked inside the operating-system kernel may remain uninterruptible.
 
 After demuxing, selected audio and video packets share a bounded router with a
-default limit of 128 packets and 8 MiB. This is useful backpressure and short
-forward buffering, but it is not a source-byte cache. On a high-bitrate UHD
-file it may represent well under a second of media, and it cannot hide a slow
-read once the demux worker itself is blocked. Decoded video remains deliberately
-limited to three frames because hardware frames reserve decoder surfaces; it
-must not be enlarged to solve source jitter. The PCM queue serves the audio
-callback but likewise is not the general source cache.
+default limit of 8,192 packets and 512 MiB. This is generous forward buffering,
+but it is not a source-byte cache and cannot hide a read that remains blocked
+after the reserve drains. Decoded video remains deliberately limited to three
+frames because hardware frames reserve decoder surfaces; it must not be
+enlarged to solve source jitter. The production PCM queue can retain up to 30
+seconds of decoded audio while the encoded router holds the interleaved video
+packets needed to read that far ahead.
 
 ## Accepted direction
 
