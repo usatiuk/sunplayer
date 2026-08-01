@@ -13,9 +13,10 @@ without an output copy. A real FFmpeg software `AVFrame` now maps through
 libplacebo with one reusable input upload and retains its source across
 target-only rerenders. Supported D3D11VA frames map their retained NV12, P010,
 P012, or P016 texture-array slice directly into libplacebo plane views with no
-input copy or CPU transfer. Dolby Vision side data can be retained and mapped
-into mapping-owned libplacebo metadata, but its target semantics and profile
-support are not yet validated and no Dolby Vision product claim is made.
+input copy or CPU transfer. A deterministic Dolby Vision Profile 8.1 fixture
+proves that FFmpeg retains raw and parsed RPU metadata and libplacebo maps the
+reshape on the production software-frame path. This is not a claim of support
+for every Dolby Vision profile, enhancement layer, trim, or physical target.
 Same-device-copy and CPU target fallbacks, and non-Windows native importers,
 are not implemented.
 
@@ -123,38 +124,39 @@ the producer currently expresses headroom as
 bridge for those inputs. Source pixels and HDR-transfer metadata remain
 unchanged, and no custom pre-output multiplier runs after tone mapping.
 
-The renderer currently inherits libplacebo 7.360.1's spline tone mapper and
-perceptual gamut mapper, explicitly disables inverse tone mapping, and passes
-null peak-detection and dithering parameters. Null peak detection means there
-is no smoothed measured-peak state affecting playback today. The active plan
-will make spline/perceptual explicit and publish a stable policy identity while
-retaining the current peak-detection-off baseline. If a later evidence-backed
-quality profile enables temporal peak detection or frame mixing, open, seek,
-track change, and generation replacement must flush that source-temporal state
-without destroying the persistent renderer. A target-only rerender is not a
-source discontinuity.
+The renderer explicitly selects libplacebo 7.360.1's spline tone mapper and
+perceptual gamut mapper, disables inverse tone mapping, and passes null peak-
+detection and dithering parameters. The same stable policy description is
+published in diagnostics. Null peak detection means there is no smoothed
+measured-peak state affecting playback today, so open and seek do not need a
+no-op renderer reset. If a later evidence-backed quality profile enables
+temporal peak detection or frame mixing, open, seek, track change, and
+generation replacement must flush that source-temporal state without
+destroying the persistent renderer. A target-only rerender is not a source
+discontinuity.
 
-The virtual destination's validated target-response claim is deliberately
-scoped to static PQ. The same production renderer currently accepts HLG and
-dynamic-HDR frames, but libplacebo 7.360.1 also uses the HDR destination
-maximum as HLG's physical OOTF peak. A virtual peak can therefore change HLG
-contrast under a potentially incorrect physical assumption. That is an
-experiment to resolve, not a separate playback gate or a reason to add another
-renderer. HDR10+'s source-authored targeted-display luminance must stay
-separate from the current display destination. The pinned Dolby Vision helper
-supports selected reshaping metadata but not target trims or enhancement-layer
-residual processing. Representative acceptance captures determine the support
-claims for these paths.
+Static PQ has an analytical target-response oracle. A real HLG fixture also
+confirms that libplacebo 7.360.1 changes the captured OOTF response when
+Sunroom's virtual destination changes, because the library uses that HDR
+destination maximum while inferring HLG. V1 accepts this behavior for
+display-relative playback, but does not claim absolute-reference HLG
+monitoring. If physical evidence later rejects it, the next step is a focused
+upstream API separating physical HLG peak from destination coordinates, not a
+second Sunroom HLG stage. HDR10+'s source-authored targeted-display luminance
+stays separate from the current display destination. The pinned Dolby Vision
+helper supports the tested Profile 8.1 reshape but not all target trims or
+enhancement-layer residual processing.
 
 The importer reports the decoded transfer name, whether a usable HDR10+ scene-
 luminance subset is present on the mapped frame, and whether libplacebo mapped
 parsed Dolby Vision metadata. It inspects the retained and mapped frames
 directly. These diagnostics are best-effort and may settle on a later frame;
 playback does not build a parallel dynamic-metadata state machine
-merely to make every transient diagnostic snapshot atomic. HLG, HDR10+, and
-Dolby Vision can produce an image today, but
-their display-target behavior remains experimental until the acceptance matrix
-validates the corresponding target models.
+merely to make every transient diagnostic snapshot atomic. Deterministic real
+HEVC fixtures now prove HLG rendering, two frame-local HDR10+ scenes, and a
+mapped Dolby Vision Profile 8.1 reshape through this boundary. Dynamic-HDR and
+HLG physical-output accuracy remains subject to the stated format-specific
+limits and later measurement.
 
 Those formats are required V1 scope. The current experimental label describes
 unverified color behavior, not a plan to omit HLG, HDR10+, or Dolby Vision from
@@ -292,14 +294,18 @@ configuration enables D3D11, Shaderc, and built-in DOVI handling while
 disabling Vulkan, OpenGL, and external libdovi, checks the pinned version, and
 exercises a real log create/destroy lifecycle.
 
-The FFmpeg video test opens pinned, hashed RGB and Matroska/FFV1 fixtures
-through real `avformat`/`avcodec`. The focused RGB adapter destroys decoder
-contexts after returning the retained frame, while the three-frame FFV1 and
-H.264 cases also exercise continuous drain through the production bounded
-packet/decode path. The RGB case maps through the production software importer
-and captures both the display-targeted surface and final composition. It
-asserts known pixels, one input upload, zero input download/GPU copy, zero
-output copies, and source-upload reuse while rerendering the same SDR frame for
+The FFmpeg video test opens pinned, hashed RGB, Matroska/FFV1, Matroska/H.264,
+and raw HEVC fixtures through real `avformat`/`avcodec`. Four-frame BT.2020
+Main10 fixtures cover static HDR10/PQ, HLG, two-scene HDR10+, and Dolby Vision
+Profile 8.1. Each is decoded once, retained, imported, rendered into RGBA16F,
+and captured; exact hashes and source signal facts are checked before format-
+specific analytical or behavioral assertions. The focused RGB adapter
+destroys decoder contexts after returning the retained frame, while the three-
+frame FFV1 and H.264 cases also exercise continuous drain through the
+production bounded packet/decode path. The RGB case maps through the production
+software importer and captures both the display-targeted surface and final
+composition. It asserts known pixels, one input upload, zero input download/GPU
+copy, zero output copies, and source-upload reuse while rerendering the same SDR frame for
 203- and 100-nit reference whites.
 
 The FFV1 case proves real compressed-video demux, timestamp and metadata
@@ -309,7 +315,6 @@ rectangle. A pinned H.264 case uses the production shared-device D3D11VA
 decoder and direct NV12 plane importer, asserts no input download/upload or GPU
 copy and no output copy/transfer, captures its display-targeted output, and
 compares representative pixels against the software decode. Physical display
-correctness, a real decoded mastered-PQ fixture, HLG/dynamic-HDR target
-semantics, actual display-gamut propagation,
-P010/P012/P016 capture, general display-matrix rotation, macOS EDR viability,
-and Vulkan synchronization remain unproven.
+correctness, physical HLG/dynamic-HDR target accuracy, actual display-gamut
+propagation, P010/P012/P016 capture, general display-matrix rotation, macOS EDR
+viability, and Vulkan synchronization remain unproven.

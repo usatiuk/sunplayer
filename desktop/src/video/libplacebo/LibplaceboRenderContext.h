@@ -23,6 +23,9 @@ public:
     LibplaceboRenderContext &operator=(
         const LibplaceboRenderContext &) = delete;
 
+    static QString policyDescription(
+        bool toneMappingEnabled);
+
     bool isValid() const;
     bool render(
         const pl_frame &source,

@@ -14,6 +14,7 @@ struct PresentationBackendState {
     QString videoSurfaceFormat = QStringLiteral("Unavailable");
     QString videoSurfaceProducer = QStringLiteral("Unavailable");
     QString videoInputPath = QStringLiteral("Unavailable");
+    QString videoColorPolicy = QStringLiteral("Unavailable");
     QString videoOutputPath = QStringLiteral("Unavailable");
     QString videoSynchronization = QStringLiteral("Unavailable");
     QString videoCopySummary = QStringLiteral("Unavailable");

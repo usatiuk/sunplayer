@@ -767,6 +767,7 @@ void RhiPresentationEngine::updateBackendState() {
         m_videoProducer->diagnostics();
     state.videoSurfaceProducer = videoDiagnostics.producerName;
     state.videoInputPath = videoDiagnostics.inputPath;
+    state.videoColorPolicy = videoDiagnostics.colorPolicy;
     state.videoOutputPath =
         videoOutputPathName(videoDiagnostics.target.outputPath);
     state.videoSynchronization =

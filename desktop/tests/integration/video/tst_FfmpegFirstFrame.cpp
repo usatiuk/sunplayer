@@ -21,6 +21,7 @@ extern "C" {
 #include <libavcodec/packet.h>
 #include <libavutil/frame.h>
 #include <libavutil/hdr_dynamic_metadata.h>
+#include <libavutil/mastering_display_metadata.h>
 }
 
 #include <rhi/qrhi.h>
@@ -47,6 +48,13 @@ struct FloatPixel {
     float green = 0.0f;
     float blue = 0.0f;
     float alpha = 0.0f;
+};
+
+enum class HdrFixtureKind {
+    StaticPq,
+    Hlg,
+    Hdr10Plus,
+    DolbyVision,
 };
 
 FloatPixel pixel(
@@ -118,7 +126,8 @@ RenderedVideoSurfaceState surfaceState(
         GraphicsDeviceDomain &graphics,
         std::uint64_t contentRevision,
         float referenceWhiteNits = 203.0f,
-        QSize pixelSize = {4, 4}) {
+        QSize pixelSize = {4, 4},
+        float targetPeakHeadroom = 1.0f) {
     return {
         .description = {
             .pixelSize = pixelSize,
@@ -134,7 +143,7 @@ RenderedVideoSurfaceState surfaceState(
             .referenceWhiteNits = referenceWhiteNits,
             .targetMinimumLuminanceKnown = true,
             .targetMinimumLuminanceNits = 0.0f,
-            .targetPeakHeadroom = 1.0f,
+            .targetPeakHeadroom = targetPeakHeadroom,
         },
         .graphicsDeviceGeneration = graphics.generation(),
         .contentRevision = contentRevision,
@@ -157,7 +166,9 @@ struct DecodedFrameCapture {
 
 DecodedFrameCapture captureDecodedFrame(
         GraphicsDeviceDomain &graphics,
-        std::shared_ptr<const DecodedVideoFrame> frame) {
+        std::shared_ptr<const DecodedVideoFrame> frame,
+        float referenceWhiteNits = 203.0f,
+        float targetPeakHeadroom = 1.0f) {
     DecodedFrameCapture result;
     GraphicsDeviceExecutionScope execution =
         graphics.acquireExecutionScope();
@@ -170,8 +181,9 @@ DecodedFrameCapture captureDecodedFrame(
         surfaceState(
             graphics,
             source.contentRevision(),
-            203.0f,
-            source.currentFrame()->geometry().visibleSize);
+            referenceWhiteNits,
+            source.currentFrame()->geometry().visibleSize,
+            targetPeakHeadroom);
     if (producer.ensureSurface(state)
             != VideoOperationResult::Ready) {
         result.error =
@@ -239,6 +251,47 @@ DecodedFrameCapture captureDecodedFrame(
     result.producer = producer.diagnostics();
     return result;
 }
+
+std::array<FloatPixel, 4> neutralPatchPixels(
+        const QRhiReadbackResult &readback) {
+    return {
+        pixel(readback, 32, 72),
+        pixel(readback, 96, 72),
+        pixel(readback, 160, 72),
+        pixel(readback, 224, 72),
+    };
+}
+
+void verifyNeutralPatchProperties(
+        const std::array<FloatPixel, 4> &patches,
+        float targetPeakHeadroom,
+        float neutralChannelTolerance = 0.025f) {
+    float previous = -1.0f;
+    for (const FloatPixel &patch : patches) {
+        QVERIFY(std::isfinite(patch.red));
+        QVERIFY(std::isfinite(patch.green));
+        QVERIFY(std::isfinite(patch.blue));
+        QVERIFY(std::isfinite(patch.alpha));
+        compareNear(
+            patch.red, patch.green, neutralChannelTolerance);
+        compareNear(
+            patch.green, patch.blue, neutralChannelTolerance);
+        compareNear(patch.alpha, 1.0f, 0.002f);
+        QVERIFY2(
+            patch.red > previous,
+            qPrintable(QStringLiteral(
+                "Neutral patches are not increasing: %1 after %2")
+                .arg(patch.red)
+                .arg(previous)));
+        QVERIFY2(
+            patch.red <= targetPeakHeadroom * 1.005f,
+            qPrintable(QStringLiteral(
+                "Patch %1 exceeds target headroom %2")
+                .arg(patch.red)
+                .arg(targetPeakHeadroom)));
+        previous = patch.red;
+    }
+}
 }
 
 class FfmpegFirstFrameTest final : public QObject {
@@ -256,6 +309,8 @@ public:
 
 private slots:
     void retainsStreamHdr10PlusAtTheDecodeBoundary();
+    void hdrInputAcceptance_data();
+    void hdrInputAcceptance();
     void realDemuxDecodeImportAndComposition();
     void compressedYuvMetadataAndRendering();
     void continuousDecodeDrainsEveryFrame();
@@ -405,6 +460,283 @@ retainsStreamHdr10PlusAtTheDecodeBoundary() {
     QCOMPARE(second->num_windows, 1);
     QCOMPARE(second->params[0].average_maxrgb.num, 1);
     QCOMPARE(second->params[0].average_maxrgb.den, 2);
+}
+
+void FfmpegFirstFrameTest::hdrInputAcceptance_data() {
+    QTest::addColumn<QString>("fixtureStem");
+    QTest::addColumn<QString>("expectedTransfer");
+    QTest::addColumn<int>("formatKind");
+
+    QTest::newRow("static-pq")
+        << QStringLiteral("hdr10-pq-hevc")
+        << QStringLiteral("smpte2084")
+        << static_cast<int>(HdrFixtureKind::StaticPq);
+    QTest::newRow("hlg")
+        << QStringLiteral("hlg-hevc")
+        << QStringLiteral("arib-std-b67")
+        << static_cast<int>(HdrFixtureKind::Hlg);
+    QTest::newRow("hdr10plus")
+        << QStringLiteral("hdr10plus-hevc")
+        << QStringLiteral("smpte2084")
+        << static_cast<int>(HdrFixtureKind::Hdr10Plus);
+    QTest::newRow("dolby-vision-profile-8.1")
+        << QStringLiteral("dovi-profile81-hevc")
+        << QStringLiteral("smpte2084")
+        << static_cast<int>(HdrFixtureKind::DolbyVision);
+}
+
+void FfmpegFirstFrameTest::hdrInputAcceptance() {
+#ifndef Q_OS_WIN
+    QSKIP("The current libplacebo integration is Windows D3D11");
+#else
+    QFETCH(QString, fixtureStem);
+    QFETCH(QString, expectedTransfer);
+    QFETCH(int, formatKind);
+    const auto kind = static_cast<HdrFixtureKind>(formatKind);
+
+    const QString fixture = QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR "/media/%1.hevc")
+        .arg(fixtureStem);
+    const QString manifest = QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR "/media/%1.toml")
+        .arg(fixtureStem);
+    const QByteArray declaredHash =
+        expectedFixtureHash(manifest);
+    QVERIFY2(
+        !declaredHash.isEmpty(),
+        "Fixture manifest has no valid SHA-256");
+    QCOMPARE(fixtureHash(fixture), declaredHash);
+
+    std::vector<std::shared_ptr<const DecodedVideoFrame>> frames;
+    const std::uint64_t playbackGeneration =
+        40U + static_cast<std::uint64_t>(formatKind);
+    const FfmpegVideoDecodeResult decoded =
+        decodeVideoFrames(
+            {
+                .path = fixture,
+                .firstFrameIdentity = {
+                    .playbackGeneration = playbackGeneration,
+                    .decoderRevision = 1,
+                    .frameId = 1,
+                },
+            },
+            [&frames](
+                    std::shared_ptr<const DecodedVideoFrame> frame,
+                    const FfmpegVideoStreamDiagnostics &) {
+                frames.push_back(std::move(frame));
+                return true;
+            });
+
+    QVERIFY2(decoded.isSuccess(), qPrintable(decoded.error));
+    QVERIFY(decoded.endOfStream);
+    QVERIFY(!decoded.stopped);
+    QCOMPARE(decoded.framesDecoded, 4U);
+    QCOMPARE(frames.size(), std::size_t(4));
+    QVERIFY(decoded.diagnostics.containerFormat.contains(
+        QStringLiteral("hevc"), Qt::CaseInsensitive));
+    QCOMPARE(decoded.diagnostics.decoderName, QStringLiteral("hevc"));
+    QCOMPARE(decoded.diagnostics.decodePath, QStringLiteral("Software"));
+    QVERIFY(!decoded.diagnostics.hardwareAccelerated);
+
+    for (std::size_t index = 0; index < frames.size(); ++index) {
+        const DecodedVideoFrame &frame = *frames[index];
+        QCOMPARE(
+            frame.identity().playbackGeneration,
+            playbackGeneration);
+        QCOMPARE(frame.identity().frameId, 1U + index);
+        QCOMPARE(frame.geometry().visibleSize, QSize(256, 144));
+        QCOMPARE(
+            frame.storage().kind,
+            VideoFrameStorageKind::SoftwarePlanes);
+        QCOMPARE(
+            frame.storage().softwareFormat,
+            QStringLiteral("yuv420p10le"));
+        QCOMPARE(frame.signal().componentDepth, 10);
+        QCOMPARE(
+            frame.signal().colorPrimaries,
+            QStringLiteral("bt2020"));
+        QCOMPARE(
+            frame.signal().transferFunction,
+            expectedTransfer);
+        QCOMPARE(
+            frame.signal().matrixCoefficients,
+            QStringLiteral("bt2020nc"));
+        QCOMPARE(
+            frame.signal().colorRange,
+            QStringLiteral("tv"));
+        QCOMPARE(
+            frame.signal().chromaLocation,
+            QStringLiteral("left"));
+        QCOMPARE(
+            frame.timing().durationMicroseconds(),
+            std::optional<std::int64_t>(250'000));
+    }
+
+    std::unique_ptr<GraphicsDeviceDomain> graphics =
+        GraphicsBackendFactory::createDeviceDomain();
+    QVERIFY2(graphics, "Could not create D3D11 graphics domain");
+    constexpr float referenceWhiteNits = 100.0f;
+    constexpr float targetPeakHeadroom = 6.0f;
+    const DecodedFrameCapture capture = captureDecodedFrame(
+        *graphics,
+        frames.front(),
+        referenceWhiteNits,
+        targetPeakHeadroom);
+    QVERIFY2(capture.isSuccess(), qPrintable(capture.error));
+    QCOMPARE(capture.readback.pixelSize, QSize(256, 144));
+    QCOMPARE(
+        capture.input.path,
+        VideoFrameImportPath::SoftwareUpload);
+    QCOMPARE(
+        capture.producer.colorPolicy,
+        QStringLiteral(
+            "Spline tone map · perceptual gamut map · "
+            "inverse mapping off · peak detection off · dither off"));
+    const std::array<FloatPixel, 4> patches =
+        neutralPatchPixels(capture.readback);
+    verifyNeutralPatchProperties(
+        patches,
+        targetPeakHeadroom,
+        kind == HdrFixtureKind::DolbyVision
+            ? 0.12f
+            : 0.025f);
+
+    const auto sideData = [](const DecodedVideoFrame &frame,
+                             AVFrameSideDataType type) {
+        return av_frame_get_side_data(&frame.ffmpegFrame(), type);
+    };
+
+    if (kind == HdrFixtureKind::StaticPq) {
+        const AVFrameSideData *masteringSideData = sideData(
+            *frames.front(),
+            AV_FRAME_DATA_MASTERING_DISPLAY_METADATA);
+        QVERIFY(masteringSideData);
+        QVERIFY(masteringSideData->size
+                >= sizeof(AVMasteringDisplayMetadata));
+        const auto *mastering = reinterpret_cast<
+            const AVMasteringDisplayMetadata *>(
+            masteringSideData->data);
+        QVERIFY(mastering->has_luminance);
+        compareNear(
+            static_cast<float>(
+                av_q2d(mastering->max_luminance)),
+            1000.0f,
+            0.01f);
+        compareNear(
+            static_cast<float>(
+                av_q2d(mastering->min_luminance)),
+            0.005f,
+            0.0001f);
+
+        const AVFrameSideData *lightSideData = sideData(
+            *frames.front(),
+            AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
+        QVERIFY(lightSideData);
+        QVERIFY(lightSideData->size
+                >= sizeof(AVContentLightMetadata));
+        const auto *light = reinterpret_cast<
+            const AVContentLightMetadata *>(lightSideData->data);
+        QCOMPARE(light->MaxCLL, 1000U);
+        QCOMPARE(light->MaxFALL, 400U);
+
+        constexpr std::array expected{
+            50.0f / 203.0f,
+            1.0f,
+            400.0f / 203.0f,
+            1000.0f / 203.0f,
+        };
+        for (std::size_t index = 0;
+                index < patches.size();
+                ++index) {
+            compareNear(
+                patches[index].red,
+                expected[index],
+                0.12f);
+        }
+    } else if (kind == HdrFixtureKind::Hlg) {
+        for (const auto &frame : frames) {
+            QVERIFY(!sideData(
+                *frame, AV_FRAME_DATA_DYNAMIC_HDR_PLUS));
+            QVERIFY(!sideData(
+                *frame, AV_FRAME_DATA_DOVI_METADATA));
+            QVERIFY(!sideData(
+                *frame, AV_FRAME_DATA_DOVI_RPU_BUFFER));
+        }
+
+        constexpr float secondReferenceWhiteNits = 203.0f;
+        constexpr float physicalPeakNits = 600.0f;
+        constexpr float secondTargetHeadroom =
+            physicalPeakNits / secondReferenceWhiteNits;
+        const DecodedFrameCapture secondCapture =
+            captureDecodedFrame(
+                *graphics,
+                frames.front(),
+                secondReferenceWhiteNits,
+                secondTargetHeadroom);
+        QVERIFY2(
+            secondCapture.isSuccess(),
+            qPrintable(secondCapture.error));
+        const std::array<FloatPixel, 4> secondPatches =
+            neutralPatchPixels(secondCapture.readback);
+        verifyNeutralPatchProperties(
+            secondPatches, secondTargetHeadroom);
+
+        const float firstMidtoneRatio =
+            patches[1].red / patches.back().red;
+        const float secondMidtoneRatio =
+            secondPatches[1].red / secondPatches.back().red;
+        QVERIFY2(
+            std::abs(firstMidtoneRatio - secondMidtoneRatio)
+                > 0.01f,
+            "HLG target change did not alter the captured OOTF response");
+    } else if (kind == HdrFixtureKind::Hdr10Plus) {
+        std::array<double, 4> averageMaxRgb{};
+        for (std::size_t index = 0;
+                index < frames.size();
+                ++index) {
+            const AVFrameSideData *dynamic = sideData(
+                *frames[index],
+                AV_FRAME_DATA_DYNAMIC_HDR_PLUS);
+            QVERIFY(dynamic);
+            QVERIFY(dynamic->size >= sizeof(AVDynamicHDRPlus));
+            const auto *metadata = reinterpret_cast<
+                const AVDynamicHDRPlus *>(dynamic->data);
+            QCOMPARE(metadata->application_version, 1);
+            QCOMPARE(metadata->num_windows, 1);
+            compareNear(
+                static_cast<float>(av_q2d(
+                    metadata
+                        ->targeted_system_display_maximum_luminance)),
+                600.0f,
+                0.01f);
+            averageMaxRgb[index] = av_q2d(
+                metadata->params[0].average_maxrgb);
+        }
+        compareNear(
+            static_cast<float>(averageMaxRgb[0]), 0.10f, 0.0001f);
+        compareNear(
+            static_cast<float>(averageMaxRgb[1]), 0.10f, 0.0001f);
+        compareNear(
+            static_cast<float>(averageMaxRgb[2]), 0.05f, 0.0001f);
+        compareNear(
+            static_cast<float>(averageMaxRgb[3]), 0.05f, 0.0001f);
+        QVERIFY(averageMaxRgb[1] > averageMaxRgb[2]);
+        QVERIFY(capture.input.metadataPath.contains(
+            QStringLiteral(
+                "HDR10+ scene-luminance subset available "
+                "on mapped frame")));
+    } else {
+        for (const auto &frame : frames) {
+            QVERIFY(sideData(
+                *frame, AV_FRAME_DATA_DOVI_RPU_BUFFER));
+            QVERIFY(sideData(
+                *frame, AV_FRAME_DATA_DOVI_METADATA));
+        }
+        QVERIFY(capture.input.metadataPath.contains(
+            QStringLiteral(
+                "Dolby Vision reshape mapped by libplacebo")));
+    }
+#endif
 }
 
 void FfmpegFirstFrameTest::

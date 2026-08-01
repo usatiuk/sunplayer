@@ -149,6 +149,13 @@ VideoPage {
 
                 Label {
                     Layout.fillWidth: true
+                    text: root.outputState.videoColorPolicy
+                    color: "#aeb6c5"
+                    elide: Text.ElideRight
+                }
+
+                Label {
+                    Layout.fillWidth: true
                     text: root.outputState.videoSurfaceFormat
                     color: "#aeb6c5"
                     elide: Text.ElideRight

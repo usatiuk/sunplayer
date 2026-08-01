@@ -41,15 +41,16 @@ actually been validated.
 The analytic PQ test proves the numerical static-PQ bridge, not general HDR
 format correctness or emitted luminance.
 
-## Stage 1: FFmpeg/libplacebo format acceptance and target integration
+## Stage 1: FFmpeg/libplacebo format acceptance and target integration (complete)
 
-This is the immediate next implementation milestone. FFmpeg and libplacebo
+This completed milestone keeps FFmpeg and libplacebo
 remain responsible for decoding, source transfer interpretation, dynamic HDR
 metadata, tone mapping, and gamut mapping. Sunroom does not implement separate
 SDR, PQ, HLG, HDR10+, or Dolby Vision pipelines. Its work is to preserve the
-library inputs, describe the display target without contradictory units, reset
-library state at discontinuities, and prove that the production path actually
-uses the expected library feature or documented fallback.
+library inputs, describe the display target without contradictory units, and
+prove that the production path actually uses the expected library feature or
+documented fallback. Source-temporal reset behavior is required only if a
+temporal renderer feature is enabled.
 
 The milestone proves that the one production path accepts representative SDR,
 PQ, HLG, HDR10+, and Dolby Vision inputs. Missing evidence narrows a
@@ -63,7 +64,7 @@ reject a source the libraries can already show.
   introduce a parallel source-color policy object.
 * [x] Remove redundant blanket stream-to-frame mutation while preserving the
   stream evidence that FFmpeg does not attach to every frame.
-* [ ] Expose source colorimetry, dynamic-metadata presence, libplacebo mapping
+* [x] Expose source colorimetry, dynamic-metadata presence, libplacebo mapping
   path, and explicit fallback in diagnostics. In particular, report whether
   parsed Dolby Vision metadata produced a libplacebo reshape or the decoded
   base layer was shown; do not infer base-layer compatibility from appearance.
@@ -73,70 +74,70 @@ reject a source the libraries can already show.
 
 ### One display-target integration
 
-The current renderer already disables inverse tone mapping, peak detection,
-and dithering. It inherits libplacebo 7.360.1's spline tone mapper and
-perceptual gamut mapper through default parameter structs. The immediate
-policy change is intentionally small: assign those same choices explicitly,
-give the policy a diagnostic identity, and protect it with production-boundary
-captures. This freezes today's appearance without enabling another processing
-stage or prematurely adding quality presets.
+The renderer explicitly selects libplacebo 7.360.1's spline tone mapper and
+perceptual gamut mapper and disables inverse tone mapping, peak detection, and
+dithering. The resulting policy identity is visible in HDR Lab and protected
+at the production capture boundary. This freezes today's appearance without
+enabling another processing stage or prematurely adding quality presets.
 
-* [ ] Explicitly select libplacebo spline tone mapping and perceptual gamut
+* [x] Explicitly select libplacebo spline tone mapping and perceptual gamut
   mapping, keep inverse tone mapping disabled, keep peak detection disabled,
   and keep dithering disabled for the RGBA16F target. Report this initial
   policy in diagnostics so a future library upgrade cannot silently redefine
   playback.
-* [ ] Add a source-discontinuity reset hook to the persistent renderer and
-  drive it from open, seek, track change, and generation replacement. The hook
-  clears libplacebo temporal source state with `pl_renderer_flush_cache()`
-  when such state is in use; it does not recreate the renderer, graphics
-  device, target, or retained source upload. Display-target and window changes
-  are not source discontinuities and must not reset it.
-* [ ] Keep dynamic peak detection disabled for the first acceptance pass.
+* [x] Do not add a no-op source-discontinuity hook while peak detection and
+  other source-temporal renderer features are disabled. If one is enabled,
+  open, seek, track change, and generation replacement must reset its state;
+  display-target and window changes must not.
+* [x] Keep dynamic peak detection disabled for the first acceptance pass.
   Consider enabling it only if representative missing or unreliable source
   metadata demonstrates a visible benefit and its cost and seek/scene behavior
   pass the same production-boundary tests.
-* [ ] Express the physical display peak, active reference white, and output
-  normalization through supported libplacebo semantics for every input. The
-  existing relative/static-PQ adapter may be retained only where its virtual
-  coordinate construction has been numerically validated; its destination
-  values are deliberately not described as literal physical nits.
-* [ ] Render a controlled HLG fixture through the current adapter and compare
-  its target response at multiple physical peaks and reference whites. Source
-  inspection identifies a plausible OOTF/virtual-target mismatch, but the
-  experiment decides whether it is material in the production path. If it is,
-  first use an existing libplacebo-supported configuration; otherwise take a
-  focused issue or API proposal upstream. Do not add a Sunroom HLG mapper or
-  preselect a dependency patch before the result exists.
-* [ ] Keep HDR10+ source metadata unchanged, including its source-authored
+* [x] Express the display-relative headroom and active reference white through
+  current libplacebo semantics for every input. The virtual destination is
+  numerically validated for static PQ and behaviorally characterized for HLG
+  and dynamic inputs; its values are deliberately not described as literal
+  physical nits.
+* [x] Render a controlled HLG fixture through the current adapter at two
+  reference-white/headroom targets. The captured OOTF response changes with
+  the virtual target as pinned libplacebo source predicts. V1 accepts that
+  display-relative behavior without claiming absolute-reference monitoring;
+  physical evidence may later motivate a focused upstream API separating HLG
+  physical peak from destination coordinates.
+* [x] Keep HDR10+ source metadata unchanged, including its source-authored
   targeted-system-display luminance, and supply the current physical display
   peak separately through the libplacebo destination.
-* [ ] Report whether libplacebo applied Dolby Vision reshaping or displayed the
+* [x] Report whether libplacebo applied Dolby Vision reshaping or displayed the
   decoder's base-layer result. Do not parse Dolby Vision profiles or implement
   missing trims/residual processing in Sunroom.
 
 ### Production-boundary acceptance matrix
 
-* [ ] Add small redistributable FFmpeg-decoded fixtures representing BT.709
-  SDR, BT.2020 SDR, PQ/HDR10, HLG, HDR10+ scene transitions, and Dolby Vision
-  reshape/base-layer behavior. These are integration evidence for FFmpeg and
-  libplacebo, not an exhaustive profile matrix or duplicate implementation.
-* [ ] Render every fixture through the production importer, persistent
-  libplacebo renderer, RGBA16F target, and QRhi compositor at multiple
-  reference-white/headroom targets.
-* [ ] Assert source evidence, active libplacebo path, reference-white
-  adaptation, physical-target semantics, no unintended expansion, monotonic
-  bounded compression, target-only rerender without re-import, dynamic-state
-  reset, and exactly one final Windows coordinate conversion appropriate to
-  the active HDR scene-referred or SDR display-referred mode.
+* [x] Retain the existing BT.709 SDR corpus and add deterministic,
+  redistributable PQ/HDR10, HLG, two-scene HDR10+, and Dolby Vision Profile 8.1
+  HEVC fixtures.
+  BT.2020 SDR and the broader range/bit-depth matrix remain Stage 4 expansion,
+  not a separate V1 renderer path.
+* [x] Decode every new fixture once through the production FFmpeg operation,
+  retain its four real frames, and render those frames through the production
+  importer, libplacebo renderer, and RGBA16F target. The content-independent
+  QRhi compositor and final Windows conversion remain independently covered
+  rather than repeated for every source format.
+* [x] Assert hashes, decoded signal facts, static mastering/content-light
+  metadata, the explicit color policy, finite/monotonic/bounded captures,
+  static-PQ analytical values, two HLG target responses, frame-local HDR10+
+  scene progression, and mapped Dolby Vision reshaping. Existing tests retain
+  target-only rerender, final Windows scaling, and real inter-frame seek
+  coverage; temporal-state reset is intentionally absent while temporal
+  renderer features are off.
 
 Immediate milestone outcome:
 
 * All representative formats enter the same retained-frame/import/render path.
 * SDR and static PQ retain the validated numerical model.
-* HLG's observed target response is recorded; an incorrect result is fixed at
-  the libplacebo integration/API boundary rather than hidden by a second
-  Sunroom color pipeline.
+* HLG's observed target response is accepted for display-relative V1 playback;
+  absolute-reference monitoring remains outside the claim rather than being
+  approximated by a second Sunroom color pipeline.
 * HDR10+ metadata reaches libplacebo without stale carry-over.
 * Dolby Vision diagnostics distinguish mapped reshape from decoded base layer.
 * Unverified target behavior remains visible without blocking otherwise valid

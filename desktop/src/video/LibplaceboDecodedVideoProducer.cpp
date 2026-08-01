@@ -226,6 +226,8 @@ LibplaceboDecodedVideoProducer::diagnostics() const {
     RenderedVideoProducerDiagnostics result;
     result.producerName =
         QStringLiteral("FFmpeg decoded frame via libplacebo");
+    result.colorPolicy =
+        LibplaceboRenderContext::policyDescription(true);
 
     if (m_importer
             && m_importer->lastDiagnostics().isValid()) {

@@ -4,6 +4,7 @@
 
 #include <QtCore/qassert.h>
 #include <libplacebo/colorspace.h>
+#include <libplacebo/gamut_mapping.h>
 #include <libplacebo/tone_mapping.h>
 
 #include "graphics/GraphicsDeviceDomain.h"
@@ -54,6 +55,17 @@ LibplaceboRenderContext::~LibplaceboRenderContext() {
 
 bool LibplaceboRenderContext::isValid() const {
     return m_renderer;
+}
+
+QString LibplaceboRenderContext::policyDescription(
+        bool toneMappingEnabled) {
+    return toneMappingEnabled
+        ? QStringLiteral(
+            "Spline tone map · perceptual gamut map · "
+            "inverse mapping off · peak detection off · dither off")
+        : QStringLiteral(
+            "Clip tone map · perceptual gamut map · "
+            "inverse mapping off · peak detection off · dither off");
 }
 
 bool LibplaceboRenderContext::render(
@@ -120,11 +132,13 @@ bool LibplaceboRenderContext::render(
 
     pl_color_map_params colorMap =
         pl_color_map_default_params;
+    colorMap.gamut_mapping =
+        &pl_gamut_map_perceptual;
+    colorMap.tone_mapping_function =
+        toneMappingEnabled
+        ? &pl_tone_map_spline
+        : &pl_tone_map_clip;
     colorMap.inverse_tone_mapping = false;
-    if (!toneMappingEnabled) {
-        colorMap.tone_mapping_function =
-            &pl_tone_map_clip;
-    }
     pl_render_params parameters =
         pl_render_default_params;
     parameters.color_map_params = &colorMap;

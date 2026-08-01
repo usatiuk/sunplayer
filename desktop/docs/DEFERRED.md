@@ -18,7 +18,7 @@ unimplemented.
 Track under the backend-realization section of
 `docs/subsystems/graphics/PLAN.md`.
 
-### Incomplete decoded-video acceptance and cross-platform hardware import
+### Remaining decoded-video coverage and cross-platform hardware import
 
 The explicit video surface, narrow final compositor, persistent libplacebo
 renderer, and direct D3D11 QRhi target bridge now exist. Their analytic input
@@ -27,13 +27,13 @@ and 203-nit reference-white values on a constant 600-nit target. This covers
 the reference-white-relative target conversion from libplacebo's fixed
 203-nit coordinate system, no-expansion behavior while the source fits,
 highlight compression when it does not, and exactly one final Windows scRGB
-scale. A retained software `AVFrame` path now demuxes and decodes a pinned
-lossless RGB fixture, uploads it through libplacebo, and preserves relative SDR
-white across target changes. It does not yet cover an FFmpeg-decoded mastered
-PQ fixture, HLG's target-dependent OOTF, dynamic HDR metadata, or representative
-HDR YUV/chroma/range combinations. A deterministic
-FFV1 fixture covers compressed limited-range BT.709 YUV420P and non-square-pixel
-aspect fitting. The Windows graphics domain owns a video-capable,
+scale. A retained software `AVFrame` path demuxes and decodes pinned lossless
+RGB, compressed SDR, and four-frame Main10 HEVC fixtures. The HDR corpus covers
+static PQ mastering/content-light metadata and analytical patches, two HLG
+targets, two frame-local HDR10+ scenes, and mapped Dolby Vision Profile 8.1
+reshape data. A deterministic FFV1 fixture covers compressed limited-range
+BT.709 YUV420P and non-square-pixel aspect fitting. The Windows graphics domain
+owns a video-capable,
 multithread-protected D3D11 device; an H.264 scenario proves D3D11VA NV12 direct
 plane import, zero input copies/transfers, and observable software fallback.
 P010/P012/P016 capture, same-device-copy and CPU fallback paths, real
@@ -41,11 +41,15 @@ device-loss injection, and the other platform importers remain required.
 General display-matrix rotation still lacks a dedicated render capture.
 
 All SDR, PQ/HDR10, HLG, HDR10+, and Dolby Vision inputs use the same
-FFmpeg/libplacebo path. Static PQ has the strongest target-response evidence;
-representative HLG and dynamic-HDR fixtures still need to scope what the pinned
-libraries produce for the display-relative target. This is an immediate
-acceptance and validation task, not a reason to add parallel decoders, source
-parsers, or color pipelines.
+FFmpeg/libplacebo path. Static PQ has the strongest numerical evidence. The
+tested HLG behavior is accepted for display-relative playback, but does not
+claim absolute-reference monitoring; a focused upstream physical-peak/output-
+coordinate separation remains the next option if measurements reject it.
+HDR10+ and Dolby Vision support is proven only for the checked-in sequences,
+not every profile, target trim, or enhancement-layer path. Broader BT.601,
+BT.2020 SDR, full-range, 12-bit, chroma-location, contradictory-metadata, and
+dynamic-HDR profile coverage remains deferred. None of those gaps justifies a
+parallel source parser, decoder, or color pipeline.
 
 Sunroom also does not yet propagate actual target display primaries to
 libplacebo. The extended-linear BT.709 surface can encode wide-gamut

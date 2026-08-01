@@ -310,6 +310,9 @@ LibplaceboDiagnosticVideoProducer::diagnostics() const {
             "libplacebo fixed-reference BT.2020 / PQ")
         : QStringLiteral(
             "libplacebo analytic sRGB");
+    result.colorPolicy =
+        LibplaceboRenderContext::policyDescription(
+            m_source.toneMappingEnabled());
     result.inputPath =
         m_sourceSize.isEmpty()
         ? QStringLiteral("Fixed-size CPU RGBA32F diagnostic upload")

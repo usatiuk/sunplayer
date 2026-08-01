@@ -89,18 +89,19 @@ and continuous synchronized local-file audio/video playback:
 * On Windows, libplacebo directly wraps the QRhi-owned RGBA16F D3D11 texture,
   shares QRhi's immediate context without an output copy, and receives a
   reference-white-relative virtual target in its fixed 203-nit coordinate
-  system. This construction is capture-validated for relative SDR and an
-  analytic static-PQ signal; exact source inspection shows it is not a valid
-  universal HLG target. The importer now reports the retained FFmpeg signal
-  and best-effort HDR10+/Dolby Vision mapping evidence while leaving source
-  interpretation to FFmpeg/libplacebo. HLG/dynamic-HDR files can render, but
-  their target behavior remains experimental until the immediate
-  FFmpeg/libplacebo acceptance matrix is complete. Source HDR values remain
-  unchanged and no custom post-map normalization runs.
-  The current renderer uses libplacebo 7.360.1's spline/perceptual defaults,
-  explicitly disables inverse mapping, peak detection, and dithering, and will
-  make the first two selections explicit before treating the rendering policy
-  as upgrade-stable.
+  system. This construction is capture-validated for relative SDR, analytic
+  and real mastered static PQ, and a characterized display-relative HLG
+  response. Deterministic four-frame Main10 fixtures prove real FFmpeg decode
+  and libplacebo rendering for PQ/HDR10, HLG, two-scene HDR10+, and Dolby
+  Vision Profile 8.1 without a second media operation. The importer reports
+  retained source facts, usable HDR10+ scene metadata, and whether Dolby Vision
+  reshaping was mapped. Source HDR values remain unchanged and no custom post-
+  map normalization runs. The renderer explicitly selects libplacebo
+  7.360.1's spline tone mapper and perceptual gamut mapper and disables inverse
+  mapping, peak detection, and dithering; that policy is visible in
+  diagnostics. HLG support is display-relative and does not claim absolute-
+  reference monitoring, while broader dynamic-HDR profiles and physical output
+  accuracy remain validation work.
 * A narrow final QRhi pass places that already processed video surface,
   combines it with the UI, and presents extended-linear sRGB/scRGB when
   available, with an SDR fallback. It can also compose UI without an active
@@ -198,17 +199,18 @@ against one physical 600-nit target at all three reference-white levels. It
 proves unchanged surface-relative output while the source fits, highlight
 compression when available headroom falls below the source, and one final
 Windows scRGB scale. It also covers known pixels from the first
-FFmpeg-decoded frame at two SDR-white targets. A sustained headless probe
-exercises 60 animated 640×360 frames into a 1100×600 target without
-viewport-sized CPU generation. A bounded Windows application scenario opens a
-pinned audio-first fixture through production FFmpeg and Cubeb, observes two
+FFmpeg-decoded frame at two SDR-white targets. The real HEVC corpus adds
+static-PQ patch values, HLG target response, frame-local HDR10+ scene
+progression, and mapped Dolby Vision Profile 8.1 reshape checks. A sustained
+headless probe exercises 60 animated 640×360 frames into a 1100×600 target
+without viewport-sized CPU generation. A bounded Windows application scenario
+opens a pinned audio-first fixture through production FFmpeg and Cubeb, observes two
 distinct video content revisions at the swapchain, and requires continued live
 presented-audio clock progress. The QML component scenario separately protects
 the ready-without-frame viewport invariant. Playback-owned coarse selection
 also drains bounded video queues when the window or active page does not
-request rendering. Broader
-whole-application command/error scenarios, a pinned FFmpeg-decoded mastered-PQ
-fixture, HLG/dynamic-HDR mapping, actual display gamut propagation,
+request rendering. Broader whole-application command/error scenarios, SDR/HDR
+range and profile coverage, actual display gamut propagation,
 P010/P012/P016 capture, cross-platform hardware import, and physical-output
 validation do not yet exist.
 
@@ -331,11 +333,11 @@ Documentation: `docs/subsystems/graphics/`
 * [x] Display-target and SDR-white updates
 * [x] Analytic reference-white-adaptive SDR/static-PQ display mapping without
   a post-map video scale
-* [ ] Real FFmpeg-decoded static-PQ fixture and retained-metadata validation
+* [x] Real FFmpeg-decoded static-PQ fixture and retained-metadata validation
 * [ ] Actual display-gamut propagation
-* [ ] HLG target-response validation through the shared FFmpeg/libplacebo
+* [x] HLG target-response validation through the shared FFmpeg/libplacebo
   path, without a Sunroom-authored HLG pipeline
-* [ ] Production FFmpeg/libplacebo mapping acceptance, validation, and
+* [x] Production FFmpeg/libplacebo mapping acceptance, validation, and
   capability diagnostics for SDR, HDR10/PQ, HLG, HDR10+, and Dolby Vision as
   required for V1
 * [ ] Quality and energy profiles

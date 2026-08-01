@@ -44,6 +44,9 @@ QString PresentationOutputState::videoSurfaceProducer() const {
 QString PresentationOutputState::videoInputPath() const {
     return m_backendState.videoInputPath;
 }
+QString PresentationOutputState::videoColorPolicy() const {
+    return m_backendState.videoColorPolicy;
+}
 QString PresentationOutputState::videoOutputPath() const {
     return m_backendState.videoOutputPath;
 }

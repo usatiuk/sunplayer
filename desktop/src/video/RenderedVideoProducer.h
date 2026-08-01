@@ -12,6 +12,7 @@ class QRhiTexture;
 struct RenderedVideoProducerDiagnostics {
     QString producerName;
     QString inputPath;
+    QString colorPolicy;
     std::uint32_t knownInputCpuTransfersPerInputFrame = 0;
     std::uint32_t knownInputGpuCopiesPerInputFrame = 0;
     VideoFailureKind failureKind = VideoFailureKind::None;
@@ -20,6 +21,7 @@ struct RenderedVideoProducerDiagnostics {
     bool isValid() const {
         return !producerName.isEmpty()
             && !inputPath.isEmpty()
+            && !colorPolicy.isEmpty()
             && target.isValid();
     }
 };

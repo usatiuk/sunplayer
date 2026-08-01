@@ -186,6 +186,8 @@ DiagnosticVideoProducer::diagnostics() const {
     result.producerName = QStringLiteral("Diagnostic pattern");
     result.inputPath =
         QStringLiteral("GPU-generated procedural pattern");
+    result.colorPolicy =
+        QStringLiteral("Procedural diagnostic shader");
     result.target = m_target->diagnostics();
     Q_ASSERT(result.isValid());
     return result;

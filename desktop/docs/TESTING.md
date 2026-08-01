@@ -331,10 +331,17 @@ Initial additions should be narrowly tied to milestones:
   zero-output audio after a seek, clock handoff after drain, complete leading
   source silence, due-first-video scheduling, startup liveness, and midstream
   discontinuity handling.
-* One small HDR10 container with explicit mastering and content-light
-  metadata.
-* Timeline, subtitle, audio, corruption, dynamic-HDR, and unusual-format
-  fixtures only as those features arrive.
+* Four deterministic, four-frame Main10 HEVC elementary streams cover
+  BT.2020 limited-range static HDR10/PQ with explicit mastering and content-
+  light metadata, HLG, a two-scene HDR10+ sequence, and Dolby Vision Profile
+  8.1 over an HDR10 base layer. Their manifests record exact hashes, pinned
+  generator versions, source JSON, and analytical patch values. Raw HEVC is
+  intentional: repeated generation is byte-stable, while existing Matroska
+  fixtures already cover container routing and seek. Each HDR acceptance row
+  performs one production FFmpeg demux/decode operation and renders the
+  retained frames rather than probing or parsing the file a second time.
+* Further timeline, subtitle, audio, corruption, range/bit-depth, dynamic-HDR
+  profile, and unusual-format fixtures only as those features arrive.
 
 FFmpeg FATE is valuable validation for the exact FFmpeg dependency build, but
 it tests FFmpeg rather than Sunroom's integration. The same distinction applies

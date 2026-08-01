@@ -1,0 +1,96 @@
+{
+  "JSONInfo": {
+    "HDR10plusProfile": "B",
+    "Version": "1.0"
+  },
+  "SceneInfo": [
+    {
+      "BezierCurveData": {
+        "Anchors": [128, 256, 384, 512, 640, 768, 832, 896, 960],
+        "KneePointX": 512,
+        "KneePointY": 512
+      },
+      "LuminanceParameters": {
+        "AverageRGB": 10000,
+        "LuminanceDistributions": {
+          "DistributionIndex": [1, 5, 10, 25, 50, 75, 90, 95, 99],
+          "DistributionValues": [200, 500, 1000, 3000, 6000, 10000, 18000, 24000, 30000]
+        },
+        "MaxScl": [32000, 30000, 28000]
+      },
+      "NumberOfWindows": 1,
+      "TargetedSystemDisplayMaximumLuminance": 600,
+      "SceneFrameIndex": 0,
+      "SceneId": 0,
+      "SequenceFrameIndex": 0
+    },
+    {
+      "BezierCurveData": {
+        "Anchors": [128, 256, 384, 512, 640, 768, 832, 896, 960],
+        "KneePointX": 512,
+        "KneePointY": 512
+      },
+      "LuminanceParameters": {
+        "AverageRGB": 10000,
+        "LuminanceDistributions": {
+          "DistributionIndex": [1, 5, 10, 25, 50, 75, 90, 95, 99],
+          "DistributionValues": [200, 500, 1000, 3000, 6000, 10000, 18000, 24000, 30000]
+        },
+        "MaxScl": [32000, 30000, 28000]
+      },
+      "NumberOfWindows": 1,
+      "TargetedSystemDisplayMaximumLuminance": 600,
+      "SceneFrameIndex": 1,
+      "SceneId": 0,
+      "SequenceFrameIndex": 1
+    },
+    {
+      "BezierCurveData": {
+        "Anchors": [128, 256, 384, 512, 640, 768, 832, 896, 960],
+        "KneePointX": 512,
+        "KneePointY": 512
+      },
+      "LuminanceParameters": {
+        "AverageRGB": 5000,
+        "LuminanceDistributions": {
+          "DistributionIndex": [1, 5, 10, 25, 50, 75, 90, 95, 99],
+          "DistributionValues": [100, 250, 500, 1500, 3000, 5000, 9000, 12000, 15000]
+        },
+        "MaxScl": [16000, 15000, 14000]
+      },
+      "NumberOfWindows": 1,
+      "TargetedSystemDisplayMaximumLuminance": 600,
+      "SceneFrameIndex": 0,
+      "SceneId": 1,
+      "SequenceFrameIndex": 2
+    },
+    {
+      "BezierCurveData": {
+        "Anchors": [128, 256, 384, 512, 640, 768, 832, 896, 960],
+        "KneePointX": 512,
+        "KneePointY": 512
+      },
+      "LuminanceParameters": {
+        "AverageRGB": 5000,
+        "LuminanceDistributions": {
+          "DistributionIndex": [1, 5, 10, 25, 50, 75, 90, 95, 99],
+          "DistributionValues": [100, 250, 500, 1500, 3000, 5000, 9000, 12000, 15000]
+        },
+        "MaxScl": [16000, 15000, 14000]
+      },
+      "NumberOfWindows": 1,
+      "TargetedSystemDisplayMaximumLuminance": 600,
+      "SceneFrameIndex": 1,
+      "SceneId": 1,
+      "SequenceFrameIndex": 3
+    }
+  ],
+  "SceneInfoSummary": {
+    "SceneFirstFrameIndex": [0, 2],
+    "SceneFrameNumbers": [2, 2]
+  },
+  "ToolInfo": {
+    "Tool": "Sunroom analytical fixture",
+    "Version": "1"
+  }
+}

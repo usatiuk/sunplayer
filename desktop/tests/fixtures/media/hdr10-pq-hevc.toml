@@ -1,0 +1,41 @@
+file = "hdr10-pq-hevc.hevc"
+sha256 = "0179f288a48cfa5e57cd10563f21fb1574f2d375d07dfdba53c6313b8728f3c0"
+provenance = "Generated analytically for Sunroom; no external source media"
+generator = "FFmpeg 8.1.2-full_build-www.gyan.dev with libx265 4.2+37-b81f650"
+
+generation_command = """
+ffmpeg -f lavfi -i "nullsrc=size=256x144:rate=4:duration=1,format=yuv420p10le,geq=lum='if(lt(X,64),450,if(lt(X,128),573,if(lt(X,192),636,723)))':cb=512:cr=512,setparams=range=limited:color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc,setsar=1" -frames:v 4 -an -c:v libx265 -profile:v main10 -pix_fmt yuv420p10le -qp 0 -threads 1 -x265-params "pools=none:frame-threads=1:keyint=2:min-keyint=2:scenecut=0:bframes=0:repeat-headers=1:hdr10=1:colorprim=9:transfer=16:colormatrix=9:range=limited:chromaloc=0:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,50):max-cll=1000,400" -fflags +bitexact -flags:v +bitexact -map_metadata -1 -f hevc hdr10-pq-hevc.hevc
+"""
+
+[expected]
+container = "hevc"
+codec = "hevc"
+pixel_format = "yuv420p10le"
+width = 256
+height = 144
+sample_aspect_ratio = "1:1"
+frame_rate = "4/1"
+frame_count = 4
+frame_duration_seconds = 0.25
+color_primaries = "bt2020"
+transfer = "smpte2084"
+matrix = "bt2020nc"
+range = "tv"
+chroma_location = "left"
+mastering_peak_nits = 1000
+mastering_minimum_nits = 0.005
+max_cll_nits = 1000
+max_fall_nits = 400
+neutral_patch_nits = [50, 203, 400, 1000]
+
+[coverage]
+features = [
+    "real-ffmpeg-demux-decode",
+    "hevc-main10",
+    "limited-range",
+    "bt2020",
+    "pq",
+    "static-mastering-metadata",
+    "content-light-metadata",
+    "analytical-neutral-patches",
+]
