@@ -283,6 +283,33 @@ set_source_files_properties(src/app/pages/PlayerPage.qml PROPERTIES
 set_source_files_properties(src/app/pages/VideoPage.qml PROPERTIES
         QT_RESOURCE_ALIAS VideoPage.qml
 )
+set_source_files_properties(src/app/icons/lucide/play.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/play.svg
+)
+set_source_files_properties(src/app/icons/lucide/pause.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/pause.svg
+)
+set_source_files_properties(src/app/icons/lucide/rotate-ccw.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/rotate-ccw.svg
+)
+set_source_files_properties(src/app/icons/lucide/rotate-cw.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/rotate-cw.svg
+)
+set_source_files_properties(src/app/icons/lucide/volume-2.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/volume-2.svg
+)
+set_source_files_properties(src/app/icons/lucide/volume-x.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/volume-x.svg
+)
+set_source_files_properties(src/app/icons/lucide/ellipsis.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/ellipsis.svg
+)
+set_source_files_properties(src/app/icons/lucide/x.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/x.svg
+)
+set_source_files_properties(src/app/icons/lucide/LICENSE PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/LICENSE
+)
 
 qt_add_qml_module(sunroom
         URI Sunroom
@@ -293,6 +320,16 @@ qt_add_qml_module(sunroom
         src/app/pages/HdrLabPage.qml
         src/app/pages/PlayerPage.qml
         src/app/pages/VideoPage.qml
+        RESOURCES
+        src/app/icons/lucide/play.svg
+        src/app/icons/lucide/pause.svg
+        src/app/icons/lucide/rotate-ccw.svg
+        src/app/icons/lucide/rotate-cw.svg
+        src/app/icons/lucide/volume-2.svg
+        src/app/icons/lucide/volume-x.svg
+        src/app/icons/lucide/ellipsis.svg
+        src/app/icons/lucide/x.svg
+        src/app/icons/lucide/LICENSE
 )
 
 qt_generate_foreign_qml_types(sunroom_video_pipeline sunroom)
@@ -382,6 +419,11 @@ install(TARGETS sunroom
         BUNDLE DESTINATION .
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+install(FILES src/app/icons/lucide/LICENSE
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/sunroom/licenses
+        RENAME Lucide.txt
 )
 
 if (WIN32)

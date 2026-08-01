@@ -72,9 +72,11 @@ and continuous synchronized local-file audio/video playback:
   window swapchain.
 * Qt Quick renders through `QQuickRenderControl` into an application-owned
   RGBA16F texture.
-* A thin QML application shell defaults to a truthful Player page and keeps the
-  retained HDR Lab reachable through simple top-level navigation. The active
-  page publishes a generic root-coordinate video viewport with explicit
+* A thin QML application shell defaults to a video-first Player page and keeps
+  the retained HDR Lab reachable from Player's empty state or overflow menu.
+  Player publishes a full-page video viewport with a transient transport island
+  and optional playback-statistics panel; HDR Lab has one return action. The
+  active page publishes generic root-coordinate viewport geometry with explicit
   visibility. HDR Lab uses libplacebo by default and can select the retained
   procedural QRhi producer for diagnostic comparison; that switch is not a
   playback fallback or player preference.
@@ -381,7 +383,7 @@ Documentation: `docs/subsystems/subtitles/`
 * [ ] Drag-and-drop interface
 * [x] Play and pause controls
 * [x] Seek bar and timestamps
-* [ ] Jump backward and forward
+* [x] Jump backward and forward
 * [ ] Audio-track selection
 * [ ] Subtitle-track selection
 * [x] Volume and mute
@@ -389,9 +391,9 @@ Documentation: `docs/subsystems/subtitles/`
 * [x] Continuous video loading and media error presentation
 * [x] Initial audio-buffering status presentation
 * [ ] General source-buffering presentation
-* [ ] Keyboard shortcuts
+* [ ] Keyboard shortcuts beyond Space play/pause
 * [ ] Minimal settings surface
-* [ ] Playback-pipeline diagnostics view
+* [x] Playback-pipeline diagnostics view
 
 Documentation: `docs/subsystems/ui/`
 

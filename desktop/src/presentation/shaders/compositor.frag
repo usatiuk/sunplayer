@@ -34,8 +34,7 @@ vec3 linearToSrgb(vec3 value)
 void main()
 {
     vec2 displayUv = ndcYUp > 0.5 ? vec2(uv.x, 1.0 - uv.y) : uv;
-    vec3 background = srgbToLinear(vec3(17.0, 19.0, 24.0) / 255.0);
-    vec3 color = background;
+    vec3 color = vec3(0.0);
 
     vec2 pixel = displayUv * viewportSize;
     if (all(greaterThanEqual(pixel, videoOrigin))

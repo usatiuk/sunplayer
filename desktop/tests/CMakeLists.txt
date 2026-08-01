@@ -128,6 +128,33 @@ set_source_files_properties(../src/app/pages/VideoPage.qml PROPERTIES
         QT_RESOURCE_ALIAS VideoPage.qml
         QT_QML_SKIP_CACHEGEN TRUE
 )
+set_source_files_properties(../src/app/icons/lucide/play.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/play.svg
+)
+set_source_files_properties(../src/app/icons/lucide/pause.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/pause.svg
+)
+set_source_files_properties(../src/app/icons/lucide/rotate-ccw.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/rotate-ccw.svg
+)
+set_source_files_properties(../src/app/icons/lucide/rotate-cw.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/rotate-cw.svg
+)
+set_source_files_properties(../src/app/icons/lucide/volume-2.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/volume-2.svg
+)
+set_source_files_properties(../src/app/icons/lucide/volume-x.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/volume-x.svg
+)
+set_source_files_properties(../src/app/icons/lucide/ellipsis.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/ellipsis.svg
+)
+set_source_files_properties(../src/app/icons/lucide/x.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/x.svg
+)
+set_source_files_properties(../src/app/icons/lucide/LICENSE PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/LICENSE
+)
 
 qt_add_qml_module(sunroom_qml_shell_tests
         URI SunroomShellTest
@@ -138,6 +165,16 @@ qt_add_qml_module(sunroom_qml_shell_tests
         ../src/app/pages/HdrLabPage.qml
         ../src/app/pages/PlayerPage.qml
         ../src/app/pages/VideoPage.qml
+        RESOURCES
+        ../src/app/icons/lucide/play.svg
+        ../src/app/icons/lucide/pause.svg
+        ../src/app/icons/lucide/rotate-ccw.svg
+        ../src/app/icons/lucide/rotate-cw.svg
+        ../src/app/icons/lucide/volume-2.svg
+        ../src/app/icons/lucide/volume-x.svg
+        ../src/app/icons/lucide/ellipsis.svg
+        ../src/app/icons/lucide/x.svg
+        ../src/app/icons/lucide/LICENSE
 )
 
 target_include_directories(sunroom_presentation_target_tests

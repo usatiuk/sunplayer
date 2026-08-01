@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <memory>
 
 #include <QColor>
@@ -100,6 +101,18 @@ void AppShellTest::publishesActiveViewport() {
     QObject *const emptyState =
         rootItem->findChild<QObject *>(
             QStringLiteral("emptyState"));
+    QObject *const playerPage =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("playerPage"));
+    QObject *const playbackHoverHandler =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("playbackHoverHandler"));
+    QObject *const emptyHdrLabButton =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("emptyHdrLabButton"));
+    QObject *const backToPlayerButton =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("backToPlayerButton"));
     QObject *const openingState =
         rootItem->findChild<QObject *>(
             QStringLiteral("openingState"));
@@ -121,6 +134,9 @@ void AppShellTest::publishesActiveViewport() {
     QObject *const playPauseButton =
         rootItem->findChild<QObject *>(
             QStringLiteral("playPauseButton"));
+    QObject *const playPauseButtonIcon =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("playPauseButtonIcon"));
     QObject *const seekingState =
         rootItem->findChild<QObject *>(
             QStringLiteral("seekingState"));
@@ -145,10 +161,32 @@ void AppShellTest::publishesActiveViewport() {
     QObject *const playbackStateLabel =
         rootItem->findChild<QObject *>(
             QStringLiteral("playbackStateLabel"));
-    QQuickItem *const sessionStatusBar =
+    QObject *const statisticsMenuItem =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("statisticsMenuItem"));
+    QObject *const hdrLabMenuItem =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("hdrLabMenuItem"));
+    QObject *const closeStatisticsButton =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("closeStatisticsButton"));
+    QObject *const statisticsPanel =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("playbackStatisticsPanel"));
+    QQuickItem *const transportIsland =
         rootItem->findChild<QQuickItem *>(
-            QStringLiteral("sessionStatusBar"));
+            QStringLiteral("transportIsland"));
+    QObject *const seekBackwardButton =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("seekBackwardButton"));
+    QObject *const seekForwardButton =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("seekForwardButton"));
     QVERIFY(emptyState);
+    QVERIFY(playerPage);
+    QVERIFY(playbackHoverHandler);
+    QVERIFY(emptyHdrLabButton);
+    QVERIFY(backToPlayerButton);
     QVERIFY(openingState);
     QVERIFY(waitingForVideoState);
     QVERIFY(errorState);
@@ -156,6 +194,7 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(retryMediaButton);
     QVERIFY(closeMediaButton);
     QVERIFY(playPauseButton);
+    QVERIFY(playPauseButtonIcon);
     QVERIFY(seekingState);
     QVERIFY(seekSlider);
     QVERIFY(positionLabel);
@@ -164,7 +203,22 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(volumeSlider);
     QVERIFY(audioDiagnosticsLabel);
     QVERIFY(playbackStateLabel);
-    QVERIFY(sessionStatusBar);
+    QVERIFY(statisticsMenuItem);
+    QVERIFY(hdrLabMenuItem);
+    QVERIFY(closeStatisticsButton);
+    QVERIFY(statisticsPanel);
+    QVERIFY(transportIsland);
+    QVERIFY(seekBackwardButton);
+    QVERIFY(seekForwardButton);
+    QQuickItem *const seekBackwardButtonItem =
+        qobject_cast<QQuickItem *>(seekBackwardButton);
+    QQuickItem *const playPauseButtonItem =
+        qobject_cast<QQuickItem *>(playPauseButton);
+    QQuickItem *const seekForwardButtonItem =
+        qobject_cast<QQuickItem *>(seekForwardButton);
+    QVERIFY(seekBackwardButtonItem);
+    QVERIFY(playPauseButtonItem);
+    QVERIFY(seekForwardButtonItem);
     QObject *const rendererSwitchContent =
         qvariant_cast<QObject *>(
             rendererSwitch->property("contentItem"));
@@ -190,6 +244,16 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(!openingState->property("visible").toBool());
     QVERIFY(!errorState->property("visible").toBool());
     QVERIFY(!seekSlider->property("visible").toBool());
+    QVERIFY(QMetaObject::invokeMethod(
+        emptyHdrLabButton, "clicked", Qt::DirectConnection));
+    QTRY_COMPARE(
+        activeVideoSource.route(),
+        ShellTestActiveVideoSource::Route::Diagnostics);
+    QVERIFY(QMetaObject::invokeMethod(
+        backToPlayerButton, "clicked", Qt::DirectConnection));
+    QTRY_COMPARE(
+        activeVideoSource.route(),
+        ShellTestActiveVideoSource::Route::Player);
 
     mediaSession.setState(
         ShellTestMediaSession::State::Opening);
@@ -207,12 +271,49 @@ void AppShellTest::publishesActiveViewport() {
     // selection can make progress instead of deadlocking behind hasFrame.
     mediaSession.setState(
         ShellTestMediaSession::State::Ready, false);
+    QVERIFY(QMetaObject::invokeMethod(
+        playerPage, "revealControls", Qt::DirectConnection));
     QTRY_VERIFY(videoViewport.visible());
     QTRY_VERIFY(waitingForVideoState->property("visible").toBool());
     QTRY_VERIFY(playPauseButton->property("visible").toBool());
     QTRY_VERIFY(seekSlider->property("visible").toBool());
     QTRY_VERIFY(muteButton->property("visible").toBool());
     QTRY_VERIFY(volumeSlider->property("visible").toBool());
+    playerPage->setProperty("controlsVisibleByActivity", false);
+    QTRY_VERIFY(transportIsland->opacity() < 0.1);
+    const QPoint transportCenter = transportIsland->mapToScene({
+        transportIsland->width() * 0.5,
+        transportIsland->height() * 0.5,
+    }).toPoint();
+    QTest::mouseMove(&quickWindow, transportCenter);
+    QTRY_VERIFY(transportIsland->opacity() > 0.9);
+    QVERIFY(!playerPage->property("controlsPinned").toBool());
+    QTRY_VERIFY_WITH_TIMEOUT(transportIsland->opacity() < 0.1, 3500);
+    QCOMPARE(
+        playbackHoverHandler->property("cursorShape").toInt(),
+        static_cast<int>(Qt::ArrowCursor));
+    QTest::mouseMove(&quickWindow, QPoint(40, 40));
+    QTRY_VERIFY(transportIsland->opacity() > 0.9);
+    QTRY_COMPARE(playPauseButtonIcon->property("status").toInt(), 1);
+    QCOMPARE(playPauseButtonIcon->property("width").toDouble(), 17.0);
+    QCOMPARE(playPauseButtonIcon->property("height").toDouble(), 17.0);
+    const auto centerY = [](const QQuickItem &item) {
+        return qRound(item.mapToScene({
+            item.width() * 0.5,
+            item.height() * 0.5,
+        }).y());
+    };
+    QCOMPARE(centerY(*seekBackwardButtonItem),
+             centerY(*playPauseButtonItem));
+    QCOMPARE(centerY(*seekForwardButtonItem),
+             centerY(*playPauseButtonItem));
+    QVERIFY(
+        playPauseButtonIcon->property("source").toUrl().path().endsWith(
+            QStringLiteral("/pause.svg")));
+    QVERIFY(!statisticsPanel->property("visible").toBool());
+    QVERIFY(QMetaObject::invokeMethod(
+        statisticsMenuItem, "clicked", Qt::DirectConnection));
+    QTRY_VERIFY(statisticsPanel->property("visible").toBool());
     QTRY_VERIFY(audioDiagnosticsLabel->property("visible").toBool());
     QVERIFY(audioDiagnosticsLabel->property("text").toString().contains(
         QStringLiteral("controlled")));
@@ -227,6 +328,9 @@ void AppShellTest::publishesActiveViewport() {
     mediaSession.setMuted(false);
     mediaSession.setVolume(0.4);
     QTRY_COMPARE(volumeSlider->property("value").toDouble(), 0.4);
+    QVERIFY(QMetaObject::invokeMethod(
+        playerPage, "revealControls", Qt::DirectConnection));
+    QTRY_VERIFY(transportIsland->opacity() > 0.9);
     QQuickItem *const volumeSliderItem =
         qobject_cast<QQuickItem *>(volumeSlider);
     QVERIFY(volumeSliderItem);
@@ -257,6 +361,9 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_COMPARE(
         volumeSlider->property("value").toDouble(),
         mediaSession.volume());
+    QVERIFY(QMetaObject::invokeMethod(
+        closeStatisticsButton, "clicked", Qt::DirectConnection));
+    QTRY_VERIFY(!statisticsPanel->property("visible").toBool());
 
     mediaSession.setPlaybackInterruption(
         ShellTestMediaSession::PlaybackInterruption::Buffering);
@@ -294,17 +401,23 @@ void AppShellTest::publishesActiveViewport() {
 
     mediaSession.setState(
         ShellTestMediaSession::State::Ready, true);
+    QVERIFY(QMetaObject::invokeMethod(
+        playerPage, "revealControls", Qt::DirectConnection));
     QTRY_VERIFY(videoViewport.visible());
-    QTRY_COMPARE(videoViewport.rect().x(), 24.0);
+    QTRY_COMPARE(videoViewport.rect().x(), 0.0);
+    QTRY_COMPARE(videoViewport.rect().y(), 0.0);
+    QTRY_COMPARE(videoViewport.rect().width(), 1100.0);
+    QTRY_COMPARE(videoViewport.rect().height(), 760.0);
+    playerPage->setProperty("controlsVisibleByActivity", false);
+    QTRY_VERIFY(transportIsland->opacity() < 0.1);
     QTRY_COMPARE(
-        videoViewport.rect().y(),
-        56.0 + sessionStatusBar->y()
-            + sessionStatusBar->height() + 12.0);
-    QTRY_COMPARE(videoViewport.rect().width(), 1052.0);
+        playbackHoverHandler->property("cursorShape").toInt(),
+        static_cast<int>(Qt::BlankCursor));
+    QTest::mouseMove(&quickWindow, QPoint(44, 44));
+    QTRY_VERIFY(transportIsland->opacity() > 0.9);
     QTRY_COMPARE(
-        videoViewport.rect().height(),
-        rootItem->height()
-            - videoViewport.rect().y() - 80.0);
+        playbackHoverHandler->property("cursorShape").toInt(),
+        static_cast<int>(Qt::ArrowCursor));
     QTRY_VERIFY(seekSlider->property("visible").toBool());
     QVERIFY(seekSlider->property("enabled").toBool());
     QCOMPARE(seekSlider->property("from").toDouble(), 0.0);
@@ -322,6 +435,9 @@ void AppShellTest::publishesActiveViewport() {
     QQuickItem *const seekSliderItem =
         qobject_cast<QQuickItem *>(seekSlider);
     QVERIFY(seekSliderItem);
+    QVERIFY(QMetaObject::invokeMethod(
+        playerPage, "revealControls", Qt::DirectConnection));
+    QTRY_VERIFY(transportIsland->opacity() > 0.9);
     const QPointF start =
         seekSliderItem->mapToScene({
             seekSliderItem->width() * 0.2,
@@ -341,6 +457,9 @@ void AppShellTest::publishesActiveViewport() {
         &quickWindow,
         destination.toPoint());
     QCOMPARE(mediaSession.seekCount(), 0);
+    QTRY_VERIFY(
+        positionLabel->property("text").toString()
+            != QStringLiteral("0:12"));
     QTest::mouseRelease(
         &quickWindow,
         Qt::LeftButton,
@@ -352,6 +471,31 @@ void AppShellTest::publishesActiveViewport() {
         qRound(seekSlider->property("value").toDouble()),
         static_cast<int>(
             mediaSession.lastSeekMilliseconds()));
+    const qlonglong seekedPosition =
+        mediaSession.lastSeekMilliseconds();
+    QVERIFY(QMetaObject::invokeMethod(
+        seekBackwardButton, "clicked", Qt::DirectConnection));
+    QTRY_COMPARE(
+        mediaSession.lastSeekMilliseconds(),
+        std::max<qlonglong>(0, seekedPosition - 10'000));
+    QVERIFY(QMetaObject::invokeMethod(
+        seekForwardButton, "clicked", Qt::DirectConnection));
+    QTRY_COMPARE(
+        mediaSession.lastSeekMilliseconds(),
+        std::min<qlonglong>(
+            mediaSession.durationMilliseconds(),
+            std::max<qlonglong>(0, seekedPosition - 10'000)
+                + 10'000));
+
+    mediaSession.setTimeline(5'000, 65'000, true);
+    QVERIFY(QMetaObject::invokeMethod(
+        seekBackwardButton, "clicked", Qt::DirectConnection));
+    QTRY_COMPARE(mediaSession.lastSeekMilliseconds(), 0);
+
+    mediaSession.setTimeline(62'000, 65'000, true);
+    QVERIFY(QMetaObject::invokeMethod(
+        seekForwardButton, "clicked", Qt::DirectConnection));
+    QTRY_COMPARE(mediaSession.lastSeekMilliseconds(), 65'000);
 
     mediaSession.setTimeline(42'000, 65'000, false);
     QTRY_VERIFY(!seekSlider->property("enabled").toBool());
@@ -368,6 +512,10 @@ void AppShellTest::publishesActiveViewport() {
     mediaSession.setState(
         ShellTestMediaSession::State::Ready, true);
     QVERIFY(mediaSession.playing());
+    QTest::keyClick(&quickWindow, Qt::Key_Space);
+    QTRY_VERIFY(!mediaSession.playing());
+    QTest::keyClick(&quickWindow, Qt::Key_Space);
+    QTRY_VERIFY(mediaSession.playing());
     QVERIFY(QMetaObject::invokeMethod(
         playPauseButton, "clicked", Qt::DirectConnection));
     QVERIFY(!mediaSession.playing());
@@ -377,8 +525,9 @@ void AppShellTest::publishesActiveViewport() {
 
     const qreal originalHeight = videoViewport.rect().height();
     rootItem->setSize({900.0, 650.0});
-    QTRY_COMPARE(videoViewport.rect().width(), 852.0);
+    QTRY_COMPARE(videoViewport.rect().width(), 900.0);
     QTRY_VERIFY(videoViewport.rect().height() < originalHeight);
+    QTRY_COMPARE(videoViewport.rect().height(), 650.0);
 
     QVERIFY(QMetaObject::invokeMethod(
         closeMediaButton, "clicked", Qt::DirectConnection));
@@ -387,12 +536,13 @@ void AppShellTest::publishesActiveViewport() {
     mediaSession.setState(
         ShellTestMediaSession::State::Ready, true);
 
-    rootItem->setProperty("currentPage", 1);
+    QVERIFY(QMetaObject::invokeMethod(
+        hdrLabMenuItem, "clicked", Qt::DirectConnection));
     QTRY_COMPARE(
         activeVideoSource.route(),
         ShellTestActiveVideoSource::Route::Diagnostics);
     QTRY_COMPARE(videoViewport.rect().x(), 24.0);
-    QTRY_COMPARE(videoViewport.rect().y(), 168.0);
+    QTRY_COMPARE(videoViewport.rect().y(), 112.0);
     QTRY_COMPARE(videoViewport.rect().width(), 852.0);
 
     rootItem->setVisible(false);
@@ -404,6 +554,12 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_COMPARE(
         rendererSwitch->property("checked").toBool(),
         false);
+
+    QVERIFY(QMetaObject::invokeMethod(
+        backToPlayerButton, "clicked", Qt::DirectConnection));
+    QTRY_COMPARE(
+        activeVideoSource.route(),
+        ShellTestActiveVideoSource::Route::Player);
 }
 
 QTEST_MAIN(AppShellTest)

@@ -3,18 +3,26 @@
 ## Status
 
 The QML scene has a thin `AppShell` with a default `PlayerPage` and retained
-`HdrLabPage`, rendered offscreen through `QQuickRenderControl`. The shell,
-navigation, and viewport boundary are production structure; HDR Lab remains
-developer tooling.
+`HdrLabPage`, rendered offscreen through `QQuickRenderControl`. The shell and
+viewport boundary are production structure; HDR Lab remains developer tooling
+and is reached from Player rather than occupying permanent playback chrome.
 
 Player opens a local file, starts synchronized playback through the production
-libplacebo video and default Windows audio paths, and exposes working play,
-pause, and replay commands. A position/duration timeline performs seek through
-the session's
-generation-scoped restart boundary and reports truthful seeking state. It
-reports decode path/fallback plus decoded, queued, selected, and dropped-frame
-counts. Session-lifetime volume and mute are wired to the audio-output boundary;
-track and subtitle controls remain absent until those commands exist.
+libplacebo video and default Windows audio paths, and presents the movie across
+the full page. A compact two-row transport island appears on pointer activity,
+keeps the timeline above its controls, and fades during uninterrupted playback.
+The transport uses a small vendored Lucide 1.28.0 SVG subset inside fully
+custom rounded buttons, avoiding font-dependent glyphs and platform-style
+pressed backgrounds. The player and compositor background is pure black.
+After the transport finishes its idle fade during uninterrupted playback, the
+cursor hides over an available video frame and returns with the controls on
+the next pointer movement. It remains visible when no frame is ready or while
+the controls, menu, sliders, or statistics panel need interaction.
+Its position/duration timeline performs seek through the session's
+generation-scoped restart boundary and previews the selected time while the
+scrubber is pressed. Session-lifetime volume and mute remain wired to the
+audio-output boundary; track and subtitle controls remain absent until those
+commands exist.
 
 Session readiness and video-frame availability are distinct UI facts. When
 audio makes the session ready before the first video frame, Player keeps its
@@ -42,8 +50,10 @@ Main.qml
 ```
 
 `VideoPage` defines the viewport rectangle and visibility contract shared by
-Player and HDR Lab. `AppShell` owns simple top-level navigation and translates
-the active page's viewport into root logical coordinates. A stable
+Player and HDR Lab. `AppShell` owns the two-page route and translates the
+active page's viewport into root logical coordinates. Player exposes HDR Lab
+through its empty state and overflow menu, while HDR Lab has one return action;
+no permanent navigation bar reduces the movie viewport. A stable
 `ActiveVideoSource` delegates presentation to Player or HDR Lab and changes the
 concrete producer only at a render boundary. No routing framework, page
 registry, or service container is needed.
@@ -100,15 +110,23 @@ Inactive pages cannot compete for the viewport.
 * Ready with playing, paused, ended, or buffering-audio status; video may still
   be waiting for its first due frame.
 
-The Ready state exposes play/pause or replay, open another, close, mute, and
-volume. Queue/frame counters plus audio-clock, PCM-occupancy, and underrun
-diagnostics provide lightweight pipeline observability. Its non-live timeline
-sends only interactive moves back to the session, so backend position updates
-cannot create seek loops. Seeking has a distinct busy state and keeps the
-timeline visible but disabled. The status bar uses explicit user play intent,
-so Buffering still offers Pause and a pause made during an interruption cannot
-be mistaken for automatic playback. Add track and subtitle controls only when
-their underlying commands and observable states exist.
+The Ready state exposes play/pause or replay, ten-second relative seeks, open
+another, close, mute, and volume. The active video viewport fills the page and
+the bottom-center transport island is pinned only while paused, ended, seeking,
+buffering, actively manipulating a slider, or menu-open. A stationary pointer
+over the island does not pin it onscreen. Its non-live timeline sends only
+interactive moves back to the session, so backend position updates cannot
+create seek loops; while pressed, the current-time label follows the selected
+slider position. Seeking has a distinct busy state and keeps the timeline
+visible but disabled. Explicit user play intent means Buffering still offers
+Pause and a pause made during an interruption cannot be mistaken for automatic
+playback.
+
+Queue/frame counters plus audio-clock, PCM-occupancy, and underrun information
+live in an optional upper-right playback-statistics panel toggled from the
+transport menu. Diagnostics no longer occupy permanent space around the movie.
+Add track and subtitle controls only when their underlying commands and
+observable states exist.
 
 ## HDR Lab and diagnostics
 
@@ -135,10 +153,10 @@ D3D11 target reports zero output copies or CPU transfers. Future hardware-frame
 import must therefore remain distinguishable rather than making every path
 look “zero-copy.”
 
-Player is the default page and HDR Lab remains reachable through the top-level
-selector. Reusable read-only pipeline
-diagnostics may also appear in a Player drawer or page, but HDR Lab controls do
-not become ordinary player preferences.
+Player is the default page and HDR Lab remains reachable through Player's
+overflow menu or empty state. Reusable read-only pipeline diagnostics appear in
+the optional Player statistics panel, but HDR Lab controls do not become
+ordinary player preferences.
 
 ## Verification
 
@@ -147,13 +165,14 @@ and renderability. A non-presenting Qt Quick component test creates the real
 QML shell through the same initial-property contract, resizes it, and verifies
 that active-page geometry and visibility reach `VideoViewportState`. It also
 verifies Empty/Opening/Ready/Error visibility, cancel/retry/close and
-play/pause command wiring, Player/HDR-Lab route and viewport selection, and the
-diagnostic renderer switch's default and source binding. It explicitly covers
-`Ready` before `hasFrame`: playback chrome and the viewport remain active while
-the preparing state is visible, then the preparing state disappears after
-frame publication. It also verifies timeline
-formatting, backend position updates, one user seek command, and disabled
-seeking state without launching a native dialog. The real
+play/pause command wiring, Player/HDR-Lab route and viewport selection, the
+optional statistics panel, and the diagnostic renderer switch's default and
+source binding. It explicitly covers `Ready` before `hasFrame`: playback chrome
+and the viewport remain active while the preparing state is visible, then the
+preparing state disappears after frame publication. It also verifies full-page
+Player geometry, timeline formatting, scrub-preview time, relative and slider
+seek commands, backend position updates, and disabled seeking state without
+launching a native dialog. The real
 D3D11 capture verifies that zero video geometry and the compositor's fallback
 binding produce the normal background rather than sampling the retained video
 surface. It also destroys a bound diagnostic producer, creates the other

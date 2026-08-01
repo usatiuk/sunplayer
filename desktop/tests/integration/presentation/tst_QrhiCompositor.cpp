@@ -459,9 +459,9 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
 
     const BytePixel background =
         readBytePixel(outputReadback, *rhi, 1, 1);
-    compareByteNear(background.r, 17);
-    compareByteNear(background.g, 19);
-    compareByteNear(background.b, 24);
+    compareByteNear(background.r, 0);
+    compareByteNear(background.g, 0);
+    compareByteNear(background.b, 0);
     QCOMPARE(background.a, 255);
 
     const BytePixel composedVideo = readBytePixel(
@@ -528,9 +528,9 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     const float encodedStraightRed =
         (64.0f / 255.0f) / alpha;
     const std::array<float, 3> backgroundEncoded{
-        17.0f / 255.0f,
-        19.0f / 255.0f,
-        24.0f / 255.0f,
+        0.0f,
+        0.0f,
+        0.0f,
     };
     const auto expectedLinearBlend =
         [alpha](float baseLinear, float encodedUi, float scale) {
@@ -633,9 +633,9 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
         *rhi,
         videoOriginX + sampleX,
         videoOriginY + 1);
-    compareByteNear(hiddenVideoPixel.r, 17);
-    compareByteNear(hiddenVideoPixel.g, 19);
-    compareByteNear(hiddenVideoPixel.b, 24);
+    compareByteNear(hiddenVideoPixel.r, 0);
+    compareByteNear(hiddenVideoPixel.g, 0);
+    compareByteNear(hiddenVideoPixel.b, 0);
     QCOMPARE(hiddenVideoPixel.a, 255);
 
     // Submission tracking and content-state promotion are separate. Discarding

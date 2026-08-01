@@ -5,8 +5,11 @@ import QtQuick.Layouts
 
 VideoPage {
     id: root
+    objectName: "playerPage"
 
     required property MediaSession session
+
+    signal hdrLabRequested
 
     readonly property bool sessionReady:
         session.state === MediaSession.Ready
@@ -14,6 +17,28 @@ VideoPage {
         sessionReady && session.hasFrame
     readonly property bool sessionActive:
         sessionReady || session.seeking
+    property bool showPlaybackStatistics: false
+    property bool controlsVisibleByActivity: true
+    property point lastPointerPosition: Qt.point(-1, -1)
+    readonly property bool controlsPinned:
+        !session.playRequested
+        || session.ended
+        || session.seeking
+        || session.playbackInterruption !== MediaSession.None
+        || transportMenu.visible
+        || statisticsHover.hovered
+        || seekSlider.pressed
+        || volumeSlider.pressed
+    readonly property bool controlsShouldShow:
+        sessionActive
+        && (controlsPinned || controlsVisibleByActivity)
+    readonly property bool cursorShouldHide:
+        frameReady && transportIsland.opacity < 0.05
+
+    videoViewportRect:
+        Qt.rect(0, 0, root.width, root.height)
+    videoViewportVisible:
+        visible && sessionReady
 
     function formatTime(milliseconds) {
         if (milliseconds < 0)
@@ -60,11 +85,144 @@ VideoPage {
         }
     }
 
-    videoViewportRect:
-        Qt.rect(videoFrame.x, videoFrame.y,
-                videoFrame.width, videoFrame.height)
-    videoViewportVisible:
-        visible && sessionReady
+    function revealControls() {
+        if (!sessionActive)
+            return
+        controlsVisibleByActivity = true
+        if (!controlsPinned)
+            hideControlsTimer.restart()
+    }
+
+    function observePointerMovement(position) {
+        if (Math.abs(position.x - lastPointerPosition.x) < 0.5
+                && Math.abs(position.y - lastPointerPosition.y) < 0.5) {
+            return
+        }
+        lastPointerPosition = position
+        revealControls()
+    }
+
+    function togglePlayback() {
+        if (!sessionReady || session.seeking)
+            return
+        if (session.playRequested && !session.ended)
+            session.pause()
+        else
+            session.play()
+        revealControls()
+    }
+
+    function seekBy(milliseconds) {
+        if (!session.seekable
+                || session.durationMilliseconds <= 0
+                || session.seeking) {
+            return
+        }
+        const target = Math.max(
+            0,
+            Math.min(
+                session.durationMilliseconds,
+                session.positionMilliseconds + milliseconds))
+        session.seekToMilliseconds(Math.round(target))
+        revealControls()
+    }
+
+    onSessionActiveChanged: {
+        if (sessionActive)
+            revealControls()
+        else
+            hideControlsTimer.stop()
+    }
+
+    onControlsPinnedChanged: {
+        if (controlsPinned) {
+            controlsVisibleByActivity = true
+            hideControlsTimer.stop()
+        } else if (sessionActive) {
+            hideControlsTimer.restart()
+        }
+    }
+
+    component IslandButton: AbstractButton {
+        id: control
+
+        property bool prominent: false
+        property url iconSource
+
+        implicitWidth: prominent
+            ? 52
+            : 40
+        implicitHeight: prominent ? 42 : 36
+        padding: 0
+
+        contentItem: Item {
+            Image {
+                objectName: control.objectName.length > 0
+                    ? control.objectName + "Icon"
+                    : ""
+                anchors.centerIn: parent
+                width: control.prominent ? 17 : 15
+                height: width
+                source: control.iconSource
+                sourceSize: Qt.size(64, 64)
+                fillMode: Image.PreserveAspectFit
+                mipmap: true
+                opacity: control.enabled ? 1 : 0.38
+            }
+        }
+
+        background: Rectangle {
+            radius: height / 2
+            color: control.down
+                ? Qt.rgba(1, 1, 1, 0.24)
+                : control.hovered
+                    ? Qt.rgba(1, 1, 1, 0.15)
+                    : control.prominent
+                        ? Qt.rgba(1, 1, 1, 0.11)
+                        : "transparent"
+        }
+    }
+
+    component IslandSlider: Slider {
+        id: control
+
+        implicitHeight: 24
+        leftPadding: 2
+        rightPadding: 2
+
+        background: Rectangle {
+            x: control.leftPadding
+            y: control.topPadding
+                + control.availableHeight / 2 - height / 2
+            width: control.availableWidth
+            height: 4
+            radius: 2
+            color: Qt.rgba(1, 1, 1, 0.25)
+
+            Rectangle {
+                width: control.visualPosition * parent.width
+                height: parent.height
+                radius: parent.radius
+                color: control.enabled ? "#f5f6fa" : "#777b84"
+            }
+        }
+
+        handle: Rectangle {
+            x: control.leftPadding
+                + control.visualPosition
+                    * (control.availableWidth - width)
+            y: control.topPadding
+                + control.availableHeight / 2 - height / 2
+            width: control.pressed || control.hovered ? 14 : 12
+            height: width
+            radius: width / 2
+            color: control.enabled ? "#ffffff" : "#858993"
+
+            Behavior on width {
+                NumberAnimation { duration: 90 }
+            }
+        }
+    }
 
     FileDialog {
         id: openDialog
@@ -77,31 +235,39 @@ VideoPage {
         onAccepted: root.session.openMedia(selectedFile)
     }
 
+    Timer {
+        id: hideControlsTimer
+
+        interval: 2400
+        repeat: false
+        onTriggered: {
+            if (!root.controlsPinned)
+                root.controlsVisibleByActivity = false
+        }
+    }
+
+    HoverHandler {
+        objectName: "playbackHoverHandler"
+        acceptedDevices:
+            PointerDevice.Mouse | PointerDevice.TouchPad
+        cursorShape: root.cursorShouldHide
+            ? Qt.BlankCursor
+            : Qt.ArrowCursor
+        onPointChanged: root.observePointerMovement(point.position)
+    }
+
+    Shortcut {
+        sequence: "Space"
+        enabled: root.visible
+            && root.sessionReady
+            && !transportMenu.visible
+        onActivated: root.togglePlayback()
+    }
+
     Rectangle {
         anchors.fill: parent
         visible: !root.frameReady
-        color: "#090b10"
-    }
-
-    Item {
-        id: videoFrame
-
-        x: 24
-        y: root.sessionActive
-            ? sessionStatusBar.y + sessionStatusBar.height + 12
-            : 72
-        width: Math.max(1, root.width - 48)
-        height: Math.max(
-            1,
-            root.height - y
-                - (timelineBar.visible ? timelineBar.height + 24 : 24))
-
-        Rectangle {
-            anchors.fill: parent
-            color: "transparent"
-            border.color: root.frameReady ? "#303746" : "transparent"
-            border.width: 1
-        }
+        color: "#000000"
     }
 
     ColumnLayout {
@@ -114,20 +280,31 @@ VideoPage {
             Layout.alignment: Qt.AlignHCenter
             text: qsTr("Open a video")
             color: "white"
-            font.pixelSize: 22
+            font.pixelSize: 24
+            font.weight: Font.DemiBold
         }
 
         Label {
             Layout.alignment: Qt.AlignHCenter
-            text: qsTr("Video and audio playback are available.")
-            color: "#8e97a8"
+            text: qsTr("Play local video with HDR and audio.")
+            color: "#9297a2"
         }
 
-        Button {
-            objectName: "openMediaButton"
+        RowLayout {
             Layout.alignment: Qt.AlignHCenter
-            text: qsTr("Open media…")
-            onClicked: openDialog.open()
+            spacing: 10
+
+            Button {
+                objectName: "openMediaButton"
+                text: qsTr("Open media…")
+                onClicked: openDialog.open()
+            }
+
+            Button {
+                objectName: "emptyHdrLabButton"
+                text: qsTr("HDR Lab")
+                onClicked: root.hdrLabRequested()
+            }
         }
     }
 
@@ -163,8 +340,7 @@ VideoPage {
 
         Label {
             Layout.alignment: Qt.AlignHCenter
-            text: qsTr("Opening %1…").arg(
-                root.session.displayName)
+            text: qsTr("Opening %1…").arg(root.session.displayName)
             color: "white"
             font.pixelSize: 20
         }
@@ -191,8 +367,7 @@ VideoPage {
         Label {
             Layout.alignment: Qt.AlignHCenter
             text: qsTr("Seeking to %1…").arg(
-                root.formatTime(
-                    root.session.positionMilliseconds))
+                root.formatTime(root.session.positionMilliseconds))
             color: "white"
             font.pixelSize: 20
         }
@@ -241,217 +416,343 @@ VideoPage {
     }
 
     Rectangle {
-        id: sessionStatusBar
-        objectName: "sessionStatusBar"
+        id: statisticsPanel
+        objectName: "playbackStatisticsPanel"
 
         anchors {
-            left: parent.left
             right: parent.right
             top: parent.top
-            margins: 16
+            margins: 20
         }
-        visible: root.sessionActive
-        height: readyLayout.implicitHeight + 16
-        radius: 8
-        color: Qt.rgba(17 / 255, 19 / 255, 24 / 255, 0.92)
-        border.color: "#303746"
+        z: 20
+        visible: root.showPlaybackStatistics && root.sessionActive
+        width: Math.min(340, Math.max(250, root.width - 40))
+        height: statisticsLayout.implicitHeight + 24
+        radius: 14
+        color: Qt.rgba(12 / 255, 14 / 255, 18 / 255, 0.86)
+        border.color: Qt.rgba(1, 1, 1, 0.16)
 
-        RowLayout {
-            id: readyLayout
+        HoverHandler {
+            id: statisticsHover
+        }
+
+        ColumnLayout {
+            id: statisticsLayout
 
             anchors {
                 fill: parent
-                leftMargin: 12
-                rightMargin: 12
+                margins: 12
             }
-            spacing: 12
+            spacing: 4
 
-            ColumnLayout {
+            RowLayout {
                 Layout.fillWidth: true
-                spacing: 1
 
                 Label {
                     Layout.fillWidth: true
-                    text: root.session.displayName
+                    text: qsTr("Playback statistics")
                     color: "white"
                     font.weight: Font.DemiBold
-                    elide: Text.ElideMiddle
                 }
 
-                Label {
-                    objectName: "playbackStateLabel"
-                    Layout.fillWidth: true
-                    text: qsTr("%1 · %2 · %3 · %4")
-                        .arg(root.playbackStateText())
-                        .arg(root.session.videoSummary)
-                        .arg(root.session.decoderName)
-                        .arg(root.session.decodePath)
-                    color: "#9ca6b8"
-                    elide: Text.ElideRight
-                }
-
-                Label {
-                    Layout.fillWidth: true
-                    visible: root.session.hardwareFallbackReason.length > 0
-                    text: qsTr("Hardware decode fallback: %1")
-                        .arg(root.session.hardwareFallbackReason)
-                    color: "#d2a85d"
-                    elide: Text.ElideRight
-                }
-
-                Label {
-                    Layout.fillWidth: true
-                    text: qsTr("%1 decoded · %2 selected · %3 dropped · %4 queued")
-                        .arg(root.session.decodedVideoFrames)
-                        .arg(root.session.selectedVideoFrames)
-                        .arg(root.session.droppedVideoFrames)
-                        .arg(root.session.queuedVideoFrames)
-                    color: "#778195"
-                    elide: Text.ElideRight
-                }
-
-                Label {
-                    objectName: "audioDiagnosticsLabel"
-                    Layout.fillWidth: true
-                    visible: root.session.hasAudioOutput
-                    text: qsTr("%1 · %2 · %3 ms PCM queued · %4 underrun frames")
-                        .arg(root.session.audioBackend)
-                        .arg(root.clockSourceText(
-                            root.session.mediaClockSource))
-                        .arg(root.session.audioQueuedMilliseconds)
-                        .arg(root.session.audioUnderrunFrames)
-                    color: root.session.audioClockReliable
-                        ? "#778195"
-                        : "#d2a85d"
-                    elide: Text.ElideRight
+                IslandButton {
+                    objectName: "closeStatisticsButton"
+                    iconSource: "icons/lucide/x.svg"
+                    text: qsTr("Close playback statistics")
+                    onClicked: root.showPlaybackStatistics = false
                 }
             }
 
-            Button {
-                objectName: "playPauseButton"
-                enabled: !root.session.seeking
-                text: root.session.ended
-                    ? qsTr("Replay")
-                    : root.session.playRequested
-                        ? qsTr("Pause")
-                        : qsTr("Play")
-                onClicked: root.session.playRequested
-                    ? root.session.pause()
-                    : root.session.play()
+            Label {
+                Layout.fillWidth: true
+                text: root.session.displayName
+                color: "#d6d9e0"
+                elide: Text.ElideMiddle
             }
 
-            Button {
-                text: qsTr("Open another…")
-                onClicked: openDialog.open()
+            Label {
+                objectName: "playbackStateLabel"
+                Layout.fillWidth: true
+                text: qsTr("%1 · %2")
+                    .arg(root.playbackStateText())
+                    .arg(root.session.videoSummary)
+                color: "#afb4bf"
+                elide: Text.ElideRight
             }
 
-            Button {
-                objectName: "closeMediaButton"
-                text: qsTr("Close")
-                onClicked: root.session.cancel()
+            Label {
+                Layout.fillWidth: true
+                text: qsTr("%1 · %2")
+                    .arg(root.session.decoderName)
+                    .arg(root.session.decodePath)
+                color: "#8f96a3"
+                elide: Text.ElideRight
+            }
+
+            Label {
+                Layout.fillWidth: true
+                visible: root.session.hardwareFallbackReason.length > 0
+                text: qsTr("Hardware fallback: %1")
+                    .arg(root.session.hardwareFallbackReason)
+                color: "#d7ae68"
+                elide: Text.ElideRight
+            }
+
+            Label {
+                Layout.fillWidth: true
+                text: qsTr("%1 decoded · %2 selected · %3 dropped · %4 queued")
+                    .arg(root.session.decodedVideoFrames)
+                    .arg(root.session.selectedVideoFrames)
+                    .arg(root.session.droppedVideoFrames)
+                    .arg(root.session.queuedVideoFrames)
+                color: "#8f96a3"
+                wrapMode: Text.Wrap
+            }
+
+            Label {
+                objectName: "audioDiagnosticsLabel"
+                Layout.fillWidth: true
+                visible: root.session.hasAudioOutput
+                text: qsTr("%1 · %2 · %3 ms PCM · %4 underrun frames")
+                    .arg(root.session.audioBackend)
+                    .arg(root.clockSourceText(
+                        root.session.mediaClockSource))
+                    .arg(root.session.audioQueuedMilliseconds)
+                    .arg(root.session.audioUnderrunFrames)
+                color: root.session.audioClockReliable
+                    ? "#8f96a3"
+                    : "#d7ae68"
+                wrapMode: Text.Wrap
             }
         }
     }
 
     Rectangle {
-        id: timelineBar
+        id: transportIsland
+        objectName: "transportIsland"
 
         anchors {
-            left: parent.left
-            right: parent.right
+            horizontalCenter: parent.horizontalCenter
             bottom: parent.bottom
-            margins: 16
+            bottomMargin: 24
         }
+        z: 30
         visible: root.sessionActive
-        height: 56
-        radius: 8
-        color: Qt.rgba(17 / 255, 19 / 255, 24 / 255, 0.92)
-        border.color: "#303746"
+        enabled: opacity > 0.05
+        width: Math.min(680, Math.max(300, root.width - 32))
+        height: transportLayout.implicitHeight + 24
+        radius: 18
+        opacity: root.controlsShouldShow ? 1 : 0
+        color: Qt.rgba(10 / 255, 12 / 255, 16 / 255, 0.82)
+        border.color: Qt.rgba(1, 1, 1, 0.18)
 
-        RowLayout {
+        Behavior on opacity {
+            NumberAnimation {
+                duration: 150
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        ColumnLayout {
+            id: transportLayout
+
             anchors {
                 fill: parent
-                leftMargin: 12
-                rightMargin: 12
+                margins: 12
             }
-            spacing: 10
+            spacing: 8
 
-            Label {
-                objectName: "positionLabel"
-                text: root.formatTime(
-                    root.session.positionMilliseconds)
-                color: "white"
-                font.features: {
-                    "tnum": 1
-                }
-            }
-
-            Slider {
-                id: seekSlider
-                objectName: "seekSlider"
-
+            RowLayout {
                 Layout.fillWidth: true
-                from: 0
-                to: Math.max(
-                    1, root.session.durationMilliseconds)
-                live: false
-                enabled: root.session.seekable
-                    && root.session.durationMilliseconds > 0
-                    && !root.session.seeking
-                onMoved: {
-                    if (enabled && !pressed) {
-                        root.session.seekToMilliseconds(
-                            Math.round(valueAt(position)))
+                spacing: 10
+
+                Label {
+                    objectName: "positionLabel"
+                    text: root.formatTime(
+                        seekSlider.pressed
+                            ? Math.round(seekSlider.valueAt(
+                                seekSlider.position))
+                            : root.session.positionMilliseconds)
+                    color: "#f5f6fa"
+                    font.features: { "tnum": 1 }
+                }
+
+                IslandSlider {
+                    id: seekSlider
+                    objectName: "seekSlider"
+
+                    Layout.fillWidth: true
+                    from: 0
+                    to: Math.max(1, root.session.durationMilliseconds)
+                    live: false
+                    enabled: root.session.seekable
+                        && root.session.durationMilliseconds > 0
+                        && !root.session.seeking
+                    onMoved: {
+                        if (enabled && !pressed) {
+                            root.session.seekToMilliseconds(
+                                Math.round(valueAt(position)))
+                        }
+                    }
+                    onPressedChanged: {
+                        root.revealControls()
+                        if (enabled && !pressed) {
+                            root.session.seekToMilliseconds(
+                                Math.round(valueAt(position)))
+                        }
+                    }
+
+                    Binding on value {
+                        when: !seekSlider.pressed
+                        value: root.session.positionMilliseconds
+                        restoreMode: Binding.RestoreBinding
                     }
                 }
-                onPressedChanged: {
-                    if (enabled && !pressed) {
-                        root.session.seekToMilliseconds(
-                            Math.round(valueAt(position)))
+
+                Label {
+                    objectName: "durationLabel"
+                    text: root.formatTime(
+                        root.session.durationMilliseconds)
+                    color: "#b4b8c1"
+                    font.features: { "tnum": 1 }
+                }
+            }
+
+            Item {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 42
+
+                RowLayout {
+                    anchors {
+                        left: parent.left
+                        verticalCenter: parent.verticalCenter
+                    }
+                    spacing: 6
+
+                    IslandButton {
+                        id: muteButton
+                        objectName: "muteButton"
+
+                        visible: root.session.hasAudioOutput
+                        iconSource: root.session.muted
+                            ? "icons/lucide/volume-x.svg"
+                            : "icons/lucide/volume-2.svg"
+                        text: root.session.muted
+                            ? qsTr("Unmute")
+                            : qsTr("Mute")
+                        onClicked:
+                            root.session.muted = !root.session.muted
+                    }
+
+                    IslandSlider {
+                        id: volumeSlider
+                        objectName: "volumeSlider"
+
+                        visible: root.session.hasAudioOutput
+                            && transportIsland.width >= 560
+                        Layout.preferredWidth: 104
+                        from: 0
+                        to: 1
+                        enabled: !root.session.muted
+                        onMoved: root.session.volume = value
+
+                        Binding on value {
+                            when: !volumeSlider.pressed
+                            value: root.session.volume
+                            restoreMode: Binding.RestoreBinding
+                        }
                     }
                 }
 
-                Binding on value {
-                    when: !seekSlider.pressed
-                    value: root.session.positionMilliseconds
-                    restoreMode: Binding.RestoreBinding
+                RowLayout {
+                    anchors.centerIn: parent
+                    spacing: 6
+
+                    IslandButton {
+                        objectName: "seekBackwardButton"
+                        Layout.alignment: Qt.AlignVCenter
+                        iconSource: "icons/lucide/rotate-ccw.svg"
+                        text: qsTr("Seek backward 10 seconds")
+                        enabled: root.session.seekable
+                            && root.session.durationMilliseconds > 0
+                            && !root.session.seeking
+                        onClicked: root.seekBy(-10000)
+                    }
+
+                    IslandButton {
+                        id: playPauseButton
+                        objectName: "playPauseButton"
+
+                        Layout.alignment: Qt.AlignVCenter
+                        prominent: true
+                        enabled: !root.session.seeking
+                        iconSource: root.session.playRequested
+                            && !root.session.ended
+                                ? "icons/lucide/pause.svg"
+                                : "icons/lucide/play.svg"
+                        text: root.session.playRequested
+                            && !root.session.ended
+                                ? qsTr("Pause")
+                                : qsTr("Play")
+                        onClicked: root.togglePlayback()
+                    }
+
+                    IslandButton {
+                        objectName: "seekForwardButton"
+                        Layout.alignment: Qt.AlignVCenter
+                        iconSource: "icons/lucide/rotate-cw.svg"
+                        text: qsTr("Seek forward 10 seconds")
+                        enabled: root.session.seekable
+                            && root.session.durationMilliseconds > 0
+                            && !root.session.seeking
+                        onClicked: root.seekBy(10000)
+                    }
+                }
+
+                IslandButton {
+                    id: moreButton
+                    objectName: "moreButton"
+
+                    anchors {
+                        right: parent.right
+                        verticalCenter: parent.verticalCenter
+                    }
+                    iconSource: "icons/lucide/ellipsis.svg"
+                    text: qsTr("More actions")
+                    onClicked: transportMenu.popup()
                 }
             }
+        }
 
-            Label {
-                objectName: "durationLabel"
-                text: root.formatTime(
-                    root.session.durationMilliseconds)
-                color: "#9ca6b8"
-                font.features: {
-                    "tnum": 1
-                }
+        Menu {
+            id: transportMenu
+
+            MenuItem {
+                text: qsTr("Open another…")
+                onClicked: openDialog.open()
             }
 
-            Button {
-                objectName: "muteButton"
-                visible: root.session.hasAudioOutput
-                text: root.session.muted
-                    ? qsTr("Unmute")
-                    : qsTr("Mute")
-                onClicked: root.session.muted = !root.session.muted
+            MenuItem {
+                objectName: "statisticsMenuItem"
+                text: qsTr("Show playback statistics")
+                checkable: true
+                checked: root.showPlaybackStatistics
+                onClicked:
+                    root.showPlaybackStatistics = !root.showPlaybackStatistics
             }
 
-            Slider {
-                id: volumeSlider
-                objectName: "volumeSlider"
-                visible: root.session.hasAudioOutput
-                Layout.preferredWidth: 120
-                from: 0
-                to: 1
-                enabled: !root.session.muted
-                onMoved: root.session.volume = value
+            MenuItem {
+                objectName: "hdrLabMenuItem"
+                text: qsTr("HDR Lab")
+                onClicked: root.hdrLabRequested()
+            }
 
-                Binding on value {
-                    when: !volumeSlider.pressed
-                    value: root.session.volume
-                    restoreMode: Binding.RestoreBinding
-                }
+            MenuSeparator {}
+
+            MenuItem {
+                objectName: "closeMediaButton"
+                text: qsTr("Close video")
+                onClicked: root.session.cancel()
             }
         }
     }
