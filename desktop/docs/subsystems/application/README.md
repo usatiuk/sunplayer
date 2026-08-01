@@ -7,7 +7,7 @@ QML `AppShell`, default Player page, and retained HDR Lab. It establishes
 startup, object ownership, native presentation events, redirected Qt Quick
 input, the active video-viewport boundary, and asynchronous continuous local
 audio/video playback with a position/duration seek timeline. It does not yet
-provide drag-and-drop, persistent settings, fullscreen behavior, general
+provide drag-and-drop, persistent settings, general
 structured errors, or a user-facing support-report interface. It now installs
 the shared Qt category logger and bounded session-file sink.
 
@@ -41,7 +41,11 @@ One optional positional command-line path opens local media after construction.
 `--playback-smoke` is a narrow noninteractive verification mode for that path:
 it requires two distinct video content revisions to reach the swapchain plus
 continued live Cubeb audio-master clock progress, then exits with a process
-result. It is not a general remote-control interface. There is no full command-line model,
+result. `--fullscreen-smoke` uses the same production boundary to verify
+normal/fullscreen and maximized/fullscreen transitions, restoration, continued
+video presentation, native keyboard routing, and idle cursor hiding. These are
+test scenarios, not a general remote-control interface. There is no full
+command-line model,
 single-instance policy, recent-file state, settings store, or application
 service container.
 
@@ -87,9 +91,21 @@ The native window translates:
 * Resize and device-pixel-ratio changes into UI and viewport invalidation.
 * Native surface destruction into swapchain teardown.
 
-Mouse, wheel, and keyboard input are forwarded to the redirected hidden
-`QQuickWindow`. The hidden Quick scene has the same logical size as the native
-window.
+Mouse, wheel, and ordinary keyboard input are forwarded to the redirected
+hidden `QQuickWindow`, including the complete native double-click event
+sequence and its timestamp/device metadata. The visible native window handles
+non-repeating F11/Escape plus gated Space play/pause itself; QML publishes only
+whether a transient menu or dialog currently owns Escape. The hidden Quick
+scene has the same logical size as the native window.
+
+`PresentationWindow` is the sole fullscreen and native-cursor authority. Its
+QML-facing commands ask Qt to enter or leave compositor-managed fullscreen and
+remember only whether the prior non-fullscreen state was maximized. QML still
+decides when idle playback should hide the cursor, while the real window
+applies and reapplies that state after fullscreen transitions. Leaving
+fullscreen restores normal or maximized state without custom geometry, native
+window-style edits, display-mode switching, or exclusive fullscreen. Existing
+Qt resize, exposure, surface, and QRhi paths handle the asynchronous change.
 
 The current forwarding is incomplete for a player shell. Touch, tablet, input
 methods, accessibility, drag-and-drop, and file-open events remain deferred.
@@ -152,8 +168,12 @@ packaged QML module with production type registrations. A second registered,
 bounded application scenario opens a real audio-first A/V fixture through the
 production FFmpeg and Cubeb paths, shows the native presentation window, and
 waits for two distinct video content revisions plus continued live Cubeb
-audio-clock progress. It exits without user interaction and disables Windows
-error dialogs. The scenario proves startup and initial playback wiring; broader command,
+audio-clock progress. A second bounded real-window scenario verifies native
+keyboard/gesture routing, fullscreen state/restoration, cursor hiding, and
+video presentation after each transition. Both exit without user interaction
+and disable Windows error
+dialogs. The scenarios prove startup, initial playback wiring, and fullscreen;
+broader command,
 error, shutdown, and packaged-install scenarios remain future work.
 
 When features arrive, use:

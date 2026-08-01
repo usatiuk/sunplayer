@@ -4,4 +4,5 @@ import QtQuick
 Item {
     property rect videoViewportRect: Qt.rect(0, 0, 0, 0)
     property bool videoViewportVisible: false
+    property bool windowShortcutsBlocked: false
 }

@@ -1,20 +1,25 @@
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
 #include <optional>
 #include <string_view>
 
 #include <QByteArray>
 #include <QCommandLineParser>
+#include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QKeyEvent>
 #include <QPalette>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QStyleHints>
 #include <QTimer>
 #include <QUrl>
+#include <qpa/qwindowsysteminterface.h>
 
 #include "app/PresentationWindow.h"
 #include "diagnostics/ApplicationLog.h"
@@ -41,12 +46,308 @@ bool hasExactArgument(
 }
 #endif
 
+namespace {
+void sendKeyClick(PresentationWindow &window, Qt::Key key) {
+    QKeyEvent press(QEvent::KeyPress, key, Qt::NoModifier);
+    QCoreApplication::sendEvent(&window, &press);
+    QKeyEvent release(QEvent::KeyRelease, key, Qt::NoModifier);
+    QCoreApplication::sendEvent(&window, &release);
+}
+
+void sendAutoRepeatKeyPress(PresentationWindow &window, Qt::Key key) {
+    QKeyEvent repeated(
+        QEvent::KeyPress,
+        key,
+        Qt::NoModifier,
+        QString(),
+        true);
+    QCoreApplication::sendEvent(&window, &repeated);
+}
+
+void sendMouseDoubleClick(
+        PresentationWindow &window,
+        const QPointF &position) {
+    const QPointF globalPosition =
+        window.mapToGlobal(position.toPoint());
+    QElapsedTimer eventClock;
+    eventClock.start();
+    ulong timestamp = static_cast<ulong>(
+        eventClock.msecsSinceReference());
+    const auto send = [&window, &position, &globalPosition, &timestamp](
+                              QEvent::Type type,
+                              Qt::MouseButtons buttons) {
+        QWindowSystemInterface::handleMouseEvent<
+            QWindowSystemInterface::SynchronousDelivery>(
+            &window,
+            timestamp++,
+            position,
+            globalPosition,
+            buttons,
+            Qt::LeftButton,
+            type,
+            Qt::NoModifier);
+    };
+    send(QEvent::MouseButtonPress, Qt::LeftButton);
+    send(QEvent::MouseButtonRelease, Qt::NoButton);
+    send(QEvent::MouseButtonPress, Qt::LeftButton);
+    send(QEvent::MouseButtonRelease, Qt::NoButton);
+}
+
+enum class FullscreenSmokeStage {
+    InitialFrame,
+    FullscreenFromNormal,
+    RestoredNormal,
+    PausedBySpace,
+    ResumedBySpace,
+    Maximized,
+    FullscreenFromMaximized,
+    RestoredMaximized,
+};
+
+struct FullscreenSmokeState {
+    FullscreenSmokeStage stage = FullscreenSmokeStage::InitialFrame;
+    qulonglong presentedFrames = 0;
+    qulonglong frameBaseline = 0;
+};
+
+void startFullscreenSmokeScenario(
+        QGuiApplication &app,
+        PresentationWindow &window) {
+    auto state = std::make_shared<FullscreenSmokeState>();
+    auto *const deadline = new QTimer(&app);
+    auto *const poll = new QTimer(&app);
+    deadline->setSingleShot(true);
+    deadline->setInterval(20'000);
+    poll->setInterval(25);
+
+    QObject::connect(
+        &window,
+        &PresentationWindow::videoFramePresented,
+        &app,
+        [state](qulonglong) { ++state->presentedFrames; });
+    QObject::connect(
+        deadline,
+        &QTimer::timeout,
+        &app,
+        [&app, &window, state] {
+            qCCritical(sunroomLogApplication).noquote()
+                << "event=application.fullscreen_smoke_timeout"
+                << "stage=" + QString::number(
+                    static_cast<int>(state->stage))
+                << "windowState=" + QString::number(
+                    static_cast<int>(window.windowState()))
+                << "presentedFrames=" + QString::number(
+                    state->presentedFrames)
+                << "error=" + window.mediaSession().errorMessage();
+            std::fprintf(
+                stderr,
+                "Sunroom fullscreen smoke timed out: stage=%d, "
+                "windowState=%d, presentedFrames=%llu, "
+                "cursorHidden=%d, cursorShape=%d\n",
+                static_cast<int>(state->stage),
+                static_cast<int>(window.windowState()),
+                static_cast<unsigned long long>(
+                    state->presentedFrames),
+                window.cursorHidden() ? 1 : 0,
+                static_cast<int>(window.cursor().shape()));
+            std::fflush(stderr);
+            app.exit(EXIT_FAILURE);
+        });
+    QObject::connect(
+        poll,
+        &QTimer::timeout,
+        &app,
+        [&app, &window, state, deadline, poll] {
+            if (window.mediaSession().state()
+                    == MediaSession::State::Error) {
+                qCCritical(sunroomLogApplication).noquote()
+                    << "event=application.fullscreen_smoke_failed"
+                    << "error="
+                        + window.mediaSession().errorMessage();
+                const QByteArray error =
+                    window.mediaSession().errorMessage().toUtf8();
+                std::fprintf(
+                    stderr,
+                    "Sunroom fullscreen smoke media failure: %s\n",
+                    error.constData());
+                std::fflush(stderr);
+                deadline->stop();
+                poll->stop();
+                app.exit(EXIT_FAILURE);
+                return;
+            }
+
+            const auto hasNewFrame = [state] {
+                return state->presentedFrames > state->frameBaseline;
+            };
+            const auto waitForNextFrame = [state] {
+                state->frameBaseline = state->presentedFrames;
+            };
+
+            switch (state->stage) {
+            case FullscreenSmokeStage::InitialFrame:
+                if (!window.isExposed()
+                        || window.windowState() != Qt::WindowNoState
+                        || state->presentedFrames == 0
+                        || !window.cursorHidden()
+                        || window.cursor().shape() != Qt::BlankCursor) {
+                    return;
+                }
+                waitForNextFrame();
+                sendKeyClick(window, Qt::Key_F11);
+                state->stage =
+                    FullscreenSmokeStage::FullscreenFromNormal;
+                return;
+            case FullscreenSmokeStage::FullscreenFromNormal:
+                if (window.windowState() != Qt::WindowFullScreen
+                        || !window.cursorHidden()
+                        || window.cursor().shape() != Qt::BlankCursor
+                        || !hasNewFrame()) {
+                    return;
+                }
+                waitForNextFrame();
+                window.setWindowShortcutsBlocked(true);
+                sendKeyClick(window, Qt::Key_Escape);
+                if (window.windowState() != Qt::WindowFullScreen) {
+                    std::fprintf(
+                        stderr,
+                        "Sunroom fullscreen smoke failed: blocked Escape "
+                        "changed state to %d\n",
+                        static_cast<int>(window.windowState()));
+                    std::fflush(stderr);
+                    deadline->stop();
+                    poll->stop();
+                    app.exit(EXIT_FAILURE);
+                    return;
+                }
+                window.setWindowShortcutsBlocked(false);
+                sendKeyClick(window, Qt::Key_Escape);
+                state->stage = FullscreenSmokeStage::RestoredNormal;
+                return;
+            case FullscreenSmokeStage::RestoredNormal:
+                if (window.windowState() != Qt::WindowNoState
+                        || !hasNewFrame()) {
+                    return;
+                }
+                waitForNextFrame();
+                sendAutoRepeatKeyPress(window, Qt::Key_F11);
+                if (window.windowState() != Qt::WindowNoState) {
+                    qCCritical(sunroomLogApplication).noquote()
+                        << "event=application.fullscreen_smoke_failed"
+                        << "reason=repeated_f11_changed_state";
+                    std::fprintf(
+                        stderr,
+                        "Sunroom fullscreen smoke failed: "
+                        "repeated F11 changed state to %d\n",
+                        static_cast<int>(window.windowState()));
+                    std::fflush(stderr);
+                    deadline->stop();
+                    poll->stop();
+                    app.exit(EXIT_FAILURE);
+                    return;
+                }
+                sendKeyClick(window, Qt::Key_Escape);
+                if (window.windowState() != Qt::WindowNoState) {
+                    qCCritical(sunroomLogApplication).noquote()
+                        << "event=application.fullscreen_smoke_failed"
+                        << "reason=windowed_escape_changed_state";
+                    std::fprintf(
+                        stderr,
+                        "Sunroom fullscreen smoke failed: "
+                        "windowed Escape changed state to %d\n",
+                        static_cast<int>(window.windowState()));
+                    std::fflush(stderr);
+                    deadline->stop();
+                    poll->stop();
+                    app.exit(EXIT_FAILURE);
+                    return;
+                }
+                sendKeyClick(window, Qt::Key_Space);
+                if (window.mediaSession().playRequested()) {
+                    std::fprintf(
+                        stderr,
+                        "Sunroom fullscreen smoke failed: "
+                        "Space did not pause playback\n");
+                    std::fflush(stderr);
+                    deadline->stop();
+                    poll->stop();
+                    app.exit(EXIT_FAILURE);
+                    return;
+                }
+                state->stage = FullscreenSmokeStage::PausedBySpace;
+                return;
+            case FullscreenSmokeStage::PausedBySpace:
+                sendKeyClick(window, Qt::Key_Space);
+                if (!window.mediaSession().playRequested()) {
+                    std::fprintf(
+                        stderr,
+                        "Sunroom fullscreen smoke failed: "
+                        "Space did not resume playback\n");
+                    std::fflush(stderr);
+                    deadline->stop();
+                    poll->stop();
+                    app.exit(EXIT_FAILURE);
+                    return;
+                }
+                state->stage = FullscreenSmokeStage::ResumedBySpace;
+                return;
+            case FullscreenSmokeStage::ResumedBySpace:
+                if (!window.mediaSession().playRequested()
+                        || !hasNewFrame()) {
+                    return;
+                }
+                window.showMaximized();
+                state->stage = FullscreenSmokeStage::Maximized;
+                return;
+            case FullscreenSmokeStage::Maximized:
+                if (window.windowState() != Qt::WindowMaximized
+                        || !hasNewFrame()) {
+                    return;
+                }
+                waitForNextFrame();
+                sendMouseDoubleClick(window, QPointF(40.0, 40.0));
+                state->stage =
+                    FullscreenSmokeStage::FullscreenFromMaximized;
+                return;
+            case FullscreenSmokeStage::FullscreenFromMaximized:
+                if (window.windowState() != Qt::WindowFullScreen
+                        || !hasNewFrame()) {
+                    return;
+                }
+                waitForNextFrame();
+                sendKeyClick(window, Qt::Key_F11);
+                state->stage = FullscreenSmokeStage::RestoredMaximized;
+                return;
+            case FullscreenSmokeStage::RestoredMaximized:
+                if (window.windowState() != Qt::WindowMaximized
+                        || !hasNewFrame()) {
+                    return;
+                }
+                qCInfo(sunroomLogApplication).noquote()
+                    << "event=application.fullscreen_smoke_complete";
+                std::fprintf(
+                    stdout,
+                    "Sunroom fullscreen smoke passed\n");
+                std::fflush(stdout);
+                deadline->stop();
+                poll->stop();
+                app.exit(EXIT_SUCCESS);
+                return;
+            }
+        });
+
+    deadline->start();
+    poll->start();
+}
+}
+
 int main(int argc, char *argv[]) {
 #ifdef Q_OS_WIN
     // QGuiApplication initializes the platform plugin in its constructor.
     // Suppress native failure dialogs before that boundary for the bounded
     // noninteractive application scenario.
-    if (hasExactArgument(argc, argv, "--playback-smoke")) {
+    if (hasExactArgument(argc, argv, "--playback-smoke")
+            || hasExactArgument(argc, argv, "--fullscreen-smoke")) {
         SetErrorMode(
             SEM_FAILCRITICALERRORS
             | SEM_NOGPFAULTERRORBOX
@@ -97,6 +398,12 @@ int main(int argc, char *argv[]) {
             "Run a bounded noninteractive real-application playback "
             "scenario for the positional media file."));
     parser.addOption(playbackSmokeOption);
+    const QCommandLineOption fullscreenSmokeOption(
+        QStringLiteral("fullscreen-smoke"),
+        QStringLiteral(
+            "Run a bounded noninteractive real-application fullscreen "
+            "scenario for the positional media file."));
+    parser.addOption(fullscreenSmokeOption);
     parser.process(app);
 
     if (parser.isSet(logFileOption)
@@ -109,9 +416,21 @@ int main(int argc, char *argv[]) {
     const QStringList positionalArguments =
         parser.positionalArguments();
     if (parser.isSet(playbackSmokeOption)
+            && parser.isSet(fullscreenSmokeOption)) {
+        qCCritical(sunroomLogApplication).noquote()
+            << "--playback-smoke and --fullscreen-smoke are mutually exclusive.";
+        return EXIT_FAILURE;
+    }
+    if (parser.isSet(playbackSmokeOption)
             && positionalArguments.size() != 1) {
         qCCritical(sunroomLogApplication).noquote()
             << "--playback-smoke requires exactly one positional media file.";
+        return EXIT_FAILURE;
+    }
+    if (parser.isSet(fullscreenSmokeOption)
+            && positionalArguments.size() != 1) {
+        qCCritical(sunroomLogApplication).noquote()
+            << "--fullscreen-smoke requires exactly one positional media file.";
         return EXIT_FAILURE;
     }
 
@@ -357,6 +676,8 @@ int main(int argc, char *argv[]) {
         playbackSmokeDeadline.start();
         playbackSmokePoll.start();
     }
+    if (parser.isSet(fullscreenSmokeOption))
+        startFullscreenSmokeScenario(app, window);
     window.show();
 
     const int exitCode = app.exec();

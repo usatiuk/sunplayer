@@ -540,6 +540,19 @@ if (WIN32)
             LABELS "application;audio;ffmpeg;gpu;integration;windows"
             TIMEOUT 30
     )
+    add_test(
+            NAME application-fullscreen
+            COMMAND $<TARGET_FILE:sunroom>
+                    --fullscreen-smoke
+                    --no-log-file
+                    "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/media/sdr-bt709-ffv1-video-late-flac.mkv"
+    )
+    set_tests_properties(
+            application-fullscreen
+            PROPERTIES
+            LABELS "application;ui;gpu;integration;windows"
+            TIMEOUT 30
+    )
 endif ()
 
 set_tests_properties(

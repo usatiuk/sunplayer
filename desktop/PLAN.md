@@ -387,11 +387,11 @@ Documentation: `docs/subsystems/subtitles/`
 * [ ] Audio-track selection
 * [ ] Subtitle-track selection
 * [x] Volume and mute
-* [ ] Fullscreen
+* [x] Fullscreen
 * [x] Continuous video loading and media error presentation
 * [x] Initial audio-buffering status presentation
 * [ ] General source-buffering presentation
-* [ ] Keyboard shortcuts beyond Space play/pause
+* [x] Initial F11/Escape fullscreen shortcuts beyond Space play/pause
 * [ ] Minimal settings surface
 * [x] Playback-pipeline diagnostics view
 

@@ -204,9 +204,9 @@ test whose purpose is to validate those components.
 
 ### Future application-control channel
 
-Once multiple actual-application scenarios exist, the test runner should be
-able to launch the real binary with an isolated profile and opt-in local
-control endpoint, conceptually:
+Once actual-application scenarios need interactive coordination, the test
+runner should be able to launch the real binary with an isolated profile and
+opt-in local control endpoint, conceptually:
 
 ```text
 sunroom --isolated-profile=<temporary-directory>
@@ -227,11 +227,15 @@ Early tests can call public subsystem APIs in-process. The out-of-process
 channel is justified when it removes duplicated orchestration and proves
 startup, shutdown, and application wiring that in-process tests cannot.
 
-The current `--playback-smoke` mode is deliberately narrower than that future
-channel. It opens one positional file, waits for two distinct video content
-revisions to reach the swapchain and for live Cubeb-derived audio-master clock
-progress, reports a process result, and exits. Keep it small until multiple
-application scenarios justify shared command/event orchestration.
+The current `--playback-smoke` and `--fullscreen-smoke` modes are deliberately
+narrower than that future channel. Each opens one positional file and observes
+production application state directly. Playback smoke waits for distinct video
+revisions plus live Cubeb-derived audio-master clock progress; fullscreen smoke
+drives native F11, Escape, Space, and redirected background double-click input
+while checking normal/maximized restoration, native cursor hiding, and continued
+video presentation through both fullscreen transitions. Both report a process
+result and exit. Keep these modes small until scenarios need shared interactive
+command/event orchestration.
 
 ## Focused deterministic tests
 

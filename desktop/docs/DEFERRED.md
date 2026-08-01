@@ -155,6 +155,14 @@ settings with the Player. A later player-reliability slice must separate the
 diagnostic override from production display policy so experiments cannot
 silently alter ordinary playback.
 
+### HDR Lab UI regression
+
+HDR Lab is currently reported broken in the real application. Diagnosis and
+repair are deliberately deferred until after the fullscreen playback slice.
+The QML shell test also emits a warning because its presentation-output fake
+does not expose the production `videoColorPolicy` property; that gap must be
+resolved as part of the HDR Lab repair instead of being hidden by this change.
+
 ## Build and tooling
 
 ### Vulkan and SPIR-V optimization tools are not configured

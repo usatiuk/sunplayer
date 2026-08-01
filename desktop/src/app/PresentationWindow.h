@@ -4,10 +4,15 @@
 
 #include <QUrl>
 #include <QWindow>
+#include <QtQml/qqmlregistration.h>
 
 // Native window and event boundary for the current application shell.
-class PresentationWindow final : public QWindow {
+class PresentationWindow : public QWindow {
     Q_OBJECT
+    Q_PROPERTY(bool cursorHidden READ cursorHidden WRITE setCursorHidden)
+    Q_PROPERTY(bool windowShortcutsBlocked
+                   READ windowShortcutsBlocked
+                   WRITE setWindowShortcutsBlocked)
 
 public:
     PresentationWindow();
@@ -15,6 +20,14 @@ public:
 
     void openMedia(const QUrl &url);
     const class MediaSession &mediaSession() const;
+
+    Q_INVOKABLE void toggleFullscreen();
+    Q_INVOKABLE void exitFullscreen();
+
+    bool cursorHidden() const;
+    void setCursorHidden(bool hidden);
+    bool windowShortcutsBlocked() const;
+    void setWindowShortcutsBlocked(bool blocked);
 
 signals:
     void videoFramePresented(qulonglong contentRevision);
@@ -24,6 +37,7 @@ protected:
     void resizeEvent(QResizeEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
@@ -31,6 +45,11 @@ protected:
     bool event(QEvent *event) override;
 
 private:
+    void applyCursorVisibility();
+    void forwardMouseEvent(QMouseEvent &event);
+    bool playbackShortcutEnabled() const;
+    void togglePlayback();
+
     std::unique_ptr<class PresentationOutputState> m_outputState;
     std::unique_ptr<class PresentationSettings> m_settings;
     std::unique_ptr<class DiagnosticVideoSource> m_diagnosticVideoSource;
@@ -38,4 +57,14 @@ private:
     std::unique_ptr<class ActiveVideoSource> m_activeVideoSource;
     std::unique_ptr<class VideoViewportState> m_videoViewport;
     std::unique_ptr<class RhiPresentationEngine> m_engine;
+    bool m_restoreMaximizedAfterFullscreen = false;
+    bool m_cursorHidden = false;
+    bool m_windowShortcutsBlocked = false;
+};
+
+struct PresentationWindowQmlForeign {
+    Q_GADGET
+    QML_FOREIGN(PresentationWindow)
+    QML_NAMED_ELEMENT(WindowCommands)
+    QML_UNCREATABLE("The application supplies the native window commands")
 };

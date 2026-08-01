@@ -5,6 +5,7 @@ import QtQuick.Layouts
 Item {
     id: root
 
+    required property WindowCommands windowCommands
     required property PresentationOutputState presentationOutput
     required property PresentationSettings presentationPolicy
     required property DiagnosticVideoSource diagnosticSource
@@ -24,6 +25,18 @@ Item {
                 activePage.videoViewportRect.height)
     readonly property bool activeVideoViewportVisible:
         activePage.visible && activePage.videoViewportVisible
+
+    Binding {
+        target: root.windowCommands
+        property: "cursorHidden"
+        value: root.currentPage === 0 && playerPage.cursorShouldHide
+    }
+
+    Binding {
+        target: root.windowCommands
+        property: "windowShortcutsBlocked"
+        value: root.activePage.windowShortcutsBlocked
+    }
 
     Binding {
         target: root.activeVideoSource
@@ -55,6 +68,7 @@ Item {
             id: playerPage
 
             session: root.mediaSession
+            windowCommands: root.windowCommands
             onHdrLabRequested: root.currentPage = 1
         }
 

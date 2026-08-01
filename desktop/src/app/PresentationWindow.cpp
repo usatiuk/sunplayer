@@ -1,11 +1,13 @@
 #include "app/PresentationWindow.h"
 
 #include <QCoreApplication>
+#include <QCursor>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPlatformSurfaceEvent>
 #include <QQuickWindow>
 #include <QResizeEvent>
+#include <QTimer>
 #include <QWheelEvent>
 
 #include "app/PresentationSettings.h"
@@ -45,6 +47,20 @@ PresentationWindow::PresentationWindow() {
         &RhiPresentationEngine::videoFramePresented,
         this,
         &PresentationWindow::videoFramePresented);
+    connect(
+        this,
+        &QWindow::windowStateChanged,
+        this,
+        [this](Qt::WindowState state) {
+            if (state != Qt::WindowFullScreen) {
+                m_restoreMaximizedAfterFullscreen =
+                    state == Qt::WindowMaximized;
+            }
+            QTimer::singleShot(
+                0,
+                this,
+                [this] { applyCursorVisibility(); });
+        });
 
     setMinimumSize({760, 560});
     resize(1100, 760);
@@ -63,6 +79,53 @@ const MediaSession &PresentationWindow::mediaSession() const {
     return *m_mediaSession;
 }
 
+void PresentationWindow::toggleFullscreen() {
+    if (windowState() == Qt::WindowFullScreen) {
+        exitFullscreen();
+        return;
+    }
+
+    m_restoreMaximizedAfterFullscreen =
+        windowState() == Qt::WindowMaximized;
+    showFullScreen();
+}
+
+void PresentationWindow::exitFullscreen() {
+    if (windowState() != Qt::WindowFullScreen)
+        return;
+
+    if (m_restoreMaximizedAfterFullscreen)
+        showMaximized();
+    else
+        showNormal();
+}
+
+bool PresentationWindow::cursorHidden() const {
+    return m_cursorHidden;
+}
+
+void PresentationWindow::setCursorHidden(bool hidden) {
+    if (hidden == m_cursorHidden)
+        return;
+    m_cursorHidden = hidden;
+    applyCursorVisibility();
+}
+
+bool PresentationWindow::windowShortcutsBlocked() const {
+    return m_windowShortcutsBlocked;
+}
+
+void PresentationWindow::setWindowShortcutsBlocked(bool blocked) {
+    m_windowShortcutsBlocked = blocked;
+}
+
+void PresentationWindow::applyCursorVisibility() {
+    if (m_cursorHidden)
+        setCursor(QCursor(Qt::BlankCursor));
+    else
+        unsetCursor();
+}
+
 void PresentationWindow::exposeEvent(QExposeEvent *) {
     m_engine->handleExposure();
 }
@@ -72,30 +135,51 @@ void PresentationWindow::resizeEvent(QResizeEvent *) {
 }
 
 void PresentationWindow::mousePressEvent(QMouseEvent *event) {
-    if (QQuickWindow *quickWindow = m_engine->quickWindow()) {
-        QMouseEvent mapped(
-            event->type(), event->position(), event->globalPosition(),
-            event->button(), event->buttons(), event->modifiers());
-        QCoreApplication::sendEvent(quickWindow, &mapped);
-    }
+    forwardMouseEvent(*event);
 }
 
 void PresentationWindow::mouseReleaseEvent(QMouseEvent *event) {
+    forwardMouseEvent(*event);
+}
+
+void PresentationWindow::mouseDoubleClickEvent(QMouseEvent *event) {
+    forwardMouseEvent(*event);
+}
+
+void PresentationWindow::mouseMoveEvent(QMouseEvent *event) {
+    forwardMouseEvent(*event);
+}
+
+void PresentationWindow::forwardMouseEvent(QMouseEvent &event) {
     if (QQuickWindow *quickWindow = m_engine->quickWindow()) {
         QMouseEvent mapped(
-            event->type(), event->position(), event->globalPosition(),
-            event->button(), event->buttons(), event->modifiers());
+            event.type(),
+            event.position(),
+            event.scenePosition(),
+            event.globalPosition(),
+            event.button(),
+            event.buttons(),
+            event.modifiers(),
+            event.source(),
+            event.pointingDevice());
+        mapped.setTimestamp(event.timestamp());
         QCoreApplication::sendEvent(quickWindow, &mapped);
     }
 }
 
-void PresentationWindow::mouseMoveEvent(QMouseEvent *event) {
-    if (QQuickWindow *quickWindow = m_engine->quickWindow()) {
-        QMouseEvent mapped(
-            event->type(), event->position(), event->globalPosition(),
-            event->button(), event->buttons(), event->modifiers());
-        QCoreApplication::sendEvent(quickWindow, &mapped);
-    }
+bool PresentationWindow::playbackShortcutEnabled() const {
+    return !m_windowShortcutsBlocked
+        && m_activeVideoSource->route()
+            == ActiveVideoSource::Route::Player
+        && m_mediaSession->state() == MediaSession::State::Ready
+        && !m_mediaSession->seeking();
+}
+
+void PresentationWindow::togglePlayback() {
+    if (m_mediaSession->playRequested())
+        m_mediaSession->pause();
+    else
+        m_mediaSession->play();
 }
 
 void PresentationWindow::wheelEvent(QWheelEvent *event) {
@@ -104,11 +188,39 @@ void PresentationWindow::wheelEvent(QWheelEvent *event) {
 }
 
 void PresentationWindow::keyPressEvent(QKeyEvent *event) {
+    if (event->key() == Qt::Key_F11) {
+        if (!event->isAutoRepeat())
+            toggleFullscreen();
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_Escape
+            && !m_windowShortcutsBlocked) {
+        if (!event->isAutoRepeat())
+            exitFullscreen();
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_Space
+            && playbackShortcutEnabled()) {
+        if (!event->isAutoRepeat())
+            togglePlayback();
+        event->accept();
+        return;
+    }
     if (QQuickWindow *quickWindow = m_engine->quickWindow())
         QCoreApplication::sendEvent(quickWindow, event);
 }
 
 void PresentationWindow::keyReleaseEvent(QKeyEvent *event) {
+    if (event->key() == Qt::Key_F11
+            || (event->key() == Qt::Key_Escape
+                && !m_windowShortcutsBlocked)
+            || (event->key() == Qt::Key_Space
+                && playbackShortcutEnabled())) {
+        event->accept();
+        return;
+    }
     if (QQuickWindow *quickWindow = m_engine->quickWindow())
         QCoreApplication::sendEvent(quickWindow, event);
 }

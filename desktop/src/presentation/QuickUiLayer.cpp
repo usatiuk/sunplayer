@@ -99,6 +99,10 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
 
     const QVariantMap initialProperties{
         {
+            QStringLiteral("windowCommands"),
+            QVariant::fromValue(&m_renderWindow),
+        },
+        {
             QStringLiteral("presentationOutput"),
             QVariant::fromValue(&m_outputState),
         },

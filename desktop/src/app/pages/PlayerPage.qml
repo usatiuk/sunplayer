@@ -8,6 +8,7 @@ VideoPage {
     objectName: "playerPage"
 
     required property MediaSession session
+    required property WindowCommands windowCommands
 
     signal hdrLabRequested
 
@@ -34,6 +35,8 @@ VideoPage {
         && (controlsPinned || controlsVisibleByActivity)
     readonly property bool cursorShouldHide:
         frameReady && transportIsland.opacity < 0.05
+
+    windowShortcutsBlocked: transportMenu.visible || openDialog.visible
 
     videoViewportRect:
         Qt.rect(0, 0, root.width, root.height)
@@ -250,24 +253,22 @@ VideoPage {
         objectName: "playbackHoverHandler"
         acceptedDevices:
             PointerDevice.Mouse | PointerDevice.TouchPad
-        cursorShape: root.cursorShouldHide
-            ? Qt.BlankCursor
-            : Qt.ArrowCursor
         onPointChanged: root.observePointerMovement(point.position)
-    }
-
-    Shortcut {
-        sequence: "Space"
-        enabled: root.visible
-            && root.sessionReady
-            && !transportMenu.visible
-        onActivated: root.togglePlayback()
     }
 
     Rectangle {
         anchors.fill: parent
         visible: !root.frameReady
         color: "#000000"
+    }
+
+    MouseArea {
+        objectName: "fullscreenBackgroundMouseArea"
+
+        anchors.fill: parent
+        visible: root.sessionReady
+        acceptedButtons: Qt.LeftButton
+        onDoubleClicked: root.windowCommands.toggleFullscreen()
     }
 
     ColumnLayout {
@@ -432,6 +433,11 @@ VideoPage {
         color: Qt.rgba(12 / 255, 14 / 255, 18 / 255, 0.86)
         border.color: Qt.rgba(1, 1, 1, 0.16)
 
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton
+        }
+
         HoverHandler {
             id: statisticsHover
         }
@@ -545,6 +551,11 @@ VideoPage {
         opacity: root.controlsShouldShow ? 1 : 0
         color: Qt.rgba(10 / 255, 12 / 255, 16 / 255, 0.82)
         border.color: Qt.rgba(1, 1, 1, 0.18)
+
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton
+        }
 
         Behavior on opacity {
             NumberAnimation {
@@ -726,6 +737,7 @@ VideoPage {
 
         Menu {
             id: transportMenu
+            objectName: "transportMenu"
 
             MenuItem {
                 text: qsTr("Open another…")

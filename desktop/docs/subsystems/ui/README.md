@@ -24,6 +24,18 @@ scrubber is pressed. Session-lifetime volume and mute remain wired to the
 audio-output boundary; track and subtitle controls remain absent until those
 commands exist.
 
+The native presentation window handles non-repeating `F11`/`Escape` and gated
+Space play/pause because the redirected Quick window is not the active native
+shortcut target. `F11` toggles Qt-managed fullscreen from either page. A
+left-button
+double-click on active Player video background does the same; one accepting
+area behind each floating island prevents labels and dead panel space from
+falling through to the video gesture while its child controls keep normal
+input. `Escape` leaves fullscreen, except that QML publishes when an open menu
+or file dialog owns the first Escape. QML retains the transport/cursor idle
+policy, while the real presentation window applies native cursor visibility
+and window-state changes.
+
 Session readiness and video-frame availability are distinct UI facts. When
 audio makes the session ready before the first video frame, Player keeps its
 controls and viewport contract active while showing a preparing state. The
@@ -171,8 +183,9 @@ source binding. It explicitly covers `Ready` before `hasFrame`: playback chrome
 and the viewport remain active while the preparing state is visible, then the
 preparing state disappears after frame publication. It also verifies full-page
 Player geometry, timeline formatting, scrub-preview time, relative and slider
-seek commands, backend position updates, and disabled seeking state without
-launching a native dialog. The real
+seek commands, backend position updates, disabled seeking state, fullscreen
+gesture dispatch, popup Escape priority state, island hit testing, and
+native-cursor intent without launching a native dialog. The real
 D3D11 capture verifies that zero video geometry and the compositor's fallback
 binding produce the normal background rather than sampling the retained video
 surface. It also destroys a bound diagnostic producer, creates the other
@@ -181,6 +194,11 @@ registered audio-first application playback scenario crosses the production
 FFmpeg, Cubeb, QML, QRhi, libplacebo, and swapchain paths and exits
 noninteractively after observing real presentation plus continued clock
 progress.
+
+The registered fullscreen application scenario additionally crosses the real
+window, QRhi swapchain, QML, media, and video-presentation boundaries while
+driving native F11, Escape, Space, and redirected background double-click input
+and checking normal/maximized restoration and cursor hiding through fullscreen.
 
 Extend Qt Quick component coverage as commands gain behavior. Add
 actual-application scenarios for file open, navigation, diagnostics access,

@@ -5,6 +5,41 @@
 #include <QUrl>
 #include <QtQml/qqmlregistration.h>
 
+class ShellTestWindowCommands final : public QObject {
+    Q_OBJECT
+    QML_NAMED_ELEMENT(WindowCommands)
+    QML_UNCREATABLE("Test commands are supplied by the component harness")
+    Q_PROPERTY(bool cursorHidden READ cursorHidden WRITE setCursorHidden)
+    Q_PROPERTY(bool windowShortcutsBlocked
+                   READ windowShortcutsBlocked
+                   WRITE setWindowShortcutsBlocked)
+
+public:
+    explicit ShellTestWindowCommands(QObject *parent)
+        : QObject(parent) {}
+
+    int toggleCount() const { return m_toggleCount; }
+    bool cursorHidden() const { return m_cursorHidden; }
+    void setCursorHidden(bool hidden) { m_cursorHidden = hidden; }
+    bool windowShortcutsBlocked() const {
+        return m_windowShortcutsBlocked;
+    }
+    void setWindowShortcutsBlocked(bool blocked) {
+        m_windowShortcutsBlocked = blocked;
+    }
+
+    void reset() {
+        m_toggleCount = 0;
+    }
+
+    Q_INVOKABLE void toggleFullscreen() { ++m_toggleCount; }
+
+private:
+    int m_toggleCount = 0;
+    bool m_cursorHidden = false;
+    bool m_windowShortcutsBlocked = false;
+};
+
 class ShellTestPresentationOutputState final : public QObject {
     Q_OBJECT
     QML_NAMED_ELEMENT(PresentationOutputState)
