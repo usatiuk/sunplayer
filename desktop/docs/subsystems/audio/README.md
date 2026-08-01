@@ -34,6 +34,13 @@ underrun silence, applies one atomically published linear gain, and publishes
 fixed-capacity output-to-media spans. It does not allocate, block, take
 application locks, decode, log, invoke Qt, or perform device recovery.
 
+ADR 0016 has accepted a simpler migration policy for the next refactor:
+cubeb will follow the system default inside one cubeb-stream epoch, while
+Sunroom continues to own media/hold mapping, user intent, and explicit
+re-anchoring only when the cubeb stream itself must be recreated. The current
+explicit endpoint pinning and fail-closed overlay patch remain described below
+because they are still the checked-in implementation until that refactor lands.
+
 Volume is a session-lifetime value from zero to one. Mute selects zero effective
 gain without changing that remembered value. Both controls operate after PCM
 queueing, so they affect already-buffered audio immediately while submitted and
@@ -114,9 +121,10 @@ invalidation, queue bounds, and discontinuity policy. The sink owns device
 negotiation and presentation observations; it does not reinterpret media PTS.
 
 The initial controlled and physical formats are 48 kHz stereo because that
-gives stable fixture expectations and one proven device epoch. Format
-renegotiation and rebuilding libswresample for a changed device epoch remain
-recovery work.
+gives stable fixture expectations and avoids endpoint-driven format churn.
+Cubeb may adapt that stable requested format to a migrated endpoint. Sunroom
+rebuilds libswresample only when its own requested stream format changes, such
+as a future multichannel policy change.
 
 Each physical epoch fixes both its preroll and maximum accepted PCM block size.
 The maximum is no greater than `queue capacity - preroll`, so an accepted block
@@ -132,6 +140,12 @@ explicitly; it does not migrate to another default inside the epoch. Context
 collection-change notification is capability-reported; stream-level device
 change callbacks are not assumed because the pinned WASAPI backend does not
 provide them.
+
+This is the current, superseded implementation policy. The accepted next state
+opens cubeb's default route directly and lets cubeb or the sound server perform
+ordinary route migration. An audio-output epoch then identifies one cubeb
+stream lifetime rather than every native endpoint or WASAPI client hidden by
+that stream.
 
 The playback position reported by cubeb is the primary presentation
 observation. Sunroom must not subtract reported latency from that position a
@@ -204,19 +218,23 @@ device-frame position continues to advance while its media-frame mapping stays
 fixed, then resumes from the next real PCM frame. End-of-stream is
 generation-scoped so a stale decoder cannot finish a newer sink epoch.
 
-Physical device replacement is not implemented. Pinned cubeb's WASAPI backend
-can migrate a null-device stream internally without a stream-specific success
-notification or an acoustically continuous position guarantee. Sunroom avoids
-that ambiguity by enumerating the enabled multimedia default, opening its
-explicit device ID, disabling Cubeb-managed default switching, and carrying a
-narrow overlay patch that turns every disabled-switching WASAPI reconfigure
-event into an error before the client is replaced. The selected device ID is
-diagnostic state. Invalidation therefore fails closed until the next Windows
-slice re-enumerates the default and creates a new audio-output epoch from the
-last confident presented position. Demux, video decode, and the shared media
-timeline will remain alive; reopening the media source is a fallback, not the
-normal recovery path. See the
-[recovery research](../../research/2026-07-31-cubeb-wasapi-device-recovery.md).
+Application-level stream replacement is not implemented. The current explicit
+endpoint and fail-closed patch still turn native invalidation into a terminal
+sink error. The immediate simplification refactor removes both so cubeb can
+perform normal default-route migration while its monotonic logical position
+continues through the existing media/hold ledger. This may skip pending audio
+owned by a disappearing endpoint; V1 does not claim gapless device migration.
+
+A later bounded recovery slice handles actual cubeb error or demonstrated
+no-progress by freezing the last confident media time, recreating only the
+audio stream as a new output epoch, prerolling, and resuming according to
+current user intent. Demux, video decode, and the shared media timeline remain
+alive; reopening the media source is a fallback, not the normal recovery path.
+See the original
+[fail-closed research](../../research/2026-07-31-cubeb-wasapi-device-recovery.md),
+the later
+[project reconciliation](../../research/2026-08-01-display-audio-migration-reconciliation.md),
+and [ADR 0016](../../decisions/0016-reconcile-output-changes-semantically.md).
 
 ## Verification
 

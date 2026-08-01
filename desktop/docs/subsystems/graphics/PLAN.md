@@ -23,13 +23,13 @@ The current prototype establishes:
 * [x] Initial center-screen window movement and display-mode invalidation.
 * [x] Live Windows SDR-white/minimum/maximum updates through WinRT
   `AdvancedColorInfoChanged`, with QRhi swapchain HDR information as fallback.
-* [x] Display-target revisions invalidate display-dependent video surfaces, so
-  a detected target change rerenders paused content.
-* [ ] Stable Windows display identity, DisplayConfig/DXGI capability facts,
-  greatest-intersection selection, provenance, confidence, and stale-query
-  protection.
-* [ ] Topology/hotplug and sleep/wake invalidation plus deterministic
-  two-display reconciliation tests.
+* [x] Material display-target changes invalidate display-dependent video
+  surfaces, so a detected target change rerenders paused content.
+* [ ] Remove the redundant display-target revision and native-screen-driven
+  swapchain churn; compare the complete semantic target and recreate
+  presentation resources only when their contract changes.
+* [ ] Treat topology, hotplug, sleep/wake, and movement events as latest-state
+  reprobe hints and add deterministic semantic reconciliation tests.
 * [x] Demand-driven render scheduling with explicit animation.
 * [x] Resize, surface destruction, swapchain invalidation, and bounded
   device-loss recovery.
@@ -56,8 +56,9 @@ introducing FFmpeg or libplacebo yet.
 * [x] Reduce the final compositor to layer geometry, alpha composition, and
   swapchain encoding.
 * [x] Remove source tone mapping and pattern generation from the final shader.
-* [x] Track graphics-device and display revisions needed to invalidate a
-  rendered surface.
+* [x] Track graphics-device lifetime and the semantic display values needed to
+  invalidate a rendered surface. The temporary display revision surrogate is
+  scheduled for removal under ADR 0016.
 * [x] Preserve valid texture ownership through resize, swapchain recreation,
   and device recreation.
 * [x] Report the active video-surface format and producer in diagnostics.
@@ -276,7 +277,7 @@ For each implemented milestone, validate at least:
 | SDR output | Correct sRGB encoding and no HDR headroom claims |
 | HDR output | Extended-linear presentation and correct SDR-white placement |
 | HDR disabled on capable display | State and swapchain settle without mismatched encoding |
-| Move between unlike displays | Swapchain is recreated and display-targeted content rerenders |
+| Move between unlike displays | Targeted content rerenders; swapchain work occurs only if presentation encoding or lifetime changes |
 | DPI or window resize | UI and video geometry remain aligned |
 | Animation disabled | No continuous presentation loop |
 | Swapchain out of date | Resize/retry without stale render-pass resources |

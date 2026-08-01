@@ -1,87 +1,123 @@
 ---
 name: ship-change
-description: Ship a substantial project change through proportionate research, planning, implementation, validation, independent review, and design reassessment. Use for non-trivial implementation, refactoring, architecture, testing, or documentation slices where several concerns or meaningful failure modes must be reconciled before handoff or commit.
+description: Ship a substantial project change through grounded research, plan review, implementation, validation, documentation, independent review, design reassessment, and clean handoff. Use for non-trivial implementation, refactoring, architecture, testing, or documentation where current code, real production practice, meaningful failure modes, and project bookkeeping must be reconciled.
 ---
 
 # Ship Change
 
-Use this as a flexible completion loop, not a ceremony. Follow the repository's
-instructions first and use judgement to scale or reorder the workflow.
+Use this as a flexible completion loop, not ceremony. Follow repository
+instructions first. Scale, combine, reorder, or omit steps when judgement says
+that produces a clearer and safer result.
 
-## Work the slice
+## 1. Orient and protect the workspace
 
-1. Orient in the current code, plans, decisions, and relevant documentation.
-2. Identify the behavior, invariants, risks, unknowns, and a clear completion
-   condition.
-3. When accepted requirements make an axis of variation concrete and
-   materially different implementations, ownership, or lifecycle models are
-   already known, establish its narrow shared contract with the first
-   implementation. Shape it from known consumers, synchronization, capability,
-   fallback, and lifecycle requirements; use judgement rather than wrapping
-   anything merely because it could be replaced.
-4. Research only meaningful unknowns. Delegate bounded, independent questions
-   when that will improve confidence or speed; keep trivial and tightly coupled
-   work local.
-5. Maintain a short working plan when the work has multiple meaningful steps.
-6. Implement the smallest coherent slice that proves the intended boundary.
-7. Validate at the strongest practical boundary, including important failure
-   and fallback paths. Prefer behavioral tests over implementation-call tests.
-8. Synchronize documentation, decisions, progress, diagnostics, and deferred
-   work when the slice changes them.
+Read the applicable repository instructions, current plan, subsystem docs,
+accepted decisions, implementation, tests, and pinned dependency versions.
+Inspect worktree state before editing and preserve user or unrelated changes.
+State the requested behavior, current behavior, important invariants, risks,
+unknowns, and a concrete completion condition.
 
-## Challenge the result
+## 2. Research the real problem
 
-After the implementer's own checks pass, use independent review in proportion
-to risk:
+Research only uncertainties that can change the design or validation. Start
+with the current repository and exact pinned dependency source. For library,
+platform, lifecycle, media, or architecture questions, also inspect how mature
+production projects solve the same problem and their known regressions. Prefer
+primary documentation and source over summaries.
 
-- Trivial edits usually need self-review and targeted validation only.
-- A localized, well-tested change may need one reviewer covering several
-  concerns.
-- Cross-subsystem, lifecycle, concurrency, platform, media, color, or
-  high-consequence changes may benefit from two or three focused reviewers.
+Keep evidence categories distinct:
 
-Choose useful review lenses rather than maximizing comments:
+- Current project behavior.
+- Documented contract.
+- Source-confirmed implementation detail.
+- Inference or policy choice.
+- Experiment still required.
 
-- Correctness: APIs, lifetimes, concurrency, failure behavior, portability,
-  security, and observable invariants.
-- Design: ownership, module seams, cohesion, duplication, naming, testability,
-  and appropriately modern patterns.
-- Verification: meaningful regression coverage, diagnostics, fallback
-  visibility, documentation, progress, and unsupported claims.
+Do not promote a research note into project truth without reconciling it with
+the current architecture. Delegate bounded independent questions only when it
+materially improves confidence or speed; keep tightly coupled work local.
 
-Keep reviewers read-only unless there is a clear reason to delegate a fix.
-Triage findings against evidence and project intent; the implementer owns the
-decision. Fix material findings, reject false positives with a reason, and
+## 3. Shape and challenge the plan
+
+Maintain a short working plan for multi-step work. Define the smallest coherent
+vertical slices, their behavioral acceptance, validation, documentation, and
+commit boundaries. Review the plan with the same judgement as code: remove
+speculative abstractions, redundant states, unnecessary compatibility, and
+steps whose only purpose is to satisfy an earlier plan.
+
+Prefer latest-value reconciliation and eventual user-visible correctness for
+capabilities, diagnostics, and transient platform state. Require strict
+identity or ordering only for stale media, native-resource lifetime, clock
+meaning, protocol-required asynchronous lifetime, or another demonstrated
+invariant.
+
+When a concrete axis already has materially different consumers, ownership,
+or lifecycles, establish its narrow shared contract with the first
+implementation. Do not add wrappers merely because something could vary.
+Update the working plan when evidence changes the design.
+
+## 4. Implement a coherent slice
+
+Implement the behavior through the strongest existing boundary. Keep modules
+cohesive and contracts narrow. Prefer deleting superseded paths and cruft over
+leaving compatibility layers the project does not require. Do not broaden the
+task into unrelated cleanup, but refactor an existing boundary when that is
+the simpler way to make the requested behavior correct.
+
+Keep the user informed during long work and surface assumptions that materially
+affect scope or behavior.
+
+## 5. Validate behavior
+
+Validate at the highest practical public boundary with real dependencies and
+representative data. Substitute clocks, devices, or OS state only where control
+or determinism requires it. Prefer observable outcomes over private call
+sequences and fixed sleeps.
+
+For a significant bug fix, add a regression that fails without the fix when
+practical; temporarily revert or disable the fix to prove that relationship
+when doing so is safe and useful. Cover important failure, cancellation,
+fallback, lifetime, and stale-work paths in proportion to risk. Follow the
+repository's exact build and test instructions.
+
+## 6. Synchronize project truth
+
+Update the appropriate accepted architecture, subsystem plan, root progress,
+decision record, research note, diagnostics contract, testing record, and
+deferred-work entry. Preserve evidence and unresolved experiments without
+presenting them as implemented behavior. Do not leave material reasoning only
+in chat, a commit message, or a speculative architecture note.
+
+## 7. Review the result
+
+Self-review the complete diff for correctness, ownership, API use, concurrency,
+lifetime, failure behavior, portability, cohesion, duplication, naming,
+testability, observable fallback, documentation consistency, and unsupported
+claims. Look specifically for abstractions without policy, wrappers without a
+consumer, duplicated helpers, catch-all fallbacks, comments that restate code,
+and tests that assert implementation calls instead of behavior.
+
+Use independent read-only review in proportion to risk: none for trivial work,
+one broad reviewer for a localized slice, and focused correctness/design/test
+reviewers for consequential cross-subsystem or lifecycle changes. Triage every
+material finding against evidence and intent, fix or explicitly defer it, then
 rerun affected validation.
 
-Watch for AI-generated-code smells: abstractions without a known requirement
-or policy, wrappers without policy, duplicated helpers, comments that restate
-syntax, catch-all fallbacks, unsupported defensive checks, inconsistent
-naming, unrelated refactors, and tests that assert calls instead of behavior.
-“Modern” means an appropriate, established pattern—not novelty.
+## 8. Stop and rethink when needed
 
-## Stop and rethink
+Treat three review/fix rounds on the same design as a circuit breaker, not a
+target. Stop earlier when clean. If material findings recur, question the
+boundary, ownership, invariant, API, state model, and test seam. Prefer a
+simpler redesign that removes the failure class over accumulating patches.
 
-Use three review/fix rounds for one design as a circuit breaker, not a target.
-Stop earlier when the slice is clean.
+Continue iterating only for evidence-backed blockers such as wrong results,
+crashes, hangs, data loss, security issues, lifetime/API violations, broken
+core invariants, or misleading tests. Report missing authority, hardware, or
+external state clearly rather than manufacturing certainty.
 
-If material findings persist or recur, reassess why:
+## 9. Finish cleanly
 
-- Is the boundary, ownership, invariant, API, or test seam wrong?
-- Is complexity making invalid states or lifetime errors too easy?
-- Would a simpler, stronger design remove a class of findings?
-
-When a materially better design is credible, state the failure hypothesis,
-reimplement, and begin a fresh review cycle. When no credible redesign exists,
-continue only for evidence-backed blockers such as wrong results, crashes,
-hangs, data loss, security issues, lifetime/API violations, broken core
-invariants, or materially misleading tests. Do not loop on optional style churn.
-
-If a blocker requires missing authority, information, hardware, or external
-state, report it clearly instead of looping indefinitely.
-
-## Finish
-
-Run the final relevant checks after review fixes and summarize the evidence,
-remaining gaps, and deferred work. Commit only when the task authorizes it.
-Commit permission does not imply permission to push, deploy, or publish.
+Run final relevant checks after review fixes. Inspect the final diff and status,
+then summarize the outcome, validation evidence, remaining gaps, and deferred
+work. Commit, push, deploy, or publish only when authorized; each is a separate
+authority unless repository or user instructions explicitly combine them.

@@ -148,52 +148,51 @@ failure is acceptable only when FFmpeg/libplacebo genuinely lacks a valid path
 for that source and the fallback or error is explicit; it is not a reason to
 build a competing Sunroom implementation.
 
-## Stage 2: Harden the live Windows presentation environment
+## Stage 2: Simplify live Windows target reconciliation
 
 This is not a greenfield display observer. The current implementation already:
 
-* [x] Binds WinRT `DisplayInformation` to the native window and observes
+* [x] Caches an HWND-bound WinRT `DisplayInformation` and observes
   `AdvancedColorInfoChanged`.
 * [x] Publishes active HDR mode, SDR white, minimum luminance, and maximum
   luminance, with QRhi swapchain HDR information as a fallback.
-* [x] Reacts to `QWindow::screenChanged` and debounced window movement, then
-  reattaches/reprobes the provider and recreates the swapchain when the
-  presentation mode changes.
-* [x] Converts material target changes into a `displayTargetRevision`; the
-  rendered-video key consumes that revision, so a paused frame rerenders for a
-  detected reference-white/headroom change while ordinary UI changes only
-  recompose.
+* [x] Reacts to `QWindow::screenChanged` and debounced movement.
+* [x] Rerenders a paused target-dependent frame when the detected reference
+  white or headroom changes.
 
-The remaining work replaces heuristic identity and capability selection with
-stronger Windows facts and stress-proves the existing reconciliation path.
+The accepted design treats native events as hints and the latest semantic
+`PresentationTarget` as truth. Windows' HWND-bound `DisplayInformation` already
+tracks the window and is the Advanced Color authority. Sunroom will not add a
+cross-platform hierarchy of selection, capability, provider, topology, or
+query revisions, nor a competing greatest-intersection display selector.
 
-* [ ] Evolve `PresentationOutputState` into a window-associated presentation
-  snapshot with stable display identity, selection revision, provenance, and
-  confidence.
-* [ ] Resolve the current Windows output from actual window/video-viewport
-  association, using a documented greatest-intersection rule and hysteresis
-  where the platform does not provide a stronger surface association.
-* [ ] Combine DisplayConfig reference white and identity with DXGI color volume
-  and luminance facts; use `IDXGIFactory1::IsCurrent` as a cheap topology
-  invalidation guard.
-* [ ] Coalesce expensive reprobes and reject late results whose window,
-  selection, provider, or topology revision is stale.
-* [ ] Reprobe after display hotplug, Advanced Color/HDR changes, topology
-  invalidation, and resume from sleep; converge to the newest observable state
-  rather than requiring every transient callback to be globally ordered.
-* [ ] Distinguish reported peak, full-frame peak, and conservatively selected
-  usable peak. Preserve unknown values rather than presenting an estimate as a
-  measurement.
-* [ ] Add a deterministic simulated provider with two unlike displays,
-  out-of-order query completion, window movement, pause, and target-only
-  rerender coverage.
+* [ ] Remove `displayTargetRevision` from the rendered-video reuse key. Record
+  every video-affecting target value directly in the surface request and reuse
+  it when those values are equal.
+* [ ] Stop recreating the swapchain merely because `QScreen` identity changed.
+  Recreate or reconfigure only when the presentation format, declared color
+  encoding, HDR/SDR mode, adapter/device, or native resource lifetime changes.
+* [ ] Route movement, `screenChanged`, Advanced Color changes, hotplug, and
+  resume through one idempotent latest-state reprobe. Coalesce bursts lightly;
+  do not build a mandatory asynchronous probe pipeline for synchronous Windows
+  state.
+* [ ] Keep native display identity, reported full-frame peak, raw capability
+  values, update reason, and timestamps as optional diagnostics. Rendering
+  consumes one effective target peak and does not use confidence scores as a
+  correctness mechanism.
+* [ ] Add deterministic semantic-policy coverage proving equal targets reuse a
+  paused video surface, material target changes rerender it, and presentation
+  mode changes request only the required swapchain work.
 * [ ] Record `SystemManaged` for a correctly tagged Advanced Color surface,
   distinguish HDR scene-referred scRGB scaling from SDR Advanced Color/WCG
   display-referred FP16, and record `UnmanagedSrgb` only for ordinary SDR with
   Advanced Color inactive.
 
-This stage extends the existing WinRT observer; it does not add symmetric
-empty platform abstractions without a consumer.
+Wayland's compositor description identity remains a local asynchronous
+protocol lifetime. It does not justify extra shared display revisions on
+Windows or macOS. See
+[the reconciliation research](../../research/2026-08-01-display-audio-migration-reconciliation.md)
+and [ADR 0016](../../decisions/0016-reconcile-output-changes-semantically.md).
 
 ## Stage 3: Target gamut and composition verification
 

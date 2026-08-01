@@ -64,9 +64,12 @@ Research notes and architecture notes are not automatically current project trut
 * Make designs as simple as possible, but not simpler than correctness, lifecycle, recovery, platform behavior, and observability require.
 * Prefer designs that converge quickly to the correct user-visible state over
   machinery that makes every transient frame, diagnostic snapshot, or event
-  interleaving perfect. Add strict ordering, revisioning, and reconciliation
-  only when stale state can cause wrong media, unsafe lifetimes, persistent
-  incorrect output, or another demonstrated product failure.
+  interleaving perfect. Compare the latest semantic value and reconcile it at
+  a safe boundary by default. Add a generation, epoch, revision, or strict
+  ordering rule only when it protects media identity, native-resource
+  lifetime, clock meaning, a protocol-required asynchronous lifetime, or
+  another demonstrated product invariant. Do not create identities merely to
+  make capability observation or diagnostics appear atomic.
 * Treat diagnostics and non-critical capability observations as eventually
   consistent unless a concrete requirement needs an atomic snapshot. Do not
   turn best-effort library integration into a duplicate policy engine merely
@@ -80,32 +83,18 @@ Research notes and architecture notes are not automatically current project trut
 * Do not derail current work to fix every incidental issue. Record relevant deferred findings instead.
 * Make hardware-decoding, texture-copy, graphics-backend, and fallback behavior visible through diagnostics.
 
-## Implementation workflow
+## Change workflow
 
-For substantial implementation work, normally:
+For substantial implementation, refactoring, architecture, testing, or
+documentation work, use the project-local `$ship-change` skill. It is the one
+source of truth for the research–plan–implement–validate–review–rethink–finish
+workflow, including research into how comparable production projects solve the
+problem. Apply it proportionally and review the plan itself with judgement;
+the workflow is not a requirement to preserve an overbuilt plan.
 
-1. Orient from the current plan, relevant subsystem documentation, decisions, and implementation.
-2. Investigate meaningful unknowns before committing to a design. When research, API verification, or codebase auditing can be separated cleanly, delegate bounded questions to one or more subagents and synthesize the results before implementation.
-3. Create or update a short working plan. Keep it synchronized when discoveries change the approach or scope.
-4. Implement the smallest coherent vertical slice that proves the relevant boundaries and behavior.
-5. Validate in proportion to risk, including important failure and fallback paths, and synchronize the relevant documentation.
-6. For a substantial or high-risk slice, use the project-local
-   `$ship-change` skill when available before treating the work as complete.
-7. Rerun affected validation after review fixes. When a task includes a commit, commit only after material findings are resolved, rejected with evidence, or explicitly deferred.
-
-This flow is not ceremony or a hard gate. Trivial edits may not benefit from delegation or a written multi-step plan, while substantial documentation, audits, and test design can benefit when they contain separable questions or meaningful unknowns. Tightly coupled work may still be clearer when handled by one agent. Skip, combine, or reorder steps when that produces a clearer and safer result, and always use your own best judgement.
-
-## Shipping substantial changes
-
-The project-local `$ship-change` skill defines the reusable
-research–plan–implement–validate–review–rethink loop. Apply it proportionally:
-trivial edits normally need only self-review and targeted validation, while
-cross-subsystem, lifecycle, concurrency, platform, media, or color-pipeline
-changes benefit from independent review.
-
-`AGENTS.md` remains authoritative for project principles, documentation,
-testing, and local instructions. Review completion is not blanket
-authorization to commit, push, deploy, or publish.
+`AGENTS.md` remains authoritative for project principles, documentation roles,
+testing discipline, and local instructions. The skill does not grant authority
+to commit, push, deploy, or publish.
 
 ## Testing discipline
 
@@ -115,18 +104,3 @@ authorization to commit, push, deploy, or publish.
 * Optimize for meaningful reproducible behaviors, not test count or a prescribed unit/integration ratio.
 * Add a regression scenario for significant bug fixes when practical. Otherwise document why automation is not yet possible and what coverage remains missing.
 * Keep verification strategy and known coverage gaps current in subsystem documentation and `docs/TESTING.md`.
-
-## Review checklist
-
-For substantial changes, verify that:
-
-* Intended behavior, important invariants, ownership, and failure paths are
-  correct and observable.
-* Module boundaries remain narrow and the implementation is no more complex
-  than the problem requires.
-* Tests exercise meaningful behavior at the strongest practical boundary.
-* Documentation and progress tracking remain current.
-* New architectural decisions have been recorded where appropriate.
-* Platform-specific logic has not unnecessarily leaked into shared modules.
-* Known limitations and deferred issues are documented.
-* Relevant tests and diagnostics exist or are tracked.

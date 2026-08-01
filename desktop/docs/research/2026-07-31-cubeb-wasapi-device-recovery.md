@@ -1,5 +1,13 @@
 # Cubeb WASAPI device-recovery semantics
 
+> Historical result: the pinned-source findings remain valid, but the
+> fail-closed product policy is superseded by
+> [the 2026-08-01 reconciliation](2026-08-01-display-audio-migration-reconciliation.md)
+> and [ADR 0016](../decisions/0016-reconcile-output-changes-semantically.md).
+> Sunroom now accepts cubeb-stream-level logical continuity for ordinary
+> default-route migration instead of requiring a physical-endpoint epoch for
+> every hidden WASAPI client.
+
 ## Question
 
 Can Sunroom treat cubeb's automatic default-device migration as a trustworthy

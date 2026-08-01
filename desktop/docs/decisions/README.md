@@ -30,3 +30,4 @@ with a new decision when the accepted choice changes materially.
 * [0013: Rely on system display calibration on managed presentation paths](0013-rely-on-system-display-calibration.md)
 * [0014: Prefer native Metal presentation for the macOS graphics domain](0014-prefer-native-metal-presentation-on-macos.md)
 * [0015: Target Wayland and leave X11 unsupported](0015-wayland-only-linux-desktop.md)
+* [0016: Reconcile output changes by semantic value](0016-reconcile-output-changes-semantically.md)

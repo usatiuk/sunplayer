@@ -4,6 +4,8 @@
 * Date: 2026-07-28
 * Amended by:
   [0008: Anchor normal HDR playback to the platform reference white](0008-reference-white-adaptive-hdr-display-mapping.md)
+  and
+  [0016: Reconcile output changes by semantic value](0016-reconcile-output-changes-semantically.md)
 * Related:
   [0013: Rely on system display calibration on managed presentation paths](0013-rely-on-system-display-calibration.md)
 
@@ -44,14 +46,16 @@ allocation. The compositor borrows the QRhi view for the current presentation
 device. A completed surface records:
 
 * The graphics-device generation.
-* The effective display-target revision.
 * The producer-content revision.
-* Its pixel size, reference white, target minimum-luminance value and known
-  state, target headroom, and fixed color semantics.
+* Its pixel size and every semantic target value that affects rendering,
+  currently reference white, target minimum-luminance value and known state,
+  target headroom, and fixed color semantics.
 
-Reuse requires an exact match of that state. Swapchain identity is
-intentionally absent, so an equivalent swapchain recreation does not discard a
-valid surface. Device, display-target, content, or destination-size changes
+Reuse requires an exact match of that semantic state. A separate display
+revision is deliberately absent: an event or native display identity change
+with an equal target does not change the rendered pixels. Swapchain identity
+is intentionally absent, so an equivalent swapchain recreation does not
+discard a valid surface. Device, display-target, content, or destination-size changes
 invalidate it. A recorded render becomes completed and reusable only after the
 owning QRhi frame ends successfully; failed frame submission discards the
 pending state.

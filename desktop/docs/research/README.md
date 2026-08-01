@@ -32,3 +32,5 @@ the newer note or decision rather than silently rewriting the investigation.
 * [2026-07-31: Cubeb WASAPI device-recovery semantics](2026-07-31-cubeb-wasapi-device-recovery.md)
 * [2026-08-01: Video-rendering and color-management milestone review](2026-08-01-color.md)
 * [2026-08-01: Pinned color-pipeline source verification](2026-08-01-pinned-color-source-verification.md)
+* [2026-08-01: Display and audio migration in production media stacks](2026-08-01-video-audio-switch.md)
+* [2026-08-01: Display and audio migration project reconciliation](2026-08-01-display-audio-migration-reconciliation.md)

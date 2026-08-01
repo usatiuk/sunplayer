@@ -270,16 +270,19 @@ the swapchain was rebuilt.
 * Windows `DisplayInformation::GetAdvancedColorInfo()` state: current HDR mode,
   SDR white, minimum luminance, and maximum luminance.
 
-Windows display updates arrive through `AdvancedColorInfoChanged`. Moving the
-window re-evaluates the output associated with the window center. Position
-changes are debounced for 100 milliseconds before the engine verifies whether
-the swapchain belongs to the same screen.
+Windows display updates arrive through `AdvancedColorInfoChanged`. The current
+implementation also debounces window movement for 100 milliseconds and
+recreates the swapchain when its center-associated `QScreen` changes.
 
-This is an initial observer, not the final multi-display model. It does not yet
-provide stable DisplayConfig/DXGI identity, complete color-volume provenance,
-greatest-intersection selection for spanning windows, topology revisions, or
-stale asynchronous-query rejection. Those requirements are active work in the
-video-rendering roadmap.
+[ADR 0016](../../decisions/0016-reconcile-output-changes-semantically.md)
+accepts a simpler replacement: native events mark presentation state dirty,
+the platform adapter requeries the current semantic target at a safe boundary,
+and the engine reacts only when that value changes. A reference-white,
+headroom, or gamut change invalidates target-dependent video. A swapchain is
+recreated only when its format, declared color encoding, or native-resource
+lifetime changes. Stable display identities, greatest-intersection selection,
+topology revisions, per-field confidence, and a general asynchronous query
+pipeline are optional diagnostics rather than correctness requirements.
 
 ### Swapchain selection
 

@@ -52,8 +52,9 @@ explicit recovery semantics.
 * [x] Add a preallocated SPSC PCM and timestamp-metadata boundary.
 * [x] Implement `CubebAudioSink` with no allocation, blocking, application
   locks, synchronous logging, Qt calls, decode, or recovery in its callback.
-* [ ] Negotiate a stable format for each audio-output epoch and rebuild
-  libswresample when it changes.
+* [x] Use a stable 48 kHz stereo float32 request across ordinary endpoint
+  migration; rebuild libswresample only when Sunroom's requested stream format
+  changes.
 * [x] Implement preroll, drain, and short-underrun hold silence.
 * [x] Implement gain and mute without changing media-clock progression.
 * [x] Expose submitted media frames, mapped presented media frames, raw cubeb
@@ -95,28 +96,27 @@ explicit recovery semantics.
 * [x] Keep sustained hold-silence frozen and observable without falling back
   to a monotonic clock; keep established-clock loss terminal until physical
   output replacement exists.
-* [ ] Detect a valid but non-advancing physical position with a grace-based
-  progress watchdog; repeated equal `IAudioClock` samples are allowed within
-  the grace window.
-* [x] Disable Cubeb-managed default-device switching so opaque migration cannot
-  redefine the current output epoch.
-* [x] Patch the pinned WASAPI render loop so a disabled-switching session
-  reconfigure fails before silently replacing the same endpoint's client.
-* [x] Enumerate and open the Windows multimedia default explicitly as the
-  selected device for Sunroom-owned replacement.
-* [x] Identify every presentation/diagnostic observation by an audio-output
-  epoch distinct from playback generation; reject an unanchored epoch change.
-* [ ] After selected-device loss, recreate only device-dependent
-  output/conversion state, re-anchor a new epoch at the last confident
+* [ ] Remove explicit Windows default-endpoint enumeration, the
+  disabled-switching preference, and the fail-closed cubeb overlay patch; open
+  cubeb's default route and let cubeb or the sound server own normal migration.
+* [ ] Define `audioOutputEpoch` as one cubeb stream lifetime. Keep the existing
+  compact media/hold history across internal backend migration and do not infer
+  a hidden epoch from a collection notification.
+* [ ] Add a deterministic sink scenario proving an internal device-revision
+  hint does not invalidate media mapping, while actual stream recreation starts
+  a new epoch and requires a new anchor.
+* [ ] On cubeb error or failed stream creation, recreate only
+  device-dependent output state, re-anchor a new epoch at the last confident
   presented position, bound retry, and require a new presentation observation
   before resuming.
 * [ ] Preserve the single demux/video pipeline across ordinary audio-device
   replacement; use a full media-generation restart only when buffered timeline
   state cannot be reconciled.
+* [ ] Add a valid-but-non-advancing watchdog only if real-device experiments
+  demonstrate a persistent wedge without a cubeb error; repeated equal clock
+  samples are not themselves failure.
 * [ ] Validate default-device change, USB removal, Bluetooth disconnect and
   reconnect, sleep/wake, and service interruption on Windows.
-* [x] Select explicit stream recreation over Cubeb's opaque migration for
-  trustworthy epoch semantics.
 * [ ] Package and validate cubeb's current macOS and Linux backend choices with
   locked Rust dependencies if those backends remain selected upstream.
 * [ ] Validate PulseAudio and PipeWire-Pulse behavior on supported Linux

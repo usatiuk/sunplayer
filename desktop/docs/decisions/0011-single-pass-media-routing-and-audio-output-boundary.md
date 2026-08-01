@@ -3,6 +3,8 @@
 * Status: Accepted
 * Date: 2026-07-31
 * Media-input clarification: 2026-08-01
+* Output-migration amendment:
+  [0016: Reconcile output changes by semantic value](0016-reconcile-output-changes-semantically.md)
 
 ## Context
 
@@ -43,8 +45,8 @@ Decoded audio is converted off the real-time thread through FFmpeg
 libswresample into native-endian, interleaved float32 PCM. A PCM block carries
 its playback generation, absolute output-frame index, normalized media start,
 sample rate, and channel count. The initial controlled scenario uses 48 kHz
-stereo; real device negotiation may select another fixed format for a later
-audio-output epoch.
+stereo. The production sink requests the same stable format across ordinary
+default-device migration; native endpoint conversion remains cubeb's concern.
 
 `AudioSink` is the narrow decode/control-thread boundary. Its first
 implementation, `ControlledAudioSink`, is bounded and deterministic and keeps
@@ -55,7 +57,10 @@ The physical implementation is a pinned cubeb backend. The real-time callback
 reads from preallocated PCM and metadata storage, writes bounded hold silence,
 and updates fixed-capacity observations only. It does not
 decode, allocate, block, log synchronously, invoke Qt, or perform recovery.
-Device lifecycle and recovery remain control-thread responsibilities.
+Sunroom serializes stream lifecycle on its control thread. Cubeb and the sound
+service own ordinary migration of a stream following the system default;
+application-level stream recreation is a fallback after an error or
+demonstrated persistent no-progress condition.
 
 When cubeb supplies a playback position, Sunroom treats that position as the
 primary backend presentation observation. It does not subtract cubeb's reported
@@ -92,12 +97,13 @@ end-of-stream without producing output for the requested interval creates no
 audio epoch; playback uses the no-audio clock for that interval. Decode failure
 remains terminal and is not reclassified as an empty interval.
 
-An audio-output epoch is distinct from a playback generation. Presentation
-snapshots and diagnostics carry both identities, and playback rejects an epoch
-change that has not been explicitly re-anchored. Future physical-device
-replacement will recreate device-dependent output, conversion, and
-presentation-ledger state and anchor the new raw device clock to the last
-confident media position. It will not normally reopen the shared source,
+An audio-output epoch is distinct from a playback generation. It identifies one
+cubeb stream lifetime and its presentation ledger, not every native endpoint
+or client that cubeb may use internally. Presentation snapshots and diagnostics
+carry both identities, and playback rejects a replaced stream's epoch until it
+has been explicitly re-anchored. Application-level stream replacement recreates
+device-dependent output state and anchors the new raw clock to the last
+confident media position. It does not normally reopen the shared source,
 demuxer, or video decoder. Full generation replacement remains a fallback when
 buffered timeline state cannot be reconciled.
 
@@ -163,9 +169,9 @@ Costs and current limits:
   epoch while retaining the media generation remains a later slice; sustained
   clock loss and terminal device failure currently become visible errors.
 * cubeb is maintained as a project-local overlay because the pinned registry
-  package is substantially older than the reviewed upstream revision. A narrow
-  WASAPI patch makes disabled-switching reconfigure events fail before Cubeb
-  can replace the clock source invisibly.
+  package is substantially older than the reviewed upstream revision. The
+  temporary fail-closed WASAPI patch and explicit device pinning are superseded
+  by ADR 0016 and will be removed by the next simplification refactor.
 
 ## Alternatives considered
 

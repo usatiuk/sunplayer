@@ -108,10 +108,11 @@ and continuous synchronized local-file audio/video playback:
 * Qt screen state, QRhi swapchain HDR information, and an initial WinRT
   Advanced Color observer feed a shared presentation snapshot and diagnostic
   UI. Live Advanced Color changes already update SDR white and luminance;
-  target revisions rerender a paused frame when those effective values change.
-  Stable Windows display identity, DisplayConfig/DXGI capability
-  provenance, robust spanning-window selection, topology revisions, and stale
-  asynchronous-query rejection remain planned.
+  material target changes rerender a paused frame. ADR 0016 replaces the
+  planned display identity/topology/query-revision graph with latest semantic
+  target reconciliation. The next refactor removes the current revision
+  surrogate and avoids swapchain recreation when only native screen identity
+  changed.
 * Diagnostics distinguish the producer input path and its CPU transfers from
   output-target GPU copies, output CPU transfers, synchronization, and fallback
   reason.
@@ -140,7 +141,10 @@ and continuous synchronized local-file audio/video playback:
   dedicated MTA control thread. Its real-time callback consumes preallocated
   PCM, records bounded output-to-media mappings, and represents short underruns
   as hold silence. The sink exposes separate media/device positions, optional
-  latency and device-notification capabilities, and generation-safe drain.
+  latency and device-notification capabilities, and generation-safe drain. The
+  checked-in sink still pins the enumerated default and carries a fail-closed
+  cubeb patch; ADR 0016 accepts the simpler next state where cubeb follows the
+  system default within one cubeb-stream epoch.
 * Playback exposes user play intent independently from audio interruption.
   Sustained hold-silence enters `Buffering`, preserves the last confident
   audio-master position, and keeps video frozen without switching to a
@@ -296,10 +300,10 @@ Documentation: `docs/subsystems/playback/`
 * [x] Shared presentation and display-state model
 * [x] Initial Windows window-movement and Advanced Color observation
 * [x] Initial Windows dynamic Advanced Color notification
-* [ ] Stable Windows display identity, topology observation, and
-  greatest-intersection window/output selection
-* [ ] Windows DisplayConfig/DXGI capability, provenance, confidence, and stale
-  query model
+* [ ] Semantic display-target reconciliation without native-identity-driven
+  surface invalidation or swapchain churn
+* [ ] Optional Windows raw display capability diagnostics where renderer or
+  support tooling has a concrete consumer
 * [ ] macOS display adapter
 * [ ] Wayland display adapter
 * [x] Graphics-device loss and recreation
@@ -479,6 +483,8 @@ docs/
         0012-use-final-decoded-frames-as-color-evidence.md
         0013-rely-on-system-display-calibration.md
         0014-prefer-native-metal-presentation-on-macos.md
+        0015-wayland-only-linux-desktop.md
+        0016-reconcile-output-changes-semantically.md
 
     research/
         README.md
@@ -495,6 +501,8 @@ docs/
         2026-07-31-cubeb-wasapi-device-recovery.md
         2026-08-01-color.md
         2026-08-01-pinned-color-source-verification.md
+        2026-08-01-video-audio-switch.md
+        2026-08-01-display-audio-migration-reconciliation.md
 
     subsystems/
         application/

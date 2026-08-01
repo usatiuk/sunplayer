@@ -111,20 +111,21 @@ pass. This is accepted for explicit composition. Memory bandwidth, power, and
 damage behavior must be profiled with real playback before optimizing the
 integration or adding platform-specific variants.
 
-### Display-state confidence and provenance
+### Additional display capability diagnostics
 
 `PresentationOutputState` applies a fixed preference between Windows Advanced
-Color data and QRhi swapchain data. It does not expose confidence, source
-provenance, maximum full-frame luminance, brightness changes, calibration, or
-user overrides. Expand the model when libplacebo target selection requires
-those distinctions.
+Color data and QRhi swapchain data. It does not expose maximum full-frame
+luminance, detailed raw capability provenance, calibration identity, or user
+overrides. Add a raw fact only when renderer policy or a concrete support
+diagnostic consumes it; rendering continues to use one effective semantic
+target.
 
-The current Windows observer also identifies the active `QScreen` from the
-window center and listens to WinRT `AdvancedColorInfoChanged`. It does not yet
-provide stable DisplayConfig/DXGI display identity, greatest-intersection
-selection for spanning windows, topology revision guards, coalesced capability
-reprobes, or stale asynchronous-result rejection. These are active in the
-video-rendering plan rather than accepted as complete multi-display support.
+Stable DisplayConfig identity, a custom greatest-intersection selector,
+topology generations, confidence scores, and a general asynchronous probe
+pipeline are not planned correctness mechanisms. Windows' cached HWND-bound
+`DisplayInformation` remains the Advanced Color authority. Native identity and
+topology data may be added locally for diagnostics or adapter enumeration if a
+real backend need appears.
 
 ### ICC transforms and calibration fallbacks
 
@@ -230,17 +231,21 @@ and underruns. It still lacks click-free gain ramps, persistence, subtitles,
 track selection, and a general diagnostics view. macOS and Linux physical
 audio backends are not yet packaged or validated.
 
-Pinned cubeb's WASAPI backend can migrate a null-device stream internally, but
-does not expose a stream-specific success notification or guarantee that its
-monotonic logical position excludes discarded old-device audio. Sunroom now
-enumerates and opens the explicit multimedia default and disables opaque
-default switching. Its narrow cubeb overlay patch also rejects same-endpoint
-WASAPI client reconfiguration, so invalidation fails closed. The next slice will
-re-enumerate on collection changes and replace only the audio-output epoch from
-the last confident presented position. The single demux/video pipeline remains
-alive; reopening the source is an explicit fallback for irreconcilable timeline
-state.
-See the dated Cubeb recovery research note.
+Pinned cubeb's WASAPI backend can migrate a null-device stream internally and
+keeps a monotonic logical position, but it does not expose a stream-specific
+success notification or guarantee gapless delivery of audio queued to the old
+endpoint. The current implementation still pins the enumerated multimedia
+default and carries a fail-closed WASAPI patch. ADR 0016 supersedes that policy:
+the immediate refactor will open cubeb's default route and keep one Sunroom
+output epoch for one cubeb stream while cubeb performs ordinary route
+migration.
+
+Application-level recreation after a cubeb error remains deferred. That path
+will replace only the audio stream, start and re-anchor a new output epoch from
+the last confident media position, and preserve the single demux/video
+pipeline. A no-progress watchdog is added only if real-device tests demonstrate
+a wedge without an error. See the original Cubeb recovery note and the later
+display/audio migration reconciliation.
 
 The current seek implementation reopens and reprobes a local file for each
 restart. A future persistent-context optimization requires an explicit

@@ -201,20 +201,25 @@ Windows display adaptation is already live. The provider binds WinRT
 `DisplayInformation` to the native window, listens for
 `AdvancedColorInfoChanged`, and publishes HDR mode, SDR white, minimum
 luminance, and maximum luminance. QRhi swapchain HDR information supplies a
-fallback. `PresentationOutputState` responds to screen changes, while the
-presentation engine verifies debounced window movement and recreates the
-swapchain when needed. A material target change advances
-`displayTargetRevision`, which invalidates the rendered-video key and rerenders
-even a paused frame.
+fallback. The current implementation also reacts to `QScreen` changes and a
+debounced window-position check by recreating the swapchain, and it carries a
+separate `displayTargetRevision` in the rendered-video key.
 
-This is sufficient for the current single-display development path, but it is
-not final multi-display capability discovery. The remaining Windows work is
-stable DisplayConfig/DXGI identity, greatest-intersection selection for
-spanning windows, target primaries, richer peak/full-frame capability facts,
-topology and sleep/wake invalidation, stale asynchronous-result rejection, and
-deterministic two-display stress coverage. These refinements should converge to
-the newest state; diagnostics do not require atomic perfection across every
-transient event.
+[ADR 0016](../../decisions/0016-reconcile-output-changes-semantically.md)
+supersedes those two implementation details. The next refactor keeps the
+HWND-bound `DisplayInformation` as the Windows Advanced Color authority,
+treats native events as hints to requery the latest state, and compares one
+semantic presentation target. A changed target rerenders even a paused frame;
+an equal target reuses the existing surface regardless of screen identity or
+event count. Presentation resources are recreated only when their format,
+declared encoding, or native lifetime actually changes.
+
+Stable DisplayConfig/DXGI identity, greatest-intersection selection, topology
+generations, per-field confidence, and a general asynchronous query pipeline
+are not required for correctness. Raw output identity, target primaries, and
+peak/full-frame capability values may be added as diagnostics or policy inputs
+when a concrete renderer decision needs them. Topology, HDR, movement, and
+sleep/wake events only need to converge to the newest semantic target.
 
 ## Platform backends
 
