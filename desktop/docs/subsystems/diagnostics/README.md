@@ -138,7 +138,7 @@ The long-term support snapshot should compose:
 * Decoder backend, frame storage, adapter/device generation, and fallbacks.
 * Queue depths, clock source, selected/dropped frames, and underruns.
 * libplacebo backend, input and output transfer/copy paths, and target state.
-* Presentation backend, active display revision, output format, and recovery.
+* Presentation backend, semantic display target, output format, and recovery.
 * Relevant operation progress and last structured failure.
 
 Color diagnostics inspect the retained final FFmpeg frame and, when available,
@@ -146,7 +146,7 @@ libplacebo's mapped result. They report best-effort signal names, dynamic
 metadata path, and source ICC presence/size/application status without
 reconstructing a second metadata policy. Presentation state distinguishes
 `SystemManaged` from `UnmanagedSrgb` and records the surface encoding,
-target-gamut source, reference white, selected usable peak, display revisions,
+target-gamut source, reference white, selected usable peak, last update reason,
 and last invalidation reason. Diagnostics must not imply that retained ICC
 bytes were applied while LCMS is disabled.
 

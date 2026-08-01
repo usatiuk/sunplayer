@@ -66,7 +66,6 @@ private:
     RealtimePcmQueue m_queue;
     AudioOutputLedger m_outputLedger;
     std::string m_backendName;
-    std::string m_deviceId;
     AudioStreamFormat m_format;
     std::size_t m_prerollFrames = 0;
     std::uint32_t m_requestedLatencyFrames = 0;

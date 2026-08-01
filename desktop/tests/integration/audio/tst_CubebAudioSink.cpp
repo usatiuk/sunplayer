@@ -66,13 +66,13 @@ public:
     }
 
 private slots:
-    void opensDefaultOutputWithoutStartingPlayback();
+    void opensSystemDefaultRouteWithoutStartingPlayback();
     void rejectsABlockThatCouldDeadlockPreroll();
     void startsPausesAndDrainsSilentPcm();
 };
 
 void CubebAudioSinkTest::
-opensDefaultOutputWithoutStartingPlayback() {
+opensSystemDefaultRouteWithoutStartingPlayback() {
     CubebAudioSink sink(48'000);
     sink.reset(9, {48'000, 2});
 
@@ -82,7 +82,7 @@ opensDefaultOutputWithoutStartingPlayback() {
         diagnostics.errorMessage.empty(),
         diagnostics.errorMessage.c_str());
     QCOMPARE(diagnostics.backendName, std::string("wasapi"));
-    QVERIFY(!diagnostics.deviceId.empty());
+    QVERIFY(diagnostics.followsSystemDefault);
     QVERIFY(diagnostics.streamOpen);
     QCOMPARE(
         diagnostics.format,

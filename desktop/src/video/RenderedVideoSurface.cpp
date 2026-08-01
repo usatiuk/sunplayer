@@ -26,7 +26,6 @@ bool RenderedVideoSurfaceDescription::isValid() const {
 bool RenderedVideoSurfaceState::isValid() const {
     return description.isValid()
         && graphicsDeviceGeneration != 0
-        && displayTargetRevision != 0
         && contentRevision != 0;
 }
 

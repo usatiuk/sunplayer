@@ -84,7 +84,6 @@ public:
     float potentialHeadroom() const;
     float effectiveTargetHeadroom() const;
     float sdrScale() const;
-    quint64 displayTargetRevision() const;
 
     Q_INVOKABLE void reprobePresentation();
     void setBackendState(const PresentationBackendState &state);
@@ -98,7 +97,6 @@ private:
     void updateMetrics();
     void applyDisplayState(const DisplayState &state);
     PresentationTarget presentationTarget() const;
-    void advanceDisplayTargetRevision();
 
     QPointer<QWindow> m_window;
     QPointer<QScreen> m_screen;
@@ -109,5 +107,4 @@ private:
     QString m_screenName = QStringLiteral("Unavailable");
     qreal m_dpr = 1.0;
     qreal m_refreshRate = 0.0;
-    quint64 m_displayTargetRevision = 1;
 };

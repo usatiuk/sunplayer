@@ -169,9 +169,9 @@ Costs and current limits:
   epoch while retaining the media generation remains a later slice; sustained
   clock loss and terminal device failure currently become visible errors.
 * cubeb is maintained as a project-local overlay because the pinned registry
-  package is substantially older than the reviewed upstream revision. The
-  temporary fail-closed WASAPI patch and explicit device pinning are superseded
-  by ADR 0016 and will be removed by the next simplification refactor.
+  package is substantially older than the reviewed upstream revision. ADR 0016
+  removed the temporary fail-closed WASAPI patch and explicit device pinning;
+  the stream now follows cubeb's system-default route.
 
 ## Alternatives considered
 

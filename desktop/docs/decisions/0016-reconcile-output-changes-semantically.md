@@ -2,7 +2,8 @@
 
 * Status: Accepted
 * Date: 2026-08-01
-* Implementation status: Planned refactor
+* Implementation status: Implemented; application-level audio stream recovery
+  remains deferred
 * Amends:
   [0003: Normalize rendered video to one display-targeted linear surface](0003-display-targeted-video-surface.md)
   and
@@ -119,9 +120,8 @@ Costs and limitations:
   not manufacture a per-migration epoch from unrelated collection events.
 * A no-progress watchdog is deferred until real devices demonstrate the need
   and establish a safe threshold.
-* The implementation temporarily differs from this accepted decision until the
-  planned simplification refactor removes explicit endpoint pinning, the cubeb
-  patch, and the display revision surrogate.
+* Application-level cubeb stream recreation after a backend error remains a
+  separate recovery slice.
 
 ## Alternatives considered
 

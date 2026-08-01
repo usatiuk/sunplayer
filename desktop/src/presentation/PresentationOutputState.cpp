@@ -2,7 +2,6 @@
 
 #include <utility>
 
-#include <QGuiApplication>
 #include <QScreen>
 #include <QWindow>
 
@@ -23,7 +22,8 @@ void PresentationOutputState::attach(QWindow &window) {
     m_window = &window;
     connect(m_window, &QWindow::screenChanged, this, [this](QScreen *screen) {
         attachScreen(screen);
-        m_provider->attach(*m_window);
+        m_provider->refresh();
+        emit outputCharacteristicsChanged();
     });
     attachScreen(m_window->screen());
     m_provider->attach(*m_window);
@@ -94,9 +94,6 @@ float PresentationOutputState::effectiveTargetHeadroom() const {
 float PresentationOutputState::sdrScale() const {
     return presentationTarget().sdrScale;
 }
-quint64 PresentationOutputState::displayTargetRevision() const {
-    return m_displayTargetRevision;
-}
 
 PresentationTarget PresentationOutputState::presentationTarget() const {
     return calculatePresentationTarget(m_state, m_backendState);
@@ -112,15 +109,11 @@ void PresentationOutputState::reprobePresentation() {
 void PresentationOutputState::setBackendState(const PresentationBackendState &state) {
     if (m_backendState == state)
         return;
-    const PresentationTarget previousTarget = presentationTarget();
     m_backendState = state;
-    if (presentationTarget() != previousTarget)
-        advanceDisplayTargetRevision();
     emit stateChanged();
 }
 
 void PresentationOutputState::attachScreen(QScreen *screen) {
-    const bool targetScreenChanged = m_screen && m_screen != screen;
     for (const auto &connection : std::as_const(m_connections))
         disconnect(connection);
     m_connections.clear();
@@ -132,8 +125,6 @@ void PresentationOutputState::attachScreen(QScreen *screen) {
         m_connections.append(connect(m_screen, &QScreen::refreshRateChanged, this, changed));
     }
     updateMetrics();
-    if (targetScreenChanged)
-        advanceDisplayTargetRevision();
 }
 
 void PresentationOutputState::updateMetrics() {
@@ -154,32 +145,13 @@ void PresentationOutputState::updateMetrics() {
 
 void PresentationOutputState::applyDisplayState(const DisplayState &state) {
     Q_ASSERT(m_window);
-    const PresentationTarget previousTarget = presentationTarget();
-    bool screenSelectionChanged = false;
-    if (QScreen *screen =
-            QGuiApplication::screenAt(m_window->geometry().center());
-            screen && screen != m_screen) {
-        attachScreen(screen);
-        screenSelectionChanged = true;
-    }
-    const bool displayStateChanged = m_state != state;
-    const bool presentationModeChanged = displayStateChanged
-        && (m_state.valid != state.valid
-            || m_state.hdrActive != state.hdrActive);
-    if (!displayStateChanged && !screenSelectionChanged)
+    if (m_state == state)
         return;
-    if (displayStateChanged)
-        m_state = state;
-    if (presentationTarget() != previousTarget)
-        advanceDisplayTargetRevision();
-    if (presentationModeChanged || screenSelectionChanged)
+    const bool presentationModeChanged =
+        m_state.valid != state.valid
+        || m_state.hdrActive != state.hdrActive;
+    m_state = state;
+    if (presentationModeChanged)
         emit outputCharacteristicsChanged();
-    if (displayStateChanged)
-        emit stateChanged();
-}
-
-void PresentationOutputState::advanceDisplayTargetRevision() {
-    ++m_displayTargetRevision;
-    if (m_displayTargetRevision == 0)
-        ++m_displayTargetRevision;
+    emit stateChanged();
 }

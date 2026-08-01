@@ -137,7 +137,6 @@ RenderedVideoSurfaceState surfaceState(
             .targetPeakHeadroom = 1.0f,
         },
         .graphicsDeviceGeneration = graphics.generation(),
-        .displayTargetRevision = 1,
         .contentRevision = contentRevision,
     };
 }
@@ -657,7 +656,6 @@ realDemuxDecodeImportAndComposition() {
 
     RenderedVideoSurfaceState changedTarget = state;
     changedTarget.description.referenceWhiteNits = 100.0f;
-    ++changedTarget.displayTargetRevision;
     QCOMPARE(
         producer.ensureSurface(changedTarget),
         VideoOperationResult::Ready);

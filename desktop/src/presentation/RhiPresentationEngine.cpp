@@ -5,9 +5,7 @@
 #include <cmath>
 #include <optional>
 
-#include <QGuiApplication>
 #include <QQuickWindow>
-#include <QScreen>
 #include <QWindow>
 #include <QtCore/qscopeguard.h>
 #include <rhi/qrhi.h>
@@ -79,8 +77,6 @@ RhiPresentationEngine::RhiPresentationEngine(
       m_diagnosticSource(diagnosticSource),
       m_mediaSession(mediaSession),
       m_videoViewport(videoViewport) {
-    m_outputVerificationTimer.setSingleShot(true);
-    m_outputVerificationTimer.setInterval(std::chrono::milliseconds(100));
     m_deviceRecoveryTimer.setSingleShot(true);
 
     connect(&m_settings, &PresentationSettings::settingsChanged,
@@ -93,20 +89,8 @@ RhiPresentationEngine::RhiPresentationEngine(
             this, &RhiPresentationEngine::markPresentationDirty);
     connect(&m_outputState,
             &PresentationOutputState::outputCharacteristicsChanged,
-            this, [this] {
-                requestSwapChainRecreation();
-                scheduleOutputVerification();
-            });
-    connect(&m_window, &QWindow::screenChanged, this, [this] {
-        requestSwapChainRecreation();
-        scheduleOutputVerification();
-    });
-    connect(&m_window, &QWindow::xChanged,
-            this, &RhiPresentationEngine::scheduleOutputVerification);
-    connect(&m_window, &QWindow::yChanged,
-            this, &RhiPresentationEngine::scheduleOutputVerification);
-    connect(&m_outputVerificationTimer, &QTimer::timeout,
-            this, &RhiPresentationEngine::verifyOutput);
+            this,
+            &RhiPresentationEngine::markOutputCharacteristicsDirty);
     connect(&m_deviceRecoveryTimer, &QTimer::timeout,
             this, &RhiPresentationEngine::requestFrame);
 
@@ -149,10 +133,7 @@ void RhiPresentationEngine::renderFrame() {
             m_graphicsDevice->acquireExecutionScope();
         if (!m_quickUi && !initializeDevice())
             return;
-        if (m_recreateSwapChain) {
-            releaseSwapChainResources();
-            m_recreateSwapChain = false;
-        }
+        reconcileOutputCharacteristics();
         if (!m_swapChain && !createSwapChain())
             return;
         if (!resizeSwapChain())
@@ -251,8 +232,6 @@ void RhiPresentationEngine::renderFrame() {
         requestedSurface->description.targetPeakHeadroom = targetPeak;
         requestedSurface->graphicsDeviceGeneration =
             m_graphicsDevice->generation();
-        requestedSurface->displayTargetRevision =
-            m_outputState.displayTargetRevision();
         requestedSurface->contentRevision =
             m_videoSource.contentRevision();
         Q_ASSERT(requestedSurface->isValid());
@@ -515,7 +494,6 @@ void RhiPresentationEngine::releaseSwapChainResources() {
         m_swapChain->destroy();
     m_swapChain.reset();
     m_renderPassDescriptor.reset();
-    m_swapChainScreen = nullptr;
 }
 
 QQuickWindow *RhiPresentationEngine::quickWindow() const {
@@ -669,7 +647,7 @@ void RhiPresentationEngine::releaseDevice() {
     m_quickUi.reset();
     m_rhi = nullptr;
     m_graphicsDevice.reset();
-    m_recreateSwapChain = false;
+    m_outputCharacteristicsDirty = false;
 }
 
 void RhiPresentationEngine::handleDeviceLoss(const char *operation) {
@@ -769,11 +747,6 @@ void RhiPresentationEngine::scheduleDeviceRecovery() {
 }
 
 void RhiPresentationEngine::updateBackendState() {
-    m_swapChainScreen =
-        QGuiApplication::screenAt(m_window.geometry().center());
-    if (!m_swapChainScreen)
-        m_swapChainScreen = m_window.screen();
-
     PresentationBackendState state;
     const GraphicsDeviceDiagnostics &graphicsDiagnostics =
         m_graphicsDevice->diagnostics();
@@ -854,22 +827,31 @@ void RhiPresentationEngine::scheduleNextFrame(bool videoViewportActive) {
     }
 }
 
-void RhiPresentationEngine::requestSwapChainRecreation() {
-    // Display callbacks may occur during Quick synchronization. Defer all QRhi
-    // resource mutation to the next engine-owned render point.
-    m_recreateSwapChain = true;
+void RhiPresentationEngine::markOutputCharacteristicsDirty() {
+    m_outputCharacteristicsDirty = true;
     markPresentationDirty();
 }
 
-void RhiPresentationEngine::scheduleOutputVerification() {
-    m_outputVerificationTimer.start();
-}
+void RhiPresentationEngine::reconcileOutputCharacteristics() {
+    if (!m_outputCharacteristicsDirty)
+        return;
+    m_outputCharacteristicsDirty = false;
+    if (!m_swapChain)
+        return;
 
-void RhiPresentationEngine::verifyOutput() {
-    QScreen *screen =
-        QGuiApplication::screenAt(m_window.geometry().center());
-    if (!screen)
-        screen = m_window.screen();
-    if (screen != m_swapChainScreen)
-        requestSwapChainRecreation();
+    const bool extendedLinearSupported =
+        m_swapChain->isFormatSupported(
+            QRhiSwapChain::HDRExtendedSrgbLinear);
+    const QRhiSwapChain::Format desiredFormat =
+        extendedLinearSupported
+        ? QRhiSwapChain::HDRExtendedSrgbLinear
+        : QRhiSwapChain::SDR;
+    if (m_swapChain->format() != desiredFormat) {
+        releaseSwapChainResources();
+        return;
+    }
+
+    // Refresh QRhi luminance/headroom fallback data without rebuilding an
+    // already compatible presentation surface.
+    updateBackendState();
 }

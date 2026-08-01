@@ -108,11 +108,10 @@ and continuous synchronized local-file audio/video playback:
 * Qt screen state, QRhi swapchain HDR information, and an initial WinRT
   Advanced Color observer feed a shared presentation snapshot and diagnostic
   UI. Live Advanced Color changes already update SDR white and luminance;
-  material target changes rerender a paused frame. ADR 0016 replaces the
-  planned display identity/topology/query-revision graph with latest semantic
-  target reconciliation. The next refactor removes the current revision
-  surrogate and avoids swapchain recreation when only native screen identity
-  changed.
+  material target changes rerender a paused frame. ADR 0016's latest semantic
+  target reconciliation is implemented: the rendered surface has no display
+  revision surrogate, and native screen identity alone no longer recreates the
+  swapchain.
 * Diagnostics distinguish the producer input path and its CPU transfers from
   output-target GPU copies, output CPU transfers, synchronization, and fallback
   reason.
@@ -142,9 +141,9 @@ and continuous synchronized local-file audio/video playback:
   PCM, records bounded output-to-media mappings, and represents short underruns
   as hold silence. The sink exposes separate media/device positions, optional
   latency and device-notification capabilities, and generation-safe drain. The
-  checked-in sink still pins the enumerated default and carries a fail-closed
-  cubeb patch; ADR 0016 accepts the simpler next state where cubeb follows the
-  system default within one cubeb-stream epoch.
+  sink opens cubeb's system-default route and lets cubeb migrate it within one
+  cubeb-stream epoch. The former explicit endpoint pin and fail-closed cubeb
+  patch have been removed.
 * Playback exposes user play intent independently from audio interruption.
   Sustained hold-silence enters `Buffering`, preserves the last confident
   audio-master position, and keeps video frozen without switching to a
@@ -300,7 +299,7 @@ Documentation: `docs/subsystems/playback/`
 * [x] Shared presentation and display-state model
 * [x] Initial Windows window-movement and Advanced Color observation
 * [x] Initial Windows dynamic Advanced Color notification
-* [ ] Semantic display-target reconciliation without native-identity-driven
+* [x] Semantic display-target reconciliation without native-identity-driven
   surface invalidation or swapchain churn
 * [ ] Optional Windows raw display capability diagnostics where renderer or
   support tooling has a concrete consumer

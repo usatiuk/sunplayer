@@ -29,7 +29,6 @@ RenderedVideoSurfaceState canonicalState() {
     RenderedVideoSurfaceState state;
     state.description = canonicalDescription();
     state.graphicsDeviceGeneration = 7;
-    state.displayTargetRevision = 11;
     state.contentRevision = 13;
     return state;
 }
@@ -52,11 +51,10 @@ private slots:
     void canonicalDescriptionIsValid();
     void descriptionRequiresCompleteSemantics();
     void descriptionRequiresFiniteLuminance();
-    void stateRequiresNonzeroRevisions();
-    void identicalStateIsReusable();
+    void stateRequiresNonzeroIdentities();
+    void equalSemanticStateIsReusableAcrossNativeChanges();
     void lifecycleAndContentChangesInvalidate();
     void semanticChangesInvalidate();
-    void swapchainOnlyRecreationPreservesReuse();
     void unavailableTargetDiagnosticsRequireReason();
     void directTargetDiagnosticsRequireNoCopies();
     void fallbackDiagnosticsRequireObservableCostsAndReason();
@@ -158,15 +156,10 @@ void RenderedVideoSurfaceTest::descriptionRequiresFiniteLuminance() {
     }
 }
 
-void RenderedVideoSurfaceTest::stateRequiresNonzeroRevisions() {
+void RenderedVideoSurfaceTest::stateRequiresNonzeroIdentities() {
     {
         auto state = canonicalState();
         state.graphicsDeviceGeneration = 0;
-        QVERIFY(!state.isValid());
-    }
-    {
-        auto state = canonicalState();
-        state.displayTargetRevision = 0;
         QVERIFY(!state.isValid());
     }
     {
@@ -176,10 +169,15 @@ void RenderedVideoSurfaceTest::stateRequiresNonzeroRevisions() {
     }
 }
 
-void RenderedVideoSurfaceTest::identicalStateIsReusable() {
-    const auto completed = canonicalState();
-    const auto requested = canonicalState();
-    QVERIFY(completed.isReusableFor(requested));
+void RenderedVideoSurfaceTest::
+equalSemanticStateIsReusableAcrossNativeChanges() {
+    const auto beforeNativeOutputChange = canonicalState();
+    const auto afterNativeOutputChange = canonicalState();
+
+    // Native output and swapchain identities are deliberately absent. Equal
+    // semantic targets reuse the device-owned video surface.
+    QVERIFY(beforeNativeOutputChange.isReusableFor(
+        afterNativeOutputChange));
 }
 
 void RenderedVideoSurfaceTest::lifecycleAndContentChangesInvalidate() {
@@ -188,11 +186,6 @@ void RenderedVideoSurfaceTest::lifecycleAndContentChangesInvalidate() {
     {
         auto requested = canonicalState();
         ++requested.graphicsDeviceGeneration;
-        QVERIFY(!completed.isReusableFor(requested));
-    }
-    {
-        auto requested = canonicalState();
-        ++requested.displayTargetRevision;
         QVERIFY(!completed.isReusableFor(requested));
     }
     {
@@ -235,15 +228,6 @@ void RenderedVideoSurfaceTest::semanticChangesInvalidate() {
         requested.description.targetPeakHeadroom = 3.0f;
         QVERIFY(!completed.isReusableFor(requested));
     }
-}
-
-void RenderedVideoSurfaceTest::swapchainOnlyRecreationPreservesReuse() {
-    const auto beforeSwapchainRecreation = canonicalState();
-    const auto afterSwapchainRecreation = canonicalState();
-
-    // A swapchain identity is deliberately not part of the surface key.
-    QVERIFY(beforeSwapchainRecreation.isReusableFor(
-        afterSwapchainRecreation));
 }
 
 void RenderedVideoSurfaceTest::

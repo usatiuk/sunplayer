@@ -11,6 +11,10 @@ This note distinguishes current project behavior, exact pinned-source facts,
 production precedent, accepted policy, and experiments. The larger review is
 research input rather than project truth.
 
+The immediate simplification described below was implemented on 2026-08-01.
+The current-behavior sections preserve the pre-refactor evidence that motivated
+the decision.
+
 ## Current project behavior
 
 ### Display

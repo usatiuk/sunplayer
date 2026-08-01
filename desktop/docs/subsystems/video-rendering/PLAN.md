@@ -156,7 +156,8 @@ This is not a greenfield display observer. The current implementation already:
   `AdvancedColorInfoChanged`.
 * [x] Publishes active HDR mode, SDR white, minimum luminance, and maximum
   luminance, with QRhi swapchain HDR information as a fallback.
-* [x] Reacts to `QWindow::screenChanged` and debounced movement.
+* [x] Reacts to `QWindow::screenChanged` and refreshes the cached window-bound
+  display observer.
 * [x] Rerenders a paused target-dependent frame when the detected reference
   white or headroom changes.
 
@@ -166,23 +167,26 @@ tracks the window and is the Advanced Color authority. Sunroom will not add a
 cross-platform hierarchy of selection, capability, provider, topology, or
 query revisions, nor a competing greatest-intersection display selector.
 
-* [ ] Remove `displayTargetRevision` from the rendered-video reuse key. Record
+* [x] Remove `displayTargetRevision` from the rendered-video reuse key. Record
   every video-affecting target value directly in the surface request and reuse
   it when those values are equal.
-* [ ] Stop recreating the swapchain merely because `QScreen` identity changed.
+* [x] Stop recreating the swapchain merely because `QScreen` identity changed.
   Recreate or reconfigure only when the presentation format, declared color
   encoding, HDR/SDR mode, adapter/device, or native resource lifetime changes.
-* [ ] Route movement, `screenChanged`, Advanced Color changes, hotplug, and
-  resume through one idempotent latest-state reprobe. Coalesce bursts lightly;
-  do not build a mandatory asynchronous probe pipeline for synchronous Windows
-  state.
-* [ ] Keep native display identity, reported full-frame peak, raw capability
-  values, update reason, and timestamps as optional diagnostics. Rendering
-  consumes one effective target peak and does not use confidence scores as a
-  correctness mechanism.
-* [ ] Add deterministic semantic-policy coverage proving equal targets reuse a
-  paused video surface, material target changes rerender it, and presentation
-  mode changes request only the required swapchain work.
+* [x] Route `screenChanged`, Advanced Color changes, and manual reprobe through
+  one idempotent render-boundary format check. The cached HWND observer tracks
+  movement; no competing movement timer or asynchronous query pipeline exists.
+* [ ] Validate hotplug and resume convergence on real Windows systems and add
+  another native hint only if those events do not reach the existing observer.
+* [x] Add semantic surface coverage proving equal targets reuse a video surface
+  while reference-white/headroom changes invalidate it. Actual window movement
+  and swapchain-format changes remain real-platform validation.
+
+Native display identity, reported full-frame peak, raw capability values,
+update reason, and timestamps remain optional diagnostics. Rendering consumes
+one effective target peak and does not use confidence scores as a correctness
+mechanism.
+
 * [ ] Record `SystemManaged` for a correctly tagged Advanced Color surface,
   distinguish HDR scene-referred scRGB scaling from SDR Advanced Color/WCG
   display-referred FP16, and record `UnmanagedSrgb` only for ordinary SDR with

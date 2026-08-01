@@ -234,11 +234,9 @@ audio backends are not yet packaged or validated.
 Pinned cubeb's WASAPI backend can migrate a null-device stream internally and
 keeps a monotonic logical position, but it does not expose a stream-specific
 success notification or guarantee gapless delivery of audio queued to the old
-endpoint. The current implementation still pins the enumerated multimedia
-default and carries a fail-closed WASAPI patch. ADR 0016 supersedes that policy:
-the immediate refactor will open cubeb's default route and keep one Sunroom
-output epoch for one cubeb stream while cubeb performs ordinary route
-migration.
+endpoint. Sunroom now opens cubeb's default route and keeps one output epoch
+for one cubeb stream while cubeb performs ordinary route migration, as decided
+by ADR 0016.
 
 Application-level recreation after a cubeb error remains deferred. That path
 will replace only the audio stream, start and re-anchor a new output epoch from

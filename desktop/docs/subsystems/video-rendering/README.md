@@ -202,17 +202,17 @@ Windows display adaptation is already live. The provider binds WinRT
 `AdvancedColorInfoChanged`, and publishes HDR mode, SDR white, minimum
 luminance, and maximum luminance. QRhi swapchain HDR information supplies a
 fallback. The current implementation also reacts to `QScreen` changes and a
-debounced window-position check by recreating the swapchain, and it carries a
-separate `displayTargetRevision` in the rendered-video key.
+manual reprobe by refreshing the cached window-bound observer and marking the
+output characteristics dirty.
 
 [ADR 0016](../../decisions/0016-reconcile-output-changes-semantically.md)
-supersedes those two implementation details. The next refactor keeps the
-HWND-bound `DisplayInformation` as the Windows Advanced Color authority,
-treats native events as hints to requery the latest state, and compares one
-semantic presentation target. A changed target rerenders even a paused frame;
-an equal target reuses the existing surface regardless of screen identity or
-event count. Presentation resources are recreated only when their format,
-declared encoding, or native lifetime actually changes.
+is implemented. The HWND-bound `DisplayInformation` remains the Windows
+Advanced Color authority, native events are latest-state hints, and rendered
+surface reuse compares one semantic target. A changed target rerenders even a
+paused frame; an equal target reuses the existing surface regardless of screen
+identity or event count. At the render boundary, the engine checks whether the
+current output still supports the active swapchain format and recreates only
+when the desired format differs.
 
 Stable DisplayConfig/DXGI identity, greatest-intersection selection, topology
 generations, per-field confidence, and a general asynchronous query pipeline

@@ -54,10 +54,9 @@ struct RenderedVideoSurfaceState {
     bool operator==(const RenderedVideoSurfaceState &) const = default;
 
     RenderedVideoSurfaceDescription description;
-    // All revisions are nonzero and monotonic within the application process.
+    // Both identities are nonzero and monotonic within the application process.
     // Swapchain identity is deliberately absent: the texture is device-owned.
     std::uint64_t graphicsDeviceGeneration = 0;
-    std::uint64_t displayTargetRevision = 0;
     std::uint64_t contentRevision = 0;
 
     bool isValid() const;

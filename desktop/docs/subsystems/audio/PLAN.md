@@ -96,20 +96,19 @@ explicit recovery semantics.
 * [x] Keep sustained hold-silence frozen and observable without falling back
   to a monotonic clock; keep established-clock loss terminal until physical
   output replacement exists.
-* [ ] Remove explicit Windows default-endpoint enumeration, the
+* [x] Remove explicit Windows default-endpoint enumeration, the
   disabled-switching preference, and the fail-closed cubeb overlay patch; open
   cubeb's default route and let cubeb or the sound server own normal migration.
-* [ ] Define `audioOutputEpoch` as one cubeb stream lifetime. Keep the existing
+* [x] Define `audioOutputEpoch` as one cubeb stream lifetime. Keep the existing
   compact media/hold history across internal backend migration and do not infer
   a hidden epoch from a collection notification.
-* [ ] Add a deterministic sink scenario proving an internal device-revision
-  hint does not invalidate media mapping, while actual stream recreation starts
-  a new epoch and requires a new anchor.
+  The cubeb integration test verifies that Sunroom opens the system-default
+  route and that an actual sink reset advances the epoch.
 * [ ] On cubeb error or failed stream creation, recreate only
   device-dependent output state, re-anchor a new epoch at the last confident
   presented position, bound retry, and require a new presentation observation
   before resuming.
-* [ ] Preserve the single demux/video pipeline across ordinary audio-device
+* [x] Preserve the single demux/video pipeline across ordinary audio-device
   replacement; use a full media-generation restart only when buffered timeline
   state cannot be reconciled.
 * [ ] Add a valid-but-non-advancing watchdog only if real-device experiments

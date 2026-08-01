@@ -54,8 +54,8 @@ Implement alongside graphics milestone 1:
   description.
 * [x] Test that a graphics-device generation change always invalidates a
   surface.
-* [x] Test that a target display revision invalidates a display-targeted
-  surface.
+* [x] Test that material semantic target changes invalidate a display-targeted
+  surface while equal targets remain reusable.
 * [x] Test that producer-content changes invalidate the completed surface.
 * [x] Test that swapchain-only recreation preserves a surface when its explicit
   contract permits reuse.

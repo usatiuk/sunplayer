@@ -4,7 +4,6 @@
 #include <memory>
 
 #include <QObject>
-#include <QPointer>
 #include <QTimer>
 
 class GraphicsDeviceDomain;
@@ -15,7 +14,6 @@ class MediaSession;
 class PresentationOutputState;
 class PresentationSettings;
 class QQuickWindow;
-class QScreen;
 class QRhi;
 class QRhiRenderPassDescriptor;
 class QRhiSwapChain;
@@ -72,9 +70,8 @@ private:
     void scheduleDeviceRecovery();
     void updateBackendState();
     void scheduleNextFrame(bool videoViewportActive);
-    void requestSwapChainRecreation();
-    void scheduleOutputVerification();
-    void verifyOutput();
+    void markOutputCharacteristicsDirty();
+    void reconcileOutputCharacteristics();
 
     QWindow &m_window;
     PresentationOutputState &m_outputState;
@@ -90,17 +87,14 @@ private:
     std::unique_ptr<QuickUiLayer> m_quickUi;
     std::unique_ptr<RenderedVideoProducer> m_videoProducer;
     std::unique_ptr<HdrCompositor> m_compositor;
-    // Output selected when the current swapchain was successfully created.
-    QPointer<QScreen> m_swapChainScreen;
-    QTimer m_outputVerificationTimer;
     QTimer m_deviceRecoveryTimer;
     bool m_rendering = false;
     // Mirrors an outstanding QWindow UpdateRequest owned by this engine.
     bool m_framePending = false;
     // Captures synchronous dirty signals without recursively entering render().
     bool m_frameRequestedWhileRendering = false;
-    // Resource mutation is deferred from display callbacks to the render point.
-    bool m_recreateSwapChain = false;
+    // Native display callbacks are hints. Query and mutate at the render point.
+    bool m_outputCharacteristicsDirty = false;
     bool m_recoveringDevice = false;
     bool m_retriedFrameError = false;
     int m_deviceRecoveryAttempts = 0;

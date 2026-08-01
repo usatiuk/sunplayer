@@ -117,7 +117,8 @@ Early likely seams are:
 
 * A pure presentation-target calculation separated from Qt/WinRT observation.
 * Injectable `DisplayStateProvider` snapshots.
-* Explicit graphics-device and display revisions on rendered surfaces.
+* An explicit graphics-device generation and complete semantic target values
+  on rendered surfaces.
 * Production source/producer/target contracts with readback enabled only for
   the real offscreen GPU test.
 * An injected pipeline operation for deterministic cancellation and

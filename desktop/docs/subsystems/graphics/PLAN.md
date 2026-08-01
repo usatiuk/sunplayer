@@ -25,7 +25,7 @@ The current prototype establishes:
   `AdvancedColorInfoChanged`, with QRhi swapchain HDR information as fallback.
 * [x] Material display-target changes invalidate display-dependent video
   surfaces, so a detected target change rerenders paused content.
-* [ ] Remove the redundant display-target revision and native-screen-driven
+* [x] Remove the redundant display-target revision and native-screen-driven
   swapchain churn; compare the complete semantic target and recreate
   presentation resources only when their contract changes.
 * [ ] Treat topology, hotplug, sleep/wake, and movement events as latest-state
@@ -57,8 +57,8 @@ introducing FFmpeg or libplacebo yet.
   swapchain encoding.
 * [x] Remove source tone mapping and pattern generation from the final shader.
 * [x] Track graphics-device lifetime and the semantic display values needed to
-  invalidate a rendered surface. The temporary display revision surrogate is
-  scheduled for removal under ADR 0016.
+  invalidate a rendered surface; native display and swapchain identities are
+  deliberately absent from the reuse key.
 * [x] Preserve valid texture ownership through resize, swapchain recreation,
   and device recreation.
 * [x] Report the active video-surface format and producer in diagnostics.

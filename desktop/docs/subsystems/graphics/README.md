@@ -270,19 +270,18 @@ the swapchain was rebuilt.
 * Windows `DisplayInformation::GetAdvancedColorInfo()` state: current HDR mode,
   SDR white, minimum luminance, and maximum luminance.
 
-Windows display updates arrive through `AdvancedColorInfoChanged`. The current
-implementation also debounces window movement for 100 milliseconds and
-recreates the swapchain when its center-associated `QScreen` changes.
+Windows display updates arrive through `AdvancedColorInfoChanged`. A
+`QWindow::screenChanged` event refreshes the cached window-bound observer and
+marks output characteristics dirty.
 
 [ADR 0016](../../decisions/0016-reconcile-output-changes-semantically.md)
-accepts a simpler replacement: native events mark presentation state dirty,
-the platform adapter requeries the current semantic target at a safe boundary,
-and the engine reacts only when that value changes. A reference-white,
-headroom, or gamut change invalidates target-dependent video. A swapchain is
-recreated only when its format, declared color encoding, or native-resource
-lifetime changes. Stable display identities, greatest-intersection selection,
-topology revisions, per-field confidence, and a general asynchronous query
-pipeline are optional diagnostics rather than correctness requirements.
+is implemented: native events trigger a latest-state refresh, semantic target
+values invalidate target-dependent video, and the engine checks swapchain
+format support at the next render boundary. It recreates the swapchain only
+when the desired format differs. Stable display identities,
+greatest-intersection selection, topology revisions, per-field confidence, and
+a general asynchronous query pipeline are optional diagnostics rather than
+correctness requirements.
 
 ### Swapchain selection
 

@@ -61,7 +61,6 @@ struct AudioSinkDiagnostics {
     bool operator==(const AudioSinkDiagnostics &) const = default;
 
     std::string backendName;
-    std::string deviceId;
     std::string errorMessage;
     AudioStreamFormat format;
     std::size_t queueCapacityFrames = 0;
@@ -78,6 +77,7 @@ struct AudioSinkDiagnostics {
     std::uint64_t audioOutputEpoch = 0;
     std::uint64_t deviceRevision = 0;
     bool streamOpen = false;
+    bool followsSystemDefault = false;
     bool positionAvailable = false;
     bool deviceNotificationsAvailable = false;
     bool clockReliable = false;

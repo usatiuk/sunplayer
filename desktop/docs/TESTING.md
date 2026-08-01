@@ -162,9 +162,11 @@ Names and payloads should be defined with the owning subsystem. The important
 contract is that tests can wait for the real operation rather than infer
 completion from elapsed wall time.
 
-Events that can be invalidated by seek, reopen, device recreation, or display
-change should include the relevant session, seek, device, frame, or display
-generation.
+Events that can be invalidated by seek, reopen, or device recreation should
+include the relevant session, seek, device, frame, or audio-output epoch.
+Display capability events normally converge by comparing the latest semantic
+target; protocol-supplied asynchronous identities remain local to that
+protocol.
 
 ### Structured diagnostics
 
@@ -177,7 +179,7 @@ able to describe:
 * Decoder, hardware device, and decoded-frame storage.
 * Graphics adapter, QRhi backend, libplacebo backend, and render-target
   description.
-* Display target supplied to libplacebo and its revision.
+* Semantic display target supplied to libplacebo and its update reason.
 * Known CPU and GPU copies and explicit fallback reasons.
 * Queue depths, buffering state, clock position, and active generations.
 * Presented, repeated, stale, and dropped frames.

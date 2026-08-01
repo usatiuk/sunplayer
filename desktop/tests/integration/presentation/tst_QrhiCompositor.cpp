@@ -64,7 +64,6 @@ RenderedVideoSurfaceState surfaceState() {
     state.description.targetMinimumLuminanceNits = 0.005f;
     state.description.targetPeakHeadroom = sourcePeak;
     state.graphicsDeviceGeneration = 1;
-    state.displayTargetRevision = 1;
     state.contentRevision = 1;
     return state;
 }
@@ -912,7 +911,6 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
         sdrState.description.referenceWhiteNits =
             referenceWhite;
         sdrState.description.targetPeakHeadroom = 4.0f;
-        ++sdrState.displayTargetRevision;
 
         QRhiReadbackResult sdrReadback;
         const QString captureError =
@@ -1019,7 +1017,6 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
         0.0f;
     referenceWhiteState.description.targetPeakHeadroom =
         10.0f;
-    ++referenceWhiteState.displayTargetRevision;
     referenceWhiteState.contentRevision =
         source.contentRevision();
     QRhiReadbackResult referenceWhiteReadback;
@@ -1059,7 +1056,6 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
     hdr100State.description.targetPeakHeadroom =
         physicalTargetPeakNits
         / hdr100State.description.referenceWhiteNits;
-    ++hdr100State.displayTargetRevision;
     hdr100State.contentRevision = source.contentRevision();
     QRhiReadbackResult hdr100Readback;
     const QString hdr100CaptureError =
@@ -1090,7 +1086,6 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
     hdr80State.description.targetPeakHeadroom =
         physicalTargetPeakNits
         / hdr80State.description.referenceWhiteNits;
-    ++hdr80State.displayTargetRevision;
     QRhiReadbackResult hdr80Readback;
     const QString hdr80CaptureError =
         captureProducerSurface(
@@ -1116,7 +1111,6 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
     hdrState.description.targetPeakHeadroom =
         physicalTargetPeakNits
         / hdrState.description.referenceWhiteNits;
-    ++hdrState.displayTargetRevision;
     QCOMPARE(
         producer->ensureSurface(hdrState),
         VideoOperationResult::Ready);

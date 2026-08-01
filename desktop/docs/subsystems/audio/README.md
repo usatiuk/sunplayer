@@ -34,12 +34,10 @@ underrun silence, applies one atomically published linear gain, and publishes
 fixed-capacity output-to-media spans. It does not allocate, block, take
 application locks, decode, log, invoke Qt, or perform device recovery.
 
-ADR 0016 has accepted a simpler migration policy for the next refactor:
-cubeb will follow the system default inside one cubeb-stream epoch, while
-Sunroom continues to own media/hold mapping, user intent, and explicit
-re-anchoring only when the cubeb stream itself must be recreated. The current
-explicit endpoint pinning and fail-closed overlay patch remain described below
-because they are still the checked-in implementation until that refactor lands.
+The sink passes a null output device to cubeb, so cubeb and the platform sound
+service own normal system-default route migration inside one cubeb-stream
+epoch. Sunroom continues to own media/hold mapping, user intent, and explicit
+re-anchoring only when the cubeb stream itself must be recreated.
 
 Volume is a session-lifetime value from zero to one. Mute selects zero effective
 gain without changing that remembered value. Both controls operate after PCM
@@ -101,9 +99,10 @@ Each `PcmAudioBlock` contains:
 
 Every presentation snapshot and diagnostic sample identifies both its playback
 generation and its monotonic audio-output epoch. A sink reset starts a new
-output epoch even when the playback generation is retained. Until physical
-replacement can explicitly re-anchor that epoch, an unexpected change is
-terminal rather than being mistaken for continuous presentation.
+output epoch even when the playback generation is retained. Native endpoint
+changes hidden inside the same cubeb stream do not create an unobservable
+epoch; application replacement of the cubeb stream will create and re-anchor a
+new one.
 
 An output epoch begins at the requested media position. If stream metadata
 declares that selected audio begins later, the decoder publishes the complete
@@ -126,7 +125,7 @@ Cubeb may adapt that stable requested format to a migrated endpoint. Sunroom
 rebuilds libswresample only when its own requested stream format changes, such
 as a future multichannel policy change.
 
-Each physical epoch fixes both its preroll and maximum accepted PCM block size.
+Each output epoch fixes both its preroll and maximum accepted PCM block size.
 The maximum is no greater than `queue capacity - preroll`, so an accepted block
 can never wait for a callback that cannot start until that same block is
 published. FFmpeg output must be split before this boundary if a future format
@@ -134,18 +133,13 @@ can produce a larger block.
 
 ## Device and clock direction
 
-The production backend is cubeb in shared mode. At the start of each output
-epoch, Sunroom enumerates the current multimedia default and opens that device
-explicitly; it does not migrate to another default inside the epoch. Context
-collection-change notification is capability-reported; stream-level device
-change callbacks are not assumed because the pinned WASAPI backend does not
-provide them.
-
-This is the current, superseded implementation policy. The accepted next state
-opens cubeb's default route directly and lets cubeb or the sound server perform
-ordinary route migration. An audio-output epoch then identifies one cubeb
-stream lifetime rather than every native endpoint or WASAPI client hidden by
-that stream.
+The production backend is cubeb in shared mode. Sunroom opens cubeb's
+system-default route rather than enumerating and pinning the endpoint that is
+default at that instant. Cubeb or the sound server performs ordinary route
+migration inside the same cubeb stream. An audio-output epoch identifies that
+cubeb stream lifetime rather than every native endpoint or WASAPI client hidden
+by it. Collection-change notifications remain low-rate diagnostics; they are
+not treated as successful stream-migration boundaries.
 
 The playback position reported by cubeb is the primary presentation
 observation. Sunroom must not subtract reported latency from that position a
@@ -168,9 +162,9 @@ requested position. Clean audio EOF with zero output for the requested
 interval creates no audio epoch and keeps the monotonic clock. A seek or full
 playback-generation replacement cancels the decoder and matching sink epoch
 together, waking blocked PCM submission and rejecting stale completion. A
-future physical output replacement will instead create a new audio-output
-epoch while retaining the media generation when its buffered timeline remains
-usable.
+future application-level cubeb stream replacement will create a new
+audio-output epoch while retaining the media generation when its buffered
+timeline remains usable.
 
 The audio and video decoder workers both start before demuxing. Packet routing
 does not depend on either decoder producing its first output: every selected
@@ -218,12 +212,10 @@ device-frame position continues to advance while its media-frame mapping stays
 fixed, then resumes from the next real PCM frame. End-of-stream is
 generation-scoped so a stale decoder cannot finish a newer sink epoch.
 
-Application-level stream replacement is not implemented. The current explicit
-endpoint and fail-closed patch still turn native invalidation into a terminal
-sink error. The immediate simplification refactor removes both so cubeb can
-perform normal default-route migration while its monotonic logical position
-continues through the existing media/hold ledger. This may skip pending audio
-owned by a disappearing endpoint; V1 does not claim gapless device migration.
+Application-level stream replacement is not implemented. Cubeb performs normal
+default-route migration while its monotonic logical position continues through
+the existing media/hold ledger. A disappearing endpoint may still cause an
+audible gap or skip; V1 does not claim gapless device migration.
 
 A later bounded recovery slice handles actual cubeb error or demonstrated
 no-progress by freezing the last confident media time, recreating only the

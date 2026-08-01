@@ -258,7 +258,6 @@ void CubebAudioSink::reset(
         m_streamStarted.store(false, std::memory_order_relaxed);
         m_producerFinished.store(false, std::memory_order_relaxed);
         m_drained.store(false, std::memory_order_relaxed);
-        m_deviceId.clear();
         m_ignoreDrainUntilStarted.store(
             false, std::memory_order_relaxed);
         m_maximumSubmitFrames.store(0, std::memory_order_relaxed);
@@ -290,10 +289,7 @@ void CubebAudioSink::reset(
             .channels = static_cast<std::uint32_t>(
                 format.channelCount),
             .layout = CUBEB_LAYOUT_STEREO,
-            // Suppress Cubeb's default-change reconfiguration. The explicit
-            // multimedia device selected below also pins this stream to one
-            // endpoint until Sunroom can replace and re-anchor it itself.
-            .prefs = CUBEB_STREAM_PREF_DISABLE_DEVICE_SWITCHING,
+            .prefs = CUBEB_STREAM_PREF_NONE,
             .input_params =
                 CUBEB_INPUT_PROCESSING_PARAM_NONE,
         };
@@ -320,53 +316,20 @@ void CubebAudioSink::reset(
             m_queueCapacityFrames - m_prerollFrames,
             std::memory_order_release);
 
-        cubeb_device_collection outputDevices{};
-        if (cubeb_enumerate_devices(
-                m_impl->context,
-                CUBEB_DEVICE_TYPE_OUTPUT,
-                &outputDevices) != CUBEB_OK) {
-            m_error.store(
-                Error::StreamInitialization,
-                std::memory_order_release);
-            m_queue.cancel();
-            return;
-        }
-
-        cubeb_devid outputDevice = nullptr;
-        for (std::size_t index = 0;
-                index < outputDevices.count;
-                ++index) {
-            const cubeb_device_info &device =
-                outputDevices.device[index];
-            if (device.state == CUBEB_DEVICE_STATE_ENABLED
-                    && (device.preferred
-                        & CUBEB_DEVICE_PREF_MULTIMEDIA) != 0) {
-                outputDevice = device.devid;
-                if (device.device_id)
-                    m_deviceId = device.device_id;
-                break;
-            }
-        }
-
-        const int streamResult = outputDevice
-            ? cubeb_stream_init(
-                m_impl->context,
-                &m_impl->stream,
-                "Sunroom playback",
-                nullptr,
-                nullptr,
-                outputDevice,
-                &outputParameters,
-                minimumLatency,
-                &Impl::dataCallback,
-                &Impl::stateCallback,
-                m_impl.get())
-            : CUBEB_ERROR;
-        cubeb_device_collection_destroy(
-            m_impl->context, &outputDevices);
+        const int streamResult = cubeb_stream_init(
+            m_impl->context,
+            &m_impl->stream,
+            "Sunroom playback",
+            nullptr,
+            nullptr,
+            nullptr,
+            &outputParameters,
+            minimumLatency,
+            &Impl::dataCallback,
+            &Impl::stateCallback,
+            m_impl.get());
         if (streamResult != CUBEB_OK) {
             m_impl->stream = nullptr;
-            m_deviceId.clear();
             m_error.store(
                 Error::StreamInitialization,
                 std::memory_order_release);
@@ -598,7 +561,6 @@ AudioSinkDiagnostics CubebAudioSink::diagnostics() const {
             && error == Error::None;
         return AudioSinkDiagnostics{
             .backendName = m_backendName,
-            .deviceId = m_deviceId,
             .errorMessage = errorMessage(error),
             .format = m_format,
             .queueCapacityFrames = m_queueCapacityFrames,
@@ -634,6 +596,7 @@ AudioSinkDiagnostics CubebAudioSink::diagnostics() const {
             .deviceRevision = m_deviceRevision.load(
                 std::memory_order_relaxed),
             .streamOpen = m_impl->stream != nullptr,
+            .followsSystemDefault = true,
             .positionAvailable = hasDevicePosition,
             .deviceNotificationsAvailable =
                 m_deviceNotificationsAvailable.load(
