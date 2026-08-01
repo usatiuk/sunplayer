@@ -37,6 +37,14 @@ implementation as appropriate:
   lenses; three is a minimum, not a maximum.
 - Cover behavior/correctness, architecture/failure risk, and
   tests/evidence/docs/scope. Add focused lenses when useful.
+- Always assign one reviewer an explicit simplicity and anti-overengineering
+  lens. Have it challenge new abstractions, duplicate state, strict ordering,
+  custom low-level ownership, speculative fallbacks, and edge-case machinery;
+  prefer existing boundaries, standard high-level APIs, latest-value semantic
+  reconciliation, eventual consistency, and designs that make invalid states
+  or edge cases unrepresentable. It must preserve demonstrated correctness,
+  resource lifetime, protocol, and recovery requirements rather than dismiss
+  essential complexity.
 - Give reviewers raw artifacts without steering conclusions. Self-review does
   not count as an independent lens.
 - Before editing, tell the user which findings will be fixed, deferred, or
