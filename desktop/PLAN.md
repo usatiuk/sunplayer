@@ -234,9 +234,13 @@ Documentation: `docs/subsystems/application/`
 
 * [x] Cancellable continuous local-file open/demux/decode
 * [x] Generation invalidation for superseded pipeline work
+* [ ] Small media-input request for local or remote locators, safe display
+  label, authentication headers, and FFmpeg open options
+* [ ] FFmpeg-native HTTP/range/HLS input before application-owned networking
 * [ ] Network-source cancellation and timeout model
-* [ ] FFmpeg AVIO integration
-* [ ] Bounded read-ahead and byte caching
+* [ ] Observable duration/byte-aware encoded-packet read-ahead
+* [ ] Custom FFmpeg AVIO byte caching only when native protocol behavior is
+  insufficient
 * [ ] Unreliable or blocking source isolation model
 * [ ] Clear source-stall and recovery states
 

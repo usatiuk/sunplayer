@@ -165,6 +165,31 @@ current dependency build as proof of Vulkan readiness.
 
 ## Application and player
 
+### Remote media input, source read-ahead, and Jellyfin
+
+`MediaSession` currently rejects non-local URLs and the FFmpeg request carries
+a filesystem path. The shared production operation nevertheless has the right
+single-pass shape for remote media: one `AVFormatContext` feeds both selected
+audio and video streams. Its 128-packet/8-MiB router is post-demux buffering,
+not a controllable source-byte cache, so slow SMB reads or network bursts can
+still drain playback.
+
+The planned first step is a small sanitized media-input request and FFmpeg's
+native HTTP/range/HLS support, followed by timeout, stall, occupancy, and
+Buffering telemetry. A duration-aware encoded-packet budget may be enough for
+ordinary burstiness. Custom AVIO with bounded memory or disk read-ahead remains
+available when real sources demonstrate that FFmpeg-native I/O cannot provide
+the required caching, credential refresh, retry, or cancellation behavior.
+It must replace the existing input edge rather than create a second reader.
+
+A Jellyfin client is possible future product scope, not part of the current V1
+commitment. A server layer would own authentication, library/navigation,
+playback negotiation, progress reporting, and transcode-session lifetime, then
+hand one direct-play, remux, or HLS locator to the ordinary media pipeline.
+Track/subtitle selection and efficient remote seeking remain prerequisites for
+a complete experience. See
+[media input and source buffering](subsystems/media-io/README.md).
+
 ### Pre-Qt startup diagnostics
 
 The bounded session logger is installed after `QGuiApplication` exists and

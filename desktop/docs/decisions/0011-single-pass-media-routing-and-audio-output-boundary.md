@@ -2,6 +2,7 @@
 
 * Status: Accepted
 * Date: 2026-07-31
+* Media-input clarification: 2026-08-01
 
 ## Context
 
@@ -29,6 +30,14 @@ memory to the configured budget except that one oversized packet may enter an
 otherwise empty router. It relies on both workers continuing to drain and does
 not claim progress through arbitrarily pathological interleave when one worker
 stalls.
+
+The single-open rule applies equally to local files, FFmpeg-native remote URLs,
+and a possible future custom `AVIOContext`. Remote support should begin by
+passing a sanitized locator and narrow open options to FFmpeg. An
+application-owned byte reader/cache is added only when concrete cancellation,
+read-ahead, credential, or recovery requirements exceed the native protocol
+layer. It replaces the input edge of the same `AVFormatContext`; it never adds
+a parallel audio/video reader or a general source-plugin framework.
 
 Decoded audio is converted off the real-time thread through FFmpeg
 libswresample into native-endian, interleaved float32 PCM. A PCM block carries
