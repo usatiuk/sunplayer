@@ -178,5 +178,10 @@ is valid. The next hosted run passed static validation and started both jobs.
 Windows then exposed that released `aqtinstall` 3.3.0 predates Qt 6.11's changed
 per-architecture repository layout. CI now pins the immutable upstream merge
 commit containing the accepted layout fix. Build, lint, and CTest parallelism
-also follows each runner's available processor count. Another hosted rerun remains
-the validation boundary for these corrections.
+initially followed each runner's available processor count. That Linux run built
+and linted successfully, then exposed the missing Qt SVG runtime plugin and made
+an already-documented timing-sensitive media-session checkpoint recur under broad
+CTest contention. CI now installs `qt6-svg-plugins`, retains processor-wide
+build/lint parallelism, and restores the established two-test CTest bound without
+retries or skips. Another hosted rerun remains the validation boundary for these
+corrections.

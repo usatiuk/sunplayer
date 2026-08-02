@@ -100,7 +100,7 @@ sudo apt install \
   qt6-declarative-dev qt6-declarative-private-dev \
   qt6-declarative-dev-tools \
   qt6-wayland qt6-wayland-dev qt6-wayland-private-dev \
-  qt6-shadertools-dev qt6-shader-baker spirv-tools \
+  qt6-shadertools-dev qt6-shader-baker qt6-svg-plugins spirv-tools \
   qml6-module-qtquick qml6-module-qtquick-controls \
   qml6-module-qtquick-dialogs qml6-module-qtquick-layouts \
   libavcodec-dev libavformat-dev libavutil-dev libswresample-dev \
