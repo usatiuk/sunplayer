@@ -114,6 +114,12 @@ RhiPresentationEngine::RhiPresentationEngine(
             &PresentationOutputState::outputCharacteristicsChanged,
             this,
             &RhiPresentationEngine::markOutputCharacteristicsDirty);
+#ifdef Q_OS_MACOS
+    connect(&m_window, &QWindow::screenChanged, this, [this] {
+        m_swapChainSurfaceDirty = true;
+        markOutputCharacteristicsDirty();
+    });
+#endif
     connect(&m_deviceRecoveryTimer, &QTimer::timeout,
             this, &RhiPresentationEngine::requestFrame);
     connect(&m_mediaSession, &MediaSession::subtitleChanged,
@@ -158,7 +164,8 @@ void RhiPresentationEngine::renderFrame() {
             m_graphicsDevice->acquireExecutionScope();
         if (!m_quickUi && !initializeDevice())
             return;
-        reconcileOutputCharacteristics();
+        if (!reconcileOutputCharacteristics())
+            return;
         if (!m_swapChain && !createSwapChain())
             return;
         if (!resizeSwapChain())
@@ -726,6 +733,9 @@ void RhiPresentationEngine::releaseDevice() {
     m_rhi = nullptr;
     m_graphicsDevice.reset();
     m_outputCharacteristicsDirty = false;
+#ifdef Q_OS_MACOS
+    m_swapChainSurfaceDirty = false;
+#endif
 }
 
 void RhiPresentationEngine::handleDeviceLoss(const char *operation) {
@@ -923,12 +933,19 @@ void RhiPresentationEngine::markOutputCharacteristicsDirty() {
     markPresentationDirty();
 }
 
-void RhiPresentationEngine::reconcileOutputCharacteristics() {
+bool RhiPresentationEngine::reconcileOutputCharacteristics() {
+#ifdef Q_OS_MACOS
+    if (!m_outputCharacteristicsDirty && !m_swapChainSurfaceDirty)
+        return true;
+    const bool refreshSwapChainSurface = m_swapChainSurfaceDirty;
+    m_swapChainSurfaceDirty = false;
+#else
     if (!m_outputCharacteristicsDirty)
-        return;
+        return true;
+#endif
     m_outputCharacteristicsDirty = false;
     if (!m_swapChain)
-        return;
+        return true;
 
     const QRhiSwapChain::Format desiredFormat =
         desiredSwapChainFormat(
@@ -937,10 +954,20 @@ void RhiPresentationEngine::reconcileOutputCharacteristics() {
             m_outputState.displayHdrEnabled());
     if (m_swapChain->format() != desiredFormat) {
         releaseSwapChainResources();
-        return;
+        return true;
     }
+
+#ifdef Q_OS_MACOS
+    if (refreshSwapChainSurface) {
+        qCInfo(
+            sunroomLogPresentation,
+            "Reapplying the Metal presentation surface after a screen change");
+        return createOrResizeSwapChain("reconfiguring the presentation surface");
+    }
+#endif
 
     // Refresh QRhi luminance/headroom fallback data without rebuilding an
     // already compatible presentation surface.
     updateBackendState();
+    return true;
 }

@@ -144,9 +144,13 @@ playback:
   GPU completion. SDR, PQ, HLG, HDR10+, Dolby Vision Profile 8.1, subtitles,
   seeking, and AudioUnit-backed system-default playback pass focused tests on
   the available M2/macOS 26 host; the final registered Debug suite passes
-  26/26. Physical EDR above `1.0`, unlike-display
-  movement, live default-audio-route switching, older-macOS dependency
-  compatibility, and packaging remain open validation gates.
+  26/26. Physical EDR measurement, live HDR/SDR switching, live
+  default-audio-route switching, older-macOS dependency compatibility, and
+  packaging remain open validation gates. A
+  user-confirmed multi-display move and return preserve video, UI color, and
+  EDR mapping after the engine reconfigures the existing Metal swapchain at
+  the render boundary; live HDR/SDR switching and broader display-lifecycle
+  coverage remain open.
 * Native-Wayland Linux configures from system Qt 6.10, FFmpeg 8, libplacebo,
   cubeb, libass, Vulkan, Wayland, VA-API, and DRM packages. It now selects
   Wayland before Qt startup, inventories optional color/decorations

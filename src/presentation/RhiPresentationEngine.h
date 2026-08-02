@@ -76,7 +76,7 @@ private:
     void updateBackendState();
     void scheduleNextFrame(bool videoViewportActive);
     void markOutputCharacteristicsDirty();
-    void reconcileOutputCharacteristics();
+    bool reconcileOutputCharacteristics();
 
     QWindow &m_window;
     PresentationOutputState &m_outputState;
@@ -102,6 +102,12 @@ private:
     bool m_frameRequestedWhileRendering = false;
     // Native display callbacks are hints. Query and mutate at the render point.
     bool m_outputCharacteristicsDirty = false;
+#ifdef Q_OS_MACOS
+    // Qt's Cocoa backing-property propagation can replace CAMetalLayer's
+    // colorspace when the window changes screens. QRhi reapplies the selected
+    // presentation colorspace from createOrResize().
+    bool m_swapChainSurfaceDirty = false;
+#endif
     bool m_recoveringDevice = false;
     bool m_retriedFrameError = false;
     int m_deviceRecoveryAttempts = 0;

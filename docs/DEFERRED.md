@@ -14,11 +14,12 @@ Metal/MoltenVK video-target interop, AppKit relative EDR observation,
 VideoToolbox NV12/P010 import, subtitles, seeking, and cubeb AudioUnit playback
 on the available Apple M2/macOS 26 host. That host's built-in display reported
 current EDR headroom `1.0` and potential headroom `2.0`. Physical output above
-SDR white, movement between unlike SDR/EDR displays, live HDR/SDR switching,
-brightness/headroom changes, hotplug, sleep/wake, and paused-frame behavior
-across those changes remain native-hardware checks. Playback is user-confirmed
-audible on the current macOS default device; a live system-default route change
-remains unverified.
+SDR white, live HDR/SDR switching, brightness/headroom changes, hotplug,
+sleep/wake, and paused-frame behavior across those changes remain
+native-hardware checks. One user-confirmed multi-display move and return now
+preserve video, UI color, and EDR mapping after QRhi reapplies the Metal layer's
+presentation declaration. Playback is user-confirmed audible on the current
+macOS default device; a live system-default route change remains unverified.
 
 Packaging is intentionally after the non-packaging port. It must build and
 inspect a self-contained bundle, close Qt/plugin/native-library dependencies,

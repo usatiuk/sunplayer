@@ -59,12 +59,14 @@ NV12/P010 plane import, AudioUnit output, subtitle composition, seeking, and
 production application playback. Deterministic captures cover SDR
 and the shared PQ, HLG, HDR10+, and Dolby Vision Profile 8.1 tone-mapping path.
 The connected built-in display reported current EDR headroom `1.0` and
-potential headroom `2.0`; physical extended output, unlike-display movement,
-live HDR/SDR switching and live default-audio-route movement remain
-native-hardware checks. Playback is user-confirmed audible on the current
-default device. The final post-review Debug suite passes all 26 registered
-tests in 25.43 seconds without leaving an application process. Bundle closure
-and macOS 13 dependency
+potential headroom `2.0`. A user-confirmed multi-display move and return now
+preserve video, UI color, and EDR mapping; physical extended-output
+measurement, live HDR/SDR switching, a broader display matrix, and live
+default-audio-route movement remain native-hardware checks. Playback is
+user-confirmed audible on the current default device. The
+post-transition-fix and post-review Debug suite passes all 26 registered tests
+in 24.55 seconds; every registered application scenario exits itself. Bundle
+closure and macOS 13 dependency
 compatibility remain packaging checks.
 
 The central principle is:
@@ -520,11 +522,16 @@ light.
 
 On the current macOS host, AppKit observation and the EDR-capable swapchain
 selection path run against a real `NSScreen`, while pure tests cover relative
-headroom mapping and equal-state reconciliation. One clean direct fullscreen
-smoke passed, and interactive fullscreen is user-confirmed working. Repeated
-fullscreen CTest automation was sensitive to live desktop input and was not
-registered as a deterministic test; broader display-transition evidence
-requires a controlled or manually recorded run. Cross-platform source/router
+headroom mapping and equal-state reconciliation. A user-confirmed
+multi-display move and return preserve video, UI color, and EDR mapping after
+the Metal surface refresh. This physical event is not synthesized in CTest:
+the current public boundary cannot select a second physical `NSScreen` or make
+AppKit deliver its backing-property change, and a test-only signal or helper
+would not prove that boundary. One clean direct fullscreen smoke passed, and
+interactive fullscreen is user-confirmed working. Repeated fullscreen CTest
+automation was sensitive to live desktop input and was not registered as a
+deterministic test; broader display-transition evidence requires a controlled
+or manually recorded run. Cross-platform source/router
 coverage verifies that HDR Lab publishes its fixed input geometry so the
 shared presentation engine can provision a surface, while component coverage
 verifies its active viewport and opaque black diagnostic panels. These tests

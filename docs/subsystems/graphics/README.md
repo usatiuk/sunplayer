@@ -272,7 +272,7 @@ A frame is requested when:
 * The active video viewport geometry or visibility changes.
 * Presentation policy or the active source changes.
 * Display state or successfully created backend state changes.
-* The window moves and its settled output needs verification.
+* Qt reports that the window changed screens.
 * A swapchain or device recovery attempt is due.
 * The procedural pattern is animated.
 
@@ -287,7 +287,11 @@ The native surface and graphics device have different lifetimes:
 * `SurfaceAboutToBeDestroyed` releases swapchain-dependent resources.
 * A normal resize calls `createOrResize()` only when the surface pixel size
   changed, except when QRhi explicitly reports an out-of-date swapchain.
-* A display-mode or output change schedules swapchain recreation.
+* A display-mode change recreates the swapchain when its required format
+  changes. On macOS, an actual screen change also re-runs QRhi Metal
+  `createOrResize()` on the existing compatible swapchain because Qt's Cocoa
+  backing-property propagation can replace the `CAMetalLayer` color-space
+  declaration.
 * The video texture survives swapchain-only teardown because it depends on the
   QRhi device, not the swapchain render-pass descriptor.
 * Device loss tears down compositor, swapchain, diagnostic producer, Quick,
@@ -338,13 +342,19 @@ marks output characteristics dirty.
 
 macOS refreshes the active `NSScreen` on `QWindow::screenChanged`, expose, and
 `NSApplicationDidChangeScreenParametersNotification`. These callbacks publish
-the latest semantic value; they do not mutate QRhi resources immediately.
+the latest semantic value; they do not mutate QRhi resources immediately. A
+screen change additionally marks the Metal presentation surface dirty. At the
+next render boundary, an unchanged swapchain format is reconfigured in place
+so QRhi reapplies its extended-linear sRGB color space and EDR declaration;
+video, Quick, compositor, and device resources remain intact.
+[The pinned Qt source and native evidence are recorded here.](../../research/2026-08-02-qt-metal-edr-screen-transition.md)
 
 [ADR 0016](../../decisions/0016-reconcile-output-changes-semantically.md)
 is implemented: native events trigger a latest-state refresh, semantic target
 values invalidate target-dependent video, and the engine checks swapchain
 format support at the next render boundary. It recreates the swapchain only
-when the desired format differs. Stable display identities,
+when the desired format differs, apart from the demonstrated macOS native
+surface reconfiguration above. Stable display identities,
 greatest-intersection selection, topology revisions, per-field confidence, and
 a general asynchronous query pipeline are optional diagnostics rather than
 correctness requirements.

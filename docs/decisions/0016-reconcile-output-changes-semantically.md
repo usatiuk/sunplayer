@@ -66,9 +66,15 @@ recomposes it.
 
 Windows uses the cached HWND-bound `DisplayInformation` as the Advanced Color
 authority. macOS will query the current `NSScreen` after its normal screen and
-profile notifications. Wayland will use the compositor's preferred surface
-description and its protocol identity. Sunroom does not introduce a shared
-display-topology transaction model or custom spanning-window authority.
+profile notifications. Qt 6.11.1's Cocoa backing-property propagation replaces
+the existing `CAMetalLayer` color space during a screen transition, so macOS
+marks that native surface configuration dirty and re-runs QRhi
+`createOrResize()` at the next render boundary even when the swapchain format
+is unchanged. This restores the declared encoding without treating display
+identity as a video-cache revision or rebuilding the graphics device. Wayland
+will use the compositor's preferred surface description and its protocol
+identity. Sunroom does not introduce a shared display-topology transaction
+model or custom spanning-window authority.
 
 ### Audio changes
 
