@@ -52,6 +52,7 @@ public:
         std::chrono::steady_clock::time_point now) override;
     std::uint64_t contentRevision() const override;
     std::uint64_t producerConfigurationRevision() const override;
+    std::optional<double> displayAspectRatio() const override;
     bool wantsContinuousFrames() const override;
     std::unique_ptr<RenderedVideoProducer> createProducer(
         GraphicsDeviceDomain &graphicsDevice) const override;

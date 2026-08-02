@@ -128,6 +128,12 @@ DiagnosticVideoSource::producerConfigurationRevision() const {
     return m_producerConfigurationRevision;
 }
 
+std::optional<double>
+DiagnosticVideoSource::displayAspectRatio() const {
+    return static_cast<double>(m_inputFrameSize.width())
+        / static_cast<double>(m_inputFrameSize.height());
+}
+
 bool DiagnosticVideoSource::wantsContinuousFrames() const {
     return m_animatePattern;
 }

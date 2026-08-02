@@ -172,6 +172,11 @@ The former diagnostic playground now lives in `HdrLabPage` without losing its
 working controls. It remains a developer-facing way to inspect display state,
 tone mapping, surface invalidation, and presentation behavior.
 
+The page publishes the diagnostic source's fixed display geometry through the
+same active-source contract as Player, allowing the presentation engine to
+aspect-fit and provision its video surface without a page-specific path. Its
+header, output, and control panels are opaque black over the diagnostic image.
+
 HDR Lab selects libplacebo by default. Its diagnostic renderer switch can
 recreate the producer at a frame boundary and show the retained procedural QRhi
 implementation for A/B inspection. Both implementations receive the same
@@ -205,7 +210,9 @@ that active-page geometry and visibility reach `VideoViewportState`. It also
 verifies Empty/Opening/Ready/Error visibility, cancel/retry/close and
 play/pause command wiring, Player/HDR-Lab route and viewport selection, the
 optional statistics panel, and the diagnostic renderer switch's default and
-source binding. It explicitly covers `Ready` before `hasFrame`: playback chrome
+source binding. Source/router coverage verifies that the diagnostic route
+retains its 16:9 input geometry, and the component test verifies the HDR Lab's
+opaque black panel backgrounds. It explicitly covers `Ready` before `hasFrame`: playback chrome
 and the viewport remain active while the preparing state is visible, then the
 preparing state disappears after frame publication. It also verifies full-page
 Player geometry, timeline formatting, scrub-preview time, relative and slider

@@ -5,6 +5,7 @@
 #include <QtTest>
 
 #include "video/ActiveVideoSource.h"
+#include "video/DiagnosticVideoSource.h"
 #include "video/RenderedVideoProducer.h"
 
 class TestVideoSource final : public RenderedVideoSource {
@@ -103,6 +104,7 @@ class ActiveVideoSourceTest final : public QObject {
 private slots:
     void forwardsOnlyActiveUpdates();
     void switchesDelegatesAtOneProducerRevision();
+    void diagnosticRouteProvidesDisplayGeometry();
     void observesPrepareAndFailurePolicy();
 };
 
@@ -156,6 +158,21 @@ switchesDelegatesAtOneProducerRevision() {
     QVERIFY(source.displayAspectRatio());
     QCOMPARE(*source.displayAspectRatio(), 4.0 / 3.0);
     QVERIFY(source.wantsContinuousFrames());
+}
+
+void ActiveVideoSourceTest::
+diagnosticRouteProvidesDisplayGeometry() {
+    TestVideoSource player(4.0 / 3.0);
+    DiagnosticVideoSource diagnostics(
+        VideoProducerApi::Qrhi,
+        VideoTargetReadback::Disabled,
+        QSize(640, 360));
+    ActiveVideoSource source(player, diagnostics);
+
+    source.setRoute(ActiveVideoSource::Route::Diagnostics);
+
+    QVERIFY(source.displayAspectRatio());
+    QCOMPARE(*source.displayAspectRatio(), 16.0 / 9.0);
 }
 
 void ActiveVideoSourceTest::

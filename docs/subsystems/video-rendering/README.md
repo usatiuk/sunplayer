@@ -51,8 +51,9 @@ The known seams are established with their first implementations:
 * The graphics-device domain owns QRhi, native backend state, the same-device
   libplacebo GPU and FFmpeg hardware device, device generation, execution
   synchronization, backend/adapter diagnostics, and teardown order.
-* The rendered-video source owns source-specific state, content revision,
-  cadence, update requests, and device-recreatable producer creation.
+* The rendered-video source owns source-specific state, display geometry,
+  content revision, cadence, update requests, and device-recreatable producer
+  creation.
 * The rendered-video producer owns invalidation, submission reporting, and
   rendered-state commit/discard semantics without exposing source-specific
   controls to the presentation engine.

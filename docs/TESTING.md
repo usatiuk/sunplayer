@@ -524,8 +524,11 @@ headroom mapping and equal-state reconciliation. One clean direct fullscreen
 smoke passed, and interactive fullscreen is user-confirmed working. Repeated
 fullscreen CTest automation was sensitive to live desktop input and was not
 registered as a deterministic test; broader display-transition evidence
-requires a controlled or manually recorded run. No test uses the currently
-broken HDR Lab as an acceptance oracle.
+requires a controlled or manually recorded run. Cross-platform source/router
+coverage verifies that HDR Lab publishes its fixed input geometry so the
+shared presentation engine can provision a surface, while component coverage
+verifies its active viewport and opaque black diagnostic panels. These tests
+do not replace physical-output validation.
 
 The current WSLg lane is intentionally narrower. Its unmanaged assumed-sRGB
 surface and software Vulkan device exercise production ownership, rendering,

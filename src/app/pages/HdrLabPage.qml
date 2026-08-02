@@ -46,6 +46,7 @@ VideoPage {
 
         Rectangle {
             id: headerPanel
+            objectName: "hdrLabHeaderPanel"
 
             anchors {
                 left: parent.left
@@ -54,7 +55,7 @@ VideoPage {
             }
             width: headerColumn.implicitWidth
             height: headerColumn.implicitHeight
-            color: "#111318"
+            color: "black"
 
             Column {
                 id: headerColumn
@@ -83,6 +84,7 @@ VideoPage {
 
         Rectangle {
             id: outputPanel
+            objectName: "hdrLabOutputPanel"
 
             x: parent.width - width - 36
             y: 124
@@ -90,7 +92,7 @@ VideoPage {
             width: 286
             height: diagnosticColumn.implicitHeight + 24
             radius: 8
-            color: Qt.rgba(27 / 255, 30 / 255, 38 / 255, 0.96)
+            color: "black"
             border.color: "#3b4250"
 
             DragHandler {
@@ -266,8 +268,10 @@ VideoPage {
             height: footerLayout.implicitHeight
 
             Rectangle {
+                objectName: "hdrLabFooterPanel"
+
                 anchors.fill: parent
-                color: "#111318"
+                color: "black"
             }
 
             ColumnLayout {

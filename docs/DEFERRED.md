@@ -34,10 +34,6 @@ to concurrent user input and is not registered as a deterministic CTest.
 Revisit automation only with reproducible supported-environment evidence or a
 controlled boundary; do not add timing or event-order workarounds.
 
-The HDR Lab is currently broken and was explicitly excluded from macOS port
-acceptance. Do not use or repair it as part of this port; its existing target-
-control issue remains recorded separately below.
-
 ### Remaining decoded-video coverage and cross-platform hardware import
 
 The explicit video surface, narrow final compositor, persistent libplacebo

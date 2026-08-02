@@ -107,7 +107,19 @@ void AppShellTest::publishesActiveViewport() {
     QObject *const rendererSwitch =
         rootItem->findChild<QObject *>(
             QStringLiteral("videoRendererSwitch"));
+    QObject *const hdrLabHeaderPanel =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("hdrLabHeaderPanel"));
+    QObject *const hdrLabOutputPanel =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("hdrLabOutputPanel"));
+    QObject *const hdrLabFooterPanel =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("hdrLabFooterPanel"));
     QVERIFY(rendererSwitch);
+    QVERIFY(hdrLabHeaderPanel);
+    QVERIFY(hdrLabOutputPanel);
+    QVERIFY(hdrLabFooterPanel);
     QObject *const emptyState =
         rootItem->findChild<QObject *>(
             QStringLiteral("emptyState"));
@@ -298,6 +310,15 @@ void AppShellTest::publishesActiveViewport() {
     QCOMPARE(
         rendererSwitch->property("checked").toBool(),
         true);
+    QCOMPARE(
+        hdrLabHeaderPanel->property("color").value<QColor>(),
+        QColor(Qt::black));
+    QCOMPARE(
+        hdrLabOutputPanel->property("color").value<QColor>(),
+        QColor(Qt::black));
+    QCOMPARE(
+        hdrLabFooterPanel->property("color").value<QColor>(),
+        QColor(Qt::black));
     QCOMPARE(
         activeVideoSource.route(),
         ShellTestActiveVideoSource::Route::Player);
