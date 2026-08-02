@@ -7,9 +7,10 @@ The QML scene has a thin `AppShell` with a default `PlayerPage` and retained
 viewport boundary are production structure; HDR Lab remains developer tooling
 and is reached from Player rather than occupying permanent playback chrome.
 
-Player opens a local file, starts synchronized playback through the production
-libplacebo video and default Windows audio paths, and presents the movie across
-the full page. A compact two-row transport island appears on pointer activity,
+Player opens a local file and presents the movie across the full page. Windows
+uses the production libplacebo video and default audio paths; Linux now uses
+the same software-decoded libplacebo path through Vulkan while physical audio
+remains pending. A compact two-row transport island appears on pointer activity,
 keeps the timeline above its controls, and fades during uninterrupted playback.
 The transport uses a small vendored Lucide 1.28.0 SVG subset inside fully
 custom rounded buttons, avoiding font-dependent glyphs and platform-style
@@ -43,6 +44,25 @@ presentation engine can therefore select the first frame without QML claiming
 that video is already drawable or creating a viewport/`hasFrame` dependency
 cycle.
 
+On native Wayland, an in-scene `ClientSideWindowChrome` is enabled only when
+startup capability inventory finds no xdg-decoration manager. It overlays the
+existing scene; it is not another window or presentation layer. Its black
+titlebar follows the same pointer-activity fade as playback controls, while an
+active video viewport remains full-window and does not jump as chrome fades.
+Empty/non-player content requests a stable titlebar inset. Compositor-owned
+move/resize begins through public `QWindow` operations. Chrome is absent in
+fullscreen and its
+resize zones are absent while maximized.
+
+Window buttons ask the system icon theme for symbolic minimize, maximize,
+restore, and close shapes, use the vendored Lucide glyphs as deterministic
+fallbacks, and always apply Sunroom's light foreground tint. The desktop theme
+does not choose color for the intentionally black application titlebar. Exact
+desktop decoration styling, button ordering, and external client-side shadows
+are not reconstructed. Application chrome currently has no intentional window
+perimeter; that visual treatment is explicitly deferred in
+[DEFERRED.md](../../DEFERRED.md).
+
 ## Page structure
 
 Keep one native presentation window, one QML engine, one redirected Qt Quick
@@ -59,6 +79,8 @@ Main.qml
         PlayerPage.qml
     components/
         shared controls and read-only diagnostics as they become concrete
+    windowchrome/
+        optional in-scene native-window controls
 ```
 
 `VideoPage` defines the viewport rectangle and visibility contract shared by
@@ -185,8 +207,11 @@ preparing state disappears after frame publication. It also verifies full-page
 Player geometry, timeline formatting, scrub-preview time, relative and slider
 seek commands, backend position updates, disabled seeking state, fullscreen
 gesture dispatch, popup Escape priority state, island hit testing, and
-native-cursor intent without launching a native dialog. The real
-D3D11 capture verifies that zero video geometry and the compositor's fallback
+native-cursor intent without launching a native dialog. The shell test also
+checks disabled, normal, maximized, and fullscreen application-chrome state;
+stable empty-page inset and the invariant that title fade never moves an
+active video viewport. The real D3D11 capture
+verifies that zero video geometry and the compositor's fallback
 binding produce the normal background rather than sampling the retained video
 surface. It also destroys a bound diagnostic producer, creates the other
 implementation, rebinds the compositor, and captures the new result. The

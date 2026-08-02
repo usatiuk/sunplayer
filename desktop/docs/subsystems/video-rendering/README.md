@@ -179,15 +179,17 @@ surface `1.0`; PQ source values and mastering metadata remain source truth.
 The physical luminance of surface `1.0` follows the platform reference white
 at presentation.
 
-Embedded source ICC bytes are retained with the `AVFrame`, but the pinned
-libplacebo build has LCMS disabled and does not apply them. Source ICC rendering
+Embedded source ICC bytes are retained with the `AVFrame` and reported in
+diagnostics. The render-local libplacebo frame explicitly clears both ICC
+representations on every platform, so an LCMS-enabled system libplacebo cannot
+silently change behavior relative to the Windows build. Source ICC rendering
 is deferred until packaging, semantic profile validation, and SDR RGB behavior
 are tested. ICC combined with PQ, HLG, HDR10+, or Dolby Vision remains
 unsupported pending a separate model. Display calibration is a different
 responsibility: on a system-managed path Sunroom declares the final
 presentation encoding and lets the OS/compositor apply the active display
 profile once to the entire composition. Ordinary Windows SDR with Advanced
-Color inactive is currently an unmanaged sRGB-assumed fallback.
+Color inactive and unmanaged Wayland SDR are sRGB-assumed fallbacks.
 Application-managed display ICC is deferred and, if added, belongs after QRhi
 composition rather than inside the video renderer.
 
@@ -253,7 +255,8 @@ shared.
    constant 600-nit target.
 7. [x] Make libplacebo the HDR Lab default while retaining procedural QRhi as
    an explicit diagnostic comparison only.
-8. [ ] Add the Vulkan implementation and exercise it on native Wayland Linux.
+8. [x] Add the QRhi-owned Vulkan implementation and exercise its software-
+   decoded path on native Wayland under WSLg.
 9. [ ] Validate QRhi Metal/EDR presentation and the narrow
    MoltenVK/Vulkan-to-IOSurface/Metal video bridge on macOS; retain shared
    MoltenVK presentation only as an evidence-driven alternative.
@@ -288,8 +291,8 @@ compositor, submission, and UI-layer coverage. Each future native libplacebo
 backend requires equivalent real-GPU coverage. Cross-backend output
 comparisons use declared tolerances.
 
-The separate dependency integration test links the MSVC-built test process to the
-clang-cl-built libplacebo DLL, checks that the installed generated
+The Windows dependency integration test links the MSVC-built test process to
+the clang-cl-built libplacebo DLL, checks that the installed generated
 configuration enables D3D11, Shaderc, and built-in DOVI handling while
 disabling Vulkan, OpenGL, and external libdovi, checks the pinned version, and
 exercises a real log create/destroy lifecycle.
@@ -314,7 +317,11 @@ libplacebo-converted linear RGB. Its SAR 32:27 produces a 16:9 Player content
 rectangle. A pinned H.264 case uses the production shared-device D3D11VA
 decoder and direct NV12 plane importer, asserts no input download/upload or GPU
 copy and no output copy/transfer, captures its display-targeted output, and
-compares representative pixels against the software decode. Physical display
-correctness, physical HLG/dynamic-HDR target accuracy, actual display-gamut
-propagation, P010/P012/P016 capture, general display-matrix rotation, macOS EDR
-viability, and Vulkan synchronization remain unproven.
+compares representative pixels against the software decode. The Linux suite
+verifies system libplacebo's required Vulkan/shader capabilities and builds the
+production QRhi-owned Vulkan target; a WSLg llvmpipe smoke exercises software
+decode, direct rendering, composition, swapchain presentation, and teardown.
+Physical display correctness, physical HLG/dynamic-HDR target accuracy, actual
+display-gamut propagation, P010/P012/P016 capture, general display-matrix
+rotation, macOS EDR viability, native-GPU Vulkan coverage, and the broader
+Vulkan resize/surface-recreation synchronization matrix remain unproven.

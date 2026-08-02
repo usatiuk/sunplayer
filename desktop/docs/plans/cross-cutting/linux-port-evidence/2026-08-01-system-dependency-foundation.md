@@ -73,8 +73,9 @@ A Release install-tree check initially exposed Qt's cross-platform deployment
 script trying to copy and rewrite Ubuntu's system QML plugins. Linux now skips
 that Windows-oriented deployment step and installs only project-owned
 artifacts, preserving the system-package ownership boundary. A clean install
-then succeeded with the executable and project license in the expected GNU
-install directories; its dynamic dependencies resolve from `/usr`.
+then succeeded with the executable and bundled Lucide third-party license in
+the expected GNU install directories; its dynamic dependencies resolve from
+`/usr`. Project-level packaging and license installation remain deferred.
 
 ## Defects found and corrected
 

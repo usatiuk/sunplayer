@@ -8,11 +8,15 @@
 
 #ifdef Q_OS_WIN
 #include "graphics/backends/D3D11GraphicsDeviceDomain.h"
+#elif defined(Q_OS_LINUX)
+#include "graphics/backends/VulkanGraphicsDeviceDomain.h"
 #endif
 
 void GraphicsBackendFactory::configureQtQuick() {
 #ifdef Q_OS_WIN
     QQuickWindow::setGraphicsApi(QSGRendererInterface::Direct3D11);
+#elif defined(Q_OS_LINUX)
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::Vulkan);
 #else
     qCFatal(
         sunroomLogGraphics,
@@ -23,6 +27,8 @@ void GraphicsBackendFactory::configureQtQuick() {
 QSurface::SurfaceType GraphicsBackendFactory::windowSurfaceType() {
 #ifdef Q_OS_WIN
     return QSurface::Direct3DSurface;
+#elif defined(Q_OS_LINUX)
+    return QSurface::VulkanSurface;
 #else
     qCFatal(
         sunroomLogGraphics,
@@ -32,13 +38,24 @@ QSurface::SurfaceType GraphicsBackendFactory::windowSurfaceType() {
 }
 
 std::unique_ptr<GraphicsDeviceDomain>
-GraphicsBackendFactory::createDeviceDomain() {
+GraphicsBackendFactory::createDeviceDomain(QWindow &window) {
 #ifdef Q_OS_WIN
-    return createD3D11GraphicsDeviceDomain();
+    Q_UNUSED(window);
+    return createDeviceDomain();
+#elif defined(Q_OS_LINUX)
+    return createVulkanGraphicsDeviceDomain(window);
 #else
+    Q_UNUSED(window);
     qCCritical(
         sunroomLogGraphics,
         "Sunroom does not provide a graphics device for this platform");
     return {};
 #endif
 }
+
+#ifdef Q_OS_WIN
+std::unique_ptr<GraphicsDeviceDomain>
+GraphicsBackendFactory::createDeviceDomain() {
+    return createD3D11GraphicsDeviceDomain();
+}
+#endif

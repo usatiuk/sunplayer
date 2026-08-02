@@ -115,7 +115,7 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
             WaylandClientPrivate
             WaylandScannerTools
     )
-    find_package(Vulkan 1.2 REQUIRED)
+    find_package(Vulkan 1.3 REQUIRED)
     pkg_check_modules(SUNROOM_WAYLAND_PROTOCOLS REQUIRED
             wayland-protocols
     )
@@ -164,6 +164,36 @@ target_link_libraries(sunroom_diagnostics
         PUBLIC
         Qt6::Core
 )
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_library(sunroom_linux_platform STATIC
+            src/platform/linux/LinuxWaylandWindowContext.cpp
+            src/platform/linux/LinuxWaylandWindowContext.h
+            src/platform/linux/WaylandColorManagement.cpp
+            src/platform/linux/WaylandColorManagement.h
+            src/presentation/PresentationSurfaceContract.h
+    )
+    qt_generate_wayland_protocol_client_sources(
+            sunroom_linux_platform
+            PRIVATE_CODE
+            FILES
+            "${SUNROOM_WAYLAND_COLOR_MANAGEMENT_PROTOCOL}"
+    )
+    target_include_directories(sunroom_linux_platform
+            PUBLIC
+            "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    )
+    target_link_libraries(sunroom_linux_platform
+            PUBLIC
+            Qt6::Gui
+            PRIVATE
+            Qt6::GuiPrivate
+            Qt6::WaylandClientPrivate
+            Vulkan::Vulkan
+            Wayland::Client
+            sunroom_diagnostics
+    )
+endif ()
 
 add_library(sunroom_audio STATIC
         src/audio/AudioSink.h
@@ -300,6 +330,16 @@ if (WIN32)
     target_link_libraries(sunroom_video_pipeline PRIVATE
             d3d11
     )
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_sources(sunroom_video_pipeline PRIVATE
+            src/graphics/backends/VulkanGraphicsDeviceDomain.cpp
+            src/graphics/backends/VulkanGraphicsDeviceDomain.h
+            src/graphics/backends/VulkanLibplaceboVideoTarget.cpp
+            src/graphics/backends/VulkanLibplaceboVideoTarget.h
+    )
+    target_link_libraries(sunroom_video_pipeline PRIVATE
+            Vulkan::Vulkan
+    )
 endif ()
 
 qt_add_executable(sunroom
@@ -317,6 +357,8 @@ qt_add_executable(sunroom
         src/app/PresentationWindow.h
         src/app/VideoViewportState.cpp
         src/app/VideoViewportState.h
+        src/app/windowchrome/WindowChromeController.cpp
+        src/app/windowchrome/WindowChromeController.h
         src/platform/DisplayState.h
         src/platform/DisplayStateProvider.cpp
         src/platform/DisplayStateProvider.h
@@ -337,6 +379,11 @@ set_source_files_properties(src/app/Main.qml PROPERTIES
 )
 set_source_files_properties(src/app/AppShell.qml PROPERTIES
         QT_RESOURCE_ALIAS AppShell.qml
+)
+set_source_files_properties(
+        src/app/windowchrome/ClientSideWindowChrome.qml
+        PROPERTIES
+        QT_RESOURCE_ALIAS ClientSideWindowChrome.qml
 )
 set_source_files_properties(src/app/pages/HdrLabPage.qml PROPERTIES
         QT_RESOURCE_ALIAS HdrLabPage.qml
@@ -371,6 +418,15 @@ set_source_files_properties(src/app/icons/lucide/ellipsis.svg PROPERTIES
 set_source_files_properties(src/app/icons/lucide/x.svg PROPERTIES
         QT_RESOURCE_ALIAS icons/lucide/x.svg
 )
+set_source_files_properties(src/app/icons/lucide/minus.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/minus.svg
+)
+set_source_files_properties(src/app/icons/lucide/square.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/square.svg
+)
+set_source_files_properties(src/app/icons/lucide/copy.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/copy.svg
+)
 set_source_files_properties(src/app/icons/lucide/LICENSE PROPERTIES
         QT_RESOURCE_ALIAS icons/lucide/LICENSE
 )
@@ -381,6 +437,7 @@ qt_add_qml_module(sunroom
         QML_FILES
         src/app/Main.qml
         src/app/AppShell.qml
+        src/app/windowchrome/ClientSideWindowChrome.qml
         src/app/pages/HdrLabPage.qml
         src/app/pages/PlayerPage.qml
         src/app/pages/VideoPage.qml
@@ -393,6 +450,9 @@ qt_add_qml_module(sunroom
         src/app/icons/lucide/volume-x.svg
         src/app/icons/lucide/ellipsis.svg
         src/app/icons/lucide/x.svg
+        src/app/icons/lucide/minus.svg
+        src/app/icons/lucide/square.svg
+        src/app/icons/lucide/copy.svg
         src/app/icons/lucide/LICENSE
 )
 
@@ -420,6 +480,12 @@ target_link_libraries(sunroom
         sunroom_diagnostics
         sunroom_video_pipeline
 )
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_libraries(sunroom PRIVATE
+            sunroom_linux_platform
+    )
+endif ()
 
 target_include_directories(sunroom
         PRIVATE

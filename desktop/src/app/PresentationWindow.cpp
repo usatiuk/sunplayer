@@ -19,8 +19,32 @@
 #include "video/ActiveVideoSource.h"
 #include "video/DiagnosticVideoSource.h"
 
-PresentationWindow::PresentationWindow() {
+#ifdef Q_OS_LINUX
+#include "platform/linux/LinuxWaylandWindowContext.h"
+#endif
+
+#ifdef Q_OS_LINUX
+PresentationWindow::PresentationWindow(
+        LinuxWaylandWindowContext &windowContext)
+    : m_windowChrome(
+          *this,
+          windowContext.requiresClientSideDecorations()),
+      m_windowContext(windowContext) {
+    initialize(windowContext.surfaceSelection().presentationContract());
+#else
+PresentationWindow::PresentationWindow()
+    : m_windowChrome(*this, false) {
+    initialize(PresentationSurfaceContract{});
+#endif
+}
+
+void PresentationWindow::initialize(
+        PresentationSurfaceContract surfaceContract) {
+    Q_ASSERT(surfaceContract.isValid());
     setSurfaceType(GraphicsBackendFactory::windowSurfaceType());
+#ifdef Q_OS_LINUX
+    m_windowContext.configureWindow(*this);
+#endif
     setTitle(tr("Sunroom"));
 
     m_outputState = std::make_unique<PresentationOutputState>(nullptr);
@@ -41,12 +65,14 @@ PresentationWindow::PresentationWindow() {
         *m_activeVideoSource,
         *m_diagnosticVideoSource,
         *m_mediaSession,
-        *m_videoViewport);
+        *m_videoViewport,
+        surfaceContract);
     connect(
         m_engine.get(),
         &RhiPresentationEngine::videoFramePresented,
         this,
         &PresentationWindow::videoFramePresented);
+    m_presentationLifecycle = PresentationLifecycle::Active;
     connect(
         this,
         &QWindow::windowStateChanged,
@@ -69,7 +95,17 @@ PresentationWindow::PresentationWindow() {
     m_outputState->attach(*this);
 }
 
-PresentationWindow::~PresentationWindow() = default;
+PresentationWindow::~PresentationWindow() {
+    // QRhi and every resource derived from the native surface must be gone
+    // before Qt destroys that surface and its QVulkanInstance association.
+    Q_ASSERT(m_presentationLifecycle == PresentationLifecycle::Active);
+    m_presentationLifecycle = PresentationLifecycle::Releasing;
+    m_engine.reset();
+#ifdef Q_OS_LINUX
+    m_outputState.reset();
+    m_windowContext.releaseWindow(*this);
+#endif
+}
 
 void PresentationWindow::openMedia(const QUrl &url) {
     m_mediaSession->openMedia(url);
@@ -119,6 +155,10 @@ void PresentationWindow::setWindowShortcutsBlocked(bool blocked) {
     m_windowShortcutsBlocked = blocked;
 }
 
+WindowChromeController *PresentationWindow::windowChrome() {
+    return &m_windowChrome;
+}
+
 void PresentationWindow::applyCursorVisibility() {
     if (m_cursorHidden)
         setCursor(QCursor(Qt::BlankCursor));
@@ -127,10 +167,16 @@ void PresentationWindow::applyCursorVisibility() {
 }
 
 void PresentationWindow::exposeEvent(QExposeEvent *) {
+    if (m_presentationLifecycle != PresentationLifecycle::Active)
+        return;
+    Q_ASSERT(m_engine);
     m_engine->handleExposure();
 }
 
 void PresentationWindow::resizeEvent(QResizeEvent *) {
+    if (m_presentationLifecycle != PresentationLifecycle::Active)
+        return;
+    Q_ASSERT(m_engine);
     m_engine->markUiDirty();
 }
 
@@ -226,6 +272,9 @@ void PresentationWindow::keyReleaseEvent(QKeyEvent *event) {
 }
 
 bool PresentationWindow::event(QEvent *event) {
+    if (m_presentationLifecycle != PresentationLifecycle::Active)
+        return QWindow::event(event);
+    Q_ASSERT(m_engine);
     switch (event->type()) {
     case QEvent::UpdateRequest:
         m_engine->render();

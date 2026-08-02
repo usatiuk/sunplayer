@@ -69,6 +69,47 @@ private:
     int m_selectedStreamIndex = -1;
 };
 
+class ShellTestWindowChromeController final : public QObject {
+    Q_OBJECT
+    Q_PROPERTY(bool enabled READ enabled NOTIFY stateChanged)
+    Q_PROPERTY(bool fullscreen READ fullscreen NOTIFY stateChanged)
+    Q_PROPERTY(bool maximized READ maximized NOTIFY stateChanged)
+
+public:
+    explicit ShellTestWindowChromeController(QObject *parent)
+        : QObject(parent) {}
+
+    bool enabled() const { return m_enabled; }
+    bool fullscreen() const { return m_fullscreen; }
+    bool maximized() const { return m_maximized; }
+
+    void setState(bool enabled, bool fullscreen, bool maximized) {
+        if (enabled == m_enabled
+                && fullscreen == m_fullscreen
+                && maximized == m_maximized) {
+            return;
+        }
+        m_enabled = enabled;
+        m_fullscreen = fullscreen;
+        m_maximized = maximized;
+        emit stateChanged();
+    }
+
+    Q_INVOKABLE void minimize() {}
+    Q_INVOKABLE void toggleMaximized() {}
+    Q_INVOKABLE void close() {}
+    Q_INVOKABLE bool beginSystemMove() { return false; }
+    Q_INVOKABLE bool beginSystemResize(int) { return false; }
+
+signals:
+    void stateChanged();
+
+private:
+    bool m_enabled = false;
+    bool m_fullscreen = false;
+    bool m_maximized = false;
+};
+
 class ShellTestWindowCommands final : public QObject {
     Q_OBJECT
     QML_NAMED_ELEMENT(WindowCommands)
@@ -77,10 +118,12 @@ class ShellTestWindowCommands final : public QObject {
     Q_PROPERTY(bool windowShortcutsBlocked
                    READ windowShortcutsBlocked
                    WRITE setWindowShortcutsBlocked)
+    Q_PROPERTY(QObject *windowChrome READ windowChrome CONSTANT)
 
 public:
     explicit ShellTestWindowCommands(QObject *parent)
-        : QObject(parent) {}
+        : QObject(parent),
+          m_windowChrome(this) {}
 
     int toggleCount() const { return m_toggleCount; }
     bool cursorHidden() const { return m_cursorHidden; }
@@ -96,9 +139,15 @@ public:
         m_toggleCount = 0;
     }
 
+    ShellTestWindowChromeController &windowChromeController() {
+        return m_windowChrome;
+    }
+
     Q_INVOKABLE void toggleFullscreen() { ++m_toggleCount; }
+    QObject *windowChrome() { return &m_windowChrome; }
 
 private:
+    ShellTestWindowChromeController m_windowChrome;
     int m_toggleCount = 0;
     bool m_cursorHidden = false;
     bool m_windowShortcutsBlocked = false;

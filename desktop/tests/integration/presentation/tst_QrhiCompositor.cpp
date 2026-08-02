@@ -188,6 +188,13 @@ int encodedByte(float linear) {
     return static_cast<int>(std::lround(encoded * 255.0f));
 }
 
+int gamma22EncodedByte(float linear) {
+    const float encoded = std::pow(
+        std::clamp(linear, 0.0f, 1.0f),
+        1.0f / 2.2f);
+    return static_cast<int>(std::lround(encoded * 255.0f));
+}
+
 void compareNear(float actual, float expected, float tolerance) {
     QVERIFY2(std::abs(actual - expected) <= tolerance,
              qPrintable(QStringLiteral("actual %1, expected %2 ± %3")
@@ -357,7 +364,7 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     };
     compositorParameters.sdrScale = 1.0f;
     compositorParameters.ndcYUp = rhi->isYUpInNDC() ? 1.0f : 0.0f;
-    compositorParameters.linearOutput = 0.0f;
+    compositorParameters.outputTransfer = 0.0f;
 
     QRhiCommandBuffer *commandBuffer = nullptr;
     QCOMPARE(
@@ -484,7 +491,49 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     compareByteNear(composedVideo.b, expectedVideoByte);
     QCOMPARE(composedVideo.a, 255);
 
-    // A second frame changes only presentation, subtitle, and UI state. It
+    // Managed Wayland SDR uses the same composition in linear light but
+    // encodes the final normalized value as the gamma-2.2 transfer declared
+    // by Qt's color-management-v1 surface description.
+    QCOMPARE(
+        rhi->beginOffscreenFrame(&commandBuffer),
+        QRhi::FrameOpSuccess);
+    QCOMPARE(
+        producer->prepareForComposition(*commandBuffer),
+        VideoOperationResult::Ready);
+    HdrCompositorParameters gamma22Parameters = compositorParameters;
+    gamma22Parameters.outputTransfer = 1.0f;
+    compositor.render(
+        *commandBuffer,
+        *outputTarget,
+        outputSize,
+        gamma22Parameters);
+
+    bool gamma22ReadbackCompleted = false;
+    QRhiReadbackResult gamma22Readback;
+    gamma22Readback.completed = [&gamma22ReadbackCompleted] {
+        gamma22ReadbackCompleted = true;
+    };
+    updates = rhi->nextResourceUpdateBatch();
+    updates->readBackTexture(
+        QRhiReadbackDescription(outputTexture.get()),
+        &gamma22Readback);
+    commandBuffer->resourceUpdate(updates);
+    QCOMPARE(rhi->endOffscreenFrame(), QRhi::FrameOpSuccess);
+    producer->submissionAccepted();
+    QVERIFY(gamma22ReadbackCompleted);
+    const BytePixel gamma22Video = readBytePixel(
+        gamma22Readback,
+        *rhi,
+        videoOriginX + sampleX,
+        videoOriginY + 1);
+    const int expectedGamma22Byte =
+        gamma22EncodedByte(expectedRamp(sampleX));
+    compareByteNear(gamma22Video.r, expectedGamma22Byte);
+    compareByteNear(gamma22Video.g, expectedGamma22Byte);
+    compareByteNear(gamma22Video.b, expectedGamma22Byte);
+    QCOMPARE(gamma22Video.a, 255);
+
+    // A later frame changes only presentation, subtitle, and UI state. It
     // must reuse the submitted video surface while proving the intended layer
     // order: video, then premultiplied sRGB subtitles, then UI.
     QCOMPARE(
@@ -516,7 +565,7 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     HdrCompositorParameters linearParameters = compositorParameters;
     constexpr float linearSdrScale = 1.5f;
     linearParameters.sdrScale = linearSdrScale;
-    linearParameters.linearOutput = 1.0f;
+    linearParameters.outputTransfer = 2.0f;
     linearOutputCompositor.render(
         *commandBuffer,
         *linearOutputTarget,
@@ -1196,7 +1245,7 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
         hdrState.description.referenceWhiteNits / 80.0f;
     parameters.ndcYUp =
         rhi.isYUpInNDC() ? 1.0f : 0.0f;
-    parameters.linearOutput = 1.0f;
+    parameters.outputTransfer = 2.0f;
     compositor.render(
         *commandBuffer,
         *outputTarget,

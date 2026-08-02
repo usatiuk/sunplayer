@@ -7,13 +7,11 @@ accepted behavior merely because it is documented here.
 
 ## Graphics and display
 
-### Windows-only presentation backend
+### macOS presentation backend
 
-The factory-selected implementation currently configures Qt Quick and QRhi for
-D3D11 and requests a Direct3D window surface. No non-Windows factory
-implementation exists, so startup terminates on those platforms. macOS
-Metal/EDR and Linux Vulkan/compositor presentation adapters remain
-unimplemented.
+The factory-selected implementation configures Windows for D3D11 and native-
+Wayland Linux for Vulkan. macOS Metal/EDR presentation remains unimplemented,
+so startup terminates on that platform.
 
 Track under the backend-realization section of
 `docs/subsystems/graphics/PLAN.md`.
@@ -61,21 +59,24 @@ Track under graphics milestone 5 and the active testing plan.
 
 ### Qt private API compatibility
 
-The implementation uses `Qt6::GuiPrivate` and QRhi private headers and pins Qt
-6.11.1 exactly. Updating Qt requires deliberate compile and runtime validation
-of resource creation, `QQuickRenderControl`, swapchain HDR information, surface
-loss, and device recovery. A narrow wrapper reduces exposure but cannot remove
-this maintenance cost.
+The implementation uses `Qt6::GuiPrivate`, QRhi private headers, and on Linux
+`Qt6::WaylandClientPrivate`. Windows pins Qt 6.11.1 exactly; Linux accepts the
+system Qt 6.10 family. Updating either family requires deliberate compile and
+runtime validation of resource creation, `QQuickRenderControl`, swapchain HDR
+information, surface loss, device recovery, and the matching Wayland private
+ABI where applicable. Narrow wrappers reduce exposure but cannot remove this
+maintenance cost.
 
 ### Runtime HDR validation and graphics tests
 
-The Debug target builds and a headless D3D11 test captures both QRhi- and
-libplacebo-produced RGBA16F surfaces plus SDR and extended-linear offscreen
-composition. The project still has no recorded cross-display runtime matrix,
-extended-linear swapchain capture, maintained renderer image corpus,
-deterministic device-loss test, or automated physical HDR validation.
-Presentation behavior must not be treated as portable or colorimetrically
-verified until those tests exist.
+Headless graphics tests capture QRhi- and libplacebo-produced RGBA16F surfaces
+plus SDR and extended-linear offscreen composition. WSLg exercises the real
+native-Wayland Vulkan/QRhi/libplacebo software path, but supplies neither a
+native GPU nor a managed HDR display. The project still has no recorded cross-
+display runtime matrix, extended-linear swapchain capture, maintained renderer
+image corpus, deterministic device-loss test, or automated physical HDR
+validation. Presentation behavior must not be treated as portable or
+colorimetrically verified until those tests exist.
 
 ### Flattened translucent Qt Quick content
 
@@ -133,19 +134,22 @@ real backend need appears.
 
 ### ICC transforms and calibration fallbacks
 
-The pinned libplacebo build has LCMS disabled. Embedded source ICC bytes remain
-owned by retained FFmpeg frames and can be preserved and diagnosed, but they
-are not currently applied. Enabling source-ICC rendering requires reviewed
-LCMS packaging, semantic profile validation, and an ICC-versus-scalar policy.
+Embedded source ICC bytes remain owned by retained FFmpeg frames and are
+diagnosed, but Sunroom does not currently apply them on any platform. The
+render-local libplacebo frame clears both ICC handles so Ubuntu's LCMS-enabled
+system build cannot silently diverge from the LCMS-disabled Windows build.
+Enabling source-ICC rendering requires consistent LCMS packaging, semantic
+profile validation, and an ICC-versus-scalar policy.
 Initial support should be limited to validated SDR RGB profiles; ICC combined
 with PQ, HLG, HDR10+, or Dolby Vision remains unsupported pending a separate
 target model or upstream-supported integration.
 
 Sunroom relies on the operating system or compositor for final display-profile
 calibration on managed paths: Windows Advanced Color, future macOS
-ColorSync/EDR, and future Wayland color-management-v1. Ordinary Windows
-DirectX SDR output with Advanced Color inactive and native Wayland without a
-usable managed-SDR capability are unmanaged sRGB-assumed fallbacks.
+ColorSync/EDR, and the implemented Qt-owned Wayland managed-SDR declaration.
+Managed Wayland HDR transitions remain pending. Ordinary Windows DirectX SDR
+output with Advanced Color inactive and native Wayland without a usable
+managed-SDR capability are unmanaged sRGB-assumed fallbacks.
 Application-managed display ICC is deferred; if implemented it must transform
 the complete post-QRhi composition rather than video alone.
 
@@ -156,28 +160,33 @@ settings with the Player. A later player-reliability slice must separate the
 diagnostic override from production display policy so experiments cannot
 silently alter ordinary playback.
 
-### HDR Lab UI regression
-
-HDR Lab is currently reported broken in the real application. Diagnosis and
-repair are deliberately deferred until after the fullscreen playback slice.
-The QML shell test also emits a warning because its presentation-output fake
-does not expose the production `videoColorPolicy` property; that gap must be
-resolved as part of the HDR Lab repair instead of being hidden by this change.
-
-## Build and tooling
-
-### Vulkan and SPIR-V optimization tools are not configured
-
-The validated Windows D3D11 build succeeds and packages HLSL shaders, but CMake
-does not find a system Vulkan SDK and Qt Shader Tools reports that `spirv-opt`
-is unavailable. The libplacebo port stages its pinned Vulkan-Headers source
-snapshot only because disabled-backend stubs and public declarations require
-those types; it does not enable or install Vulkan. This does not block the
-current D3D11 target. Vulkan support and cross-backend shader validation
-require a deliberate Vulkan SDK/tooling decision rather than treating the
-current dependency build as proof of Vulkan readiness.
-
 ## Application and player
+
+### Wayland application chrome has no intentional window perimeter
+
+On compositors without xdg-decoration, Sunroom's in-scene titlebar and window
+buttons are present and wired to public Qt move, resize, state, and close
+operations. Native interaction remains to be recorded outside WSLg.
+The current application chrome deliberately draws no outer or inner window
+outline. A crisp perimeter is deferred after the attempted QML treatments did
+not satisfy the real redirected Vulkan presentation path. The apparent edge
+around video or HDR Lab content is not accepted as application-chrome behavior.
+
+All experimental perimeter code, tests, and implementation claims have been
+removed. Resume this work only from a reproducible rendering-boundary result;
+do not add video-dependent styling, compositor-shader chrome, a second native
+surface, or multiple fallback treatments.
+
+### Wayland decoration negotiation is not observable through public Qt API
+
+Sunroom selects system decoration when xdg-decoration is advertised and
+application chrome when it is absent. Advertisement does not guarantee that
+the compositor's final choice will be server-side, while Qt does not expose
+that result publicly. A compositor that advertises the protocol but selects
+client-side mode can therefore leave the Vulkan window undecorated. This rare
+mismatch is accepted for the current high-level integration; do not add a Qt-
+private listener, compositor allowlist, or runtime ownership switch without a
+reproducible supported-environment failure.
 
 ### Remote media input, source read-ahead, and Jellyfin
 

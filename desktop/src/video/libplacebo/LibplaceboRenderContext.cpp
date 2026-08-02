@@ -81,6 +81,11 @@ bool LibplaceboRenderContext::render(
         error->clear();
 
     pl_frame effectiveSource = source;
+    // Source ICC transforms remain outside the accepted rendering policy.
+    // Clear both libplacebo representations on the render-local copy so an
+    // LCMS-enabled system build cannot silently change cross-platform output.
+    effectiveSource.icc = nullptr;
+    effectiveSource.profile = {};
     pl_color_space_infer(&effectiveSource.color);
     if (!pl_color_transfer_is_hdr(
             effectiveSource.color.transfer)) {

@@ -33,3 +33,5 @@ with a new decision when the accepted choice changes materially.
 * [0016: Reconcile output changes by semantic value](0016-reconcile-output-changes-semantically.md)
 * [0017: Require color-management-v1 for the first Linux release (superseded)](0017-require-wayland-color-management-v1.md)
 * [0018: Support unmanaged sRGB SDR on native Wayland](0018-support-unmanaged-srgb-wayland-sdr.md)
+* [0019: Import the QRhi Vulkan device into libplacebo](0019-import-the-qrhi-vulkan-device-into-libplacebo.md)
+* [0020: Keep Qt-owned Wayland windows and render fallback chrome in-scene](0020-keep-qt-owned-wayland-windows-and-render-fallback-chrome-in-scene.md)

@@ -114,11 +114,8 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     qt_add_executable(sunroom_linux_platform_dependency_tests
             integration/platform/tst_LinuxPlatformDependencies.cpp
     )
-    qt_generate_wayland_protocol_client_sources(
-            sunroom_linux_platform_dependency_tests
-            PRIVATE_CODE
-            FILES
-            "${SUNROOM_WAYLAND_COLOR_MANAGEMENT_PROTOCOL}"
+    qt_add_executable(sunroom_wayland_color_management_tests
+            unit/platform/tst_WaylandColorManagement.cpp
     )
 endif ()
 
@@ -134,6 +131,12 @@ set_source_files_properties(../src/app/Main.qml PROPERTIES
 )
 set_source_files_properties(../src/app/AppShell.qml PROPERTIES
         QT_RESOURCE_ALIAS AppShell.qml
+        QT_QML_SKIP_CACHEGEN TRUE
+)
+set_source_files_properties(
+        ../src/app/windowchrome/ClientSideWindowChrome.qml
+        PROPERTIES
+        QT_RESOURCE_ALIAS ClientSideWindowChrome.qml
         QT_QML_SKIP_CACHEGEN TRUE
 )
 set_source_files_properties(../src/app/pages/HdrLabPage.qml PROPERTIES
@@ -172,6 +175,15 @@ set_source_files_properties(../src/app/icons/lucide/ellipsis.svg PROPERTIES
 set_source_files_properties(../src/app/icons/lucide/x.svg PROPERTIES
         QT_RESOURCE_ALIAS icons/lucide/x.svg
 )
+set_source_files_properties(../src/app/icons/lucide/minus.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/minus.svg
+)
+set_source_files_properties(../src/app/icons/lucide/square.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/square.svg
+)
+set_source_files_properties(../src/app/icons/lucide/copy.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/copy.svg
+)
 set_source_files_properties(../src/app/icons/lucide/LICENSE PROPERTIES
         QT_RESOURCE_ALIAS icons/lucide/LICENSE
 )
@@ -182,6 +194,7 @@ qt_add_qml_module(sunroom_qml_shell_tests
         QML_FILES
         ../src/app/Main.qml
         ../src/app/AppShell.qml
+        ../src/app/windowchrome/ClientSideWindowChrome.qml
         ../src/app/pages/HdrLabPage.qml
         ../src/app/pages/PlayerPage.qml
         ../src/app/pages/VideoPage.qml
@@ -194,6 +207,9 @@ qt_add_qml_module(sunroom_qml_shell_tests
         ../src/app/icons/lucide/volume-x.svg
         ../src/app/icons/lucide/ellipsis.svg
         ../src/app/icons/lucide/x.svg
+        ../src/app/icons/lucide/minus.svg
+        ../src/app/icons/lucide/square.svg
+        ../src/app/icons/lucide/copy.svg
         ../src/app/icons/lucide/LICENSE
 )
 
@@ -432,6 +448,12 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
             Wayland::Client
             PkgConfig::VAAPI
             PkgConfig::DRM
+            sunroom_linux_platform
+    )
+    target_link_libraries(sunroom_wayland_color_management_tests
+            PRIVATE
+            Qt6::Test
+            sunroom_linux_platform
     )
 endif ()
 
@@ -729,6 +751,16 @@ set_tests_properties(
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_test(
+            NAME wayland-color-management
+            COMMAND sunroom_wayland_color_management_tests
+    )
+    set_tests_properties(
+            wayland-color-management
+            PROPERTIES
+            LABELS "color;platform;unit;linux"
+            TIMEOUT 30
+    )
+    add_test(
             NAME linux-platform-dependencies
             COMMAND sunroom_linux_platform_dependency_tests
     )
@@ -740,19 +772,19 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     )
 endif ()
 
+add_test(
+        NAME packaged-qml-module
+        COMMAND $<TARGET_FILE:sunroom> --verify-qml
+)
+
+set_tests_properties(
+        packaged-qml-module
+        PROPERTIES
+        LABELS "application;integration;ui"
+        TIMEOUT 30
+)
+
 if (WIN32)
-    add_test(
-            NAME packaged-qml-module
-            COMMAND $<TARGET_FILE:sunroom> --verify-qml
-    )
-
-    set_tests_properties(
-            packaged-qml-module
-            PROPERTIES
-            LABELS "application;integration;ui"
-            TIMEOUT 30
-    )
-
     qt_add_executable(sunroom_qrhi_compositor_tests
             integration/presentation/tst_QrhiCompositor.cpp
     )

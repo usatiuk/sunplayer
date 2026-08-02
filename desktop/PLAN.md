@@ -66,8 +66,8 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 
 ## Current implementation status
 
-As of 2026-08-01, the repository contains a Windows presentation foundation
-and continuous synchronized local-file audio/video playback:
+As of 2026-08-02, the repository contains Windows D3D11 and native-Wayland
+Vulkan presentation foundations plus continuous local-file playback:
 
 * A factory-selected graphics-device domain owns the current D3D11 QRhi,
   same-device libplacebo GPU, FFmpeg D3D11VA device, shared immediate-context
@@ -127,14 +127,27 @@ and continuous synchronized local-file audio/video playback:
 * The configured Windows Debug target builds successfully with Qt 6.11.1,
   MSVC, pinned D3D11-only libplacebo 7.360.1, and official minimal FFmpeg
   8.1.2 dependencies built through the project-local vcpkg configuration.
-* The first native-Wayland build slice now configures and builds the shared
-  source graph on Ubuntu 26.04 using only system Qt 6.10, FFmpeg 8,
-  libplacebo, cubeb, libass, Vulkan, Wayland, VA-API, and DRM packages. The
-  shared embedded-subtitle pipeline and real libass dependency test are part
-  of the Linux build. Debug and Release, tests enabled/disabled, all 22
-  registered Linux CTests, QML lint, and generated color-management-v1 client
-  code pass under WSL. This is a build foundation only; Linux presentation
-  and production audio remain pending.
+* Native-Wayland Linux configures from system Qt 6.10, FFmpeg 8, libplacebo,
+  cubeb, libass, Vulkan, Wayland, VA-API, and DRM packages. It now selects
+  Wayland before Qt startup, inventories optional color/decorations
+  capabilities, creates a Vulkan 1.3 QRhi-owned device imported by libplacebo,
+  and presents software-decoded video through the shared direct RGBA16F target
+  and redirected QML compositor. Missing managed-color capability selects
+  unmanaged assumed-sRGB; a complete managed-SDR set selects Qt-declared
+  gamma-2.2. One bounded WSLg run completes the unmanaged llvmpipe production
+  path, fullscreen/restoration, Vulkan synchronization validation, and
+  application teardown. Two other runs timed out waiting for cursor-state
+  convergence, and remaining WSLg compositor diagnostics are recorded
+  separately, so broader lifecycle acceptance remains in progress.
+  All 24 Linux CTests and QML lint pass. Linux physical audio, preferred-target/HDR
+  transitions, VAAPI/DRM PRIME, native GPU/display validation, and packaging
+  remain pending.
+* Qt remains the sole Wayland toplevel and surface owner. If xdg-decoration is
+  absent, one modular QML chrome layer uses public Qt system move/resize/state
+  operations and system-theme glyphs with bundled Lucide fallbacks. It
+  overlays active video and fades with playback chrome;
+  no libdecor, GTK, private negotiation listener, second surface, or external
+  shadow path is introduced.
 * `MediaSession` opens a local file and supports play, pause, seek, and replay.
   One shared media operation gives one `AVFormatContext` to the demux owner;
   selected audio and video packets use one count/byte budget and independent
@@ -310,7 +323,8 @@ Documentation: `docs/subsystems/playback/`
 * [x] Final video, subtitle, and UI compositor
 * [x] Windows extended-linear HDR and SDR swapchain presentation
 * [ ] macOS EDR and SDR swapchain presentation
-* [ ] Wayland Linux HDR and SDR swapchain presentation
+* [x] Wayland Linux Vulkan SDR presentation foundation
+* [ ] Wayland Linux managed HDR swapchain presentation
 * [x] Shared presentation and display-state model
 * [x] Initial Windows window-movement and Advanced Color observation
 * [x] Initial Windows dynamic Advanced Color notification
@@ -319,7 +333,8 @@ Documentation: `docs/subsystems/playback/`
 * [ ] Optional Windows raw display capability diagnostics where renderer or
   support tooling has a concrete consumer
 * [ ] macOS display adapter
-* [ ] Wayland display adapter
+* [x] Initial Wayland startup capability and SDR-surface selection adapter
+* [ ] Wayland preferred-target and managed-HDR display adapter
 * [x] Graphics-device loss and recreation
 
 Documentation: `docs/subsystems/graphics/`
@@ -340,7 +355,8 @@ Documentation: `docs/subsystems/graphics/`
 * [x] FFmpeg software-frame importer and persistent upload reuse
 * [x] Shared hardware-frame import result/diagnostic contract
 * [x] D3D11VA NV12/P010/P012/P016 direct importer
-* [ ] Vulkan, VAAPI, and DRM PRIME importer
+* [x] Vulkan direct libplacebo output target
+* [ ] VAAPI and DRM PRIME hardware-frame importer
 * [ ] VideoToolbox/IOSurface importer and macOS Metal/MoltenVK interop
 * [x] Offscreen HDR render-target contract and temporary QRhi producer
 * [x] Display-target and SDR-white updates

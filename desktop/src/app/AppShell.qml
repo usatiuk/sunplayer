@@ -61,7 +61,13 @@ Item {
     StackLayout {
         id: pageStack
 
-        anchors.fill: parent
+        anchors {
+            left: parent.left
+            right: parent.right
+            top: parent.top
+            topMargin: windowChrome.contentTop
+            bottom: parent.bottom
+        }
         currentIndex: root.currentPage
 
         PlayerPage {
@@ -81,6 +87,23 @@ Item {
         }
     }
 
+    ClientSideWindowChrome {
+        id: windowChrome
+
+        anchors.fill: parent
+        z: 100
+        controller: root.windowCommands.windowChrome
+        titleRequested: root.currentPage !== 0
+            || !playerPage.sessionActive
+            || playerPage.controlsShouldShow
+        contentInsetRequested: root.currentPage !== 0
+            || !playerPage.sessionActive
+        onUserActivity: {
+            if (root.currentPage === 0)
+                playerPage.revealControls()
+        }
+    }
+
     Button {
         objectName: "backToPlayerButton"
 
@@ -88,6 +111,7 @@ Item {
             right: parent.right
             top: parent.top
             margins: 24
+            topMargin: windowChrome.contentTop + 24
         }
         z: 30
         visible: root.currentPage === 1

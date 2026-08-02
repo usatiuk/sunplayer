@@ -9,8 +9,9 @@ single FFmpeg operation. Selected ASS/text subtitles render through libass;
 FFmpeg-decoded bitmap subtitles render from owned RGBA regions.
 The same production sources compile on Linux against system libass 0.17.4.
 Platform-neutral subtitle state and FFmpeg decode tests plus the real libass
-embedded-font rendering test pass there; QRhi subtitle-surface capture remains
-gated on the native Linux graphics-domain implementation.
+embedded-font rendering test pass there. The native Linux graphics domain now
+exists; a Linux QRhi subtitle-surface capture still needs to be added before
+claiming GPU rendering equivalence on that backend.
 
 ## Responsibility
 

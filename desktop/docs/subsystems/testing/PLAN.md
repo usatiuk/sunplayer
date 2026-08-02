@@ -81,12 +81,11 @@ Implement alongside graphics milestone 1:
 
 ## Milestone 2: libplacebo and decoded-frame coverage
 
-* [x] Load the pinned libplacebo DLL through CTest and verify its version,
-  installed D3D11, Shaderc, and built-in DOVI configuration, disabled Vulkan,
-  OpenGL, and external libdovi features, runtime staging, and basic public-API
-  lifecycle.
-* [ ] Assert the installed libplacebo configuration has LCMS disabled until an
-  explicit source-ICC milestone changes the dependency and tests.
+* [x] Verify each selected libplacebo dependency through CTest: the pinned
+  Windows DLL's D3D11/Shaderc/built-in-DOVI feature shape and runtime staging,
+  and the Linux system library's accepted API version plus required Vulkan and
+  shader-compiler support. Record LCMS as an observed package capability, not a
+  cross-platform policy switch.
 * [ ] Run the pinned libplacebo upstream suite as dependency validation where
   practical.
 * [x] Render known sRGB and BT.2020/PQ software-backed frames through real
@@ -95,9 +94,10 @@ Implement alongside graphics milestone 1:
   lifetime, synchronization, and copy path.
 * [x] Add one pinned SDR media container and manifest.
 * [ ] Add one pinned HDR10 media container and manifest.
-* [ ] Cover retained source ICC presence, size, lifetime, and `applied=false`
-  diagnostics with the LCMS-disabled build. This is an ownership test, not a
-  pixel-transform claim or a second ICC policy engine.
+* [ ] Cover retained source ICC presence, size, lifetime, and explicit removal
+  from the render-local libplacebo frame on both LCMS-disabled and LCMS-enabled
+  dependency builds. This is an ownership/policy test, not a pixel-transform
+  claim or a second ICC policy engine.
 * [x] Seed the fixture layout with a pinned, hashed lossless RGB image and
   decode its first frame with real FFmpeg through the production libplacebo
   and QRhi capture path.

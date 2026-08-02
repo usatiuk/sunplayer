@@ -2,8 +2,9 @@
 
 ## Status
 
-The application shell is a single-window Windows presentation host with a thin
-QML `AppShell`, default Player page, and retained HDR Lab. It establishes
+The application shell is a single-window Windows and native-Wayland
+presentation host with a thin QML `AppShell`, default Player page, and retained
+HDR Lab. It establishes
 startup, object ownership, native presentation events, redirected Qt Quick
 input, the active video-viewport boundary, and asynchronous continuous local
 audio/video playback with a position/duration seek timeline. It does not yet
@@ -27,15 +28,18 @@ does not live in the application window or QML page.
 
 ## Startup
 
-`main.cpp` currently:
+Startup currently:
 
-1. Creates `QGuiApplication`.
-2. Parses command-line options and installs the application logger.
-3. Asks `GraphicsBackendFactory` to configure Qt Quick for the selected
-   backend; the current factory selects D3D11.
-4. Installs one dark application palette used by the diagnostic interface.
-5. Constructs and shows one `PresentationWindow`.
-6. Enters the Qt event loop.
+1. On Linux, fixes `QT_QPA_PLATFORM=wayland` before creating Qt application
+   state. XCB and XWayland are not fallback paths.
+2. Creates `QGuiApplication`, parses command-line options, and installs the
+   application logger.
+3. Asks `GraphicsBackendFactory` to configure Qt Quick for D3D11 on Windows or
+   Vulkan on Linux.
+4. Installs one dark application palette used by the interface.
+5. On Linux, inventories optional Wayland color/decorations capabilities and
+   creates the window-scoped `QVulkanInstance`.
+6. Constructs and shows one `PresentationWindow`, then enters the event loop.
 
 One optional positional command-line path opens local media after construction.
 `--playback-smoke` is a narrow noninteractive verification mode for that path:
@@ -59,8 +63,8 @@ remain available. Detailed policy and the observability roadmap live in
 
 ## Window ownership
 
-`PresentationWindow` is the current composition root. It declares ownership in
-this order, so destruction occurs in reverse:
+`PresentationWindow` is the current composition root. Its platform-neutral
+state owns:
 
 * `PresentationOutputState`.
 * `PresentationSettings`.
@@ -70,13 +74,32 @@ this order, so destruction occurs in reverse:
 * `VideoViewportState`.
 * `RhiPresentationEngine`.
 
-The graphics engine is created before display observation attaches to the
-native window because attachment may create the platform window and deliver
-synchronous events.
+On Linux, `LinuxWaylandWindowContext` is an explicit longer-lived dependency.
+It owns the `QVulkanInstance`, selects the initial SDR surface contract, and
+creates the native Qt window before the graphics engine is built. Qt can
+deliver exposure and resize events synchronously during both native creation
+and destruction, so `PresentationWindow` has explicit `Initializing`,
+`Active`, and `Releasing` phases. Only `Active` forwards those events to the
+engine. Teardown first enters `Releasing`, destroys the engine/domain and
+display state, explicitly destroys the native `QWindow` surface, then lets the
+window context destroy the Vulkan instance.
 
-The window requests the factory-selected surface type, currently Direct3D,
-starts at 1100 × 760 logical pixels, has a 760 × 560 minimum, and currently
-uses the title `Sunroom`.
+On Windows, the graphics engine is created before display observation attaches
+to the native window because attachment may create the platform window and
+deliver synchronous events.
+
+The window requests the factory-selected Direct3D or Vulkan surface type,
+starts at 1100 × 760 logical pixels, has a 760 × 560 minimum, and uses the
+title `Sunroom`.
+
+Qt remains the sole Wayland `wl_surface`, xdg-toplevel, Vulkan surface, and
+managed-color surface owner. When the compositor does not advertise
+xdg-decoration, a narrow `WindowChromeController` sets frameless mode before
+native creation and exposes only public Qt move, resize, state, and close
+operations to the in-scene QML chrome. It contains no Wayland, graphics, color,
+or playback policy. Advertisement is treated as the ordinary server-
+decoration happy path; the rare final-mode mismatch is documented rather than
+mirrored through Qt-private state.
 
 This direct ownership is intentionally simple for one window. Application-wide
 services should only be introduced when a concrete subsystem needs shared
@@ -172,7 +195,13 @@ audio-clock progress. A second bounded real-window scenario verifies native
 keyboard/gesture routing, fullscreen state/restoration, cursor hiding, and
 video presentation after each transition. Both exit without user interaction
 and disable Windows error
-dialogs. The scenarios prove startup, initial playback wiring, and fullscreen;
+dialogs. On Linux, the video-only fullscreen scenario also runs through the
+production native-Wayland Vulkan/QRhi/libplacebo path under WSLg. It verifies
+continued presentation and explicit teardown in one passing bounded run;
+two other attempts timed out waiting for cursor-state convergence. WSLg is
+not treated as native-GPU, managed-color, HDR, VAAPI, or physical-audio
+evidence. The scenarios exercise startup, initial playback wiring, and
+fullscreen;
 broader command,
 error, shutdown, and packaged-install scenarios remain future work.
 

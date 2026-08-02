@@ -62,8 +62,8 @@ target gamut and HDR mapping. That perceptual content mapping is not the same
 as applying the monitor's calibration profile.
 
 Source ICC is independent of this decision. Embedded source profiles are
-preserved and diagnosed but not transformed by the current LCMS-disabled
-build, as recorded in ADR 0012.
+preserved and diagnosed but explicitly removed from the render-local
+libplacebo frame on every platform, as recorded in ADR 0012.
 
 ## Consequences
 

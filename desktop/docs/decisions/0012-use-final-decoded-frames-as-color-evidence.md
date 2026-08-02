@@ -42,9 +42,10 @@ before retaining the frame for libplacebo. There is no blanket stream copy and
 no call to `pl_frame_copy_stream_props`.
 
 Embedded source ICC bytes remain owned by the retained frame. Import
-diagnostics report presence and size; the LCMS-disabled build neither validates
-nor applies them. Profile parsing and application-managed ICC rendering are
-deferred until a real product path requires them.
+diagnostics report presence and size. The render-local libplacebo frame clears
+both ICC representations on every platform, so dependency feature differences
+cannot enable a source transform implicitly. Profile parsing and source-ICC
+rendering are deferred until a real product path requires them.
 
 ## Consequences
 

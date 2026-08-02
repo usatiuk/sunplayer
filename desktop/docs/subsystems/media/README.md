@@ -2,12 +2,15 @@
 
 ## Status
 
-Sunroom integrates the official vcpkg FFmpeg 8.1.2 package with `avformat`,
-`avcodec`, core `avutil`, `swresample`, and zlib-backed Matroska track
-decompression. The Windows package includes
-D3D11VA, D3D12VA, DXVA2, and Media Foundation support. Sunroom exercises
-D3D11VA for supported production video streams and keeps software decoding as
-an explicit fallback.
+Sunroom integrates FFmpeg through one shared media boundary: the official
+vcpkg FFmpeg 8.1.2 package on Windows and system FFmpeg 8.0.1 on Linux. Both
+provide `avformat`, `avcodec`, core `avutil`, `swresample`, and zlib-backed
+Matroska track decompression. The Windows package includes D3D11VA, D3D12VA,
+DXVA2, and Media Foundation support. Sunroom exercises D3D11VA for supported
+Windows video streams and keeps software decoding as an explicit fallback.
+Linux currently uses the same production operation with software video decode;
+the system FFmpeg exposes VAAPI/DRM capability, but native-frame import is not
+implemented yet.
 
 The production `decodeMediaFrames()` operation accepts one restartable request,
 opens a local file, discovers selected video/audio streams and every embedded
@@ -40,6 +43,11 @@ decoder output blocked on the queue, and the producer's transient prior
 mapping during a frame switch. A configured hardware failure retries in
 software only before any frame has been published; a later decoder failure is
 visible rather than silently replaying from the beginning.
+
+On Linux the graphics capability currently reports software decode. The
+software `AVFrame` path is shared with Windows and renders through the Vulkan
+libplacebo target. VAAPI/DRM PRIME negotiation and native image import remain
+one future acceleration slice rather than a second media pipeline.
 
 If the retained hardware surface later cannot be imported by the active
 graphics backend, `MediaSession` consumes at most one software-only re-decode
@@ -103,7 +111,7 @@ recovery remain unimplemented.
 
 ## Dependency boundary
 
-The manifest requests:
+The Windows vcpkg manifest requests:
 
 ```json
 {
@@ -122,7 +130,8 @@ scaling; libswresample owns audio sample-format, rate, layout, and
 planar/interleaved conversion. Add codec libraries only for a documented
 coverage or performance requirement.
 
-The dependency is dynamically linked under the project clang-cl vcpkg triplet.
+On Windows the dependency is dynamically linked under the project clang-cl
+vcpkg triplet.
 `avutil`, `swresample`, `avcodec`, and `avformat` DLLs are staged explicitly
 beside linked build-tree targets and installed beside the application. This
 prevents loader dialogs and avoids relying on CMake's transitive-runtime
@@ -132,6 +141,12 @@ The selected FFmpeg configuration remains LGPL-oriented: GPL, version-3-only,
 nonfree, x264, x265, and fdk-aac features are not enabled. Shipping still
 requires notices, corresponding-source/build-recipe compliance, and an
 explicit codec-patent review where applicable.
+
+Linux discovers the corresponding system libraries with pkg-config and checks
+their accepted ABI-major ranges at configure and dependency-test time. It does
+not require the Windows package's disabled-Vulkan feature shape; system FFmpeg
+may expose VAAPI and DRM even though Sunroom does not yet consume that hardware
+path.
 
 ## Decoded-frame contract
 
@@ -148,8 +163,9 @@ The Sunroom wrapper snapshots:
 * Software or known hardware storage kind.
 * Pixel-format and signal diagnostics.
 
-The retained decoded frame is the authoritative color boundary. FFmpeg 8.1.2
-already fills ordinary scalar and static side data from decoder/stream state.
+The retained decoded frame is the authoritative color boundary. The supported
+FFmpeg builds already fill ordinary scalar and static side data from
+decoder/stream state.
 Sunroom therefore removed its blanket metadata copier. It snapshots only
 global HDR10+ data that FFmpeg does not reliably propagate to every frame;
 missing HDR10+ is attached before the decoded frame is retained and handed to
@@ -158,9 +174,12 @@ aspect ratio prefers the decoded frame and then the snapshotted stream/codec
 default while those contexts remain alive. Published frames do not retain or
 expose mutable format, stream, or decoder contexts.
 
-Embedded source ICC bytes remain alive through the retained `AVFrame` and will
-be preserved and diagnosed. The current libplacebo build has LCMS disabled, so
-the player does not yet claim to apply source ICC transforms.
+Embedded source ICC bytes remain alive through the retained `AVFrame` and are
+preserved and diagnosed. Before rendering, Sunroom clears both libplacebo ICC
+representations on the render-local frame copy on every platform. This keeps
+the accepted no-source-ICC-transform policy independent of whether the linked
+libplacebo was built with LCMS support. Profile parsing and source-ICC rendering
+remain deferred.
 
 Hardware frame descriptions require the graphics-device generation that
 created them and derive their signal format and component depth from
@@ -182,14 +201,16 @@ rotated-content output still needs a dedicated fixture and capture.
 3. Dispatch subtitle packets without letting one selected stream prevent
    progress for another.
 4. Add packet byte/duration and decode-time diagnostics.
-5. Add equivalent native hardware-device negotiation on Linux and macOS when
-   their graphics domains are implemented.
+5. Add VAAPI/DRM PRIME and VideoToolbox hardware-device negotiation and native
+   import behind the existing graphics-domain contract.
 
 ## Verification
 
-The dependency test loads the four selected FFmpeg DLLs through CTest, verifies
-pinned major versions including libswresample, confirms D3D11VA and native
-H.264/HEVC decoders, and checks that Vulkan and swscale remain disabled.
+The dependency test verifies the selected FFmpeg ABI majors including
+libswresample and the required native decoders. On Windows it also loads the
+four staged DLLs, confirms D3D11VA, and checks the intentionally minimal vcpkg
+feature shape. On Linux it links the system libraries and verifies the exposed
+VAAPI/DRM pixel-format and device APIs without claiming native-frame import.
 
 The decoded-frame unit test releases the originating `AVFrame` and verifies the
 Sunroom wrapper still owns valid software pixels and semantic snapshots.

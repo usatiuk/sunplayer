@@ -31,6 +31,10 @@
 #include <windows.h>
 #endif
 
+#ifdef Q_OS_LINUX
+#include "platform/linux/LinuxWaylandWindowContext.h"
+#endif
+
 #ifdef Q_OS_WIN
 namespace {
 bool hasExactArgument(
@@ -354,6 +358,9 @@ int main(int argc, char *argv[]) {
             | SEM_NOOPENFILEERRORBOX);
     }
 #endif
+#ifdef Q_OS_LINUX
+    prepareLinuxWaylandPlatform();
+#endif
     QGuiApplication app(argc, argv);
     app.styleHints()->setColorScheme(Qt::ColorScheme::Dark);
     QCoreApplication::setApplicationName(
@@ -492,6 +499,7 @@ int main(int argc, char *argv[]) {
     app.setPalette(palette);
 
     if (parser.isSet(verifyQmlOption)) {
+#ifdef Q_OS_WIN
         const QString applicationDirectory =
             QCoreApplication::applicationDirPath();
         QCoreApplication::setLibraryPaths({applicationDirectory});
@@ -504,8 +512,10 @@ int main(int argc, char *argv[]) {
                 << deployedQmlPath;
             return EXIT_FAILURE;
         }
+#endif
 
         QQmlEngine engine;
+#ifdef Q_OS_WIN
         QStringList importPaths{deployedQmlPath};
         for (const QString &path : engine.importPathList()) {
             if ((path.startsWith(QStringLiteral("qrc:"))
@@ -515,6 +525,7 @@ int main(int argc, char *argv[]) {
             }
         }
         engine.setImportPathList(importPaths);
+#endif
         QQmlComponent component(&engine);
         component.loadFromModule(
             QStringLiteral("Sunroom"), QStringLiteral("Main"));
@@ -530,7 +541,12 @@ int main(int argc, char *argv[]) {
 
     GraphicsBackendFactory::configureQtQuick();
 
+#ifdef Q_OS_LINUX
+    LinuxWaylandWindowContext windowContext(app);
+    PresentationWindow window(windowContext);
+#else
     PresentationWindow window;
+#endif
     if (!positionalArguments.isEmpty()) {
         const QString absolutePath =
             QFileInfo(positionalArguments.constFirst())

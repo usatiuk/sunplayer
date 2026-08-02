@@ -45,14 +45,17 @@ checklist must not duplicate or silently change them.
   normal/maximized restoration, cursor hiding, and continued frame
   presentation, but remains registered only on Windows until Linux has a
   production graphics and audio path.
-* `GraphicsBackendFactory` fails on non-Windows, the presentation runtime uses
-  a null display provider there, and `MediaSession` creates no physical audio
-  sink.
+* `GraphicsBackendFactory` now selects Vulkan on Linux. The production native-
+  Wayland path creates the Qt Vulkan surface, a QRhi-owned Vulkan 1.3 device
+  imported by libplacebo, and a direct RGBA16F video target. The presentation
+  runtime still uses a null preferred-output provider and `MediaSession`
+  creates no physical Linux audio sink.
 * The CMake entry point retains pinned vcpkg dependencies on Windows and uses
   Ubuntu system Qt 6.10, FFmpeg, libplacebo, cubeb, libass, Vulkan, Wayland,
   VA-API, and DRM packages on Linux. Shared production sources, subtitle/media
-  behavior, and the current platform-neutral test set build on Linux; the
-  native graphics and audio implementations remain absent.
+  behavior, the platform-neutral test set, generated color capability
+  inventory, and native Vulkan graphics implementation build on Linux; the
+  physical audio and hardware-decoding implementations remain absent.
 * The accepted graphics domain and video target/importer interfaces already
   model a Vulkan implementation. The port should fill those seams, not create
   a parallel Linux renderer or playback core.
@@ -64,6 +67,11 @@ checklist must not duplicate or silently change them.
 * Ubuntu package/source inspection found a viable system stack and a narrow
   Qt Wayland feedback seam. The exact results and remaining hardware evidence
   limits are recorded in [the Ubuntu 26.04 platform baseline](../../research/2026-08-01-ubuntu-26-04-linux-platform-baseline.md).
+* WSLg now exercises the production unmanaged assumed-sRGB path with llvmpipe:
+  real FFmpeg software decode, libplacebo render, direct Vulkan target, QRhi
+  composition, redirected QML, fullscreen/restoration, and explicit teardown
+  pass under Vulkan validation. This is lifecycle evidence, not native-GPU,
+  managed-color, HDR, VAAPI, audio, or packaging evidence.
 
 ## Fixed invariants and selected policy
 
@@ -88,7 +96,7 @@ checklist must not duplicate or silently change them.
   Declarative, and Wayland development packages. This narrow range is a
   deliberate compatibility contract for private QRhi and Wayland APIs.
 * Require FFmpeg 8's expected library majors, libplacebo API 360 with Vulkan
-  and a supported shader compiler backend, system libass, Vulkan 1.2 or newer,
+  and a supported shader compiler backend, system libass, Vulkan 1.3 or newer,
   Wayland protocol generation, libva, libdrm, and cubeb's exported CMake
   target.
 * Keep dependency assertions platform-shaped. Linux must not inherit
@@ -170,7 +178,7 @@ checklist must not duplicate or silently change them.
   existing engine/factory receives the context explicitly instead of reaching
   for hidden global Vulkan state.
 * The context creates the Qt Vulkan instance with Qt's required instance
-  extensions and API version 1.2 or newer, installs it on the `QWindow`, and
+  extensions and API version 1.3, installs it on the `QWindow`, and
   observes native-surface creation/destruction. Device-domain creation is lazy
   until a valid Qt-created `VkSurfaceKHR` exists.
 * Ordinary surface loss or recreation destroys surface feedback and swapchain
@@ -180,26 +188,23 @@ checklist must not duplicate or silently change them.
   fails or the device is actually lost.
 * Each Linux `GraphicsDeviceDomain` generation owns one present-capable Vulkan
   logical device shared by QRhi and libplacebo, the shared graphics queue lock,
-  renderer state, target/importer factories, and diagnostics. The exact
-  creator/import direction is a blocking spike, not yet accepted architecture.
-  Prefer the standard high-level direction first: let QRhi create and own the
-  device/queue, then let libplacebo borrow those native handles. Prove that
-  Qt's enabled features and extensions satisfy libplacebo before accepting it.
-  A libplacebo-created device imported into QRhi remains the narrower fallback
-  experiment only if the standard QRhi-owned path fails a measured requirement.
+  renderer state, target/importer factories, and diagnostics. QRhi creates and
+  owns the Vulkan 1.3 device/queue; libplacebo borrows the native handles after
+  Sunroom verifies the selected physical-device API and Qt-enabled feature
+  subset. A libplacebo-created device is not retained as an alternate path.
 * Start with one graphics queue family and disable separate asynchronous
   compute and transfer families. The existing execution scope serializes CPU
   access to the shared queue across QRhi, libplacebo, and decoder work. It does
   not substitute for GPU dependency signaling.
-* The direct-target goal is a QRhi-owned RGBA16F Vulkan image wrapped once by
+* The direct target is a QRhi-owned RGBA16F Vulkan image wrapped once by
   libplacebo with explicit image ownership, layout, and producer-to-fragment-
   sampler visibility. `pl_vulkan_release_ex`/`pl_vulkan_hold_ex` and
-  `QRhiTexture::setNativeLayout()` are the relevant state boundaries, but the
-  synchronization bridge is a blocking spike. Qt 6.10 assigns externally
-  supplied queue waits to `COLOR_ATTACHMENT_OUTPUT`, which is too late for
-  Sunroom's fragment-shader sampling and must not be assumed safe. Evaluate a
-  same-queue bridge/barrier or another validation-proven mechanism. Normal
-  rendering must not use `vkQueueWaitIdle` or a CPU pixel copy.
+  `QRhiTexture::setNativeLayout()` are the state boundaries. One target-owned
+  timeline semaphore makes prior QRhi sampling available before libplacebo's
+  next write. Libplacebo holds the image in shader-read layout; one same-layout
+  synchronization2 image barrier is recorded in QRhi's current command buffer
+  to make producer writes visible to fragment sampling. Normal rendering uses
+  neither `vkQueueWaitIdle` nor a CPU output copy.
 * Do not generalize `VideoTargetInterop` unless the synchronization experiment
   proves its producer/compositor transition points cannot express a safe
   handoff. Accepted and aborted frames both need a canonical, validated image
@@ -207,9 +212,8 @@ checklist must not duplicate or silently change them.
 * Destruction order is mandatory. Device recovery releases imported frames and
   rendered producers, libplacebo's borrowed image/device wrappers, targets,
   compositor and Qt Quick resources, swapchain, then QRhi and its owned logical
-  device while retaining the window context. If the fallback creator direction
-  is selected, its final ADR must adjust the device-owner edge explicitly.
-  `PresentationWindow` needs an explicit destructor contract:
+  device while retaining the window context. `PresentationWindow` needs an
+  explicit destructor contract:
   release the engine/domain, call a proven Qt native-window destruction
   boundary such as `QWindow::destroy()` while the instance is alive, and only
   then destroy the window context/instance. The default derived/base member
@@ -250,6 +254,14 @@ checklist must not duplicate or silently change them.
   Qt's asynchronous `showFullScreen()`/`showNormal()`/`showMaximized()` path;
   do not create a replacement Wayland toplevel or issue direct
   `xdg_toplevel.set_fullscreen` requests.
+* Qt remains the sole xdg-toplevel and presentation-surface owner. If the
+  compositor advertises xdg-decoration, leave normal Qt flags and assume the
+  supported server-decoration happy path. Otherwise set frameless mode before
+  native creation and enable one in-scene QML chrome module using public Qt
+  system move/resize and state operations. Do not add compositor allowlists,
+  private decoration listeners, runtime ownership switching, libdecor,
+  libadwaita, another surface, or an external-shadow path merely to cover an
+  unusual final negotiation choice.
 * Fullscreen, resize, scale/DPR change, minimize/restore, and ordinary native
   surface recreation preserve the media operation and logical-device
   generation when the replacement surface is present-compatible. Rebuild only
@@ -305,8 +317,8 @@ checklist must not duplicate or silently change them.
    distro's LCMS build cannot change cross-platform rendering behavior.
 
 Exit: a clean Debug and Release Linux configure/build reaches every shared
-test target using only Ubuntu packages. Launch still fails honestly until the
-Vulkan backend exists.
+test target using only Ubuntu packages. This slice is complete; the production
+Vulkan backend is now present.
 
 ### 2. Native Wayland Vulkan SDR vertical slice
 
@@ -316,15 +328,16 @@ Vulkan backend exists.
    creation when managed SDR can be declared. Leave managed image-
    description creation and attachment to Qt.
 2. Make initial device-domain creation wait for a valid native surface, then
-   preserve a compatible domain across ordinary surface recreation. Allow
-   software devices only in explicit test configuration and never silently in
-   a supported application run.
-3. Spike both shared-device creation direction and the direct Vulkan
-   libplacebo target behind the existing target contract. Prove extension and
+   preserve a compatible domain across ordinary surface recreation. Diagnose
+   the Qt-selected adapter honestly; a software Vulkan device can exercise the
+   supported rendering path but is not evidence for native-GPU performance,
+   hardware decode, or HDR claims.
+3. Use the accepted QRhi-owned device direction and direct Vulkan libplacebo
+   target behind the existing target contract. Prove extension and
    feature enablement, producer-to-fragment synchronization, layouts, create,
    render, compose, accepted/aborted submission, resize, surface recreation,
-   and teardown under Vulkan standard and synchronization validation before
-   recording the resulting ADR.
+   and teardown under Vulkan standard and synchronization validation, then
+   preserve the resulting contract in an ADR.
 4. Route software-decoded SDR frames through the production media operation,
    libplacebo renderer, QRhi compositor, redirected Qt Quick layer, and the
    selected SDR swapchain. Add analytic near-black, mid-gray, and endpoint
@@ -540,8 +553,8 @@ architecture/lifecycle, and delivery/testing risk, then repeated review after
 substantive corrections. The plan incorporates their common findings:
 system-dependency checks must be platform-shaped, native Wayland must be
 enforced while managed color remains capability-gated, SDR/software playback
-precedes HDR and VAAPI, Vulkan device and synchronization choices need
-blocking validation spikes, cubeb should retain the shared sink,
+precedes HDR and VAAPI, Vulkan device and synchronization choices need direct
+validation, cubeb should retain the shared sink,
 fullscreen/display transitions are product gates, system LCMS must not change
 source-ICC policy, and hardware claims need native evidence.
 
@@ -555,18 +568,19 @@ The following review suggestions were deliberately not adopted:
   uses Qt's standard surface-color path.
 
 The earlier attempt to fix libplacebo-first device creation and direct QRhi
-queue-submit semaphores in advance was rejected during review. QRhi ownership
-is now the first experiment because it retains the standard Qt lifecycle; the
-alternative remains eligible only if that path fails a measured libplacebo
-requirement. No synchronization mechanism is accepted until it proves
-producer-to-fragment visibility under validation.
+queue-submit waits in advance was rejected during review. The implemented
+QRhi-owned path retains the standard Qt lifecycle, imports its verified Vulkan
+feature set into libplacebo, and uses one graphics queue with an explicit
+timeline-and-barrier handoff. It passed standard and synchronization
+validation, so no alternate device creator or copy path was added.
 
-## Open spike decisions and remaining evidence
+## Resolved spikes and remaining evidence
 
-* Shared-device creation direction and the producer-to-fragment synchronization
-  mechanism are implementation blockers for the direct target. They must be
-  proven against QRhi 6.10 and libplacebo 7.360 under synchronization
-  validation before the Vulkan architecture ADR is accepted.
+* QRhi owns the Vulkan device and queue, libplacebo borrows them, and the direct
+  target uses one same-queue timeline dependency plus a QRhi command-buffer
+  barrier and native-layout reconciliation. The
+  accepted contract and validation evidence are recorded in ADR 0019 and the
+  dated Linux presentation evidence note.
 * Qt's surface declaration must be validated on claimed real compositors,
   including coupled surface recreation and rollback after a failed HDR-surface
   or FP16 path.

@@ -7,6 +7,8 @@
 #include <QString>
 #include <QTimer>
 
+#include "presentation/PresentationSurfaceContract.h"
+
 class GraphicsDeviceDomain;
 class HdrCompositor;
 class ActiveVideoSource;
@@ -37,6 +39,7 @@ public:
                           DiagnosticVideoSource &diagnosticSource,
                           MediaSession &mediaSession,
                           VideoViewportState &videoViewport,
+                          PresentationSurfaceContract surfaceContract,
                           QObject *parent = nullptr);
     ~RhiPresentationEngine() override;
 
@@ -82,6 +85,7 @@ private:
     DiagnosticVideoSource &m_diagnosticSource;
     MediaSession &m_mediaSession;
     VideoViewportState &m_videoViewport;
+    PresentationSurfaceContract m_surfaceContract;
     std::unique_ptr<GraphicsDeviceDomain> m_graphicsDevice;
     QRhi *m_rhi = nullptr;
     std::unique_ptr<QRhiSwapChain> m_swapChain;

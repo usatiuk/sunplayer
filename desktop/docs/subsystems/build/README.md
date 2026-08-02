@@ -2,16 +2,16 @@
 
 ## Status
 
-The CMake project builds the Windows player and the shared player sources on
-Ubuntu 26.04. Windows retains pinned vcpkg dependencies. Linux uses only system
-Qt, FFmpeg, libplacebo, cubeb, libass, Vulkan, Wayland, VAAPI, and DRM
-packages. Embedded subtitle discovery, FFmpeg decoding, libass/bitmap
-rendering, and shared subtitle state are integrated. The Linux native graphics
-and audio implementations are not present yet, so this remains a build
-foundation rather than a runnable Linux player. Complete distributable
-packaging is not integrated.
+The CMake project builds the Windows player and a runnable native-Wayland
+Vulkan player on Ubuntu 26.04. Windows retains pinned vcpkg dependencies.
+Linux uses only system Qt, FFmpeg, libplacebo, cubeb, libass, Vulkan, Wayland,
+VAAPI, and DRM packages. Embedded subtitle discovery, FFmpeg decoding,
+libass/bitmap rendering, shared subtitle state, Wayland capability inventory,
+and the Linux Vulkan graphics domain are integrated. Linux physical audio,
+VAAPI/DRM PRIME, managed HDR, and complete distributable packaging are not
+integrated.
 
-The currently validated configuration is:
+The currently validated Windows configuration is:
 
 | Requirement | Current value |
 | --- | --- |
@@ -22,9 +22,9 @@ The currently validated configuration is:
 | Qt | Exactly 6.11.1 |
 | libplacebo | Exactly 7.360.1, D3D11 enabled |
 | FFmpeg | Exactly 8.1.2, shared avutil/swresample/avcodec/avformat with zlib |
-| libass | Windows registry baseline package; Linux system 0.17.4 |
+| libass | Windows registry baseline package |
 | cubeb | Upstream commit `ef47ae581df7c2f76058d554b3edde17f9ee7cba` |
-| Graphics backend | Windows D3D11 through QRhi |
+| Graphics backend | D3D11 through QRhi |
 | Generator in the local configured tree | Ninja |
 
 The validated Linux foundation uses GCC 15.2, Qt 6.10.2, FFmpeg 8.0.1 ABI
@@ -85,7 +85,7 @@ configuration is currently claimed or tested. FFmpeg is wrapped by the same
 `sunroom_ffmpeg` target on both platforms because Windows needs explicit DLL
 staging while Linux consumes the system pkg-config target. Linux configures
 only when the expected FFmpeg 8 ABI majors, libplacebo API 360 family, Qt
-6.10 family, libass, Vulkan 1.2+, Wayland client/scanner and
+6.10 family, libass, Vulkan 1.3+, Wayland client/scanner and
 color-management-v1 XML, VA-API DRM, DRM, and `cubeb::cubeb` are present.
 
 The Ubuntu 26.04 reference development install is:
@@ -111,7 +111,7 @@ runtime for the accepted Linux port slices. GPU drivers, VA drivers,
 validation layers, and compositor/runtime packages are environment-specific
 validation dependencies rather than configure-time requirements.
 
-The initial libplacebo feature set enables D3D11, Shaderc, the shared
+The Windows libplacebo feature set enables D3D11, Shaderc, the shared
 SPIRV-Cross C API, and libplacebo's built-in DOVI handling. The optional
 external libdovi dependency, Vulkan, and OpenGL remain disabled. glslang and
 SPIRV-Tools are transitive implementation dependencies of the Shaderc build,
@@ -130,13 +130,13 @@ D3D11VA, D3D12VA, DXVA2, and Media Foundation without a separate manifest
 feature. It excludes Vulkan, swscale, filter/device libraries, command-line
 tools, vendor SDKs, and external codec libraries in this slice.
 
-The cubeb overlay is explicitly Windows-only and builds the native WASAPI
+The project-local cubeb overlay is explicitly Windows-only and builds the native WASAPI
 backend with tests, tools, and Rust backends disabled. `BUNDLE_SPEEX=OFF`
 prefers an external SpeexDSP package, but cubeb retains its embedded Speex
 fallback when none is present; the overlay ships both notices. This does not
-require a Rust toolchain on Windows. macOS and Linux backend packaging must be
-decided and validated on those platforms; current upstream choices may require
-pinned Rust submodules and Cargo inputs there. vcpkg downloads and binary
+require a Rust toolchain on Windows. Linux instead consumes the distribution's
+system cubeb package; live output remains a validation gap rather than a build-
+packaging gap. macOS packaging remains undecided. vcpkg downloads and binary
 caches remain project-build or per-user cache state and do not install cubeb
 system-wide.
 
@@ -163,22 +163,23 @@ texture and shader resources, surface loss, and device recovery.
 On Linux the corresponding contract is Qt `>=6.10,<6.11` and additionally
 requires `Qt6::WaylandClientPrivate` plus Qt's Wayland scanner tools. Private
 Base, Declarative, and Wayland targets therefore resolve from one distro Qt
-family. The dependency test uses Qt's standard protocol generator against the
-system color-management-v1 XML; the production display adapter will consume
-the same generated boundary when implemented.
+family. Qt's standard protocol generator compiles the system
+color-management-v1 XML into the production Linux capability inventory and
+the focused dependency boundary.
 
 ## Targets and resources
 
-The project defines the `sunroom` executable plus three production static
-libraries: `sunroom_audio` for PCM and sink contracts, `sunroom_media` for the
-FFmpeg frame/decode boundary, and `sunroom_video_pipeline` for the shared
-graphics, libplacebo producer/importer, target, and final-compositor code. The
-application and integration tests link these same compiled libraries rather
-than maintaining parallel source lists.
+The project defines the `sunroom` executable plus shared production static
+libraries: `sunroom_diagnostics`, `sunroom_audio`, `sunroom_media`, and
+`sunroom_video_pipeline`. Linux additionally builds `sunroom_linux_platform`
+for the native Wayland/Vulkan boundary. The application and integration tests
+link these same compiled libraries rather than maintaining parallel source
+lists.
 
 `qt_add_qml_module()` packages `src/app/Main.qml`, `AppShell.qml`,
 `pages/VideoPage.qml`, `pages/PlayerPage.qml`, and `pages/HdrLabPage.qml` under
-the `Sunroom` module.
+the `Sunroom` module together with the optional Wayland application chrome and
+its explicitly listed Lucide fallbacks.
 Qt's cross-target foreign-type generation exposes QML-marked source contracts
 from `sunroom_video_pipeline` without compiling their QObject metadata into the
 application again. `qt_add_shaders()` precompiles and packages the fullscreen
@@ -203,15 +204,15 @@ Windows:
 * `WindowsApp`.
 
 The application is marked as a Windows GUI executable and a macOS bundle at the
-CMake target level, but the source currently implements only Windows graphics
-startup. Successful CMake generation on another platform would not imply a
-supported player.
+CMake target level. Windows and native-Wayland Linux have production graphics
+startup; macOS remains unsupported even if a toolchain reaches configuration.
 
 ## Installation
 
-CMake installs the executable or bundle through `GNUInstallDirs`. Linux keeps
-Qt, QML modules, and native/media libraries system-owned and does not run Qt's
-deployment copier; the eventual distro package must express their runtime
+CMake installs the executable or bundle through `GNUInstallDirs`. Linux embeds
+the Sunroom QML module in the executable while keeping Qt's imported QML
+modules and native/media libraries system-owned; it does not run Qt's
+deployment copier. The eventual distro package must express those runtime
 package dependencies. On Windows, vcpkg's app-local dependency walker installs the executable's complete
 transitive runtime-DLL set before `qt_generate_deploy_qml_app_script()` supplies
 the current Qt deployment step with:
@@ -307,13 +308,24 @@ A prior build-tree GUI startup liveness smoke also passed with the configured
 Qt runtime available; the harness terminated the process after four seconds
 without user interaction.
 
-On Ubuntu 26.04 under WSL, clean Debug and Release builds pass with
-`BUILD_TESTING` both enabled and disabled. All 22 registered Linux tests and
-QML lint pass, including shared embedded-subtitle decoding/state and real
-system-libass rendering. A Release install-tree generation also succeeds and
-keeps system libraries under distribution ownership. This proves compilation,
-install mechanics, and platform-neutral behavior only: the Linux Vulkan
-presentation backend, real Wayland protocol/runtime behavior, cubeb sink,
-hardware decoding, installed-player launch, and native-hardware HDR validation
-remain unimplemented or untested. Windows has not yet been rerun after the
-cross-platform CMake change and remains an explicit regression gate.
+On Ubuntu 26.04 under WSL, clean Debug and Release builds pass with system
+dependencies. All 24 registered Linux tests and QML lint pass, including
+shared embedded-subtitle behavior, system libass rendering, exact Wayland SDR
+surface selection, application-chrome layout behavior, and packaged-QML
+verification. The final gamma-2.2 pixel readback remains in the Windows-only
+compositor target. A Release install-tree generation also
+succeeds and keeps system libraries under distribution ownership.
+
+WSLg production smoke testing creates the real Qt Wayland window, Vulkan 1.3
+QRhi domain, imported libplacebo device, direct RGBA16F target, redirected QML
+scene, and swapchain. The installed Release executable verifies its embedded
+Sunroom module against system Qt imports, and a video-only fixture presents
+through fullscreen and restoration under Vulkan validation with status zero.
+WSLg still emits recorded configure/protocol diagnostics around these
+transitions. The environment uses
+llvmpipe and exposes neither `/dev/dri` nor color-management-v1, so this proves
+the unmanaged assumed-sRGB software path and lifecycle only. Linux cubeb
+output, native GPU behavior, VAAPI/DRM PRIME, managed gamma-2.2 compositor
+declaration, HDR, and physical displays remain open.
+Windows has not yet been rerun after the cross-platform change and remains an
+explicit regression gate.

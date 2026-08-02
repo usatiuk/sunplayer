@@ -59,6 +59,16 @@ void advanceRevision(std::uint64_t &revision) {
     if (revision == 0)
         ++revision;
 }
+
+QRhiSwapChain::Format desiredSwapChainFormat(
+        const PresentationSurfaceContract &surfaceContract,
+        QRhiSwapChain &swapChain) {
+    return surfaceContract.extendedLinearAllowed
+            && swapChain.isFormatSupported(
+                QRhiSwapChain::HDRExtendedSrgbLinear)
+        ? QRhiSwapChain::HDRExtendedSrgbLinear
+        : QRhiSwapChain::SDR;
+}
 }
 
 RhiPresentationEngine::RhiPresentationEngine(
@@ -69,6 +79,7 @@ RhiPresentationEngine::RhiPresentationEngine(
         DiagnosticVideoSource &diagnosticSource,
         MediaSession &mediaSession,
         VideoViewportState &videoViewport,
+        PresentationSurfaceContract surfaceContract,
         QObject *parent)
     : QObject(parent),
       m_window(window),
@@ -77,7 +88,9 @@ RhiPresentationEngine::RhiPresentationEngine(
       m_videoSource(videoSource),
       m_diagnosticSource(diagnosticSource),
       m_mediaSession(mediaSession),
-      m_videoViewport(videoViewport) {
+      m_videoViewport(videoViewport),
+      m_surfaceContract(surfaceContract) {
+    Q_ASSERT(m_surfaceContract.isValid());
     m_deviceRecoveryTimer.setSingleShot(true);
 
     connect(&m_settings, &PresentationSettings::settingsChanged,
@@ -435,8 +448,11 @@ void RhiPresentationEngine::renderFrame() {
     parameters.ndcYUp = m_rhi->isYUpInNDC() ? 1.0f : 0.0f;
     // Final encoding follows the successfully created presentation path, not
     // asynchronous OS HDR metadata that may already describe another output.
-    parameters.linearOutput =
-        m_outputState.extendedLinearActive() ? 1.0f : 0.0f;
+    const PresentationOutputTransfer outputTransfer =
+        m_outputState.extendedLinearActive()
+        ? PresentationOutputTransfer::ExtendedLinear
+        : m_surfaceContract.sdrTransfer;
+    parameters.outputTransfer = static_cast<float>(outputTransfer);
 
     Q_ASSERT(m_compositor);
     m_compositor->render(
@@ -569,7 +585,7 @@ bool RhiPresentationEngine::initializeGraphicsDevice() {
     Q_ASSERT(!m_graphicsDevice);
     Q_ASSERT(!m_rhi);
     m_graphicsDevice =
-        GraphicsBackendFactory::createDeviceDomain();
+        GraphicsBackendFactory::createDeviceDomain(m_window);
     if (!m_graphicsDevice)
         return false;
     m_rhi = &m_graphicsDevice->rhi();
@@ -610,11 +626,8 @@ bool RhiPresentationEngine::createSwapChain() {
     m_swapChain.reset(m_rhi->newSwapChain());
     m_swapChain->setWindow(&m_window);
 
-    const bool extendedLinearSupported =
-        m_swapChain->isFormatSupported(QRhiSwapChain::HDRExtendedSrgbLinear);
-    m_swapChain->setFormat(extendedLinearSupported
-        ? QRhiSwapChain::HDRExtendedSrgbLinear
-        : QRhiSwapChain::SDR);
+    m_swapChain->setFormat(
+        desiredSwapChainFormat(m_surfaceContract, *m_swapChain));
     m_renderPassDescriptor.reset(
         m_swapChain->newCompatibleRenderPassDescriptor());
     m_swapChain->setRenderPassDescriptor(m_renderPassDescriptor.get());
@@ -675,6 +688,15 @@ void RhiPresentationEngine::releaseDevice() {
     }
     // Every child resource must be gone before destroying the QRhi.
     Q_ASSERT(!m_rhi || !m_rhi->isRecordingFrame());
+    if (m_rhi && !m_rhi->isDeviceLost()) {
+        const QRhi::FrameOpResult finishResult = m_rhi->finish();
+        if (finishResult != QRhi::FrameOpSuccess
+                && finishResult != QRhi::FrameOpDeviceLost) {
+            qCFatal(
+                sunroomLogGraphics,
+                "Could not finish GPU work before releasing device resources");
+        }
+    }
     releaseSwapChainResources();
     m_videoProducer.reset();
     m_videoProducerConfigurationRevision = 0;
@@ -879,13 +901,8 @@ void RhiPresentationEngine::reconcileOutputCharacteristics() {
     if (!m_swapChain)
         return;
 
-    const bool extendedLinearSupported =
-        m_swapChain->isFormatSupported(
-            QRhiSwapChain::HDRExtendedSrgbLinear);
     const QRhiSwapChain::Format desiredFormat =
-        extendedLinearSupported
-        ? QRhiSwapChain::HDRExtendedSrgbLinear
-        : QRhiSwapChain::SDR;
+        desiredSwapChainFormat(m_surfaceContract, *m_swapChain);
     if (m_swapChain->format() != desiredFormat) {
         releaseSwapChainResources();
         return;

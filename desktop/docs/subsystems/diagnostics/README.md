@@ -147,8 +147,9 @@ metadata path, and source ICC presence/size/application status without
 reconstructing a second metadata policy. Presentation state distinguishes
 `SystemManaged` from `UnmanagedSrgb` and records the surface encoding,
 target-gamut source, reference white, selected usable peak, last update reason,
-and last invalidation reason. Diagnostics must not imply that retained ICC
-bytes were applied while LCMS is disabled.
+and last invalidation reason. Source ICC application remains false because the
+render-local libplacebo frame explicitly suppresses both ICC representations;
+diagnostics must not infer application from the linked library's LCMS feature.
 
 Snapshots publish at bounded/coalesced points. Worker threads must not drive
 the UI or allocate a new object for every frame.

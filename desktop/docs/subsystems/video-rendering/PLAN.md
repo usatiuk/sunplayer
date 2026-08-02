@@ -69,8 +69,9 @@ reject a source the libraries can already show.
   parsed Dolby Vision metadata produced a libplacebo reshape or the decoded
   base layer was shown; do not infer base-layer compatibility from appearance.
 * [x] Preserve source ICC bytes through the retained frame and report presence
-  and size; do not claim an ICC transform while LCMS is disabled. Detailed
-  profile validation remains deferred with application-managed ICC output.
+  and size; clear both ICC representations on the render-local libplacebo frame
+  on every platform. Detailed profile validation and source-ICC rendering
+  remain deferred independently of the linked libplacebo's LCMS feature.
 
 ### One display-target integration
 
@@ -270,21 +271,24 @@ Windows V1 color release gate:
 * [ ] Add the VideoToolbox/IOSurface importer with the macOS graphics domain,
   and add Vulkan/DRM PRIME/VAAPI importers with the Wayland Linux graphics
   domain.
-* [ ] Inventory Linux color-management-v1 capabilities. Use Qt-owned gamma-2.2
+* [x] Inventory Linux color-management-v1 capabilities. Use Qt-owned gamma-2.2
   surface descriptions when managed SDR can be declared, add preferred-
   description observation only for HDR, and otherwise select unmanaged
   assumed-sRGB SDR without additional Wayland ownership. Continue to reject
   X11 and XWayland.
-* [ ] Make final-compositor output transfer explicit at the surface boundary:
+* [x] Make final-compositor output transfer explicit at the surface boundary:
   piecewise sRGB for Windows and Wayland unmanaged fallbacks, gamma 2.2 for Qt
-  managed Wayland SDR, and extended linear for HDR. Keep one compositor and
-  cover each branch with analytic transfer tests.
-* [ ] Treat both managed gamma-2.2 SDR and managed extended-linear Wayland
-  output as `SystemManaged`. Let Qt own surface descriptions, couple its
-  requested color space with swapchain encoding, and roll a failed optional
-  HDR transition back to a newly declared managed gamma-2.2 SDR surface rather
-  than abandoning a working managed path. Treat the startup fallback as
-  `UnmanagedSrgb`, one-times SDR headroom, and HDR unavailable.
+  managed Wayland SDR, and extended linear for HDR. Keep one compositor. The
+  shared shader branches and selection tests exist; backend-neutral pixel
+  readback for the Linux gamma-2.2 branch remains pending.
+* [x] Treat managed gamma-2.2 Wayland SDR as `SystemManaged` and its startup
+  fallback as `UnmanagedSrgb` with one-times SDR headroom and HDR unavailable.
+  Qt owns the surface description and its requested color space is coupled to
+  the compositor encoding before native creation.
+* [ ] Observe preferred-output HDR state, select a managed extended-linear
+  Wayland surface, and reconcile live HDR/SDR transitions. A failed optional
+  HDR transition must return to a newly declared managed gamma-2.2 SDR surface
+  rather than abandon a working managed path.
 
 X11 and XWayland are unsupported and do not receive a presentation backend,
 fallback path, packaging claim, or validation matrix.
@@ -304,9 +308,10 @@ fallback path, packaging claim, or validation matrix.
 ## Deliberately deferred
 
 * Application-managed display ICC and legacy calibration workflows.
-* Enabling source-ICC transforms before LCMS packaging and validated SDR RGB
-  profile tests; ICC is an embedded-profile path rather than a substitute for
-  the required scalar-metadata SDR/HDR formats above.
+* Enabling source-ICC transforms before the dependency policy, semantic
+  precedence, and validated SDR RGB profile tests are shared across platforms;
+  ICC is an embedded-profile path rather than a substitute for the required
+  scalar-metadata SDR/HDR formats above.
 * Handmade PQ, HLG, gamut, or highlight-compression shaders.
 * General renderer/backend plugin systems.
 * Exact cross-GPU pixel equality and large self-generated golden suites.

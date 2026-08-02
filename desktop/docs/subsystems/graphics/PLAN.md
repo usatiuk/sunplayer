@@ -261,8 +261,11 @@ exercises and refines them from evidence without changing their semantic
 responsibilities.
 
 * [ ] Implement macOS Metal/EDR presentation and display observation.
-* [ ] Implement native Wayland Linux Vulkan presentation and compositor/surface
-  color-management observation. X11 and XWayland are unsupported.
+* [x] Implement native Wayland Linux Vulkan presentation, unmanaged piecewise-
+  sRGB fallback, and startup-managed gamma-2.2 SDR selection. X11 and XWayland
+  are unsupported.
+* [ ] Add preferred-output/HDR observation and live managed Wayland HDR/SDR
+  transitions, then validate them on a capable compositor and display.
 * [ ] Validate backend-neutral orientation, texture, synchronization, and
   device-generation contracts.
 * [ ] Measure native import feasibility and costs before promising zero-copy

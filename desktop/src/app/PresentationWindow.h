@@ -6,6 +6,13 @@
 #include <QWindow>
 #include <QtQml/qqmlregistration.h>
 
+#include "app/windowchrome/WindowChromeController.h"
+#include "presentation/PresentationSurfaceContract.h"
+
+#ifdef Q_OS_LINUX
+class LinuxWaylandWindowContext;
+#endif
+
 // Native window and event boundary for the current application shell.
 class PresentationWindow : public QWindow {
     Q_OBJECT
@@ -13,9 +20,16 @@ class PresentationWindow : public QWindow {
     Q_PROPERTY(bool windowShortcutsBlocked
                    READ windowShortcutsBlocked
                    WRITE setWindowShortcutsBlocked)
+    Q_PROPERTY(WindowChromeController *windowChrome
+                   READ windowChrome
+                   CONSTANT)
 
 public:
+#ifdef Q_OS_LINUX
+    explicit PresentationWindow(LinuxWaylandWindowContext &windowContext);
+#else
     PresentationWindow();
+#endif
     ~PresentationWindow() override;
 
     void openMedia(const QUrl &url);
@@ -28,6 +42,7 @@ public:
     void setCursorHidden(bool hidden);
     bool windowShortcutsBlocked() const;
     void setWindowShortcutsBlocked(bool blocked);
+    WindowChromeController *windowChrome();
 
 signals:
     void videoFramePresented(qulonglong contentRevision);
@@ -45,6 +60,13 @@ protected:
     bool event(QEvent *event) override;
 
 private:
+    enum class PresentationLifecycle {
+        Initializing,
+        Active,
+        Releasing,
+    };
+
+    void initialize(PresentationSurfaceContract surfaceContract);
     void applyCursorVisibility();
     void forwardMouseEvent(QMouseEvent &event);
     bool playbackShortcutEnabled() const;
@@ -57,9 +79,15 @@ private:
     std::unique_ptr<class ActiveVideoSource> m_activeVideoSource;
     std::unique_ptr<class VideoViewportState> m_videoViewport;
     std::unique_ptr<class RhiPresentationEngine> m_engine;
+    WindowChromeController m_windowChrome;
+#ifdef Q_OS_LINUX
+    LinuxWaylandWindowContext &m_windowContext;
+#endif
     bool m_restoreMaximizedAfterFullscreen = false;
     bool m_cursorHidden = false;
     bool m_windowShortcutsBlocked = false;
+    PresentationLifecycle m_presentationLifecycle =
+        PresentationLifecycle::Initializing;
 };
 
 struct PresentationWindowQmlForeign {

@@ -121,6 +121,12 @@ void AppShellTest::publishesActiveViewport() {
     QObject *const backToPlayerButton =
         rootItem->findChild<QObject *>(
             QStringLiteral("backToPlayerButton"));
+    QQuickItem *const clientSideWindowChrome =
+        rootItem->findChild<QQuickItem *>(
+            QStringLiteral("clientSideWindowChrome"));
+    QQuickItem *const clientSideTitleBar =
+        rootItem->findChild<QQuickItem *>(
+            QStringLiteral("clientSideTitleBar"));
     QObject *const openingState =
         rootItem->findChild<QObject *>(
             QStringLiteral("openingState"));
@@ -211,6 +217,8 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(fullscreenBackgroundMouseArea);
     QVERIFY(emptyHdrLabButton);
     QVERIFY(backToPlayerButton);
+    QVERIFY(clientSideWindowChrome);
+    QVERIFY(clientSideTitleBar);
     QVERIFY(openingState);
     QVERIFY(waitingForVideoState);
     QVERIFY(errorState);
@@ -280,6 +288,27 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_VERIFY(!windowCommands.windowShortcutsBlocked());
     QTRY_VERIFY(!videoViewport.visible());
     QTRY_VERIFY(emptyState->property("visible").toBool());
+    QCOMPARE(clientSideWindowChrome->property("contentTop").toReal(), 0.0);
+
+    windowCommands.windowChromeController().setState(true, false, false);
+    QVERIFY(clientSideTitleBar->height() > 0.0);
+    QTRY_COMPARE(
+        clientSideWindowChrome->property("contentTop").toReal(),
+        clientSideTitleBar->height());
+    QTRY_VERIFY(clientSideTitleBar->isVisible());
+
+    windowCommands.windowChromeController().setState(true, false, true);
+    QTRY_COMPARE(
+        clientSideWindowChrome->property("contentTop").toReal(),
+        clientSideTitleBar->height());
+
+    windowCommands.windowChromeController().setState(true, true, false);
+    QTRY_VERIFY(!clientSideTitleBar->isVisible());
+    QTRY_COMPARE(
+        clientSideWindowChrome->property("contentTop").toReal(),
+        0.0);
+
+    windowCommands.windowChromeController().setState(false, false, false);
     QVERIFY(!openingState->property("visible").toBool());
     QVERIFY(!errorState->property("visible").toBool());
     QVERIFY(!seekSlider->property("visible").toBool());
@@ -318,6 +347,15 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_VERIFY(seekSlider->property("visible").toBool());
     QTRY_VERIFY(muteButton->property("visible").toBool());
     QTRY_VERIFY(volumeSlider->property("visible").toBool());
+    const QRectF viewportWithoutChrome = videoViewport.rect();
+    playerPage->setProperty("controlsVisibleByActivity", false);
+    QTRY_VERIFY(clientSideTitleBar->opacity() < 0.1);
+    windowCommands.windowChromeController().setState(true, false, false);
+    QTRY_COMPARE(videoViewport.rect().y(), 0.0);
+    QCOMPARE(videoViewport.rect(), viewportWithoutChrome);
+    windowCommands.windowChromeController().setState(false, false, false);
+    QVERIFY(QMetaObject::invokeMethod(
+        playerPage, "revealControls", Qt::DirectConnection));
     windowCommands.reset();
     QTest::mouseDClick(
         &quickWindow,

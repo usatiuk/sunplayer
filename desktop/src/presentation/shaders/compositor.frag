@@ -13,7 +13,7 @@ layout(std140, binding = 3) uniform CompositorParams {
     vec2 videoSize;
     float sdrScale;
     float ndcYUp;
-    float linearOutput;
+    float outputTransfer;
 };
 
 vec3 srgbToLinear(vec3 value)
@@ -30,6 +30,11 @@ vec3 linearToSrgb(vec3 value)
     vec3 linearPart = value * 12.92;
     vec3 powerPart = 1.055 * pow(value, vec3(1.0 / 2.4)) - 0.055;
     return mix(powerPart, linearPart, low);
+}
+
+vec3 linearToGamma22(vec3 value)
+{
+    return pow(value, vec3(1.0 / 2.2));
 }
 
 vec3 compositeSrgbPremultiplied(vec3 background, vec4 layer)
@@ -59,8 +64,11 @@ void main()
     color = compositeSrgbPremultiplied(
         color, texture(uiTexture, displayUv));
     color *= sdrScale;
-    vec3 outputColor = linearOutput > 0.5
+    vec3 encodedColor = clamp(color, 0.0, 1.0);
+    vec3 outputColor = outputTransfer > 1.5
         ? color
-        : linearToSrgb(clamp(color, 0.0, 1.0));
+        : (outputTransfer > 0.5
+            ? linearToGamma22(encodedColor)
+            : linearToSrgb(encodedColor));
     fragColor = vec4(outputColor, 1.0);
 }

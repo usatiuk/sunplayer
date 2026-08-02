@@ -28,11 +28,18 @@ libplacebo render, and swapchain for an audio-first source. As buffering and
 device recovery arrive, deterministic whole-pipeline scenarios should become
 the bulk of behavioral coverage.
 
-The Ubuntu system-build foundation now compiles that shared media, subtitle,
-playback, and UI graph and passes 22 Linux CTests plus QML lint, including real
-FFmpeg subtitle fixtures and system libass rendering. Native Wayland/Vulkan
-presentation, physical cubeb output, VAAPI import, and HDR display behavior
-remain untested until their Linux implementations exist.
+The Ubuntu system build now compiles that shared media, subtitle, playback,
+and UI graph plus the native-Wayland Vulkan path. It passes 24 Linux CTests and
+QML lint, including real FFmpeg/subtitle fixtures, system dependencies, exact
+unmanaged-sRGB versus managed-gamma-2.2 surface/transfer selection, and
+application-chrome layout/state behavior. A WSLg production scenario exercises the real Qt
+Wayland window, llvmpipe Vulkan device, libplacebo direct target, redirected
+QML, swapchain, fullscreen/restoration, and teardown under Vulkan validation.
+One bounded run completes; two other attempts timed out on cursor-state
+convergence, so this is narrow path evidence rather than complete WSLg
+lifecycle acceptance.
+Physical cubeb output, native GPU behavior, VAAPI import, live managed gamma-
+2.2 declaration, and HDR display behavior remain unproven.
 
 The central principle is:
 
@@ -462,6 +469,19 @@ rerendering.
 Simulation proves shared policy. It does not prove that a platform adapter
 observes the real operating-system event or that the monitor emits the expected
 light.
+
+The current WSLg lane is intentionally narrower. Its unmanaged assumed-sRGB
+surface and software Vulkan device exercise production ownership, rendering,
+synchronization, fullscreen convergence, and teardown. One bounded run
+returns status zero, while two attempts timed out waiting for cursor-state
+convergence; broader transition acceptance therefore remains open. These
+results do not satisfy a
+real-GPU, color-management-v1, HDR, VAAPI, compositor-decoration, or physical-
+output gate. WSLg's zero-size fullscreen configure warnings, post-completion
+xdg-surface buffer/configure diagnostic, and broken-pipe message are recorded
+as environment output for the passing bounded scenario. Sunroom does not add
+a compositor-specific state machine to
+suppress them; native compositor transition coverage remains open.
 
 ## Physical-output verification
 

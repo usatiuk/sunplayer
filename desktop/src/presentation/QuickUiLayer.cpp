@@ -84,6 +84,13 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
 
     m_quickWindow = std::make_unique<QQuickWindow>(m_renderControl.get());
     m_quickWindow->setColor(Qt::transparent);
+#if QT_CONFIG(vulkan)
+    if (m_renderWindow.surfaceType() == QSurface::VulkanSurface) {
+        Q_ASSERT(m_renderWindow.vulkanInstance());
+        m_quickWindow->setVulkanInstance(
+            m_renderWindow.vulkanInstance());
+    }
+#endif
     m_quickWindow->setGraphicsDevice(QQuickGraphicsDevice::fromRhi(&m_rhi));
 
     m_qmlEngine = std::make_unique<QQmlEngine>();
