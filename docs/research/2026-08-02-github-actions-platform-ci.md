@@ -36,11 +36,14 @@ repository publishes the required 6.11.1 MSVC 2022 archives and the
 `qtshadertools` add-on.
 
 `aqtinstall` can install those public Qt archives without Qt account secrets.
-Using its exact Python package version from a normal PowerShell step avoids a
-composite action whose internally referenced actions are tag-pinned even when
-the outer action is commit-pinned. The installed Qt directory can be cached by
-an official, commit-pinned `actions/cache` step with a key containing the exact
-Qt version, architecture, and cache-layout revision.
+The released 3.3.0 package predates Qt 6.11's Windows per-architecture repository
+layout, so CI pins immutable upstream merge commit
+`8c3695d4a4e1ceabf6a74dc6c79681656dc6b74b`, which contains the accepted Qt 6.11
+layout support, rather than using a movable branch. A normal PowerShell step
+avoids a composite action whose internally referenced actions are tag-pinned
+even when the outer action is commit-pinned. The installed Qt directory can be
+cached by an official, commit-pinned `actions/cache` step with a key containing
+the exact Qt version, architecture, and cache-layout revision.
 
 Current vcpkg documentation no longer treats the old `x-gha` provider as a
 supported binary-cache backend. GitHub Packages' NuGet provider requires
@@ -69,6 +72,7 @@ Primary sources:
 * [vcpkg binary-cache providers](https://learn.microsoft.com/en-us/vcpkg/reference/binarycaching)
 * [Qt 6.11.1 Windows repository](https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6111/)
 * [aqtinstall 3.3.0 command reference](https://aqtinstall.readthedocs.io/en/v3.3.0/cli.html)
+* [aqtinstall Qt 6.11 Windows layout fix](https://github.com/miurahr/aqtinstall/pull/1000)
 * [Mesa Vulkan driver selection](https://docs.mesa3d.org/install.html)
 
 ## Runtime-test findings

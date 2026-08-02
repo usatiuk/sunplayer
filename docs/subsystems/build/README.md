@@ -305,15 +305,16 @@ integration evidence, not native-GPU, VAAPI/DRM PRIME import, managed-color,
 HDR, physical-display, physical-audio, route-migration, or acoustic-sync
 evidence.
 
-The Windows job uses `windows-2022`, exact Qt 6.11.1 installed by pinned
-`aqtinstall` 3.3.0, MSVC for Sunroom, and the root manifest's clang-cl vcpkg
-triplet for dependencies. It caches only the exact Qt tree and vcpkg's
-ABI-addressed binary archives. It builds all GPU and device code, runs QML
-lint, then excludes CTests labeled `device` or `gpu` because a generic hosted
-runner does not satisfy Sunroom's hardware-only D3D11 or default-audio-device
-contracts. That exclusion also drops the software/HDR cases bundled into the
-mixed `ffmpeg-first-frame` executable; splitting a hosted software subset is
-deferred while the complete test remains dedicated-machine coverage.
+The Windows job uses `windows-2022`, exact Qt 6.11.1 installed by a pinned
+`aqtinstall` revision with Qt 6.11 repository-layout support, MSVC for Sunroom,
+and the root manifest's clang-cl vcpkg triplet for dependencies. It caches only
+the exact Qt tree and vcpkg's ABI-addressed binary archives. It builds all GPU
+and device code, runs QML lint, then excludes CTests labeled `device` or `gpu`
+because a generic hosted runner does not satisfy Sunroom's hardware-only D3D11
+or default-audio-device contracts. That exclusion also drops the software/HDR
+cases bundled into the mixed `ffmpeg-first-frame` executable; splitting a
+hosted software subset is deferred while the complete test remains dedicated-
+machine coverage.
 
 The workflow requests only read-only repository contents, disables persisted
 checkout credentials, pins actions by full commit SHA, publishes nothing, and

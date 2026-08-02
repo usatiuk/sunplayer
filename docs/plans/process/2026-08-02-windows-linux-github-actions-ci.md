@@ -174,4 +174,9 @@ The first pushed workflow was rejected during GitHub's static validation because
 the `runner` context is unavailable in job-level `env`. The corrected workflow
 uses the runtime-provided `RUNNER_TEMP` environment variable inside commands and
 retains `${{ runner.temp }}` only in step-level action inputs, where that context
-is valid. A hosted rerun remains the validation boundary for this correction.
+is valid. The next hosted run passed static validation and started both jobs.
+Windows then exposed that released `aqtinstall` 3.3.0 predates Qt 6.11's changed
+per-architecture repository layout. CI now pins the immutable upstream merge
+commit containing the accepted layout fix. Build, lint, and CTest parallelism
+also follows each runner's available processor count. Another hosted rerun remains
+the validation boundary for these corrections.
