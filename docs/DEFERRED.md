@@ -160,6 +160,25 @@ settings with the Player. A later player-reliability slice must separate the
 diagnostic override from production display policy so experiments cannot
 silently alter ordinary playback.
 
+## CI and release engineering
+
+### Hosted hardware and mixed-test coverage
+
+Generic Windows CI builds the complete codebase but excludes CTests labeled
+`device` or `gpu`. A future dedicated Windows runner with a supported physical
+GPU and audio endpoint should run the full suite, including D3D rendering,
+D3D11VA, Advanced Color, HDR scenarios, and real cubeb output. The current
+`ffmpeg-first-frame` registration mixes software/HDR coverage with required
+D3D11VA cases, so its complete executable is excluded on hosted Windows;
+splitting a useful hosted software subset is deferred instead of refactoring
+the test solely for initial CI.
+
+Linux hosted CI uses lavapipe and a Pulse null sink. A VAAPI/DRM PRIME hardware
+runner, an HDR/display lab, and physical-audio/default-route scenarios remain
+separate future lanes. Packaging/release workflows remain deferred until
+packaging is defined, and macOS CI remains deferred until the product has a
+macOS backend and dependency contract.
+
 ## Application and player
 
 ### Wayland decoration negotiation is not observable through public Qt API

@@ -24,6 +24,10 @@ registered startup and playback scenarios on both current platforms plus a
 registered Windows fullscreen scenario. Linux fullscreen is run explicitly
 while its WSLg/compositor convergence remains unstable. There is not yet a
 broad media corpus, golden-image suite, or general application-scenario suite.
+The root GitHub Actions workflow now configures an all-tests Ubuntu 26.04
+software lane and a Windows deterministic lane that excludes the existing
+`device` and `gpu` labels. The workflow has not yet completed a hosted run, so
+these are configured coverage boundaries rather than hosted pass evidence.
 The accepted testing direction is defined in
 [../../TESTING.md](../../TESTING.md), and active bootstrap work is tracked in
 [PLAN.md](PLAN.md).
@@ -144,6 +148,9 @@ Current verified coverage:
 
 | Boundary | State |
 | --- | --- |
+| GitHub-hosted CI | Workflow implemented and locally inspected; first Windows and Linux hosted execution is pending |
+| Configured hosted Linux selection | Ubuntu 26.04 system dependencies, headless native Wayland, lavapipe Vulkan, Pulse null sink, QML lint, and all registered Linux CTests are intended; no native GPU, VAAPI/DRM PRIME import, managed-color, HDR, physical-device, route-change, or acoustic claim |
+| Configured hosted Windows selection | All production/test targets build and QML lint runs; CTest excludes `device` and `gpu`, so physical audio, D3D rendering, D3D11VA, Advanced Color, and HDR remain dedicated-machine coverage, and the mixed `ffmpeg-first-frame` software cases are collateral exclusions |
 | Configured Windows Debug build | Builds successfully |
 | Focused automated tests | Twenty-eight CTest targets cover presentation policy, UI/session lifecycle, bounded media/audio/subtitle queues and state, timing and generation behavior, dependency boundaries, real FFmpeg A/V/subtitle decode, libswresample/libass rendering, a silent real-WASAPI sink lifecycle, real GPU paths, and bounded application playback/fullscreen scenarios |
 | Configured Ubuntu system build | The prior checkpoint covers Debug and Release with tests enabled and disabled. This change reruns Debug with tests and Release without tests using Qt 6.10.2 plus system media/native dependencies; the production player has native-Wayland Vulkan and system-cubeb paths |

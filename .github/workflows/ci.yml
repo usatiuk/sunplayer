@@ -1,0 +1,332 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux · Ubuntu 26.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container:
+      image: ubuntu:26.04
+    defaults:
+      run:
+        shell: bash
+    env:
+      BUILD_DIR: ${{ runner.temp }}/sunroom-linux-debug
+
+    steps:
+      - name: Install system dependencies
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install --yes --no-install-recommends \
+            ca-certificates \
+            git \
+            build-essential \
+            cmake \
+            ninja-build \
+            pkg-config \
+            qt6-base-dev \
+            qt6-base-private-dev \
+            qt6-declarative-dev \
+            qt6-declarative-private-dev \
+            qt6-declarative-dev-tools \
+            qt6-wayland \
+            qt6-wayland-dev \
+            qt6-wayland-private-dev \
+            qt6-shadertools-dev \
+            qt6-shader-baker \
+            spirv-tools \
+            qml6-module-qtquick \
+            qml6-module-qtquick-controls \
+            qml6-module-qtquick-dialogs \
+            qml6-module-qtquick-layouts \
+            libavcodec-dev \
+            libavformat-dev \
+            libavutil-dev \
+            libswresample-dev \
+            libplacebo-dev \
+            libcubeb-dev \
+            libass-dev \
+            libvulkan-dev \
+            libwayland-dev \
+            libwayland-bin \
+            wayland-protocols \
+            libva-dev \
+            libdrm-dev \
+            weston \
+            pulseaudio \
+            pulseaudio-utils \
+            mesa-vulkan-drivers \
+            vulkan-tools
+
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Configure
+        run: >-
+          cmake -S . -B "$BUILD_DIR" -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build "$BUILD_DIR" --parallel 2
+
+      - name: Lint QML
+        run: cmake --build "$BUILD_DIR" --target all_qmllint --parallel 2
+
+      - name: Test
+        run: |
+          WAYLAND_RUNTIME=/tmp/sunroom-wayland-runtime
+          PULSE_RUNTIME=/tmp/sunroom-pulse-runtime
+          WESTON_LOG=/tmp/sunroom-weston.log
+          PULSE_LOG=/tmp/sunroom-pulse.log
+          WESTON_PID=
+          PULSE_PID=
+
+          stop_process() {
+            local pid=$1
+            local name=$2
+
+            if kill -0 "$pid" 2>/dev/null; then
+              kill "$pid" 2>/dev/null
+              for attempt in {1..40}; do
+                if ! kill -0 "$pid" 2>/dev/null; then
+                  break
+                fi
+                sleep 0.25
+              done
+            fi
+
+            if kill -0 "$pid" 2>/dev/null; then
+              echo "$name did not exit after 10 seconds; killing it" >&2
+              kill -KILL "$pid" 2>/dev/null
+            fi
+            wait "$pid" 2>/dev/null
+          }
+
+          cleanup() {
+            status=$?
+            trap - EXIT
+            set +e
+
+            if [[ -n "$WESTON_PID" ]]; then
+              stop_process "$WESTON_PID" Weston
+            fi
+            if [[ -n "$PULSE_PID" ]]; then
+              stop_process "$PULSE_PID" PulseAudio
+            fi
+
+            if (( status != 0 )); then
+              echo "Weston log:"
+              tail -n 240 "$WESTON_LOG" 2>/dev/null
+              echo "PulseAudio log:"
+              tail -n 240 "$PULSE_LOG" 2>/dev/null
+            fi
+
+            exit "$status"
+          }
+          trap cleanup EXIT
+
+          install -d -m 0700 "$WAYLAND_RUNTIME"
+          install -d -o pulse -g pulse -m 0755 "$PULSE_RUNTIME"
+
+          export XDG_RUNTIME_DIR="$WAYLAND_RUNTIME"
+          export WAYLAND_DISPLAY=wayland-sunroom
+          export QT_QPA_PLATFORM=wayland
+
+          weston \
+            --backend=headless \
+            --renderer=pixman \
+            --no-config \
+            --socket="$WAYLAND_DISPLAY" \
+            --idle-time=0 \
+            --width=1920 \
+            --height=1080 \
+            --log="$WESTON_LOG" &
+          WESTON_PID=$!
+
+          for attempt in {1..120}; do
+            if [[ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]]; then
+              break
+            fi
+            if ! kill -0 "$WESTON_PID" 2>/dev/null; then
+              echo "Weston exited before creating its Wayland socket" >&2
+              exit 1
+            fi
+            sleep 0.25
+          done
+          if [[ ! -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]]; then
+            echo "Weston did not create its Wayland socket within 30 seconds" >&2
+            exit 1
+          fi
+          if ! kill -0 "$WESTON_PID" 2>/dev/null; then
+            echo "Weston exited after creating its Wayland socket" >&2
+            exit 1
+          fi
+
+          export PULSE_SERVER="unix:$PULSE_RUNTIME/native"
+          export PULSE_SINK=sunroom_ci
+
+          pulseaudio \
+            --system \
+            --daemonize=no \
+            --fail=yes \
+            --disallow-exit=yes \
+            --disallow-module-loading=yes \
+            --realtime=no \
+            --high-priority=no \
+            -n \
+            -L "module-native-protocol-unix socket=$PULSE_RUNTIME/native auth-anonymous=1" \
+            -L "module-null-sink sink_name=$PULSE_SINK" \
+            >"$PULSE_LOG" 2>&1 &
+          PULSE_PID=$!
+
+          for attempt in {1..120}; do
+            if [[ -S "$PULSE_RUNTIME/native" ]] && pactl info >/dev/null 2>&1; then
+              break
+            fi
+            if ! kill -0 "$PULSE_PID" 2>/dev/null; then
+              echo "PulseAudio exited before accepting a connection" >&2
+              exit 1
+            fi
+            sleep 0.25
+          done
+          if [[ ! -S "$PULSE_RUNTIME/native" ]] || ! pactl info >/dev/null 2>&1; then
+            echo "PulseAudio did not accept a connection within 30 seconds" >&2
+            exit 1
+          fi
+          if ! kill -0 "$PULSE_PID" 2>/dev/null; then
+            echo "PulseAudio exited after becoming ready" >&2
+            exit 1
+          fi
+          if ! pactl list short sinks | awk '$2 == "sunroom_ci" { found = 1 } END { exit !found }'; then
+            echo "PulseAudio did not expose the sunroom_ci sink" >&2
+            exit 1
+          fi
+          if [[ "$(pactl get-default-sink)" != "$PULSE_SINK" ]]; then
+            echo "PulseAudio did not select sunroom_ci as the default sink" >&2
+            exit 1
+          fi
+
+          LAVAPIPE_ICD=/usr/share/vulkan/icd.d/lvp_icd.json
+          if [[ ! -f "$LAVAPIPE_ICD" ]]; then
+            echo "Ubuntu lavapipe ICD is missing: $LAVAPIPE_ICD" >&2
+            exit 1
+          fi
+          export VK_DRIVER_FILES="$LAVAPIPE_ICD"
+          vulkaninfo --summary
+
+          ctest \
+            --test-dir "$BUILD_DIR" \
+            --output-on-failure \
+            --parallel 2
+
+          kill -0 "$WESTON_PID"
+          kill -0 "$PULSE_PID"
+
+  windows:
+    name: Windows · Qt 6.11.1
+    runs-on: windows-2022
+    timeout-minutes: 180
+    env:
+      BUILD_DIR: ${{ runner.temp }}\sunroom-windows-debug
+      QT_ROOT: ${{ runner.temp }}\Qt\6.11.1\msvc2022_64
+      VCPKG_ROOT: C:\vcpkg
+      VCPKG_BINARY_CACHE: ${{ runner.temp }}\sunroom-vcpkg-binary-cache
+      VCPKG_BINARY_SOURCES: clear;files,${{ runner.temp }}\sunroom-vcpkg-binary-cache,readwrite
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Restore Qt
+        id: qt-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}\Qt\6.11.1\msvc2022_64
+          key: windows-2022-qt-6.11.1-msvc2022_64-r1
+
+      - name: Install Qt
+        if: steps.qt-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          python -m pip install "aqtinstall==3.3.0"
+          python -m aqt install-qt `
+            --outputdir "$env:RUNNER_TEMP\Qt" `
+            windows desktop 6.11.1 win64_msvc2022_64 `
+            -m qtshadertools
+
+      - name: Verify Qt and vcpkg
+        shell: pwsh
+        run: |
+          $requiredPaths = @(
+            "$env:QT_ROOT\lib\cmake\Qt6\Qt6Config.cmake",
+            "$env:QT_ROOT\lib\cmake\Qt6ShaderTools\Qt6ShaderToolsConfig.cmake",
+            "$env:QT_ROOT\bin\qsb.exe",
+            "$env:QT_ROOT\bin\windeployqt.exe",
+            "$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
+          )
+          foreach ($path in $requiredPaths) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw "Required dependency path is missing: $path"
+            }
+          }
+          New-Item -ItemType Directory -Force -Path $env:VCPKG_BINARY_CACHE | Out-Null
+
+      - name: Restore vcpkg binaries
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}\sunroom-vcpkg-binary-cache
+          key: windows-2022-vcpkg-x64-windows-clangcl-r1-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'cmake/vcpkg/**') }}
+          restore-keys: |
+            windows-2022-vcpkg-x64-windows-clangcl-r1-
+
+      - name: Configure
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b %errorlevel%
+          cmake -S . -B "%BUILD_DIR%" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DCMAKE_PREFIX_PATH=%QT_ROOT%"
+          if errorlevel 1 exit /b %errorlevel%
+
+      - name: Build
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b %errorlevel%
+          cmake --build "%BUILD_DIR%" --parallel 2
+          if errorlevel 1 exit /b %errorlevel%
+
+      - name: Lint QML
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b %errorlevel%
+          cmake --build "%BUILD_DIR%" --target all_qmllint --parallel 2
+          if errorlevel 1 exit /b %errorlevel%
+
+      - name: Test deterministic boundaries
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b %errorlevel%
+          ctest --test-dir "%BUILD_DIR%" --output-on-failure --parallel 2 -LE "device|gpu"
+          if errorlevel 1 exit /b %errorlevel%

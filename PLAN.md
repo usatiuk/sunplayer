@@ -488,6 +488,8 @@ Documentation: `docs/TESTING.md` and `docs/subsystems/testing/`
 * [x] Reproducible FFmpeg integration
 * [x] Pinned Windows cubeb dependency integration
 * [x] Reproducible libass integration
+* [x] Root-level Windows/Linux GitHub Actions build, QML-lint, and
+  capability-honest CTest workflow configured; first hosted run pending
 * [ ] Cross-platform libplacebo dependency configurations
 * [ ] Windows packaging
 * [ ] macOS packaging

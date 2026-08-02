@@ -232,3 +232,20 @@ Implement alongside graphics milestone 1:
 
 These jobs should report unavailable capabilities and fixtures explicitly.
 They need not all block every change.
+
+## Milestone 5: hosted platform CI
+
+* [x] Put one two-job workflow at the Git root and keep the existing
+  CMake/QML-lint/CTest boundaries.
+* [x] Provision exact Windows Qt plus the root vcpkg manifest and Ubuntu 26.04
+  system dependencies without CI-only product fallbacks.
+* [x] Label every test that requires a live default audio device as `device`.
+* [x] Exclude only `device|gpu` on generic hosted Windows while continuing to
+  build all code and retaining complete hardware coverage on real machines.
+* [x] Configure Linux with headless native Wayland, lavapipe, and a real Pulse
+  protocol null sink, then run all registered Linux tests without retries or
+  service-missing skips.
+* [ ] Complete the first successful Windows and Linux GitHub-hosted run before
+  treating the workflow as accepted hosted evidence.
+* [ ] Add dedicated Windows GPU/audio, Linux VAAPI/DRM PRIME, HDR/display, and
+  physical-audio lanes only when those machines and ownership contracts exist.

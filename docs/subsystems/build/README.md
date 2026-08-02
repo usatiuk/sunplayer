@@ -11,6 +11,11 @@ the Linux Vulkan graphics domain, and system-cubeb output are integrated.
 Native Linux route-change/recovery evidence, VAAPI/DRM PRIME, managed HDR, and
 complete distributable packaging remain open.
 
+The root-level GitHub Actions workflow is configured for Ubuntu 26.04 system
+dependencies and the existing Windows Qt/vcpkg contract. It has been validated
+locally as workflow configuration, but no successful GitHub-hosted run has yet
+established hosted platform evidence.
+
 The currently validated Windows configuration is:
 
 | Requirement | Current value |
@@ -283,6 +288,39 @@ generated deployment script and their deployed relative paths.
 
 See [../testing/PLAN.md](../testing/PLAN.md).
 
+## Continuous integration
+
+[The CI workflow](../../../.github/workflows/ci.yml) uses two explicit jobs
+because dependency ownership and runtime capabilities differ materially by
+platform. Both configure from the repository root into a runner-temporary
+Debug build tree, build all production and test targets, run `all_qmllint`, and
+invoke CTest directly.
+
+The Linux job runs the official Ubuntu 26.04 container on `ubuntu-24.04`, uses
+the documented system packages, and intends to run all registered Linux tests.
+It creates a private headless native-Wayland Weston instance, selects Mesa
+lavapipe through Ubuntu's packaged `lvp_icd.json`, and provides system cubeb a
+real Pulse protocol server with one named null sink. This is software-hosted
+integration evidence, not native-GPU, VAAPI/DRM PRIME import, managed-color,
+HDR, physical-display, physical-audio, route-migration, or acoustic-sync
+evidence.
+
+The Windows job uses `windows-2022`, exact Qt 6.11.1 installed by pinned
+`aqtinstall` 3.3.0, MSVC for Sunroom, and the root manifest's clang-cl vcpkg
+triplet for dependencies. It caches only the exact Qt tree and vcpkg's
+ABI-addressed binary archives. It builds all GPU and device code, runs QML
+lint, then excludes CTests labeled `device` or `gpu` because a generic hosted
+runner does not satisfy Sunroom's hardware-only D3D11 or default-audio-device
+contracts. That exclusion also drops the software/HDR cases bundled into the
+mixed `ffmpeg-first-frame` executable; splitting a hosted software subset is
+deferred while the complete test remains dedicated-machine coverage.
+
+The workflow requests only read-only repository contents, disables persisted
+checkout credentials, pins actions by full commit SHA, publishes nothing, and
+does not cache build trees, `vcpkg_installed`, downloads, artifacts, or
+credentials. Until an actual hosted run succeeds, this is implemented and
+locally validated configuration rather than a claim that hosted CI passes.
+
 ## Verification
 
 The complete Debug build and all 28 registered CTest cases pass in the current
@@ -324,5 +362,6 @@ player opens WSLg's Pulse-compatible default route through system cubeb and
 advances its cubeb-backed A/V clock. Native PulseAudio/PipeWire-Pulse route
 changes, native GPU behavior, VAAPI/DRM PRIME, managed gamma-2.2 compositor
 declaration, HDR, and physical displays remain open.
-Windows has not yet been rerun after the cross-platform change and remains an
-explicit regression gate.
+The Windows build and application runtime were user-confirmed after the cross-
+platform change. A fresh full 28-test Windows rerun remains an explicit
+regression gate.

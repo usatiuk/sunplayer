@@ -621,7 +621,7 @@ add_test(
 set_tests_properties(
         application-audio-first-playback
         PROPERTIES
-        LABELS "application;audio;ffmpeg;gpu;integration;${sunroom_test_platform_label}"
+        LABELS "application;audio;device;ffmpeg;gpu;integration;${sunroom_test_platform_label}"
         TIMEOUT 30
 )
 
@@ -636,7 +636,7 @@ if (WIN32)
     set_tests_properties(
             application-fullscreen
             PROPERTIES
-            LABELS "application;audio;ui;gpu;integration;windows"
+            LABELS "application;audio;device;ui;gpu;integration;windows"
             TIMEOUT 30
     )
 endif ()

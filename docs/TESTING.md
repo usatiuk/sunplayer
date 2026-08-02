@@ -74,6 +74,28 @@ noisier failure signals. Lower layers remain valuable where they provide a
 stronger oracle, faster exploration, or deterministic coverage of many state
 combinations.
 
+### Hosted CI capability boundary
+
+The root GitHub Actions workflow is configured as two direct platform jobs.
+Linux uses Ubuntu 26.04 system dependencies plus headless native Wayland,
+lavapipe Vulkan, and a PulseAudio null sink, and intends to run all registered
+Linux CTests. That lane exercises production interfaces against controlled
+software services without claiming native GPU, VAAPI/DRM PRIME import,
+color-management-v1, HDR, physical display/audio, default-route migration, or
+acoustic A/V synchronization.
+
+Windows builds all production and test targets with exact Qt 6.11.1 and the
+root vcpkg manifest, runs QML lint, and runs CTest with `-LE "device|gpu"`.
+The exclusion reflects the production hardware-only D3D11 device and live
+default-audio-device contracts; no WARP or CI-only product fallback exists.
+It also excludes the complete mixed `ffmpeg-first-frame` registration,
+including its software/HDR cases, until a useful hosted software subset is
+split from the hardware-required executable.
+
+This workflow is implemented and locally validated configuration. A first
+successful GitHub-hosted run remains required before either lane is recorded
+as passing hosted evidence.
+
 Use the highest boundary that:
 
 * Exercises the behavior that can realistically fail.
