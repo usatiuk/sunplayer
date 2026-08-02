@@ -240,7 +240,7 @@ jobs:
           ctest \
             --test-dir "$BUILD_DIR" \
             --output-on-failure \
-            --parallel 2
+            --parallel "$(nproc)"
 
           kill -0 "$WESTON_PID"
           kill -0 "$PULSE_PID"
@@ -332,5 +332,5 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
-          ctest --test-dir "%RUNNER_TEMP%\sunroom-windows-debug" --output-on-failure --parallel 2 -LE "device|gpu"
+          ctest --test-dir "%RUNNER_TEMP%\sunroom-windows-debug" --output-on-failure --parallel %NUMBER_OF_PROCESSORS% -LE "device|gpu"
           if errorlevel 1 exit /b %errorlevel%

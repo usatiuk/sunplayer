@@ -181,7 +181,8 @@ commit containing the accepted layout fix. Build, lint, and CTest parallelism
 initially followed each runner's available processor count. That Linux run built
 and linted successfully, then exposed the missing Qt SVG runtime plugin and made
 an already-documented timing-sensitive media-session checkpoint recur under broad
-CTest contention. CI now installs `qt6-svg-plugins`, retains processor-wide
-build/lint parallelism, and restores the established two-test CTest bound without
-retries or skips. Another hosted rerun remains the validation boundary for these
-corrections.
+CTest contention. CI now installs `qt6-svg-plugins` and retains processor-wide
+build, lint, and CTest parallelism without retries, skips, or scheduling changes
+that would conceal the failure. The media-session failure remains visible pending
+a product-test fix outside this CI-enablement slice. Another hosted rerun remains
+the validation boundary for the SVG runtime correction.
