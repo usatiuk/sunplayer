@@ -8,6 +8,7 @@ Item {
 
     objectName: "clientSideWindowChrome"
     required property var controller
+    required property real renderDevicePixelRatio
     required property bool titleRequested
     required property bool contentInsetRequested
     signal userActivity
@@ -131,6 +132,19 @@ Item {
             }
         }
 
+    }
+
+    Rectangle {
+        objectName: "clientSideWindowOutline"
+
+        anchors.fill: parent
+        z: 2
+        visible: root.available
+        color: "transparent"
+        antialiasing: false
+        border.color: "#4a4f5a"
+        border.pixelAligned: false
+        border.width: 1.0 / root.renderDevicePixelRatio
     }
 
     HoverHandler {

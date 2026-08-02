@@ -74,7 +74,8 @@ Vulkan presentation foundations plus continuous local-file playback:
   execution guard, and device generation; the presentation engine owns its
   window swapchain.
 * Qt Quick renders through `QQuickRenderControl` into an application-owned
-  RGBA16F texture.
+  RGBA16F texture with the matching depth/stencil attachment required by its
+  default depth-assisted 2D ordering.
 * A thin QML application shell defaults to a video-first Player page and keeps
   the retained HDR Lab reachable from Player's empty state or overflow menu.
   Player publishes a full-page video viewport with a transient transport island
@@ -145,7 +146,9 @@ Vulkan presentation foundations plus continuous local-file playback:
 * Qt remains the sole Wayland toplevel and surface owner. If xdg-decoration is
   absent, one modular QML chrome layer uses public Qt system move/resize/state
   operations and system-theme glyphs with bundled Lucide fallbacks. It
-  overlays active video and fades with playback chrome;
+  overlays active video, fades its titlebar with playback chrome, and retains
+  one media-independent physical-pixel inner outline around the complete
+  client area;
   no libdecor, GTK, private negotiation listener, second surface, or external
   shadow path is introduced.
 * `MediaSession` opens a local file and supports play, pause, seek, and replay.

@@ -24,7 +24,7 @@ cross-platform target:
 | Operating system | Windows and native-Wayland Linux |
 | Graphics domain | Factory-selected D3D11 or Vulkan implementation owning QRhi, same-device libplacebo state, execution synchronization, diagnostics, and device generation |
 | Presentation | Windows extended-linear sRGB/scRGB or SDR; Linux unmanaged piecewise-sRGB SDR or managed gamma-2.2 SDR selected before native creation |
-| Qt Quick | Redirected into an application-owned full-window RGBA16F texture |
+| Qt Quick | Redirected into an application-owned full-window RGBA16F texture with matching depth/stencil |
 | Video | Shared QRhi diagnostic, analytic libplacebo, or FFmpeg-frame libplacebo producer → direct target → display-targeted RGBA16F surface |
 | Display telemetry | Shared Qt/QRhi state plus Windows Advanced Color; Linux preferred-output/HDR observation remains pending |
 | Rendering cadence | Demand-driven, continuous only while the pattern or UI animates |
@@ -79,7 +79,7 @@ RhiPresentationEngine
     │               └── shared queue execution guard
     ├── QRhi swapchain
     ├── QuickUiLayer
-    │       └── QQuickRenderControl → full-window RGBA16F texture
+    │       └── QQuickRenderControl → full-window RGBA16F color + depth/stencil target
     ├── PresentationOutputState
     │       ├── QScreen metrics
     │       ├── QRhiSwapChainHdrInfo
@@ -169,8 +169,11 @@ copy or per-frame queue-idle wait.
 
 The engine owns the final presentation loop rather than injecting rendering
 into a Qt-owned onscreen scene graph. Qt Quick renders through
-`QQuickRenderControl` into an application-provided texture, and the engine then
-performs the visible swapchain pass.
+`QQuickRenderControl` into an application-provided texture render target with
+a matching depth/stencil attachment, and the engine then performs the visible
+swapchain pass. `fromRhiRenderTarget()` borrows that target as supplied, so the
+color texture, depth/stencil buffer, target, and compatible render-pass
+descriptor form one size/sample/lifetime group owned by `QuickUiLayer`.
 
 The current destruction order is an invariant:
 
@@ -208,7 +211,8 @@ For a visible, non-empty window, one engine frame proceeds as follows:
    redirected Quick scene.
 2. Recreate the swapchain if an output change requested it.
 3. Create or resize the swapchain.
-4. Ensure the Quick RGBA16F target matches the swapchain pixel size.
+4. Ensure the Quick RGBA16F color and depth/stencil target matches the
+   swapchain pixel size.
 5. Render the Quick scene if it is dirty. `QQuickRenderControl` uses its own
    offscreen QRhi frame, which completes before the visible frame begins. Page
    route and viewport bindings are therefore coherent for this engine frame.
@@ -460,8 +464,11 @@ producer.
 
 ### Qt Quick layer
 
-Qt Quick renders a transparent, full-window RGBA16F texture. The current final
-shader treats its RGB as premultiplied sRGB-encoded UI:
+Qt Quick renders a transparent, full-window RGBA16F texture through its normal
+depth-assisted 2D scene-graph path. Because Sunroom supplies a complete
+`QRhiRenderTarget`, it also supplies the matching depth/stencil buffer rather
+than expecting Qt to create an implicit attachment. The current final shader
+treats the color texture's RGB as premultiplied sRGB-encoded UI:
 
 1. Clamp alpha.
 2. Recover straight encoded RGB when alpha is nonzero.
@@ -520,6 +527,8 @@ The current implementation establishes these project rules:
 * Qt Quick, the final compositor, and the diagnostic video producer share the
   current QRhi device.
 * Qt Quick is an offscreen layer, not the owner of final presentation.
+* Every attachment required by the application-provided Qt Quick render target
+  is owned and recreated together by `QuickUiLayer`.
 * Actual swapchain state controls final output encoding.
 * Operating-system display telemetry is advisory input to target selection and
   invalidation.

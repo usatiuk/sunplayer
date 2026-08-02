@@ -30,6 +30,10 @@ For one presentation domain:
 * Qt Quick adopts that QRhi through `QQuickGraphicsDevice::fromRhi()`.
 * `QQuickRenderControl` renders the UI into an application-provided transparent
   RGBA16F texture.
+* The application-provided Qt Quick render target includes a matching depth/
+  stencil attachment because `fromRhiRenderTarget()` adopts the complete
+  target as supplied while Qt Quick's default 2D renderer uses depth-assisted
+  opaque ordering.
 * The application compositor samples the Qt Quick texture together with video,
   subtitles, and diagnostics and writes the swapchain.
 * Resource creation, mutation, and destruction occur at engine-controlled
@@ -38,9 +42,8 @@ For one presentation domain:
   libplacebo, and compatible decoded surfaces can share native resources.
 * QRhi and Qt private integration remain confined to the graphics subsystem.
 
-The current implementation realizes this decision on Windows with D3D11 and
-one window. Those are current capability limits, not cross-platform
-architecture requirements.
+The current implementation realizes this decision with D3D11 on Windows and
+Vulkan on native-Wayland Linux, each with one window.
 
 ## Consequences
 
@@ -65,6 +68,8 @@ Costs:
   must pin and validate the Qt version, and integration must stay isolated.
 * Destruction ordering and device-generation tracking become explicit
   correctness requirements.
+* The full-window color and depth/stencil attachments increase the redirected
+  UI layer's device-memory cost.
 * Flattening the whole UI before linear-light conversion limits the
   colorimetric accuracy of overlapping translucent content.
 

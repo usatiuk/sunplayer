@@ -38,3 +38,4 @@ the newer note or decision rather than silently rewriting the investigation.
 * [2026-08-01: Ubuntu 26.04 Linux platform baseline](2026-08-01-ubuntu-26-04-linux-platform-baseline.md)
 * [2026-08-01: Embedded subtitle pipeline](2026-08-01-embedded-subtitle-pipeline.md)
 * [2026-08-02: Qt Wayland decorations for a Vulkan presentation window](2026-08-02-qt-wayland-vulkan-window-decorations.md)
+* [2026-08-02: Redirected Qt Quick depth and the application-chrome outline](2026-08-02-redirected-qt-quick-depth-and-window-outline.md)

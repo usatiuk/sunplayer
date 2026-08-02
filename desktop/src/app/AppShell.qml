@@ -5,6 +5,7 @@ import QtQuick.Layouts
 Item {
     id: root
 
+    required property real renderDevicePixelRatio
     required property WindowCommands windowCommands
     required property PresentationOutputState presentationOutput
     required property PresentationSettings presentationPolicy
@@ -93,6 +94,7 @@ Item {
         anchors.fill: parent
         z: 100
         controller: root.windowCommands.windowChrome
+        renderDevicePixelRatio: root.renderDevicePixelRatio
         titleRequested: root.currentPage !== 0
             || !playerPage.sessionActive
             || playerPage.controlsShouldShow

@@ -162,21 +162,6 @@ silently alter ordinary playback.
 
 ## Application and player
 
-### Wayland application chrome has no intentional window perimeter
-
-On compositors without xdg-decoration, Sunroom's in-scene titlebar and window
-buttons are present and wired to public Qt move, resize, state, and close
-operations. Native interaction remains to be recorded outside WSLg.
-The current application chrome deliberately draws no outer or inner window
-outline. A crisp perimeter is deferred after the attempted QML treatments did
-not satisfy the real redirected Vulkan presentation path. The apparent edge
-around video or HDR Lab content is not accepted as application-chrome behavior.
-
-All experimental perimeter code, tests, and implementation claims have been
-removed. Resume this work only from a reproducible rendering-boundary result;
-do not add video-dependent styling, compositor-shader chrome, a second native
-surface, or multiple fallback treatments.
-
 ### Wayland decoration negotiation is not observable through public Qt API
 
 Sunroom selects system decoration when xdg-decoration is advertised and

@@ -11,8 +11,8 @@ WSLg environment: native-Wayland startup, unmanaged assumed-sRGB selection,
 the Qt-owned Vulkan/QRhi/libplacebo presentation path, application chrome,
 fullscreen/restoration, QML loading, system-library linkage, and teardown.
 It is not evidence for native-GPU behavior, managed color, HDR output, VAAPI,
-physical audio, a native compositor matrix, or the deferred application-chrome
-window perimeter.
+physical audio, a native compositor matrix, or the application-chrome window
+perimeter that was deferred at this checkpoint.
 
 ## Environment
 
@@ -152,5 +152,7 @@ The supported Windows build has not been rerun after this cross-platform
 change. Linux cubeb output, VAAPI/DRM PRIME import, native GPU drivers,
 color-management-v1 managed SDR/HDR, preferred-output transitions, external
 display validation, and a distributable Ubuntu package remain separate gates.
-The application-chrome perimeter is explicitly deferred in `docs/DEFERRED.md`;
-this report makes no claim that an outline is rendered.
+At this checkpoint the application-chrome perimeter was deferred and this
+report made no claim that an outline rendered. The later investigation,
+implementation, and matching build evidence are recorded separately in the
+[redirected Quick outline plan](../2026-08-02-redirected-quick-window-outline.md).

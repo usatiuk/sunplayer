@@ -59,9 +59,10 @@ restore, and close shapes, use the vendored Lucide glyphs as deterministic
 fallbacks, and always apply Sunroom's light foreground tint. The desktop theme
 does not choose color for the intentionally black application titlebar. Exact
 desktop decoration styling, button ordering, and external client-side shadows
-are not reconstructed. Application chrome currently has no intentional window
-perimeter; that visual treatment is explicitly deferred in
-[DEFERRED.md](../../DEFERRED.md).
+are not reconstructed. One muted, one-physical-pixel inner outline covers the
+complete client area whenever application chrome is available. It remains
+visible when the titlebar fades and when no media is active, and disappears in
+fullscreen with the rest of the application chrome.
 
 ## Page structure
 
@@ -97,7 +98,9 @@ registry, or service container is needed.
 `AppShell`, and the shell passes each page its dependencies explicitly. The
 C++ types are registered as named but uncreatable QML types, so tooling can
 validate these contracts without transferring object construction or lifetime
-to QML.
+to QML. The layer also supplies its validated redirected-render DPR as an
+explicit root property so physical-pixel chrome geometry does not depend on
+the offscreen Quick window's attached `Screen`.
 
 Pages publish domain commands and viewport geometry. They do not know QRhi,
 libplacebo, native textures, graphics backends, or producer implementations.
@@ -209,8 +212,9 @@ seek commands, backend position updates, disabled seeking state, fullscreen
 gesture dispatch, popup Escape priority state, island hit testing, and
 native-cursor intent without launching a native dialog. The shell test also
 checks disabled, normal, maximized, and fullscreen application-chrome state;
-stable empty-page inset and the invariant that title fade never moves an
-active video viewport. The real D3D11 capture
+stable empty-page inset; full-root, media-independent outline visibility and
+DPR-derived thickness; and the invariant that title fade never moves an active
+video viewport. The real D3D11 capture
 verifies that zero video geometry and the compositor's fallback
 binding produce the normal background rather than sampling the retained video
 surface. It also destroys a bound diagnostic producer, creates the other

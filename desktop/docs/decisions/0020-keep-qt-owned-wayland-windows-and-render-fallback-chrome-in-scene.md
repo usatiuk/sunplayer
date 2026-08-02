@@ -61,7 +61,8 @@ The application chrome:
 * disables resize chrome while maximized or fullscreen;
 * uses a black titlebar, fixed Sunroom foreground tint, system symbolic icon
   names when available, and the existing bundled Lucide subset as fallback;
-  and
+* draws one crisp inward outline around the complete client area, independent
+  of titlebar opacity, content, and media state; and
 * does not create a second window, subsurface, swapchain, or presentation
   owner.
 

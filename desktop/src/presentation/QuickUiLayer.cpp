@@ -106,6 +106,10 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
 
     const QVariantMap initialProperties{
         {
+            QStringLiteral("renderDevicePixelRatio"),
+            m_renderWindow.devicePixelRatio(),
+        },
+        {
             QStringLiteral("windowCommands"),
             QVariant::fromValue(&m_renderWindow),
         },
@@ -176,10 +180,17 @@ QuickUiLayer::RenderTargetUpdate QuickUiLayer::ensureRenderTarget(
     Q_ASSERT(std::isfinite(devicePixelRatio) && devicePixelRatio > 0.0);
 
     if (m_texture && m_pixelSize == pixelSize) {
+        Q_ASSERT(m_depthStencilBuffer);
         Q_ASSERT(m_renderTarget);
         Q_ASSERT(m_renderPassDescriptor);
         if (!qFuzzyCompare(m_devicePixelRatio, devicePixelRatio)) {
             m_devicePixelRatio = devicePixelRatio;
+            if (!m_rootItem->setProperty(
+                    "renderDevicePixelRatio", devicePixelRatio)) {
+                qCFatal(
+                    sunroomLogPresentation,
+                    "Sunroom Main.qml must expose renderDevicePixelRatio");
+            }
             markDirty();
         }
         return RenderTargetUpdate::Unchanged;
@@ -198,8 +209,23 @@ QuickUiLayer::RenderTargetUpdate QuickUiLayer::ensureRenderTarget(
             "Could not create the Qt Quick FP16 texture");
     }
 
-    const QRhiTextureRenderTargetDescription description(
+    // fromRhiRenderTarget() adopts this target as-is. Qt Quick's default 2D
+    // renderer uses depth to preserve front-to-back opaque scene ordering.
+    m_depthStencilBuffer.reset(m_rhi.newRenderBuffer(
+        QRhiRenderBuffer::DepthStencil, pixelSize, 1));
+    if (!m_depthStencilBuffer->create()) {
+        if (m_rhi.isDeviceLost()) {
+            releaseRenderTarget();
+            return RenderTargetUpdate::DeviceLost;
+        }
+        qCFatal(
+            sunroomLogPresentation,
+            "Could not create the Qt Quick depth/stencil buffer");
+    }
+
+    QRhiTextureRenderTargetDescription description(
         QRhiColorAttachment(m_texture.get()));
+    description.setDepthStencilBuffer(m_depthStencilBuffer.get());
     m_renderTarget.reset(m_rhi.newTextureRenderTarget(description));
     m_renderPassDescriptor.reset(
         m_renderTarget->newCompatibleRenderPassDescriptor());
@@ -216,6 +242,12 @@ QuickUiLayer::RenderTargetUpdate QuickUiLayer::ensureRenderTarget(
 
     m_pixelSize = pixelSize;
     m_devicePixelRatio = devicePixelRatio;
+    if (!m_rootItem->setProperty(
+            "renderDevicePixelRatio", devicePixelRatio)) {
+        qCFatal(
+            sunroomLogPresentation,
+            "Sunroom Main.qml must expose renderDevicePixelRatio");
+    }
     configureRenderTarget();
     markDirty();
     return RenderTargetUpdate::Recreated;
@@ -227,6 +259,7 @@ void QuickUiLayer::renderIfDirty() {
     Q_ASSERT(m_renderControl);
     Q_ASSERT(m_quickWindow);
     Q_ASSERT(m_rootItem);
+    Q_ASSERT(m_depthStencilBuffer);
     Q_ASSERT(m_renderTarget);
 
     m_dirty = false;
@@ -269,6 +302,7 @@ void QuickUiLayer::releaseRenderTarget() {
     m_quickWindow->setRenderTarget({});
     m_renderTarget.reset();
     m_renderPassDescriptor.reset();
+    m_depthStencilBuffer.reset();
     m_texture.reset();
     m_pixelSize = {};
     m_devicePixelRatio = 0.0;

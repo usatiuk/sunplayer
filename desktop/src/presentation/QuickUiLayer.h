@@ -15,6 +15,7 @@ class QQuickRenderControl;
 class QQuickWindow;
 class QQmlEngine;
 class QRhi;
+class QRhiRenderBuffer;
 class QRhiRenderPassDescriptor;
 class QRhiTexture;
 class QRhiTextureRenderTarget;
@@ -79,6 +80,7 @@ private:
     std::unique_ptr<QQmlEngine> m_qmlEngine;
     std::unique_ptr<QQuickItem> m_rootItem;
     std::unique_ptr<QRhiTexture> m_texture;
+    std::unique_ptr<QRhiRenderBuffer> m_depthStencilBuffer;
     std::unique_ptr<QRhiTextureRenderTarget> m_renderTarget;
     std::unique_ptr<QRhiRenderPassDescriptor> m_renderPassDescriptor;
     QSize m_logicalSize;

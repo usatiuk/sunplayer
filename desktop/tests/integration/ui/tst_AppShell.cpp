@@ -4,6 +4,7 @@
 #include <QColor>
 #include <QQmlComponent>
 #include <QQmlEngine>
+#include <QQmlProperty>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QTest>
@@ -64,6 +65,10 @@ void AppShellTest::publishesActiveViewport() {
     ShellTestActiveVideoSource activeVideoSource(nullptr);
     VideoViewportState videoViewport(nullptr);
     const QVariantMap initialProperties{
+        {
+            QStringLiteral("renderDevicePixelRatio"),
+            1.0,
+        },
         {
             QStringLiteral("windowCommands"),
             QVariant::fromValue(&windowCommands),
@@ -127,6 +132,9 @@ void AppShellTest::publishesActiveViewport() {
     QQuickItem *const clientSideTitleBar =
         rootItem->findChild<QQuickItem *>(
             QStringLiteral("clientSideTitleBar"));
+    QQuickItem *const clientSideWindowOutline =
+        rootItem->findChild<QQuickItem *>(
+            QStringLiteral("clientSideWindowOutline"));
     QObject *const openingState =
         rootItem->findChild<QObject *>(
             QStringLiteral("openingState"));
@@ -219,6 +227,10 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(backToPlayerButton);
     QVERIFY(clientSideWindowChrome);
     QVERIFY(clientSideTitleBar);
+    QVERIFY(clientSideWindowOutline);
+    const QQmlProperty outlineBorderWidth(
+        clientSideWindowOutline, QStringLiteral("border.width"));
+    QVERIFY(outlineBorderWidth.isValid());
     QVERIFY(openingState);
     QVERIFY(waitingForVideoState);
     QVERIFY(errorState);
@@ -289,6 +301,7 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_VERIFY(!videoViewport.visible());
     QTRY_VERIFY(emptyState->property("visible").toBool());
     QCOMPARE(clientSideWindowChrome->property("contentTop").toReal(), 0.0);
+    QVERIFY(!clientSideWindowOutline->isVisible());
 
     windowCommands.windowChromeController().setState(true, false, false);
     QVERIFY(clientSideTitleBar->height() > 0.0);
@@ -296,6 +309,13 @@ void AppShellTest::publishesActiveViewport() {
         clientSideWindowChrome->property("contentTop").toReal(),
         clientSideTitleBar->height());
     QTRY_VERIFY(clientSideTitleBar->isVisible());
+    QTRY_VERIFY(clientSideWindowOutline->isVisible());
+    QCOMPARE(clientSideWindowOutline->position(), QPointF());
+    QCOMPARE(clientSideWindowOutline->size(), clientSideWindowChrome->size());
+    QVERIFY(clientSideWindowOutline->z() > clientSideTitleBar->z());
+    QCOMPARE(outlineBorderWidth.read().toReal(), 1.0);
+    rootItem->setProperty("renderDevicePixelRatio", 2.0);
+    QTRY_COMPARE(outlineBorderWidth.read().toReal(), 0.5);
 
     windowCommands.windowChromeController().setState(true, false, true);
     QTRY_COMPARE(
@@ -304,6 +324,7 @@ void AppShellTest::publishesActiveViewport() {
 
     windowCommands.windowChromeController().setState(true, true, false);
     QTRY_VERIFY(!clientSideTitleBar->isVisible());
+    QTRY_VERIFY(!clientSideWindowOutline->isVisible());
     QTRY_COMPARE(
         clientSideWindowChrome->property("contentTop").toReal(),
         0.0);
@@ -351,6 +372,7 @@ void AppShellTest::publishesActiveViewport() {
     playerPage->setProperty("controlsVisibleByActivity", false);
     QTRY_VERIFY(clientSideTitleBar->opacity() < 0.1);
     windowCommands.windowChromeController().setState(true, false, false);
+    QTRY_VERIFY(clientSideWindowOutline->isVisible());
     QTRY_COMPARE(videoViewport.rect().y(), 0.0);
     QCOMPARE(videoViewport.rect(), viewportWithoutChrome);
     windowCommands.windowChromeController().setState(false, false, false);

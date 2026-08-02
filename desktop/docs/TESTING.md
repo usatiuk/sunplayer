@@ -35,6 +35,10 @@ unmanaged-sRGB versus managed-gamma-2.2 surface/transfer selection, and
 application-chrome layout/state behavior. A WSLg production scenario exercises the real Qt
 Wayland window, llvmpipe Vulkan device, libplacebo direct target, redirected
 QML, swapchain, fullscreen/restoration, and teardown under Vulkan validation.
+The QML shell scenario also protects the full-root application outline's
+media-independent visibility and DPR-derived thickness. The original missing-
+outline regression is additionally covered by an interactive production WSLg
+check because the component test cannot observe the redirected GPU texture.
 One bounded run completes; two other attempts timed out on cursor-state
 convergence, so this is narrow path evidence rather than complete WSLg
 lifecycle acceptance.
