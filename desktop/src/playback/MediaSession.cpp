@@ -450,7 +450,7 @@ void MediaSession::cancel() {
     m_userWantsPlaying = true;
     m_audioPlayIntent.store(true, std::memory_order_release);
     m_state = State::Empty;
-    m_mediaUrl = {};
+    m_mediaUrl = QUrl{};
     m_displayName.clear();
     m_errorMessage.clear();
     m_selectedSubtitleStreamIndex = -1;

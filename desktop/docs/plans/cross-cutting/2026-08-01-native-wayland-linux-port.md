@@ -5,7 +5,8 @@ Status: Active
 ## Goal
 
 Deliver Sunroom on Ubuntu 26.04 as a native Wayland video player using the
-distribution's Qt 6.10, FFmpeg 8, libplacebo 7.360, Vulkan/VAAPI/DRM, and cubeb
+distribution's Qt 6.10, FFmpeg 8, libplacebo 7.360, libass,
+Vulkan/VAAPI/DRM, and cubeb
 packages while preserving the existing shared playback, rendering, audio,
 color, recovery, and diagnostic behavior.
 
@@ -72,14 +73,18 @@ checklist must not duplicate or silently change them.
   feedback. Treat this as a capability contract rather than a compositor
   brand or release-number list. Missing required protocol capability is an
   unsupported environment and fails clearly during startup.
-* Linux uses system packages. Windows retains its current vcpkg manifest and
-  exact pins; Linux does not require or populate vcpkg.
+* The initial Linux implementation uses only system packages. Windows retains
+  its current vcpkg manifest and exact pins; Linux neither requires nor
+  populates vcpkg. Do not add a project-specific dependency-provider switch:
+  a future explicit vcpkg CMake toolchain may become an opt-in Linux build once
+  its manifest and ports are made genuinely portable and validated.
 * On Linux, accept Qt `>=6.10,<6.11` and require matching private Base,
   Declarative, and Wayland development packages. This narrow range is a
   deliberate compatibility contract for private QRhi and Wayland APIs.
 * Require FFmpeg 8's expected library majors, libplacebo API 360 with Vulkan
-  and a supported shader compiler backend, Vulkan 1.2 or newer, Wayland
-  protocol generation, libva, libdrm, and cubeb's exported CMake target.
+  and a supported shader compiler backend, system libass, Vulkan 1.2 or newer,
+  Wayland protocol generation, libva, libdrm, and cubeb's exported CMake
+  target.
 * Keep dependency assertions platform-shaped. Linux must not inherit
   D3D11/Shaderc/no-Vulkan checks, and Windows must not become dependent on
   distro package discovery.
@@ -248,7 +253,8 @@ checklist must not duplicate or silently change them.
 * A second Wayland toplevel or custom fullscreen protocol path.
 * A second playback core, renderer, compositor, media probe, metadata policy
   engine, or Linux audio abstraction.
-* Bundled Linux copies or source builds of Qt, FFmpeg, libplacebo, or cubeb.
+* Bundled Linux copies or source builds of Qt, FFmpeg, libplacebo, libass, or
+  cubeb.
 * FFmpeg Vulkan Video decode, NVIDIA-specific hardware decode, or custom
   dma-buf import in the first port.
 * Applying source ICC profiles, full output-gamut propagation, absolute HLG
@@ -262,18 +268,20 @@ checklist must not duplicate or silently change them.
 ### 1. System build foundation
 
 1. Restructure CMake so platform selection precedes dependency policy.
-   Preserve the Windows vcpkg path; use system package/config/pkg-config
-   targets on Linux.
-2. Add the required Qt private and Wayland protocol-generation targets only to
-   the narrow Linux implementation that consumes them.
+   Preserve Windows vcpkg auto-discovery; use system
+   package/config/pkg-config targets on Linux. Do not add a provider enum or
+   adapt the Windows-only overlay ports in this iteration.
+2. Discover the accepted Vulkan, Wayland, VAAPI, and DRM build boundary up
+   front. Link Qt private APIs and generated Wayland code only to the narrow
+   Linux implementation or dependency-contract test that consumes them.
 3. Replace global exact-version/feature tests with explicit Windows and Linux
    contracts. Test the actual linked runtime versions as well as configure-time
    discovery so mixed Qt or FFmpeg installations fail clearly.
 4. Keep all platform-neutral sources and tests in the Linux build. Gate only
    native backends and tests that require unavailable hardware or OS APIs.
 5. Add an install-tree dependency report recording resolved library paths,
-   versions, libplacebo features, FFmpeg ABI/features, Qt plugin path, and
-   cubeb target/backend diagnostics.
+   versions, libplacebo features, FFmpeg ABI/features, libass version, Qt
+   plugin path, and cubeb target/backend diagnostics.
 6. Add the explicit ICC-policy boundary and ICC-tagged regression so the
    distro's LCMS build cannot change cross-platform rendering behavior.
 

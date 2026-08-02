@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+if (CMAKE_HOST_WIN32 AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     set(_sunroom_vcpkg_toolchain)
 
     if (DEFINED ENV{VCPKG_ROOT})
@@ -48,10 +48,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(CTest)
 
-if (NOT VCPKG_MANIFEST_MODE)
+if (WIN32 AND NOT VCPKG_MANIFEST_MODE)
     message(FATAL_ERROR
-            "Sunroom currently requires vcpkg manifest mode. Set VCPKG_ROOT "
-             "or configure with the vcpkg CMake toolchain.")
+            "The Windows build requires vcpkg manifest mode. Set "
+            "VCPKG_ROOT or configure with the vcpkg CMake toolchain.")
 endif ()
 
 include(cmake/SunroomFFmpeg.cmake)
@@ -59,17 +59,17 @@ sunroom_configure_ffmpeg()
 include(cmake/SunroomLibass.cmake)
 sunroom_configure_libass()
 
-find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS
-        GuiPrivate
-        Quick
-        QuickControls2
-        QuickDialogs2
-        ShaderTools
-)
-find_package(libplacebo 7.360.1 EXACT CONFIG REQUIRED)
-
 if (WIN32)
+    find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS
+            GuiPrivate
+            Quick
+            QuickControls2
+            QuickDialogs2
+            ShaderTools
+    )
+    find_package(libplacebo 7.360.1 EXACT CONFIG REQUIRED)
     find_package(cubeb CONFIG REQUIRED)
+    set(sunroom_qt_minimum_version 6.11.1)
 
     function(sunroom_stage_windows_runtime target)
         add_custom_command(
@@ -95,9 +95,60 @@ if (WIN32)
                 VERBATIM
         )
     endfunction()
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(SUNROOM_LIBPLACEBO REQUIRED
+            IMPORTED_TARGET
+            GLOBAL
+            libplacebo>=7.360
+            libplacebo<7.361
+    )
+    add_library(libplacebo::libplacebo
+            ALIAS PkgConfig::SUNROOM_LIBPLACEBO)
+
+    find_package(Qt6 6.10...<6.11 REQUIRED COMPONENTS
+            GuiPrivate
+            Quick
+            QuickControls2
+            QuickDialogs2
+            ShaderTools
+            WaylandClientPrivate
+            WaylandScannerTools
+    )
+    find_package(Vulkan 1.2 REQUIRED)
+    pkg_check_modules(SUNROOM_WAYLAND_PROTOCOLS REQUIRED
+            wayland-protocols
+    )
+    pkg_get_variable(
+            SUNROOM_WAYLAND_PROTOCOLS_DIR
+            wayland-protocols
+            pkgdatadir
+    )
+    set(SUNROOM_WAYLAND_COLOR_MANAGEMENT_PROTOCOL
+            "${SUNROOM_WAYLAND_PROTOCOLS_DIR}/staging/color-management/color-management-v1.xml")
+    if (NOT EXISTS "${SUNROOM_WAYLAND_COLOR_MANAGEMENT_PROTOCOL}")
+        message(FATAL_ERROR
+                "The system wayland-protocols package does not provide "
+                "staging/color-management/color-management-v1.xml")
+    endif ()
+    pkg_check_modules(VAAPI REQUIRED
+            IMPORTED_TARGET
+            GLOBAL
+            libva-drm
+    )
+    pkg_check_modules(DRM REQUIRED
+            IMPORTED_TARGET
+            GLOBAL
+            libdrm
+    )
+    find_package(cubeb CONFIG REQUIRED)
+    set(sunroom_qt_minimum_version 6.10)
+else ()
+    message(FATAL_ERROR
+            "Sunroom currently supports Windows and native Wayland Linux.")
 endif ()
 
-qt_standard_project_setup(REQUIRES 6.11.1)
+qt_standard_project_setup(REQUIRES ${sunroom_qt_minimum_version})
 
 add_library(sunroom_diagnostics STATIC
         src/diagnostics/ApplicationLog.cpp
@@ -422,7 +473,11 @@ if (WIN32)
 endif ()
 
 if (BUILD_TESTING)
-    find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS Test)
+    if (WIN32)
+        find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS Test)
+    else ()
+        find_package(Qt6 6.10...<6.11 REQUIRED COMPONENTS Test)
+    endif ()
     add_subdirectory(tests)
 endif ()
 
@@ -447,13 +502,12 @@ if (WIN32)
             TARGETS sunroom
             DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
+    qt_generate_deploy_qml_app_script(
+            TARGET sunroom
+            OUTPUT_SCRIPT deploy_script
+            NO_COMPILER_RUNTIME
+            NO_TRANSLATIONS
+            NO_UNSUPPORTED_PLATFORM_ERROR
+    )
+    install(SCRIPT ${deploy_script})
 endif ()
-
-qt_generate_deploy_qml_app_script(
-        TARGET sunroom
-        OUTPUT_SCRIPT deploy_script
-        NO_COMPILER_RUNTIME
-        NO_TRANSLATIONS
-        NO_UNSUPPORTED_PLATFORM_ERROR
-)
-install(SCRIPT ${deploy_script})

@@ -26,7 +26,8 @@ std::shared_ptr<const DecodedVideoFrame> makeFrame(
         std::optional<std::int64_t> pts,
         std::optional<std::int64_t> duration = 1) {
     AVFrame *source = av_frame_alloc();
-    Q_ASSERT(source);
+    if (!source)
+        qFatal("Could not allocate the test video frame");
     source->format = AV_PIX_FMT_RGB24;
     source->width = 2;
     source->height = 2;
@@ -39,7 +40,10 @@ std::shared_ptr<const DecodedVideoFrame> makeFrame(
     source->colorspace = AVCOL_SPC_RGB;
     source->color_range = AVCOL_RANGE_JPEG;
     source->chroma_location = AVCHROMA_LOC_UNSPECIFIED;
-    Q_ASSERT(av_frame_get_buffer(source, 0) >= 0);
+    if (av_frame_get_buffer(source, 0) < 0) {
+        av_frame_free(&source);
+        qFatal("Could not allocate the test video-frame buffer");
+    }
 
     QString error;
     std::shared_ptr<const DecodedVideoFrame> frame =
@@ -54,7 +58,8 @@ std::shared_ptr<const DecodedVideoFrame> makeFrame(
             std::nullopt,
             &error);
     av_frame_free(&source);
-    Q_ASSERT_X(frame, "makeFrame", qPrintable(error));
+    if (!frame)
+        qFatal("Could not clone the test video frame: %s", qPrintable(error));
     return frame;
 }
 

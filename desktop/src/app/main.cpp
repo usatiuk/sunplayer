@@ -476,8 +476,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    GraphicsBackendFactory::configureQtQuick();
-
     QPalette palette;
     palette.setColor(QPalette::Window, QColor(QStringLiteral("#111318")));
     palette.setColor(QPalette::WindowText, QColor(QStringLiteral("#f2f4f8")));
@@ -529,6 +527,8 @@ int main(int argc, char *argv[]) {
             << "event=application.verify_qml_complete";
         return EXIT_SUCCESS;
     }
+
+    GraphicsBackendFactory::configureQtQuick();
 
     PresentationWindow window;
     if (!positionalArguments.isEmpty()) {

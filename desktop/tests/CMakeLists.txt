@@ -94,25 +94,37 @@ qt_add_executable(sunroom_qml_shell_tests
         ../src/app/VideoViewportState.h
 )
 
-if (WIN32)
-    qt_add_executable(sunroom_cubeb_dependency_tests
-            integration/audio/tst_CubebDependency.cpp
-    )
+qt_add_executable(sunroom_cubeb_dependency_tests
+        integration/audio/tst_CubebDependency.cpp
+)
 
+qt_add_executable(sunroom_ffmpeg_dependency_tests
+        integration/video/tst_FfmpegDependency.cpp
+)
+
+qt_add_executable(sunroom_libplacebo_dependency_tests
+        integration/video/tst_LibplaceboDependency.cpp
+)
+
+qt_add_executable(sunroom_libass_dependency_tests
+        integration/subtitles/tst_LibassDependency.cpp
+)
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    qt_add_executable(sunroom_linux_platform_dependency_tests
+            integration/platform/tst_LinuxPlatformDependencies.cpp
+    )
+    qt_generate_wayland_protocol_client_sources(
+            sunroom_linux_platform_dependency_tests
+            PRIVATE_CODE
+            FILES
+            "${SUNROOM_WAYLAND_COLOR_MANAGEMENT_PROTOCOL}"
+    )
+endif ()
+
+if (WIN32)
     qt_add_executable(sunroom_cubeb_audio_sink_tests
             integration/audio/tst_CubebAudioSink.cpp
-    )
-
-    qt_add_executable(sunroom_ffmpeg_dependency_tests
-            integration/video/tst_FfmpegDependency.cpp
-    )
-
-    qt_add_executable(sunroom_libplacebo_dependency_tests
-            integration/video/tst_LibplaceboDependency.cpp
-    )
-
-    qt_add_executable(sunroom_libass_dependency_tests
-            integration/subtitles/tst_LibassDependency.cpp
     )
 endif ()
 
@@ -382,40 +394,52 @@ target_link_libraries(sunroom_qml_shell_tests
         Qt6::Test
 )
 
-if (WIN32)
-    target_link_libraries(sunroom_cubeb_dependency_tests
+target_link_libraries(sunroom_cubeb_dependency_tests
+        PRIVATE
+        Qt6::Test
+        cubeb::cubeb
+)
+
+target_link_libraries(sunroom_ffmpeg_dependency_tests
+        PRIVATE
+        Qt6::Test
+        sunroom_ffmpeg
+)
+
+target_link_libraries(sunroom_libplacebo_dependency_tests
+        PRIVATE
+        Qt6::Test
+        libplacebo::libplacebo
+)
+
+target_link_libraries(sunroom_libass_dependency_tests
+        PRIVATE
+        Qt6::Test
+        sunroom_libass
+)
+target_compile_definitions(
+        sunroom_libass_dependency_tests
+        PRIVATE
+        SUNROOM_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
+)
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_libraries(sunroom_linux_platform_dependency_tests
             PRIVATE
             Qt6::Test
-            cubeb::cubeb
+            Qt6::WaylandClientPrivate
+            Vulkan::Vulkan
+            Wayland::Client
+            PkgConfig::VAAPI
+            PkgConfig::DRM
     )
+endif ()
 
+if (WIN32)
     target_link_libraries(sunroom_cubeb_audio_sink_tests
             PRIVATE
             Qt6::Test
             sunroom_audio
-    )
-
-    target_link_libraries(sunroom_ffmpeg_dependency_tests
-            PRIVATE
-            Qt6::Test
-            sunroom_ffmpeg
-    )
-
-    target_link_libraries(sunroom_libplacebo_dependency_tests
-            PRIVATE
-            Qt6::Test
-            libplacebo::libplacebo
-    )
-
-    target_link_libraries(sunroom_libass_dependency_tests
-            PRIVATE
-            Qt6::Test
-            sunroom_libass
-    )
-    target_compile_definitions(
-            sunroom_libass_dependency_tests
-            PRIVATE
-            SUNROOM_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
     )
 
     foreach (test_target IN ITEMS
@@ -538,22 +562,25 @@ add_test(
         COMMAND sunroom_qml_shell_tests
 )
 
+if (WIN32)
+    set(sunroom_test_platform_label windows)
+else ()
+    set(sunroom_test_platform_label linux)
+endif ()
+
 add_test(
-        NAME packaged-qml-module
-        COMMAND $<TARGET_FILE:sunroom> --verify-qml
+        NAME cubeb-dependency
+        COMMAND sunroom_cubeb_dependency_tests
+)
+set_tests_properties(
+        cubeb-dependency
+        PROPERTIES
+        LABELS
+            "audio;dependency;integration;${sunroom_test_platform_label}"
+        TIMEOUT 30
 )
 
 if (WIN32)
-    add_test(
-            NAME cubeb-dependency
-            COMMAND sunroom_cubeb_dependency_tests
-    )
-    set_tests_properties(
-            cubeb-dependency
-            PROPERTIES
-            LABELS "audio;dependency;integration;windows"
-            TIMEOUT 30
-    )
     add_test(
             NAME cubeb-audio-sink
             COMMAND sunroom_cubeb_audio_sink_tests
@@ -664,44 +691,65 @@ set_tests_properties(
             "PATH=path_list_prepend:${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}"
 )
 
+add_test(
+        NAME ffmpeg-dependency
+        COMMAND sunroom_ffmpeg_dependency_tests
+)
 set_tests_properties(
-        packaged-qml-module
+        ffmpeg-dependency
         PROPERTIES
-        LABELS "application;integration;ui"
+        LABELS
+            "dependency;integration;${sunroom_test_platform_label}"
         TIMEOUT 30
 )
 
+add_test(
+        NAME libplacebo-dependency
+        COMMAND sunroom_libplacebo_dependency_tests
+)
+set_tests_properties(
+        libplacebo-dependency
+        PROPERTIES
+        LABELS
+            "dependency;integration;${sunroom_test_platform_label}"
+        TIMEOUT 30
+)
+
+add_test(
+        NAME libass-dependency
+        COMMAND sunroom_libass_dependency_tests
+)
+set_tests_properties(
+        libass-dependency
+        PROPERTIES
+        LABELS
+            "dependency;subtitles;integration;${sunroom_test_platform_label}"
+        TIMEOUT 30
+)
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_test(
+            NAME linux-platform-dependencies
+            COMMAND sunroom_linux_platform_dependency_tests
+    )
+    set_tests_properties(
+            linux-platform-dependencies
+            PROPERTIES
+            LABELS "dependency;integration;linux"
+            TIMEOUT 30
+    )
+endif ()
+
 if (WIN32)
     add_test(
-            NAME ffmpeg-dependency
-            COMMAND sunroom_ffmpeg_dependency_tests
-    )
-    set_tests_properties(
-            ffmpeg-dependency
-            PROPERTIES
-            LABELS "dependency;integration;windows"
-            TIMEOUT 30
+            NAME packaged-qml-module
+            COMMAND $<TARGET_FILE:sunroom> --verify-qml
     )
 
-    add_test(
-            NAME libplacebo-dependency
-            COMMAND sunroom_libplacebo_dependency_tests
-    )
-
-    add_test(
-            NAME libass-dependency
-            COMMAND sunroom_libass_dependency_tests
-    )
     set_tests_properties(
-            libass-dependency
+            packaged-qml-module
             PROPERTIES
-            LABELS "dependency;subtitles;integration;windows"
-            TIMEOUT 30
-    )
-    set_tests_properties(
-            libplacebo-dependency
-            PROPERTIES
-            LABELS "dependency;integration;windows"
+            LABELS "application;integration;ui"
             TIMEOUT 30
     )
 

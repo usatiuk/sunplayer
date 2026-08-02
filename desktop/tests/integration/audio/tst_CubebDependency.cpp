@@ -25,13 +25,14 @@ private slots:
 
 void CubebDependencyTest::
 publicCAbiLinksWithoutOpeningDevice() {
-    const auto initFunction = &cubeb_init;
-    const auto positionFunction = &cubeb_stream_get_position;
-    const auto latencyFunction = &cubeb_stream_get_latency;
+    auto volatile initFunction = &cubeb_init;
+    auto volatile positionFunction = &cubeb_stream_get_position;
+    auto volatile latencyFunction = &cubeb_stream_get_latency;
     QVERIFY(initFunction != nullptr);
     QVERIFY(positionFunction != nullptr);
     QVERIFY(latencyFunction != nullptr);
 
+#ifdef Q_OS_WIN
     const cubeb_backend_names backends =
         cubeb_get_backend_names();
     QStringList compiledBackends;
@@ -45,6 +46,10 @@ publicCAbiLinksWithoutOpeningDevice() {
         qPrintable(
             QStringLiteral("Compiled cubeb backends: %1")
                 .arg(compiledBackends.join(','))));
+#else
+    auto volatile backendFunction = &cubeb_get_backend_id;
+    QVERIFY(backendFunction != nullptr);
+#endif
 }
 
 QTEST_APPLESS_MAIN(CubebDependencyTest)

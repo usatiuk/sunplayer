@@ -115,6 +115,7 @@ class ShellTestPresentationOutputState final : public QObject {
     Q_PROPERTY(QString swapChainFormat MEMBER m_swapChainFormat CONSTANT)
     Q_PROPERTY(QString videoSurfaceFormat MEMBER m_videoSurfaceFormat CONSTANT)
     Q_PROPERTY(QString videoSurfaceProducer MEMBER m_videoSurfaceProducer CONSTANT)
+    Q_PROPERTY(QString videoColorPolicy MEMBER m_videoColorPolicy CONSTANT)
     Q_PROPERTY(QString videoInputPath MEMBER m_videoInputPath CONSTANT)
     Q_PROPERTY(QString videoOutputPath MEMBER m_videoOutputPath CONSTANT)
     Q_PROPERTY(QString videoSynchronization MEMBER m_videoSynchronization CONSTANT)
@@ -148,6 +149,7 @@ private:
     QString m_swapChainFormat = QStringLiteral("Test swapchain");
     QString m_videoSurfaceFormat = QStringLiteral("Test surface");
     QString m_videoSurfaceProducer = QStringLiteral("Test producer");
+    QString m_videoColorPolicy = QStringLiteral("Test color policy");
     QString m_videoInputPath = QStringLiteral("Test input");
     QString m_videoOutputPath = QStringLiteral("Test path");
     QString m_videoSynchronization = QStringLiteral("Test synchronization");

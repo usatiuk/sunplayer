@@ -2,12 +2,14 @@
 
 ## Status
 
-The current CMake project builds the Windows player prototype and its focused
-Qt Test targets. Qt, a pinned D3D11-only libplacebo dependency, minimal official
-FFmpeg components including libswresample and Matroska zlib decompression, a
-pinned cubeb dependency, and libass are integrated. cubeb provides production
-default-device output on Windows. Complete distributable packaging remains
-unfinished.
+The CMake project builds the Windows player and the shared player sources on
+Ubuntu 26.04. Windows retains pinned vcpkg dependencies. Linux uses only system
+Qt, FFmpeg, libplacebo, cubeb, libass, Vulkan, Wayland, VAAPI, and DRM
+packages. Embedded subtitle discovery, FFmpeg decoding, libass/bitmap
+rendering, and shared subtitle state are integrated. The Linux native graphics
+and audio implementations are not present yet, so this remains a build
+foundation rather than a runnable Linux player. Complete distributable
+packaging is not integrated.
 
 The currently validated configuration is:
 
@@ -20,10 +22,15 @@ The currently validated configuration is:
 | Qt | Exactly 6.11.1 |
 | libplacebo | Exactly 7.360.1, D3D11 enabled |
 | FFmpeg | Exactly 8.1.2, shared avutil/swresample/avcodec/avformat with zlib |
-| libass | Registry baseline package and its shaping/font dependencies |
+| libass | Windows registry baseline package; Linux system 0.17.4 |
 | cubeb | Upstream commit `ef47ae581df7c2f76058d554b3edde17f9ee7cba` |
 | Graphics backend | Windows D3D11 through QRhi |
 | Generator in the local configured tree | Ninja |
+
+The validated Linux foundation uses GCC 15.2, Qt 6.10.2, FFmpeg 8.0.1 ABI
+libraries, libplacebo 7.360.0, libass 0.17.4, the Ubuntu cubeb snapshot,
+Vulkan 1.4.341, Wayland 1.24 with wayland-protocols 1.47, VA-API 1.23, and DRM
+2.4.131.
 
 The Visual Studio C++ Clang tools component is required for Windows dependency
 builds. The application and installed Qt package remain MSVC-built; clang-cl
@@ -35,7 +42,7 @@ belong in ignored local agent or IDE configuration.
 
 ## Dependency management
 
-Sunroom uses vcpkg manifest mode. The repository owns:
+Windows uses vcpkg manifest mode. The repository owns:
 
 * `vcpkg.json`, including the pinned registry baseline and requested features.
 * `vcpkg-configuration.json`, including project-local overlay ports and
@@ -55,8 +62,9 @@ Sunroom uses vcpkg manifest mode. The repository owns:
 * `cmake/SunroomFFmpeg.cmake`, which discovers the vcpkg module before Qt can
   introduce its case-variant finder and wraps component import libraries and
   DLLs in configuration-aware imported targets.
-* `cmake/SunroomLibass.cmake`, which exposes the registry package through one
-  project-local target without duplicating libass's dependency graph.
+* `cmake/SunroomLibass.cmake`, which exposes vcpkg's pkg-config package on
+  Windows and the system pkg-config package on Linux through one project-local
+  target without duplicating libass's dependency graph.
 
 The vcpkg executable itself is supplied by Visual Studio rather than cloned
 into the repository. CMake uses an explicitly supplied toolchain when present,
@@ -69,6 +77,39 @@ Manifest installation output lives under the configured build directory's
 `vcpkg_installed/` tree. Source downloads and binary archives use vcpkg's
 normal per-user cache. Neither path registers libraries globally or modifies
 the system `PATH`.
+
+Linux does not auto-select vcpkg and needs no vcpkg variables. It consumes the
+distribution's CMake config packages and pkg-config imported targets directly;
+an explicitly supplied CMake toolchain remains honored, but no Linux vcpkg
+configuration is currently claimed or tested. FFmpeg is wrapped by the same
+`sunroom_ffmpeg` target on both platforms because Windows needs explicit DLL
+staging while Linux consumes the system pkg-config target. Linux configures
+only when the expected FFmpeg 8 ABI majors, libplacebo API 360 family, Qt
+6.10 family, libass, Vulkan 1.2+, Wayland client/scanner and
+color-management-v1 XML, VA-API DRM, DRM, and `cubeb::cubeb` are present.
+
+The Ubuntu 26.04 reference development install is:
+
+```sh
+sudo apt install \
+  build-essential cmake ninja-build pkg-config \
+  qt6-base-dev qt6-base-private-dev \
+  qt6-declarative-dev qt6-declarative-private-dev \
+  qt6-declarative-dev-tools \
+  qt6-wayland qt6-wayland-dev qt6-wayland-private-dev \
+  qt6-shadertools-dev qt6-shader-baker spirv-tools \
+  qml6-module-qtquick qml6-module-qtquick-controls \
+  qml6-module-qtquick-dialogs qml6-module-qtquick-layouts \
+  libavcodec-dev libavformat-dev libavutil-dev libswresample-dev \
+  libplacebo-dev libcubeb-dev libass-dev libvulkan-dev \
+  libwayland-dev libwayland-bin wayland-protocols \
+  libva-dev libdrm-dev
+```
+
+These are the direct build/test requirements plus the native Wayland QPA
+runtime for the accepted Linux port slices. GPU drivers, VA drivers,
+validation layers, and compositor/runtime packages are environment-specific
+validation dependencies rather than configure-time requirements.
 
 The initial libplacebo feature set enables D3D11, Shaderc, the shared
 SPIRV-Cross C API, and libplacebo's built-in DOVI handling. The optional
@@ -119,6 +160,13 @@ compatibility guarantees. A Qt upgrade is an explicit maintenance task that
 must rebuild and runtime-test redirected Quick rendering, swapchain HDR state,
 texture and shader resources, surface loss, and device recovery.
 
+On Linux the corresponding contract is Qt `>=6.10,<6.11` and additionally
+requires `Qt6::WaylandClientPrivate` plus Qt's Wayland scanner tools. Private
+Base, Declarative, and Wayland targets therefore resolve from one distro Qt
+family. The dependency test uses Qt's standard protocol generator against the
+system color-management-v1 XML; the production display adapter will consume
+the same generated boundary when implemented.
+
 ## Targets and resources
 
 The project defines the `sunroom` executable plus three production static
@@ -161,8 +209,10 @@ supported player.
 
 ## Installation
 
-CMake installs the executable or bundle through `GNUInstallDirs`. On Windows,
-vcpkg's app-local dependency walker installs the executable's complete
+CMake installs the executable or bundle through `GNUInstallDirs`. Linux keeps
+Qt, QML modules, and native/media libraries system-owned and does not run Qt's
+deployment copier; the eventual distro package must express their runtime
+package dependencies. On Windows, vcpkg's app-local dependency walker installs the executable's complete
 transitive runtime-DLL set before `qt_generate_deploy_qml_app_script()` supplies
 the current Qt deployment step with:
 
@@ -199,16 +249,23 @@ CTest and Qt Test are configured only under `BUILD_TESTING`, keeping test-only
 dependencies out of production-only configurations. Separate test executables
 cover presentation-target policy, active viewport state, real QML shell
 publication, rendered-video surface validity/reuse, and a real D3D11 QRhi
-producer/compositor capture. A dependency integration test verifies the pinned
-libplacebo version, installed feature configuration, and real log
-create/destroy lifecycle across the MSVC-to-clang-cl DLL boundary. That
-configuration enables D3D11, Shaderc, and built-in DOVI handling while
-disabling Vulkan, OpenGL, and external libdovi.
+producer/compositor capture. A shared dependency integration test verifies the
+platform-specific libplacebo version and feature contract plus real log
+create/destroy lifecycle. Windows requires its pinned D3D11/Shaderc
+configuration; Linux requires API 360, Vulkan, a shader compiler, built-in
+DOVI, and records LCMS availability.
 
 A separate FFmpeg dependency test verifies the four selected DLLs, pinned
 major versions, D3D11VA availability, native H.264/HEVC decoders, and the
-absence of Vulkan and swscale. A cubeb dependency test compiles and links its
-public C ABI without requiring COM initialization or an available device.
+absence of Vulkan and swscale on Windows. The same source verifies the system
+ABI majors plus VAAPI and DRM hardware-device support on Linux. A shared cubeb
+dependency test compiles and links its common public C ABI without requiring
+COM, a live sound server, or an available device. A Linux-only native
+dependency test links Vulkan, Wayland client, VA-API DRM, DRM, and Qt's private
+Wayland API while compiling generated color-management-v1 client code. The
+shared libass dependency test renders the same embedded-font ASS cue on both
+platforms, and the platform-neutral FFmpeg/media tests exercise ASS, converted
+SubRip, and ordinary/zlib-compressed PGS fixtures on Linux.
 The FFmpeg integration targets then
 exercises real image and continuous compressed-video demux, software and
 D3D11VA decode, libplacebo upload, and final QRhi composition. Additional focused targets cover
@@ -250,6 +307,13 @@ A prior build-tree GUI startup liveness smoke also passed with the configured
 Qt runtime available; the harness terminated the process after four seconds
 without user interaction.
 
-No Release application build, installed-application launch, clean-machine
-deployment audit, or cross-platform build is recorded yet. These remain
-coverage gaps rather than implied support.
+On Ubuntu 26.04 under WSL, clean Debug and Release builds pass with
+`BUILD_TESTING` both enabled and disabled. All 22 registered Linux tests and
+QML lint pass, including shared embedded-subtitle decoding/state and real
+system-libass rendering. A Release install-tree generation also succeeds and
+keeps system libraries under distribution ownership. This proves compilation,
+install mechanics, and platform-neutral behavior only: the Linux Vulkan
+presentation backend, real Wayland protocol/runtime behavior, cubeb sink,
+hardware decoding, installed-player launch, and native-hardware HDR validation
+remain unimplemented or untested. Windows has not yet been rerun after the
+cross-platform CMake change and remains an explicit regression gate.

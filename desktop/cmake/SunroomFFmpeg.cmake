@@ -29,18 +29,18 @@ function(_sunroom_find_ffmpeg_runtime
 endfunction()
 
 function(sunroom_configure_ffmpeg)
-    # This must run before Qt package discovery adds Qt's case-variant
-    # FindFFmpeg.cmake to CMAKE_MODULE_PATH. The vcpkg module provides
-    # configuration-aware component import libraries on every platform.
-    find_package(FFMPEG REQUIRED)
-
     add_library(sunroom_ffmpeg INTERFACE)
-    target_include_directories(sunroom_ffmpeg
-            INTERFACE
-            ${FFMPEG_INCLUDE_DIRS}
-    )
 
     if (WIN32)
+        # This must run before Qt package discovery adds Qt's case-variant
+        # FindFFmpeg.cmake to CMAKE_MODULE_PATH. The vcpkg module provides
+        # configuration-aware component import libraries on Windows.
+        find_package(FFMPEG REQUIRED)
+        target_include_directories(sunroom_ffmpeg
+                INTERFACE
+                ${FFMPEG_INCLUDE_DIRS}
+        )
+
         set(runtime_targets)
         foreach (component IN ITEMS
                 avutil
@@ -106,15 +106,27 @@ function(sunroom_configure_ffmpeg)
                 "${runtime_targets}"
                 PARENT_SCOPE
         )
-    else ()
-        target_link_directories(sunroom_ffmpeg
-                INTERFACE
-                ${FFMPEG_LIBRARY_DIRS}
+    elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(SUNROOM_FFMPEG REQUIRED
+                IMPORTED_TARGET
+                GLOBAL
+                libavutil>=60
+                libavutil<61
+                libswresample>=6
+                libswresample<7
+                libavcodec>=62
+                libavcodec<63
+                libavformat>=62
+                libavformat<63
         )
         target_link_libraries(sunroom_ffmpeg
                 INTERFACE
-                ${FFMPEG_LIBRARIES}
+                PkgConfig::SUNROOM_FFMPEG
         )
         set(SUNROOM_FFMPEG_RUNTIME_TARGETS "" PARENT_SCOPE)
+    else ()
+        message(FATAL_ERROR
+                "No FFmpeg dependency contract exists for this platform")
     endif ()
 endfunction()

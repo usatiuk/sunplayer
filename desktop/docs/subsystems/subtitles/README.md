@@ -7,6 +7,10 @@ Embedded subtitle playback is implemented and tracked by
 The Player exposes Off and the embedded tracks discovered by the existing
 single FFmpeg operation. Selected ASS/text subtitles render through libass;
 FFmpeg-decoded bitmap subtitles render from owned RGBA regions.
+The same production sources compile on Linux against system libass 0.17.4.
+Platform-neutral subtitle state and FFmpeg decode tests plus the real libass
+embedded-font rendering test pass there; QRhi subtitle-surface capture remains
+gated on the native Linux graphics-domain implementation.
 
 ## Responsibility
 

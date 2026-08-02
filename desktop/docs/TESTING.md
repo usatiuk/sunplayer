@@ -28,6 +28,12 @@ libplacebo render, and swapchain for an audio-first source. As buffering and
 device recovery arrive, deterministic whole-pipeline scenarios should become
 the bulk of behavioral coverage.
 
+The Ubuntu system-build foundation now compiles that shared media, subtitle,
+playback, and UI graph and passes 22 Linux CTests plus QML lint, including real
+FFmpeg subtitle fixtures and system libass rendering. Native Wayland/Vulkan
+presentation, physical cubeb output, VAAPI import, and HDR display behavior
+remain untested until their Linux implementations exist.
+
 The central principle is:
 
 > Optimize for meaningful behaviors that can be reproduced, not the number of

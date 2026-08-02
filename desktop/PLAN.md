@@ -128,6 +128,14 @@ and continuous synchronized local-file audio/video playback:
 * The configured Windows Debug target builds successfully with Qt 6.11.1,
   MSVC, pinned D3D11-only libplacebo 7.360.1, and official minimal FFmpeg
   8.1.2 dependencies built through the project-local vcpkg configuration.
+* The first native-Wayland build slice now configures and builds the shared
+  source graph on Ubuntu 26.04 using only system Qt 6.10, FFmpeg 8,
+  libplacebo, cubeb, libass, Vulkan, Wayland, VA-API, and DRM packages. The
+  shared embedded-subtitle pipeline and real libass dependency test are part
+  of the Linux build. Debug and Release, tests enabled/disabled, all 22
+  registered Linux CTests, QML lint, and generated color-management-v1 client
+  code pass under WSL. This is a build foundation only; Linux presentation
+  and production audio remain pending.
 * `MediaSession` opens a local file and supports play, pause, seek, and replay.
   One shared media operation gives one `AVFormatContext` to the demux owner;
   selected audio and video packets use one count/byte budget and independent

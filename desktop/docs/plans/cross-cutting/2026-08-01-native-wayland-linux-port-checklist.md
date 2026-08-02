@@ -2,7 +2,7 @@
 
 Status: Active
 
-Upstream checkpoint: `7233b9a` (`Add native fullscreen playback`)
+Upstream checkpoint: `5357d96` (`feat: add embedded subtitle playback`)
 
 ## Purpose and update rules
 
@@ -36,27 +36,27 @@ roadmap state actually changes.
 
 | ID | Gate | Status | Evidence | Notes |
 | --- | --- | --- | --- | --- |
-| BASE-01 | Inspect Ubuntu 26.04 system packages and matching patched sources | Done | [Ubuntu platform baseline](../../research/2026-08-01-ubuntu-26-04-linux-platform-baseline.md) | Qt 6.10.2, FFmpeg 8.0.1, libplacebo 7.360.0, cubeb distro snapshot |
+| BASE-01 | Inspect Ubuntu 26.04 system packages and matching patched sources | Done | [Ubuntu platform baseline](../../research/2026-08-01-ubuntu-26-04-linux-platform-baseline.md) | Qt 6.10.2, FFmpeg 8.0.1, libplacebo 7.360.0, libass 0.17.4, cubeb distro snapshot |
 | BASE-02 | Download matching Ubuntu Qt/FFmpeg/libplacebo/cubeb source packages | Done | [Ubuntu platform baseline](../../research/2026-08-01-ubuntu-26-04-linux-platform-baseline.md) | Packaging Git clones are unnecessary for installed-package inspection |
 | BASE-03 | Record current WSL execution capability | Done | [Ubuntu platform baseline](../../research/2026-08-01-ubuntu-26-04-linux-platform-baseline.md) | WSLg Wayland; llvmpipe CPU Vulkan; no `/dev/dri`, `/dev/dxg`, or usable VAAPI |
-| BASE-04 | Rebase plan onto current upstream and run independent behavior, architecture, and delivery reviews | Done | [Review disposition](2026-08-01-native-wayland-linux-port.md#review-disposition) | Rebased through `7233b9a`; review findings resolved into the plan |
+| BASE-04 | Rebase plan and implementation onto current upstream and run independent correctness, delivery, and simplicity reviews | Done | [System dependency foundation](linux-port-evidence/2026-08-01-system-dependency-foundation.md) | Deeply reconciled through `5357d96`, including system libass and the shared subtitle pipeline; review findings resolved |
 | BASE-05 | Limit Linux V1 to the modern managed Wayland capability contract while supporting SDR and HDR monitors | Done | [ADR 0017](../../decisions/0017-require-wayland-color-management-v1.md) | No unmanaged legacy-Wayland fallback |
 
 ## 1. System build foundation
 
 | ID | Gate | Status | Evidence | Blocker or notes |
 | --- | --- | --- | --- | --- |
-| BUILD-01 | Make vcpkg policy Windows-only and configure Linux exclusively from supported system packages | Pending | — | Preserve current Windows pins |
-| BUILD-02 | Discover Qt `>=6.10,<6.11`, matching Base/Declarative/Wayland private targets, Shader Tools, and the native Wayland plugin | Pending | — | Fail mixed private-header/runtime families |
-| BUILD-03 | Discover FFmpeg 8 libraries and assert expected ABI majors plus software, VAAPI, and DRM PRIME compile capabilities | Pending | — | Runtime hardware remains optional capability |
-| BUILD-04 | Discover libplacebo API 360 through pkg-config and assert Vulkan, shader compiler, built-in DOVI, and observed LCMS state | Pending | — | Accept glslang or Shaderc; do not inherit Windows D3D11 expectations |
-| BUILD-05 | Discover distro cubeb through `find_package(cubeb CONFIG)` and `cubeb::cubeb` | Pending | — | Ubuntu does not install `cubeb.pc` |
-| BUILD-06 | Generate only the required color-management-v1 client interfaces from system Wayland protocols | Pending | — | Private/generated code stays inside the Linux display adapter |
+| BUILD-01 | Make Ubuntu system packages the sole initial Linux dependency path while retaining Windows vcpkg auto-discovery | Done | [System dependency foundation](linux-port-evidence/2026-08-01-system-dependency-foundation.md) | No provider abstraction; an explicit future Linux toolchain remains possible but unsupported |
+| BUILD-02 | Discover Qt `>=6.10,<6.11`, matching Base/Declarative/Wayland private targets, Shader Tools, and the native Wayland plugin | In progress | [System dependency foundation](linux-port-evidence/2026-08-01-system-dependency-foundation.md) | Qt/private targets compile; installed-plugin runtime and mixed-family failure checks remain |
+| BUILD-03 | Discover FFmpeg 8 libraries and assert expected ABI majors plus software, VAAPI, and DRM PRIME compile capabilities | Done | [System dependency foundation](linux-port-evidence/2026-08-01-system-dependency-foundation.md) | Runtime hardware remains optional capability |
+| BUILD-04 | Discover libplacebo API 360 through pkg-config and assert Vulkan, shader compiler, built-in DOVI, and observed LCMS state | Done | [System dependency foundation](linux-port-evidence/2026-08-01-system-dependency-foundation.md) | glslang satisfies the shader-backend contract; ICC policy is tracked separately |
+| BUILD-05 | Discover distro cubeb through its CMake target and system libass through the shared pkg-config wrapper | Done | [System dependency foundation](linux-port-evidence/2026-08-01-system-dependency-foundation.md) | Common cubeb ABI links without a sound server; real libass rendering uses the embedded font fixture |
+| BUILD-06 | Generate only the required color-management-v1 client interfaces from system Wayland protocols | In progress | [System dependency foundation](linux-port-evidence/2026-08-01-system-dependency-foundation.md) | Qt's generator is proven in the contract test; move the same generation to the display adapter when it exists |
 | BUILD-07 | Clear effective render-copy ICC handles while retaining source metadata and diagnostics | Pending | — | Required because system libplacebo enables LCMS |
 | BUILD-08 | Add an ICC-tagged regression proving Linux retains the accepted no-source-ICC-transform policy | Pending | — | Must exercise the production render boundary |
-| BUILD-09 | Complete the Windows-gated test migration inventory below; no Linux dependency behavior is silently skipped | Pending | — | Each row must be reused, paired, or deliberately native-only |
-| BUILD-10 | Clean Linux Debug and Release configure/build with `BUILD_TESTING=ON` and `OFF` | Pending | — | WSL-capable |
-| BUILD-11 | Pass all platform-neutral CTests and QML lint on Linux | Pending | — | WSL-capable |
+| BUILD-09 | Complete the Windows-gated test migration inventory below; no Linux dependency behavior is silently skipped | In progress | [System dependency foundation](linux-port-evidence/2026-08-01-system-dependency-foundation.md) | Shared dependency and subtitle/media tests migrated; native GPU, audio-sink, and application scenarios await their implementations |
+| BUILD-10 | Clean Linux Debug and Release configure/build with `BUILD_TESTING=ON` and `OFF` | Done | [System dependency foundation](linux-port-evidence/2026-08-01-system-dependency-foundation.md) | All four combinations pass on WSL |
+| BUILD-11 | Pass all platform-neutral CTests and QML lint on Linux | Done | [System dependency foundation](linux-port-evidence/2026-08-01-system-dependency-foundation.md) | Twenty-two CTests and both QML lint targets pass, including subtitle state, FFmpeg subtitle decoding, and real libass rendering |
 | BUILD-12 | Re-run the supported Windows build/tests after CMake and shared-policy changes | Pending | — | Protect the existing product path |
 
 ## 2. Native Wayland Vulkan SDR
@@ -127,7 +127,7 @@ roadmap state actually changes.
 | REL-01 | Stress repeated open/close, long playback, seek, fullscreen, minimize, surface recreation, output changes, suspend, and bounded recovery | Pending | — | Separate WSL/CI and native-hardware evidence |
 | REL-02 | Choose and record the Ubuntu artifact/package format | Decision needed | — | `.deb` is the leading system-dependency option, not yet accepted |
 | REL-03 | Separate build dependencies from runtime dependencies and generate shared-library ABI dependencies where the format supports it | Pending | — | Private Qt development packages must not leak into runtime metadata |
-| REL-04 | Prove the installed artifact uses system Qt/FFmpeg/libplacebo/cubeb, the matching Qt Wayland plugin, and requires the V1 color-management-v1 capability set | Pending | — | No bundled copies, XCB fallback, or unmanaged legacy-Wayland mode |
+| REL-04 | Prove the installed artifact uses system Qt/FFmpeg/libplacebo/libass/cubeb, the matching Qt Wayland plugin, and requires the V1 color-management-v1 capability set | Pending | — | No bundled copies, XCB fallback, or unmanaged legacy-Wayland mode |
 | REL-05 | Install through the selected package mechanism on a clean Ubuntu 26.04 machine | Pending | — | Launch and both SDR application scenarios must pass |
 | REL-06 | Record distro FFmpeg configuration, runtime closure, licenses/notices, and source-offer obligations | Pending | — | Release gate |
 | REL-07 | Synchronize subsystem docs, testing matrix, root roadmap, ADRs, and deferred gaps with delivered behavior | Pending | — | Do not update implementation truth early |
@@ -136,10 +136,11 @@ roadmap state actually changes.
 
 | Current test/boundary | Linux disposition | Status |
 | --- | --- | --- |
-| `sunroom_cubeb_dependency_tests` | Reuse with platform-shaped ABI/backend assertions | Pending |
+| `sunroom_cubeb_dependency_tests` | Reuse with platform-shaped ABI/backend assertions | In progress: shared ABI test passes; selected Linux backend belongs to AUDIO-02 |
 | `sunroom_cubeb_audio_sink_tests` | Reuse shared lifecycle/clock cases; isolate only native Windows control-thread setup | Pending |
-| `sunroom_ffmpeg_dependency_tests` | Reuse with Linux FFmpeg ABI plus VAAPI/DRM PRIME assertions instead of D3D11/no-Vulkan assumptions | Pending |
-| `sunroom_libplacebo_dependency_tests` | Reuse with API 360, Vulkan, shader-backend, DOVI, LCMS-observation, and explicit ICC-policy assertions | Pending |
+| `sunroom_ffmpeg_dependency_tests` | Reuse with Linux FFmpeg ABI plus VAAPI/DRM PRIME assertions instead of D3D11/no-Vulkan assumptions | Done |
+| `sunroom_libplacebo_dependency_tests` | Reuse with API 360, Vulkan, shader-backend, DOVI, LCMS-observation, and explicit ICC-policy assertions | In progress: dependency features pass; BUILD-07/08 own ICC policy |
+| `sunroom_libass_dependency_tests` and platform-neutral subtitle/media tests | Reuse system libass plus the same embedded ASS/SubRip/PGS fixtures and session behavior | Done: system libass rendering and shared subtitle decode/state behavior pass; QRhi subtitle capture awaits the Linux graphics domain |
 | D3D11 target/import/capture tests | Keep Windows-only and add paired Vulkan target/import/capture coverage through the same public behavior | Pending |
 | `application-playback` | Register on Linux once Vulkan and cubeb production paths exist | Pending |
 | `application-fullscreen` | Register on Linux and wait for asynchronous Wayland state/presentation convergence | Pending |
@@ -148,7 +149,7 @@ roadmap state actually changes.
 
 | Environment or claim | Status | Required evidence |
 | --- | --- | --- |
-| WSL system-dependency build | Pending | Debug/Release, tests on/off, shared tests, dependency report |
+| WSL system-dependency build | Done | [Debug/Release, tests on/off, shared tests, and dependency versions](linux-port-evidence/2026-08-01-system-dependency-foundation.md) |
 | WSLg native-Wayland lifecycle | Pending | Only if the active/nested compositor exposes the required protocol capabilities; explicit software-Vulkan opt-in and no GPU/HDR claim |
 | Native-Wayland SDR video | Pending | Modern color-management-v1 compositor, Qt-managed gamma-2.2 surface, real GPU, software decode, direct target, validation, diagnostics |
 | Linux cubeb audio | Pending | Real advancing audio plus PulseAudio and PipeWire-Pulse behavior |

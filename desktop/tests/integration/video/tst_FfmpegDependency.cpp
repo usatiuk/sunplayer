@@ -4,6 +4,10 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/hwcontext.h>
+#ifdef Q_OS_LINUX
+#include <libavutil/hwcontext_drm.h>
+#include <libavutil/hwcontext_vaapi.h>
+#endif
 #include <libswresample/swresample.h>
 }
 
@@ -40,12 +44,16 @@ void FfmpegDependencyTest::pinnedMinimalFeatureSet() {
         avcodec_version(),
         static_cast<unsigned int>(LIBAVCODEC_VERSION_INT));
     QCOMPARE(
+        avutil_version(),
+        static_cast<unsigned int>(LIBAVUTIL_VERSION_INT));
+    QCOMPARE(
         swresample_version(),
         static_cast<unsigned int>(
             LIBSWRESAMPLE_VERSION_INT));
 
-    const QString configuration =
-        QString::fromLatin1(avcodec_configuration());
+#ifdef Q_OS_WIN
+    const QString configuration = QString::fromLatin1(
+        avcodec_configuration());
     QVERIFY(configuration.contains(
         QStringLiteral("--enable-d3d11va")));
     QVERIFY(configuration.contains(
@@ -55,6 +63,18 @@ void FfmpegDependencyTest::pinnedMinimalFeatureSet() {
     QCOMPARE(
         av_hwdevice_find_type_by_name("d3d11va"),
         AV_HWDEVICE_TYPE_D3D11VA);
+#elif defined(Q_OS_LINUX)
+    QVERIFY(sizeof(AVVAAPIDeviceContext) > 0);
+    QVERIFY(sizeof(AVDRMFrameDescriptor) > 0);
+    QCOMPARE(
+        av_hwdevice_find_type_by_name("vaapi"),
+        AV_HWDEVICE_TYPE_VAAPI);
+    QCOMPARE(
+        av_hwdevice_find_type_by_name("drm"),
+        AV_HWDEVICE_TYPE_DRM);
+#else
+#error "Define the required FFmpeg hardware facilities for this platform"
+#endif
     QVERIFY(avcodec_find_decoder(AV_CODEC_ID_H264));
     QVERIFY(avcodec_find_decoder(AV_CODEC_ID_HEVC));
 }
