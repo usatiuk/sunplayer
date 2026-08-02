@@ -24,8 +24,6 @@ jobs:
     defaults:
       run:
         shell: bash
-    env:
-      BUILD_DIR: ${{ runner.temp }}/sunroom-linux-debug
 
     steps:
       - name: Install system dependencies
@@ -80,18 +78,22 @@ jobs:
 
       - name: Configure
         run: >-
-          cmake -S . -B "$BUILD_DIR" -G Ninja
+          cmake -S . -B "$RUNNER_TEMP/sunroom-linux-debug" -G Ninja
           -DCMAKE_BUILD_TYPE=Debug
           -DBUILD_TESTING=ON
 
       - name: Build
-        run: cmake --build "$BUILD_DIR" --parallel 2
+        run: cmake --build "$RUNNER_TEMP/sunroom-linux-debug" --parallel 2
 
       - name: Lint QML
-        run: cmake --build "$BUILD_DIR" --target all_qmllint --parallel 2
+        run: >-
+          cmake --build "$RUNNER_TEMP/sunroom-linux-debug"
+          --target all_qmllint
+          --parallel 2
 
       - name: Test
         run: |
+          BUILD_DIR="$RUNNER_TEMP/sunroom-linux-debug"
           WAYLAND_RUNTIME=/tmp/sunroom-wayland-runtime
           PULSE_RUNTIME=/tmp/sunroom-pulse-runtime
           WESTON_LOG=/tmp/sunroom-weston.log
@@ -245,11 +247,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 180
     env:
-      BUILD_DIR: ${{ runner.temp }}\sunroom-windows-debug
-      QT_ROOT: ${{ runner.temp }}\Qt\6.11.1\msvc2022_64
       VCPKG_ROOT: C:\vcpkg
-      VCPKG_BINARY_CACHE: ${{ runner.temp }}\sunroom-vcpkg-binary-cache
-      VCPKG_BINARY_SOURCES: clear;files,${{ runner.temp }}\sunroom-vcpkg-binary-cache,readwrite
 
     steps:
       - name: Check out source
@@ -277,11 +275,13 @@ jobs:
       - name: Verify Qt and vcpkg
         shell: pwsh
         run: |
+          $qtRoot = "$env:RUNNER_TEMP\Qt\6.11.1\msvc2022_64"
+          $binaryCache = "$env:RUNNER_TEMP\sunroom-vcpkg-binary-cache"
           $requiredPaths = @(
-            "$env:QT_ROOT\lib\cmake\Qt6\Qt6Config.cmake",
-            "$env:QT_ROOT\lib\cmake\Qt6ShaderTools\Qt6ShaderToolsConfig.cmake",
-            "$env:QT_ROOT\bin\qsb.exe",
-            "$env:QT_ROOT\bin\windeployqt.exe",
+            "$qtRoot\lib\cmake\Qt6\Qt6Config.cmake",
+            "$qtRoot\lib\cmake\Qt6ShaderTools\Qt6ShaderToolsConfig.cmake",
+            "$qtRoot\bin\qsb.exe",
+            "$qtRoot\bin\windeployqt.exe",
             "$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
           )
           foreach ($path in $requiredPaths) {
@@ -289,7 +289,7 @@ jobs:
               throw "Required dependency path is missing: $path"
             }
           }
-          New-Item -ItemType Directory -Force -Path $env:VCPKG_BINARY_CACHE | Out-Null
+          New-Item -ItemType Directory -Force -Path $binaryCache | Out-Null
 
       - name: Restore vcpkg binaries
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -304,7 +304,8 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
-          cmake -S . -B "%BUILD_DIR%" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DCMAKE_PREFIX_PATH=%QT_ROOT%"
+          set "VCPKG_BINARY_SOURCES=clear;files,%RUNNER_TEMP%\sunroom-vcpkg-binary-cache,readwrite"
+          cmake -S . -B "%RUNNER_TEMP%\sunroom-windows-debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DCMAKE_PREFIX_PATH=%RUNNER_TEMP%\Qt\6.11.1\msvc2022_64"
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Build
@@ -312,7 +313,7 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
-          cmake --build "%BUILD_DIR%" --parallel 2
+          cmake --build "%RUNNER_TEMP%\sunroom-windows-debug" --parallel 2
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Lint QML
@@ -320,7 +321,7 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
-          cmake --build "%BUILD_DIR%" --target all_qmllint --parallel 2
+          cmake --build "%RUNNER_TEMP%\sunroom-windows-debug" --target all_qmllint --parallel 2
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Test deterministic boundaries
@@ -328,5 +329,5 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
-          ctest --test-dir "%BUILD_DIR%" --output-on-failure --parallel 2 -LE "device|gpu"
+          ctest --test-dir "%RUNNER_TEMP%\sunroom-windows-debug" --output-on-failure --parallel 2 -LE "device|gpu"
           if errorlevel 1 exit /b %errorlevel%

@@ -169,3 +169,9 @@ host packages were not installed for this change. Local CTest therefore used the
 existing WSLg Wayland/Pulse route; it did not execute the workflow's controlled
 service setup or any Windows job. The first actual GitHub-hosted Windows and Linux
 execution remains pending and is required before this plan can become Complete.
+
+The first pushed workflow was rejected during GitHub's static validation because
+the `runner` context is unavailable in job-level `env`. The corrected workflow
+uses the runtime-provided `RUNNER_TEMP` environment variable inside commands and
+retains `${{ runner.temp }}` only in step-level action inputs, where that context
+is valid. A hosted rerun remains the validation boundary for this correction.
