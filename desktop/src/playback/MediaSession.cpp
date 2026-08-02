@@ -10,9 +10,7 @@
 #include <QMetaObject>
 #include <QThread>
 
-#ifdef Q_OS_WIN
 #include "audio/CubebAudioSink.h"
-#endif
 #include "media/DecodedVideoFrame.h"
 #include "diagnostics/LogCategories.h"
 
@@ -40,11 +38,7 @@ FfmpegMediaDecodeResult decodeMedia(
 }
 
 std::shared_ptr<AudioSink> createAudioSink() {
-#ifdef Q_OS_WIN
     return std::make_shared<CubebAudioSink>();
-#else
-    return {};
-#endif
 }
 }
 

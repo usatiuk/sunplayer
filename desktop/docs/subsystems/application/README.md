@@ -47,8 +47,10 @@ it requires two distinct video content revisions to reach the swapchain plus
 continued live Cubeb audio-master clock progress, then exits with a process
 result. `--fullscreen-smoke` uses the same production boundary to verify
 normal/fullscreen and maximized/fullscreen transitions, restoration, continued
-video presentation, native keyboard routing, and idle cursor hiding. These are
-test scenarios, not a general remote-control interface. There is no full
+video and audio-clock presentation, native keyboard routing, and idle cursor
+hiding. These are test scenarios, not a general remote-control interface. The
+fullscreen scenario is registered on Windows and run explicitly, non-gating,
+on Linux. There is no full
 command-line model,
 single-instance policy, recent-file state, settings store, or application
 service container.
@@ -192,16 +194,16 @@ bounded application scenario opens a real audio-first A/V fixture through the
 production FFmpeg and Cubeb paths, shows the native presentation window, and
 waits for two distinct video content revisions plus continued live Cubeb
 audio-clock progress. A second bounded real-window scenario verifies native
-keyboard/gesture routing, fullscreen state/restoration, cursor hiding, and
-video presentation after each transition. Both exit without user interaction
-and disable Windows error
-dialogs. On Linux, the video-only fullscreen scenario also runs through the
-production native-Wayland Vulkan/QRhi/libplacebo path under WSLg. It verifies
-continued presentation and explicit teardown in one passing bounded run;
-two other attempts timed out waiting for cursor-state convergence. WSLg is
-not treated as native-GPU, managed-color, HDR, VAAPI, or physical-audio
-evidence. The scenarios exercise startup, initial playback wiring, and
-fullscreen;
+keyboard/gesture routing, fullscreen state/restoration, cursor hiding, video
+presentation after each transition, and an unchanged advancing cubeb audio
+epoch. It is a registered Windows test; Windows has not been rerun after the
+audio assertion was added. On Linux, a prior video-only WSLg run verified
+continued presentation and teardown once, while two attempts timed out on
+cursor convergence. The current audio-bearing explicit run ended in an
+unresolved buffer/configure protocol failure before its final assertion. WSLg
+is not treated as native-GPU, managed-color, HDR, VAAPI, native Linux acoustic-
+output, or route-change evidence. The scenarios exercise startup, initial
+playback wiring, and fullscreen;
 broader command,
 error, shutdown, and packaged-install scenarios remain future work.
 

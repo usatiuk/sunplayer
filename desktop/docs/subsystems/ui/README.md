@@ -8,9 +8,10 @@ viewport boundary are production structure; HDR Lab remains developer tooling
 and is reached from Player rather than occupying permanent playback chrome.
 
 Player opens a local file and presents the movie across the full page. Windows
-uses the production libplacebo video and default audio paths; Linux now uses
-the same software-decoded libplacebo path through Vulkan while physical audio
-remains pending. A compact two-row transport island appears on pointer activity,
+uses the production libplacebo video and default cubeb audio paths; Linux uses
+the same software-decoded libplacebo path through Vulkan and the same cubeb
+sink through the system-selected audio backend. A compact two-row transport
+island appears on pointer activity,
 keeps the timeline above its controls, and fades during uninterrupted playback.
 The transport uses a small vendored Lucide 1.28.0 SVG subset inside fully
 custom rounded buttons, avoiding font-dependent glyphs and platform-style
@@ -224,10 +225,12 @@ FFmpeg, Cubeb, QML, QRhi, libplacebo, and swapchain paths and exits
 noninteractively after observing real presentation plus continued clock
 progress.
 
-The registered fullscreen application scenario additionally crosses the real
-window, QRhi swapchain, QML, media, and video-presentation boundaries while
-driving native F11, Escape, Space, and redirected background double-click input
-and checking normal/maximized restoration and cursor hiding through fullscreen.
+The Windows-registered fullscreen application scenario additionally crosses
+the real window, QRhi swapchain, QML, media, and video-presentation boundaries
+while driving native F11, Escape, Space, and redirected background double-click
+input and checking normal/maximized restoration, cursor hiding, and one
+advancing cubeb audio epoch. Linux runs it explicitly and non-gating while its
+current WSLg buffer/configure failure remains unresolved.
 
 Extend Qt Quick component coverage as commands gain behavior. Add
 actual-application scenarios for file open, navigation, diagnostics access,

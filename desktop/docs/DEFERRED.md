@@ -217,26 +217,29 @@ preserve the logical position.
 
 The production session now uses one-open A/V packet routing, real FFmpeg audio
 decode, libswresample conversion, a common nonzero timeline, and either bounded
-controlled output or the default Windows WASAPI device through cubeb. Presented
-audio is the ordinary master clock; video-only media uses a monotonic clock,
-and video continuing after audio drain uses an explicitly anchored monotonic
-tail. The active graphics capability and whole-operation hardware fallback pass
-through the same media operation, so audio never requires a second
-`AVFormatContext`.
+controlled output or the system-default cubeb route on Windows and Linux.
+Presented audio is the ordinary master clock; video-only media uses a monotonic
+clock, and video continuing after audio drain uses an explicitly anchored
+monotonic tail. The active graphics capability and whole-operation hardware
+fallback pass through the same media operation, so audio never requires a
+second `AVFormatContext`.
 
 Short device underruns already map to hold silence without advancing media.
 Sustained holds now enter a visible `Buffering` interruption, freeze the
 timeline, and remain separate from explicit user play/pause intent. Sustained
 loss of an established presentation clock is still terminal because the
-player does not yet replace the physical stream for default-device changes,
-Bluetooth reconnect, sleep/wake, or service interruption.
+player does not yet replace a failed physical stream after route loss,
+Bluetooth reconnect, sleep/wake, or service interruption. Ordinary default-
+route switching remains cubeb and the sound service's responsibility.
 Volume and mute now apply at the output boundary without changing audio-clock
 progression, and `MediaSession` exposes the active clock, PCM queue, submitted
 and presented frames, and underrun count through a typed low-rate snapshot.
 The visible Player summary currently renders the clock, backend, PCM queue,
 and underruns. It still lacks click-free gain ramps, persistence, audio-track
-selection, and a general diagnostics view. macOS and Linux physical audio
-backends are not yet packaged or validated.
+selection, and a general diagnostics view. WSLg system-cubeb output and its
+advancing clock are validated; native PulseAudio/PipeWire-Pulse switching and
+recovery and acoustic output, physical speaker-to-display A/V measurement, and
+macOS packaging remain unvalidated.
 
 ### Expanded subtitle features
 
@@ -249,12 +252,12 @@ geometry, and exact VSFilter color behavior. Seeking deliberately does not scan
 or reread subtitle history; an already-active cue may remain absent until the
 next naturally decoded update.
 
-Pinned cubeb's WASAPI backend can migrate a null-device stream internally and
-keeps a monotonic logical position, but it does not expose a stream-specific
-success notification or guarantee gapless delivery of audio queued to the old
-endpoint. Sunroom now opens cubeb's default route and keeps one output epoch
-for one cubeb stream while cubeb performs ordinary route migration, as decided
-by ADR 0016.
+Cubeb's WASAPI and Pulse-family backends can follow a null-device stream through
+ordinary system-default routing, but they do not expose one portable stream-
+specific success notification or guarantee gapless delivery of audio queued to
+the old endpoint. Sunroom opens cubeb's default route and keeps one output
+epoch for one cubeb stream while cubeb and the sound service perform ordinary
+route migration, as decided by ADR 0016.
 
 Application-level recreation after a cubeb error remains deferred. That path
 will replace only the audio stream, start and re-anchor a new output epoch from

@@ -13,8 +13,9 @@ diagnostic snapshots. The audio boundary now contributes a common low-rate
 snapshot for backend/device/format, PCM occupancy, submitted/presented frames,
 latency and device position when available, underruns, device revision,
 audio-output epoch, and clock reliability; `MediaSession` adds the active clock
-source. There is not
-yet one exportable support report, performance trace, or A/V synchronization
+source. On Linux this same snapshot exposes the backend selected by system
+cubeb; WSLg reports `pulse`. There is not yet one exportable support report,
+performance trace, or A/V synchronization
 report. Playback logs transitions into and out of its initial audio
 `Buffering` state and reports sustained clock loss as a structured session
 failure, but physical device-replacement transactions are not implemented yet.

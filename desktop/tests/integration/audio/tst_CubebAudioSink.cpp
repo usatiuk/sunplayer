@@ -81,7 +81,11 @@ opensSystemDefaultRouteWithoutStartingPlayback() {
     QVERIFY2(
         diagnostics.errorMessage.empty(),
         diagnostics.errorMessage.c_str());
+#ifdef Q_OS_WIN
     QCOMPARE(diagnostics.backendName, std::string("wasapi"));
+#else
+    QVERIFY(!diagnostics.backendName.empty());
+#endif
     QVERIFY(diagnostics.followsSystemDefault);
     QVERIFY(diagnostics.streamOpen);
     QCOMPARE(
@@ -90,7 +94,9 @@ opensSystemDefaultRouteWithoutStartingPlayback() {
     QCOMPARE(diagnostics.queueCapacityFrames, 48'000U);
     QVERIFY(diagnostics.requestedLatencyFrames != 0);
     QVERIFY(diagnostics.maximumSubmitFrames != 0);
+#ifdef Q_OS_WIN
     QVERIFY(diagnostics.deviceNotificationsAvailable);
+#endif
     QCOMPARE(
         diagnostics.positionAvailable,
         diagnostics.deviceFramesPresented.has_value());

@@ -203,6 +203,8 @@ add_library(sunroom_audio STATIC
         src/audio/AudioTypes.h
         src/audio/ControlledAudioSink.cpp
         src/audio/ControlledAudioSink.h
+        src/audio/CubebAudioSink.cpp
+        src/audio/CubebAudioSink.h
         src/audio/RealtimePcmQueue.cpp
         src/audio/RealtimePcmQueue.h
 )
@@ -213,17 +215,8 @@ target_include_directories(sunroom_audio
 target_link_libraries(sunroom_audio
         PRIVATE
         Qt6::Core
+        cubeb::cubeb
 )
-if (WIN32)
-    target_sources(sunroom_audio PRIVATE
-            src/audio/CubebAudioSink.cpp
-            src/audio/CubebAudioSink.h
-    )
-    target_link_libraries(sunroom_audio
-            PRIVATE
-            cubeb::cubeb
-    )
-endif ()
 
 add_library(sunroom_media STATIC
         src/media/DecodedVideoFrame.cpp

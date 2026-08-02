@@ -2,7 +2,7 @@
 
 Status: Active
 
-Upstream checkpoint: `01257c6` (`Support unmanaged Wayland SDR fallback`)
+Upstream checkpoint: `7c7d30b` (`Preserve redirected Qt Quick window chrome`)
 
 ## Purpose and update rules
 
@@ -54,9 +54,9 @@ roadmap state actually changes.
 | BUILD-06 | Generate only the required color-management-v1 client interfaces from system Wayland protocols | Done | [Wayland Vulkan presentation](linux-port-evidence/2026-08-02-wayland-vulkan-presentation.md) | Production startup inventory and focused tests share the generated Qt client boundary |
 | BUILD-07 | Clear effective render-copy ICC handles while retaining source metadata and diagnostics | Done | [Wayland Vulkan presentation](linux-port-evidence/2026-08-02-wayland-vulkan-presentation.md) | One cross-platform no-source-ICC-transform policy despite system libplacebo enabling LCMS |
 | BUILD-08 | Add an ICC-tagged regression proving Linux retains the accepted no-source-ICC-transform policy | Pending | — | Must exercise the production render boundary |
-| BUILD-09 | Complete the Windows-gated test migration inventory below; no Linux dependency behavior is silently skipped | In progress | [System dependency foundation](linux-port-evidence/2026-08-01-system-dependency-foundation.md) | Shared dependency and subtitle/media tests migrated; native GPU, audio-sink, and application scenarios await their implementations |
-| BUILD-10 | Clean Linux Debug and Release configure/build with `BUILD_TESTING=ON` and `OFF` | Done | [Wayland Vulkan presentation](linux-port-evidence/2026-08-02-wayland-vulkan-presentation.md) | All four combinations pass on WSL against the current implementation |
-| BUILD-11 | Pass all platform-neutral CTests and QML lint on Linux | Done | [Wayland Vulkan presentation](linux-port-evidence/2026-08-02-wayland-vulkan-presentation.md) | Twenty-four CTests and all QML lint targets pass, including packaged QML, window chrome, surface-transfer policy, subtitles, and real system dependencies |
+| BUILD-09 | Complete the Windows-gated test migration inventory below; no Linux dependency behavior is silently skipped | In progress | [System dependency foundation](linux-port-evidence/2026-08-01-system-dependency-foundation.md), [Linux system-cubeb audio](linux-port-evidence/2026-08-02-linux-system-cubeb-audio.md) | Shared dependency, subtitle/media, audio-sink, and audio-first application tests migrated; native GPU and reliable fullscreen registration remain |
+| BUILD-10 | Clean Linux Debug and Release configure/build with `BUILD_TESTING=ON` and `OFF` | Done | [Wayland Vulkan presentation](linux-port-evidence/2026-08-02-wayland-vulkan-presentation.md), [Linux system-cubeb audio](linux-port-evidence/2026-08-02-linux-system-cubeb-audio.md) | The prior checkpoint covers all four combinations; this change reruns the affected Debug-with-tests and Release-without-tests pair |
+| BUILD-11 | Pass all platform-neutral CTests and QML lint on Linux | Done | [Wayland Vulkan presentation](linux-port-evidence/2026-08-02-wayland-vulkan-presentation.md), [Linux system-cubeb audio](linux-port-evidence/2026-08-02-linux-system-cubeb-audio.md) | Twenty-six CTests and all QML lint targets pass, including packaged QML, window chrome, surface-transfer policy, subtitles, system dependencies, real cubeb output, and application A/V playback |
 | BUILD-12 | Re-run the supported Windows build/tests after CMake and shared-policy changes | Pending | — | Protect the existing product path |
 
 ## 2. Native Wayland Vulkan SDR
@@ -83,14 +83,14 @@ roadmap state actually changes.
 
 | ID | Gate | Status | Evidence | Blocker or notes |
 | --- | --- | --- | --- | --- |
-| AUDIO-01 | Isolate Windows COM and forced-WASAPI setup from the shared cubeb sink | Pending | — | Keep callback and clock state machine shared |
-| AUDIO-02 | Instantiate distro cubeb on Linux without naming a backend and report its selected backend ID | Pending | — | Preserve system-default-route policy |
-| AUDIO-03 | Pass dependency and sink lifecycle tests on Linux | Pending | — | Open/start/pause/reset/drain/destruction and presented position |
-| AUDIO-04 | Pass real application A/V playback and `application-playback` on native Wayland | Pending | — | Requires advancing current-generation cubeb audio clock |
+| AUDIO-01 | Isolate Windows COM and forced-WASAPI setup from the shared cubeb sink | Done | [Linux system-cubeb audio](linux-port-evidence/2026-08-02-linux-system-cubeb-audio.md) | Callback, queue, ledger, clock, drain, and failure state remain shared |
+| AUDIO-02 | Instantiate distro cubeb on Linux without naming a backend and report its selected backend ID | Done | [Linux system-cubeb audio](linux-port-evidence/2026-08-02-linux-system-cubeb-audio.md) | WSLg selects `pulse`; both platforms retain the null/default-device route |
+| AUDIO-03 | Pass dependency and sink lifecycle tests on Linux | Done | [Linux system-cubeb audio](linux-port-evidence/2026-08-02-linux-system-cubeb-audio.md) | Open/start/pause/reset/drain/destruction and presented position pass |
+| AUDIO-04 | Pass real application A/V playback and `application-audio-first-playback` on native Wayland | Done | [Linux system-cubeb audio](linux-port-evidence/2026-08-02-linux-system-cubeb-audio.md) | Installed WSLg run reports backend `pulse` and 73,599 presented audio frames; user-confirmed real-file playback is audible |
 | AUDIO-05 | Validate PulseAudio behavior including route loss/change and service interruption | Needs native hardware | — | Record server and device details |
 | AUDIO-06 | Validate PipeWire-Pulse behavior including route loss/change and service interruption | Needs native hardware | — | No native PipeWire sink unless measured cubeb failure justifies it |
 | AUDIO-07 | Validate Bluetooth reconnect and suspend/resume without stale clock progression | Needs native hardware | — | Bounded recovery only |
-| AUDIO-08 | Register and pass the production audio-bearing `application-fullscreen` scenario on native Wayland | Pending | — | Require F11/double-click/Escape/Space, cursor state, continued frames, restoration, and unchanged media/device generations |
+| AUDIO-08 | Register and pass the production audio-bearing `application-fullscreen` scenario on native Wayland | In progress | [Linux system-cubeb audio](linux-port-evidence/2026-08-02-linux-system-cubeb-audio.md) | Audio epoch/progress assertions are shared; explicit WSLg run ended in an unresolved buffer/configure protocol failure after a valid `0 x 0` size hint, so it remains non-gating |
 
 ## 4. Managed output and display transitions
 
@@ -137,14 +137,14 @@ roadmap state actually changes.
 
 | Current test/boundary | Linux disposition | Status |
 | --- | --- | --- |
-| `sunroom_cubeb_dependency_tests` | Reuse with platform-shaped ABI/backend assertions | In progress: shared ABI test passes; selected Linux backend belongs to AUDIO-02 |
-| `sunroom_cubeb_audio_sink_tests` | Reuse shared lifecycle/clock cases; isolate only native Windows control-thread setup | Pending |
+| `sunroom_cubeb_dependency_tests` | Reuse with platform-shaped ABI/backend assertions | Done: shared ABI test passes; real sink diagnostics report the selected backend |
+| `sunroom_cubeb_audio_sink_tests` | Reuse shared lifecycle/clock cases; isolate only native Windows control-thread setup | Done |
 | `sunroom_ffmpeg_dependency_tests` | Reuse with Linux FFmpeg ABI plus VAAPI/DRM PRIME assertions instead of D3D11/no-Vulkan assumptions | Done |
 | `sunroom_libplacebo_dependency_tests` | Reuse with API 360, Vulkan, shader-backend, DOVI, LCMS-observation, and explicit ICC-policy assertions | In progress: dependency features pass; BUILD-07/08 own ICC policy |
 | `sunroom_libass_dependency_tests` and platform-neutral subtitle/media tests | Reuse system libass plus the same embedded ASS/SubRip/PGS fixtures and session behavior | Done: system libass rendering and shared subtitle decode/state behavior pass; Linux QRhi subtitle capture remains to be added to the implemented Vulkan domain |
 | D3D11 target/import/capture tests | Keep Windows-only and add paired Vulkan target/import/capture coverage through the same public behavior | Pending |
-| `application-playback` | Register on Linux once Vulkan and cubeb production paths exist | Pending |
-| `application-fullscreen` | Register on Linux and wait for asynchronous Wayland state/presentation convergence | Pending |
+| `application-audio-first-playback` | Register on Linux once Vulkan and cubeb production paths exist | Done |
+| `application-fullscreen` | Register on Linux and wait for asynchronous Wayland state/presentation convergence | In progress: audio continuity assertion implemented; registration awaits reliable WSLg/native compositor convergence |
 
 ## Environment and claim ledger
 
@@ -153,8 +153,8 @@ roadmap state actually changes.
 | WSL system-dependency build | Done | [Debug/Release, tests on/off, shared tests, and dependency versions](linux-port-evidence/2026-08-01-system-dependency-foundation.md) |
 | WSLg native-Wayland lifecycle | In progress | [Production unmanaged-SDR Vulkan video, fullscreen, and teardown](linux-port-evidence/2026-08-02-wayland-vulkan-presentation.md); one pass plus two cursor-state timeouts and recorded host protocol diagnostics; no native-GPU/managed-color/HDR claim |
 | Native-Wayland SDR video | In progress | Unmanaged assumed-sRGB software path passes on WSLg; managed gamma-2.2 and a real GPU remain |
-| Linux cubeb audio | Pending | Real advancing audio plus PulseAudio and PipeWire-Pulse behavior |
-| Linux fullscreen | In progress | Video-only production scenario passes WSLg; audio-bearing and cross-output scenarios remain |
+| Linux cubeb audio | In progress | [WSLg system-cubeb sink and production playback pass](linux-port-evidence/2026-08-02-linux-system-cubeb-audio.md); native PulseAudio/PipeWire-Pulse route-change and recovery evidence remains |
+| Linux fullscreen | In progress | Video-only production scenario has passed WSLg; audio-bearing assertions are implemented, but the latest run ended in an unresolved buffer/configure protocol failure after a valid zero-size hint and cross-output scenarios remain |
 | Complete Linux Wayland SDR | Pending | Unmanaged assumed-sRGB and available managed gamma-2.2 video, audio, fullscreen, clean install, native Wayland only |
 | Managed Linux HDR | Needs native hardware | Coupled declaration/FP16 path, physical procedure, display transitions, gamma-2.2 SDR rollback |
 | Intel VAAPI acceleration | Needs native hardware | Exact-device DRM PRIME import, NV12/P010, zero CPU transfer and no extra full-frame input copy, software fallback |

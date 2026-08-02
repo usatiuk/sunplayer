@@ -39,3 +39,4 @@ the newer note or decision rather than silently rewriting the investigation.
 * [2026-08-01: Embedded subtitle pipeline](2026-08-01-embedded-subtitle-pipeline.md)
 * [2026-08-02: Qt Wayland decorations for a Vulkan presentation window](2026-08-02-qt-wayland-vulkan-window-decorations.md)
 * [2026-08-02: Redirected Qt Quick depth and the application-chrome outline](2026-08-02-redirected-qt-quick-depth-and-window-outline.md)
+* [2026-08-02: WSLg and Ubuntu system-cubeb audio](2026-08-02-wslg-system-cubeb-audio.md)

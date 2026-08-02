@@ -2,13 +2,14 @@
 
 ## Status
 
-Sunroom now routes decoded audio through the production playback session and
-plays it through the default Windows output device. Presented cubeb frames are
-the ordinary media clock for sources with audio; video-only sources retain the
-monotonic clock.
+Sunroom routes decoded audio through the production playback session and plays
+it through the system-default output on Windows and Linux. Presented cubeb
+frames are the ordinary media clock for sources with audio; video-only sources
+retain the monotonic clock.
 
-The dependency graph includes FFmpeg libswresample and a pinned current cubeb
-overlay. A shared FFmpeg media operation opens and probes one source once,
+The dependency graph includes FFmpeg libswresample, a pinned cubeb overlay on
+Windows, and the distribution cubeb package on Linux. A shared FFmpeg media
+operation opens and probes one source once,
 routes selected audio and video packets under one global count/byte budget,
 decodes FLAC audio with the real FFmpeg decoder, and converts it to 48 kHz
 stereo native-endian interleaved float32 PCM. The same operation decodes video
@@ -27,12 +28,14 @@ submission, presentation, pause, reset, and media-position mapping without an
 operating-system device. It is deliberately lock-based and must not be reused
 as cubeb's real-time callback buffer.
 
-`CubebAudioSink` opens the default WASAPI output through the pinned cubeb
-build. All cubeb lifecycle and position calls run on one dedicated MTA control
-thread. Its callback consumes a preallocated SPSC float queue, writes bounded
-underrun silence, applies one atomically published linear gain, and publishes
-fixed-capacity output-to-media spans. It does not allocate, block, take
-application locks, decode, log, invoke Qt, or perform device recovery.
+`CubebAudioSink` opens the system-default output through the pinned WASAPI
+backend on Windows and the system-selected cubeb backend on Linux. All cubeb
+lifecycle and position calls run on one dedicated control thread; that thread
+also owns the required COM MTA lifetime on Windows. Its callback consumes a
+preallocated SPSC float queue, writes bounded underrun silence, applies one
+atomically published linear gain, and publishes fixed-capacity output-to-media
+spans. It does not allocate, block, take application locks, decode, log, invoke
+Qt, or perform device recovery.
 Production reserves up to 30 seconds of decoded PCM so ordinary source jitter
 can be absorbed without increasing the three-frame decoded-video queue.
 
@@ -62,7 +65,7 @@ one AVFormatContext
                               +----------------------------+----------------+
                               |                                             |
                     ControlledAudioSink                              CubebAudioSink
-                    deterministic tests                      default Windows device
+                    deterministic tests                       system-default device
 ```
 
 The demux owner alone calls `av_read_frame()`. Packet queues are logically per
@@ -139,9 +142,9 @@ The production backend is cubeb in shared mode. Sunroom opens cubeb's
 system-default route rather than enumerating and pinning the endpoint that is
 default at that instant. Cubeb or the sound server performs ordinary route
 migration inside the same cubeb stream. An audio-output epoch identifies that
-cubeb stream lifetime rather than every native endpoint or WASAPI client hidden
-by it. Collection-change notifications remain low-rate diagnostics; they are
-not treated as successful stream-migration boundaries.
+cubeb stream lifetime rather than every native endpoint or backend client
+hidden by it. Collection-change notifications remain low-rate diagnostics;
+they are not treated as successful stream-migration boundaries.
 
 The playback position reported by cubeb is the primary presentation
 observation. Sunroom must not subtract reported latency from that position a
@@ -283,11 +286,12 @@ monitor's frame selection makes that scenario fail.
 
 The callback-boundary tests additionally verify ring wrap, whole-block atomic
 publication, sticky stop/reset cancellation, zero fill, hold-silence mapping,
-and bounded ledger overwrite. A Windows integration scenario explicitly
-selects cubeb's WASAPI backend, opens the default endpoint on the sink's MTA
-thread, and exercises silent preroll, start, position observation, pause,
-generation reset, drain, and destruction. A focused regression proves that a
-PCM block cannot create a preroll/capacity dependency cycle.
+and bounded ledger overwrite. The shared device-backed scenario opens the
+system-default endpoint and exercises silent preroll, start, position
+observation, pause, generation reset, drain, and destruction. Windows requires
+the selected `wasapi` backend and the sink-owned MTA; Linux accepts cubeb's
+nonempty system-selected backend. A focused regression proves that a PCM block
+cannot create a preroll/capacity dependency cycle.
 
 A registered application scenario launches the built `sunroom` executable
 with the production FFmpeg, Cubeb, QML, QRhi, libplacebo, compositor, and
@@ -300,11 +304,17 @@ frame keeps the Player viewport and controls active. Playback liveness no
 longer depends on that UI invariant because the playback monitor drains frames
 without a presentation consumer.
 
-Automated tests do not prove acoustic output, device migration, callback timing
+WSLg verifies that Ubuntu's system cubeb selects Pulse, opens its default
+server route, advances the presentation clock, and drives the installed
+application's real A/V playback; a user-confirmed real-file run is audible
+through WSLg. Automated tests do not prove acoustic output, and WSLg does not
+prove native PulseAudio or PipeWire-Pulse default-route migration, callback timing
 under pressure, real cubeb fault recovery, or speaker-to-display A/V offset.
 Those require real-device fault scenarios and later physical flash/impulse
-measurement. The production cubeb backend is currently Windows-only; macOS and
-Linux packaging and behavior remain explicit future work.
+measurement. macOS packaging and behavior remain future work.
 
-See [the plan](PLAN.md) and
+See [the subsystem plan](PLAN.md),
+[the Linux system-cubeb delivery plan](../../plans/audio/2026-08-02-linux-system-cubeb-audio.md),
+[the matching runtime research](../../research/2026-08-02-wslg-system-cubeb-audio.md),
+and
 [ADR 0011](../../decisions/0011-single-pass-media-routing-and-audio-output-boundary.md).

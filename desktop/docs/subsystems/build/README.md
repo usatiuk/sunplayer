@@ -7,9 +7,9 @@ Vulkan player on Ubuntu 26.04. Windows retains pinned vcpkg dependencies.
 Linux uses only system Qt, FFmpeg, libplacebo, cubeb, libass, Vulkan, Wayland,
 VAAPI, and DRM packages. Embedded subtitle discovery, FFmpeg decoding,
 libass/bitmap rendering, shared subtitle state, Wayland capability inventory,
-and the Linux Vulkan graphics domain are integrated. Linux physical audio,
-VAAPI/DRM PRIME, managed HDR, and complete distributable packaging are not
-integrated.
+the Linux Vulkan graphics domain, and system-cubeb output are integrated.
+Native Linux route-change/recovery evidence, VAAPI/DRM PRIME, managed HDR, and
+complete distributable packaging remain open.
 
 The currently validated Windows configuration is:
 
@@ -53,9 +53,7 @@ Windows uses vcpkg manifest mode. The repository owns:
   SPIRV-Cross port cannot satisfy libplacebo's shared C dependency.
 * `vcpkg-ports/cubeb`, because the registry port is older than the reviewed
   audio timing and recovery behavior. The overlay also corrects upstream's
-  installed CMake target so consumers receive its public include directory and
-  makes disabled WASAPI device switching fail closed on every reconfigure
-  event.
+  installed CMake target so consumers receive its public include directory.
 * `cmake/vcpkg/triplets/x64-windows-clangcl.cmake` and its chainloaded
   toolchain, so compiler identity participates in vcpkg's package ABI and
   binary-cache key.
@@ -130,20 +128,16 @@ D3D11VA, D3D12VA, DXVA2, and Media Foundation without a separate manifest
 feature. It excludes Vulkan, swscale, filter/device libraries, command-line
 tools, vendor SDKs, and external codec libraries in this slice.
 
-The project-local cubeb overlay is explicitly Windows-only and builds the native WASAPI
-backend with tests, tools, and Rust backends disabled. `BUNDLE_SPEEX=OFF`
+The project-local cubeb overlay is explicitly Windows-only and builds the
+native WASAPI backend with tests, tools, and Rust backends disabled.
+`BUNDLE_SPEEX=OFF`
 prefers an external SpeexDSP package, but cubeb retains its embedded Speex
 fallback when none is present; the overlay ships both notices. This does not
 require a Rust toolchain on Windows. Linux instead consumes the distribution's
-system cubeb package; live output remains a validation gap rather than a build-
-packaging gap. macOS packaging remains undecided. vcpkg downloads and binary
-caches remain project-build or per-user cache state and do not install cubeb
-system-wide.
-
-The runtime patch is intentionally narrower than a Sunroom-owned WASAPI
-backend: it only prevents cubeb from silently replacing an `IAudioClient` when
-the stream requested disabled switching. Any upstream update must check whether
-equivalent behavior landed before refreshing or dropping the patch.
+system cubeb package; WSLg verifies that package's Pulse backend through the
+real sink and application. macOS packaging remains undecided. vcpkg downloads
+and binary caches remain project-build or per-user cache state and do not
+install cubeb system-wide.
 
 ## Qt dependency
 
@@ -309,23 +303,26 @@ Qt runtime available; the harness terminated the process after four seconds
 without user interaction.
 
 On Ubuntu 26.04 under WSL, clean Debug and Release builds pass with system
-dependencies. All 24 registered Linux tests and QML lint pass, including
-shared embedded-subtitle behavior, system libass rendering, exact Wayland SDR
-surface selection, application-chrome layout behavior, and packaged-QML
-verification. The final gamma-2.2 pixel readback remains in the Windows-only
-compositor target. A Release install-tree generation also
-succeeds and keeps system libraries under distribution ownership.
+dependencies. All 26 registered Linux tests and QML lint pass, including the
+system-cubeb sink, real application audio-first playback, shared embedded-
+subtitle behavior, system libass rendering, exact Wayland SDR surface
+selection, application-chrome layout behavior, and packaged-QML verification.
+The final gamma-2.2 pixel readback remains in the Windows-only compositor
+target. A Release install-tree generation also succeeds and keeps system
+libraries under distribution ownership.
 
 WSLg production smoke testing creates the real Qt Wayland window, Vulkan 1.3
 QRhi domain, imported libplacebo device, direct RGBA16F target, redirected QML
 scene, and swapchain. The installed Release executable verifies its embedded
-Sunroom module against system Qt imports, and a video-only fixture presents
-through fullscreen and restoration under Vulkan validation with status zero.
-WSLg still emits recorded configure/protocol diagnostics around these
-transitions. The environment uses
+Sunroom module against system Qt imports. A prior video-only fixture run passed
+fullscreen/restoration; the current audio-bearing explicit run ended in an
+unresolved buffer/configure protocol failure before its final assertion. The
+environment uses
 llvmpipe and exposes neither `/dev/dri` nor color-management-v1, so this proves
-the unmanaged assumed-sRGB software path and lifecycle only. Linux cubeb
-output, native GPU behavior, VAAPI/DRM PRIME, managed gamma-2.2 compositor
+the unmanaged assumed-sRGB software path and lifecycle only. The same installed
+player opens WSLg's Pulse-compatible default route through system cubeb and
+advances its cubeb-backed A/V clock. Native PulseAudio/PipeWire-Pulse route
+changes, native GPU behavior, VAAPI/DRM PRIME, managed gamma-2.2 compositor
 declaration, HDR, and physical displays remain open.
 Windows has not yet been rerun after the cross-platform change and remains an
 explicit regression gate.

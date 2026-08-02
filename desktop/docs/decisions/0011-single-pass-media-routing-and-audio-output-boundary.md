@@ -53,9 +53,10 @@ implementation, `ControlledAudioSink`, is bounded and deterministic and keeps
 submitted and presented cursors separate. It intentionally uses locks and is
 not a real-time callback implementation.
 
-The physical implementation is a pinned cubeb backend. The real-time callback
-reads from preallocated PCM and metadata storage, writes bounded hold silence,
-and updates fixed-capacity observations only. It does not
+The physical implementation is cubeb: Windows uses a pinned project overlay,
+while Linux uses its distribution package. The real-time callback reads from
+preallocated PCM and metadata storage, writes bounded hold silence, and updates
+fixed-capacity observations only. It does not
 decode, allocate, block, log synchronously, invoke Qt, or perform recovery.
 Sunroom serializes stream lifecycle on its control thread. Cubeb and the sound
 service own ordinary migration of a stream following the system default;
@@ -144,9 +145,9 @@ Benefits:
   unrelated per-stream hard caps.
 * Deterministic scenarios can exercise real demux, decode, resampling, queueing,
   and clock mapping without opening an audio device.
-* A bounded Windows application scenario additionally proves the production
-  Cubeb clock, QML viewport, QRhi/libplacebo, compositor, and swapchain wiring
-  for audio-first startup.
+* Bounded Windows and Linux application scenarios additionally prove the
+  production cubeb clock, QML viewport, QRhi/libplacebo, compositor, and
+  swapchain wiring for audio-first startup.
 * The cubeb callback has a small, explicit real-time contract.
 * The video scheduler remains clock-source-neutral.
 * Output gain and mute share the same sink contract in deterministic and
@@ -163,15 +164,17 @@ Costs and current limits:
   container interleave. Production telemetry and unreliable-source scenarios
   must establish whether soft watermarks or reservations are needed.
 * `ControlledAudioSink` proves deterministic queue and cursor behavior; the
-  physical sink's default-endpoint tests do not prove real playback latency.
+  Windows WASAPI and WSLg Pulse default-route tests do not prove real playback
+  latency or native Linux route migration.
 * Hold-silence mapping, the initial `Buffering` interruption, and the
   audio-backed production clock exist. Replacing a physical device/output
   epoch while retaining the media generation remains a later slice; sustained
   clock loss and terminal device failure currently become visible errors.
-* cubeb is maintained as a project-local overlay because the pinned registry
-  package is substantially older than the reviewed upstream revision. ADR 0016
-  removed the temporary fail-closed WASAPI patch and explicit device pinning;
-  the stream now follows cubeb's system-default route.
+* Windows cubeb is maintained as a project-local overlay because the pinned
+  registry package is substantially older than the reviewed upstream revision.
+  Linux consumes the distribution cubeb package. ADR 0016 removed the
+  temporary fail-closed WASAPI patch and explicit device pinning; both
+  platforms now follow cubeb's system-default route.
 
 ## Alternatives considered
 

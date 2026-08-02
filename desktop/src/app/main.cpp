@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <cstdint>
 #include <cstdlib>
 #include <memory>
 #include <optional>
@@ -112,6 +113,8 @@ struct FullscreenSmokeState {
     FullscreenSmokeStage stage = FullscreenSmokeStage::InitialFrame;
     qulonglong presentedFrames = 0;
     qulonglong frameBaseline = 0;
+    std::uint64_t initialAudioPresentedFrames = 0;
+    std::uint64_t audioOutputEpoch = 0;
 };
 
 void startFullscreenSmokeScenario(
@@ -189,19 +192,29 @@ void startFullscreenSmokeScenario(
             };
 
             switch (state->stage) {
-            case FullscreenSmokeStage::InitialFrame:
+            case FullscreenSmokeStage::InitialFrame: {
+                const auto audio =
+                    window.mediaSession().currentAudioPresentation();
                 if (!window.isExposed()
                         || window.windowState() != Qt::WindowNoState
                         || state->presentedFrames == 0
+                        || !audio
+                        || !audio->valid
+                        || !audio->advancing
+                        || audio->presentedFrames == 0
                         || !window.cursorHidden()
                         || window.cursor().shape() != Qt::BlankCursor) {
                     return;
                 }
+                state->initialAudioPresentedFrames =
+                    audio->presentedFrames;
+                state->audioOutputEpoch = audio->audioOutputEpoch;
                 waitForNextFrame();
                 sendKeyClick(window, Qt::Key_F11);
                 state->stage =
                     FullscreenSmokeStage::FullscreenFromNormal;
                 return;
+            }
             case FullscreenSmokeStage::FullscreenFromNormal:
                 if (window.windowState() != Qt::WindowFullScreen
                         || !window.cursorHidden()
@@ -322,21 +335,39 @@ void startFullscreenSmokeScenario(
                 sendKeyClick(window, Qt::Key_F11);
                 state->stage = FullscreenSmokeStage::RestoredMaximized;
                 return;
-            case FullscreenSmokeStage::RestoredMaximized:
+            case FullscreenSmokeStage::RestoredMaximized: {
+                const auto audio =
+                    window.mediaSession().currentAudioPresentation();
                 if (window.windowState() != Qt::WindowMaximized
-                        || !hasNewFrame()) {
+                        || !hasNewFrame()
+                        || !audio
+                        || audio->audioOutputEpoch
+                            != state->audioOutputEpoch
+                        || audio->presentedFrames
+                            <= state->initialAudioPresentedFrames) {
                     return;
                 }
                 qCInfo(sunroomLogApplication).noquote()
-                    << "event=application.fullscreen_smoke_complete";
+                    << "event=application.fullscreen_smoke_complete"
+                    << "audioBackend="
+                        + window.mediaSession().audioBackend()
+                    << "audioPresented=" + QString::number(
+                        audio->presentedFrames);
+                const QByteArray backend =
+                    window.mediaSession().audioBackend().toUtf8();
                 std::fprintf(
                     stdout,
-                    "Sunroom fullscreen smoke passed\n");
+                    "Sunroom fullscreen smoke passed: "
+                    "audioBackend=%s, audioPresented=%llu\n",
+                    backend.constData(),
+                    static_cast<unsigned long long>(
+                        audio->presentedFrames));
                 std::fflush(stdout);
                 deadline->stop();
                 poll->stop();
                 app.exit(EXIT_SUCCESS);
                 return;
+            }
             }
         });
 
@@ -679,11 +710,20 @@ int main(int argc, char *argv[]) {
 
                 qCInfo(sunroomLogApplication).noquote()
                     << "event=application.playback_smoke_complete"
-                    << "positionMs=" + QString::number(position);
+                    << "positionMs=" + QString::number(position)
+                    << "audioBackend=" + session.audioBackend()
+                    << "audioPresented=" + QString::number(
+                        audio->presentedFrames);
+                const QByteArray backend =
+                    session.audioBackend().toUtf8();
                 std::fprintf(
                     stdout,
-                    "Sunroom playback smoke passed at %lld ms\n",
-                    static_cast<long long>(position));
+                    "Sunroom playback smoke passed: positionMs=%lld, "
+                    "audioBackend=%s, audioPresented=%llu\n",
+                    static_cast<long long>(position),
+                    backend.constData(),
+                    static_cast<unsigned long long>(
+                        audio->presentedFrames));
                 std::fflush(stdout);
                 playbackSmokeDeadline.stop();
                 playbackSmokePoll.stop();

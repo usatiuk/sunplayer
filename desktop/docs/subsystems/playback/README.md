@@ -163,13 +163,15 @@ exposes `playRequested` independently of its interruption:
 * Pause intent is recorded before the fallible sink observation and remains
   separate from the Buffering fact.
 
-Physical stream replacement is not implemented yet. Its accepted direction is
-to re-enumerate the explicit default, replace only the audio-output epoch from
-the frozen position, preroll it, and leave recovery only after a trustworthy
-new presented-audio observation. The playback generation, shared demux, and
-video decoder stay alive unless their buffered timeline cannot be reconciled.
-This avoids rereading a network source, allowing video to run silently ahead,
-or trusting cubeb's opaque migration as an acoustically continuous epoch.
+Ordinary default-route switching is delegated to the existing null-device
+cubeb stream on both Windows and Linux; it does not replace the audio-output
+epoch. Application-level physical stream replacement after a cubeb error is
+not implemented yet. Its accepted direction is to replace only the audio-
+output epoch from the frozen position, preroll it, and leave recovery only
+after a trustworthy new presented-audio observation. The playback generation,
+shared demux, and video decoder stay alive unless their buffered timeline
+cannot be reconciled. This avoids rereading a network source or allowing video
+to run silently ahead.
 
 A short audio underrun writes silence and lowers clock confidence. A sustained
 underrun participates in the unified buffering state and freezes progression.

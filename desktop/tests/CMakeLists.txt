@@ -119,11 +119,9 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     )
 endif ()
 
-if (WIN32)
-    qt_add_executable(sunroom_cubeb_audio_sink_tests
-            integration/audio/tst_CubebAudioSink.cpp
-    )
-endif ()
+qt_add_executable(sunroom_cubeb_audio_sink_tests
+        integration/audio/tst_CubebAudioSink.cpp
+)
 
 set_source_files_properties(../src/app/Main.qml PROPERTIES
         QT_RESOURCE_ALIAS Main.qml
@@ -457,13 +455,13 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     )
 endif ()
 
-if (WIN32)
-    target_link_libraries(sunroom_cubeb_audio_sink_tests
-            PRIVATE
-            Qt6::Test
-            sunroom_audio
-    )
+target_link_libraries(sunroom_cubeb_audio_sink_tests
+        PRIVATE
+        Qt6::Test
+        sunroom_audio
+)
 
+if (WIN32)
     foreach (test_target IN ITEMS
             sunroom_presentation_target_tests
             sunroom_application_log_tests
@@ -602,30 +600,32 @@ set_tests_properties(
         TIMEOUT 30
 )
 
+add_test(
+        NAME cubeb-audio-sink
+        COMMAND sunroom_cubeb_audio_sink_tests
+)
+set_tests_properties(
+        cubeb-audio-sink
+        PROPERTIES
+        LABELS "audio;device;integration;${sunroom_test_platform_label}"
+        TIMEOUT 30
+)
+
+add_test(
+        NAME application-audio-first-playback
+        COMMAND $<TARGET_FILE:sunroom>
+                --playback-smoke
+                --no-log-file
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/media/sdr-bt709-ffv1-video-late-flac.mkv"
+)
+set_tests_properties(
+        application-audio-first-playback
+        PROPERTIES
+        LABELS "application;audio;ffmpeg;gpu;integration;${sunroom_test_platform_label}"
+        TIMEOUT 30
+)
+
 if (WIN32)
-    add_test(
-            NAME cubeb-audio-sink
-            COMMAND sunroom_cubeb_audio_sink_tests
-    )
-    set_tests_properties(
-            cubeb-audio-sink
-            PROPERTIES
-            LABELS "audio;device;integration;windows"
-            TIMEOUT 30
-    )
-    add_test(
-            NAME application-audio-first-playback
-            COMMAND $<TARGET_FILE:sunroom>
-                    --playback-smoke
-                    --no-log-file
-                    "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/media/sdr-bt709-ffv1-video-late-flac.mkv"
-    )
-    set_tests_properties(
-            application-audio-first-playback
-            PROPERTIES
-            LABELS "application;audio;ffmpeg;gpu;integration;windows"
-            TIMEOUT 30
-    )
     add_test(
             NAME application-fullscreen
             COMMAND $<TARGET_FILE:sunroom>
@@ -636,7 +636,7 @@ if (WIN32)
     set_tests_properties(
             application-fullscreen
             PROPERTIES
-            LABELS "application;ui;gpu;integration;windows"
+            LABELS "application;audio;ui;gpu;integration;windows"
             TIMEOUT 30
     )
 endif ()

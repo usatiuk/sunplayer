@@ -10,12 +10,15 @@ explicit recovery semantics.
 
 * [x] Enable FFmpeg libswresample without enabling unrelated FFmpeg features.
 * [x] Add a Windows-only project-local cubeb overlay pinned to a reviewed
-  upstream commit; do not claim unbuilt macOS/Linux backends.
+  upstream commit; do not reuse it as Linux packaging.
 * [x] Keep Windows cubeb packaging native; defer Rust backend packaging until
-  macOS and Linux are exercised.
+  macOS is exercised.
+* [x] Use Ubuntu's system cubeb package for Linux instead of extending the
+  Windows overlay or introducing a second native audio implementation.
 * [x] Verify cubeb's public C ABI can compile, link, and load and reports the
-  compiled WASAPI backend without requiring COM initialization or an available
-  audio endpoint.
+  compiled WASAPI backend on Windows; keep the older Ubuntu ABI check at its
+  available public boundary and observe the selected Linux backend through the
+  real sink.
 * [x] Define interleaved float32 PCM blocks with generation, sample index, and
   media timestamp.
 * [x] Add a bounded controlled sink with distinct submitted and presented
@@ -62,7 +65,8 @@ explicit recovery semantics.
   and underrun counters.
 * [ ] Add monotonic observation time, device identity where available, and
   callback cadence/jitter diagnostics.
-* [ ] Verify default-device playback and position monotonicity on Windows.
+* [x] Verify default-device playback and position monotonicity through the
+  Windows WASAPI and WSLg Pulse device-backed scenarios.
 * [x] In the device-backed suite, initialize COM on the sink's dedicated MTA
   thread, request WASAPI by name, and distinguish stream-open failure from
   dependency loading.
@@ -116,8 +120,10 @@ explicit recovery semantics.
   samples are not themselves failure.
 * [ ] Validate default-device change, USB removal, Bluetooth disconnect and
   reconnect, sleep/wake, and service interruption on Windows.
-* [ ] Package and validate cubeb's current macOS and Linux backend choices with
-  locked Rust dependencies if those backends remain selected upstream.
+* [x] Build and run the Linux production sink through Ubuntu's system cubeb
+  package and WSLg's Pulse-compatible server.
+* [ ] Package and validate cubeb's current macOS backend choice with locked
+  Rust dependencies if that backend remains selected upstream.
 * [ ] Validate PulseAudio and PipeWire-Pulse behavior on supported Linux
   configurations.
 

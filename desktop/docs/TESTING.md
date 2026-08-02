@@ -12,14 +12,16 @@ against mocked collaborators could be fast while proving little about those
 boundaries. The default regression test should therefore exercise the highest
 practical public boundary with real dependencies and representative data.
 
-The practical boundary changes as the player grows. Today the repository has a
-Windows QRhi presentation path plus asynchronous synchronized A/V playback,
+The practical boundary changes as the player grows. Today the repository has
+Windows and native-Wayland QRhi presentation paths plus asynchronous
+synchronized A/V playback,
 so useful tests cover display-target policy, resource-generation contracts,
 real QRhi composition, bounded frame-mailbox backpressure, stop-aware packet
 channels, timestamp-driven selection, active-source/session lifecycle, and
 retained software/D3D11VA `AVFrame`s, single-pass A/V decode and resampling,
-callback-safe PCM/metadata buffering, and a real default-WASAPI lifecycle
-boundary. A deterministic production-session scenario now uses presented audio
+callback-safe PCM/metadata buffering, and real cubeb default-route lifecycle
+boundaries on Windows and Linux. A deterministic production-session scenario
+now uses presented audio
 as the video scheduler's clock. Embedded-subtitle coverage crosses the same
 single FFmpeg operation, real libass and bitmap rendering, the QML track menu,
 and final QRhi composition. A registered real-process scenario additionally
@@ -29,12 +31,14 @@ device recovery arrive, deterministic whole-pipeline scenarios should become
 the bulk of behavioral coverage.
 
 The Ubuntu system build now compiles that shared media, subtitle, playback,
-and UI graph plus the native-Wayland Vulkan path. It passes 24 Linux CTests and
-QML lint, including real FFmpeg/subtitle fixtures, system dependencies, exact
+and UI graph plus the native-Wayland Vulkan path. It passes 26 Linux CTests and
+QML lint, including a device-backed system-cubeb lifecycle, real audio-first
+application playback, FFmpeg/subtitle fixtures, system dependencies, exact
 unmanaged-sRGB versus managed-gamma-2.2 surface/transfer selection, and
-application-chrome layout/state behavior. A WSLg production scenario exercises the real Qt
-Wayland window, llvmpipe Vulkan device, libplacebo direct target, redirected
-QML, swapchain, fullscreen/restoration, and teardown under Vulkan validation.
+application-chrome layout/state behavior. A WSLg production scenario exercises
+the real Qt Wayland window, llvmpipe Vulkan device, libplacebo direct target,
+redirected QML, swapchain, fullscreen/restoration, and teardown under Vulkan
+validation.
 The QML shell scenario also protects the full-root application outline's
 media-independent visibility and DPR-derived thickness. The original missing-
 outline regression is additionally covered by an interactive production WSLg
@@ -42,8 +46,11 @@ check because the component test cannot observe the redirected GPU texture.
 One bounded run completes; two other attempts timed out on cursor-state
 convergence, so this is narrow path evidence rather than complete WSLg
 lifecycle acceptance.
-Physical cubeb output, native GPU behavior, VAAPI import, live managed gamma-
-2.2 declaration, and HDR display behavior remain unproven.
+WSLg's Pulse-compatible cubeb output and advancing application audio clock are
+proven, and a user-confirmed real-file run is audible through WSLg. Native
+PulseAudio/PipeWire-Pulse acoustic output and live default-route switching,
+native GPU behavior, VAAPI import, live managed gamma-2.2 declaration, and HDR
+display behavior remain unproven.
 
 The central principle is:
 
@@ -252,9 +259,9 @@ production application state directly. Playback smoke waits for distinct video
 revisions plus live Cubeb-derived audio-master clock progress; fullscreen smoke
 drives native F11, Escape, Space, and redirected background double-click input
 while checking normal/maximized restoration, native cursor hiding, and continued
-video presentation through both fullscreen transitions. Both report a process
-result and exit. Keep these modes small until scenarios need shared interactive
-command/event orchestration.
+video and audio-clock presentation through both fullscreen transitions. Both
+report a process result and exit. Keep these modes small until scenarios need
+shared interactive command/event orchestration.
 
 ## Focused deterministic tests
 
@@ -476,15 +483,15 @@ light.
 
 The current WSLg lane is intentionally narrower. Its unmanaged assumed-sRGB
 surface and software Vulkan device exercise production ownership, rendering,
-synchronization, fullscreen convergence, and teardown. One bounded run
-returns status zero, while two attempts timed out waiting for cursor-state
-convergence; broader transition acceptance therefore remains open. These
-results do not satisfy a
+synchronization, and teardown. A prior video-only fullscreen run returned
+status zero, while two attempts timed out waiting for cursor-state convergence.
+The current audio-bearing explicit run ended in an unresolved buffer/configure
+protocol failure before its final assertion; broader transition acceptance
+therefore remains open. These results do not satisfy a
 real-GPU, color-management-v1, HDR, VAAPI, compositor-decoration, or physical-
-output gate. WSLg's zero-size fullscreen configure warnings, post-completion
-xdg-surface buffer/configure diagnostic, and broken-pipe message are recorded
-as environment output for the passing bounded scenario. Sunroom does not add
-a compositor-specific state machine to
+output gate. WSLg's zero-size fullscreen configure warnings, xdg-surface
+buffer/configure diagnostics, and broken-pipe messages are recorded as
+environment output. Sunroom does not add a compositor-specific state machine to
 suppress them; native compositor transition coverage remains open.
 
 ## Physical-output verification

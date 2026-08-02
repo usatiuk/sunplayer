@@ -12,10 +12,12 @@
 #include <type_traits>
 #include <utility>
 
-#ifndef NOMINMAX
-#define NOMINMAX
+#ifdef _WIN32
+    #ifndef NOMINMAX
+        #define NOMINMAX
+    #endif
+    #include <objbase.h>
 #endif
-#include <objbase.h>
 
 extern "C" {
 #include <cubeb/cubeb.h>
@@ -23,6 +25,11 @@ extern "C" {
 
 namespace {
 constexpr AudioStreamFormat supportedFormat{48'000, 2};
+#ifdef _WIN32
+constexpr const char *requestedBackend = "wasapi";
+#else
+constexpr const char *requestedBackend = nullptr;
+#endif
 static_assert(std::atomic<float>::is_always_lock_free);
 
 std::optional<std::int64_t> timestampForFrame(
@@ -150,6 +157,7 @@ struct CubebAudioSink::Impl {
     }
 
     void run(std::stop_token stopToken) {
+#ifdef _WIN32
         const HRESULT comResult = CoInitializeEx(
             nullptr, COINIT_MULTITHREADED);
         const bool comInitialized = SUCCEEDED(comResult);
@@ -157,8 +165,10 @@ struct CubebAudioSink::Impl {
             owner.m_error.store(
                 CubebAudioSink::Error::ComInitialization,
                 std::memory_order_release);
-        } else if (cubeb_init(
-                &context, "Sunroom", "wasapi") != CUBEB_OK) {
+        } else
+#endif
+        if (cubeb_init(
+                &context, "Sunroom", requestedBackend) != CUBEB_OK) {
             owner.m_error.store(
                 CubebAudioSink::Error::ContextInitialization,
                 std::memory_order_release);
@@ -207,8 +217,10 @@ struct CubebAudioSink::Impl {
             }
             cubeb_destroy(context);
         }
+#ifdef _WIN32
         if (comInitialized)
             CoUninitialize();
+#endif
     }
 
     CubebAudioSink &owner;
@@ -290,8 +302,6 @@ void CubebAudioSink::reset(
                 format.channelCount),
             .layout = CUBEB_LAYOUT_STEREO,
             .prefs = CUBEB_STREAM_PREF_NONE,
-            .input_params =
-                CUBEB_INPUT_PROCESSING_PARAM_NONE,
         };
         std::uint32_t minimumLatency = 0;
         if (cubeb_get_min_latency(
@@ -463,9 +473,9 @@ AudioPresentationSnapshot CubebAudioSink::snapshot() const {
             && firstMedia.has_value();
         const std::uint64_t terminalMediaFrames =
             m_outputLedger.mediaFrames();
-        // CUBEB_STATE_DRAINED is the authoritative completion boundary. The
-        // raw WASAPI position may stop updating just before the final padding
-        // reaches zero, so do not let a still-queryable stale clock move the
+        // CUBEB_STATE_DRAINED is the authoritative completion boundary. A
+        // backend position may stop updating just before the final buffered
+        // frames drain, so do not let a still-queryable stale clock move the
         // terminal media endpoint backward.
         const std::uint64_t mediaPositionFrames =
             terminalPositionAvailable

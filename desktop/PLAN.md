@@ -140,9 +140,13 @@ Vulkan presentation foundations plus continuous local-file playback:
   application teardown. Two other runs timed out waiting for cursor-state
   convergence, and remaining WSLg compositor diagnostics are recorded
   separately, so broader lifecycle acceptance remains in progress.
-  All 24 Linux CTests and QML lint pass. Linux physical audio, preferred-target/HDR
-  transitions, VAAPI/DRM PRIME, native GPU/display validation, and packaging
-  remain pending.
+  All 26 Linux CTests and QML lint pass. Ubuntu's system cubeb selects WSLg's
+  Pulse-compatible default route, and both the real sink lifecycle and
+  audio-first application playback advance through the production cubeb clock.
+  User-confirmed real-file playback is also audible through WSLg.
+  Native PulseAudio/PipeWire-Pulse route-change and recovery evidence,
+  preferred-target/HDR transitions, VAAPI/DRM PRIME, native GPU/display
+  validation, and packaging remain pending.
 * Qt remains the sole Wayland toplevel and surface owner. If xdg-decoration is
   absent, one modular QML chrome layer uses public Qt system move/resize/state
   operations and system-theme glyphs with bundled Lucide fallbacks. It
@@ -166,14 +170,14 @@ Vulkan presentation foundations plus continuous local-file playback:
   session passes the active graphics capability without adding a parallel
   audio demux context. Hardware fallback intentionally restarts the entire
   playback generation with fresh shared contexts.
-* A Windows `CubebAudioSink` opens the default WASAPI endpoint from one
-  dedicated MTA control thread. Its real-time callback consumes preallocated
-  PCM, records bounded output-to-media mappings, and represents short underruns
-  as hold silence. The sink exposes separate media/device positions, optional
-  latency and device-notification capabilities, and generation-safe drain. The
-  sink opens cubeb's system-default route and lets cubeb migrate it within one
-  cubeb-stream epoch. The former explicit endpoint pin and fail-closed cubeb
-  patch have been removed.
+* One `CubebAudioSink` opens the system-default route on Windows and Linux. Its
+  dedicated control thread owns the cubeb lifecycle and, on Windows, the COM
+  MTA. Windows requests WASAPI; Linux lets the distribution cubeb package
+  select its backend. The real-time callback consumes preallocated PCM,
+  records bounded output-to-media mappings, and represents short underruns as
+  hold silence. Cubeb and the operating-system sound service own ordinary
+  default-route migration within one cubeb-stream epoch; Sunroom adds no
+  parallel device watcher or backend policy.
 * Playback exposes user play intent independently from audio interruption.
   Sustained hold-silence enters `Buffering`, preserves the last confident
   audio-master position, and keeps video frozen without switching to a
@@ -382,10 +386,12 @@ Documentation: `docs/subsystems/video-rendering/`
 * [x] Audio-output backend direction and pinned cubeb dependency
 * [x] Initial real FFmpeg audio decoding and libswresample conversion
 * [x] Bounded controlled PCM buffering
-* [x] Real-time-safe Windows device callback and default-endpoint lifecycle
+* [x] Real-time-safe Windows and Linux cubeb callback and default-route
+  lifecycle
 * [x] Production session output and presented-audio master clock
 * [x] Session-lifetime volume and mute at the audio-output boundary
-* [ ] Device changes and recovery
+* [x] Delegate ordinary default-device switching to cubeb's null-device stream
+* [ ] Device-error recovery and native route-change validation
 
 Documentation: `docs/subsystems/audio/`
 
