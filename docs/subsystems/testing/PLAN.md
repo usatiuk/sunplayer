@@ -210,7 +210,8 @@ Implement alongside graphics milestone 1:
 
 ## Milestone 4: dedicated systems coverage
 
-* [x] First real supported GPU and D3D11VA decode/import configuration.
+* [x] First real supported Windows GPU/D3D11VA and Apple
+  Metal/VideoToolbox decode/import configurations.
 * [ ] Broader GPU, codec, bit-depth, and hardware-decode/import configurations.
 * [ ] D3D, Vulkan, and Metal validation modes where applicable.
 * [ ] Device loss, allocation failure, and long resource-lifecycle stress.

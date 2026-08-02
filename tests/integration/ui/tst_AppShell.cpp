@@ -114,6 +114,9 @@ void AppShellTest::publishesActiveViewport() {
     QObject *const playerPage =
         rootItem->findChild<QObject *>(
             QStringLiteral("playerPage"));
+    QObject *const openDialog =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("openDialog"));
     QObject *const playbackHoverHandler =
         rootItem->findChild<QObject *>(
             QStringLiteral("playbackHoverHandler"));
@@ -221,6 +224,14 @@ void AppShellTest::publishesActiveViewport() {
             QStringLiteral("seekForwardButton"));
     QVERIFY(emptyState);
     QVERIFY(playerPage);
+    QVERIFY(openDialog);
+#ifdef Q_OS_MACOS
+    QCOMPARE(
+        openDialog->property("parentWindow").value<QWindow *>(),
+        &windowCommands);
+#else
+    QVERIFY(!openDialog->property("parentWindow").value<QWindow *>());
+#endif
     QVERIFY(playbackHoverHandler);
     QVERIFY(fullscreenBackgroundMouseArea);
     QVERIFY(emptyHdrLabButton);

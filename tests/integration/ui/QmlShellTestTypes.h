@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QString>
 #include <QUrl>
+#include <QWindow>
 #include <QtQml/qqmlregistration.h>
 
 class ShellTestSubtitleTrackModel final : public QAbstractListModel {
@@ -110,7 +111,7 @@ private:
     bool m_maximized = false;
 };
 
-class ShellTestWindowCommands final : public QObject {
+class ShellTestWindowCommands final : public QWindow {
     Q_OBJECT
     QML_NAMED_ELEMENT(WindowCommands)
     QML_UNCREATABLE("Test commands are supplied by the component harness")
@@ -121,8 +122,8 @@ class ShellTestWindowCommands final : public QObject {
     Q_PROPERTY(QObject *windowChrome READ windowChrome CONSTANT)
 
 public:
-    explicit ShellTestWindowCommands(QObject *parent)
-        : QObject(parent),
+    explicit ShellTestWindowCommands(QWindow *parent)
+        : QWindow(parent),
           m_windowChrome(this) {}
 
     int toggleCount() const { return m_toggleCount; }

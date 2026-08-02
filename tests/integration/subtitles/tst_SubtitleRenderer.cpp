@@ -134,8 +134,8 @@ private slots:
 };
 
 void SubtitleRendererTest::rendersAssAndRestoresThePausedRoute() {
-#ifndef Q_OS_WIN
-    QSKIP("The supported QRhi subtitle integration test is Windows D3D11");
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
+    QSKIP("This test requires a D3D11 or Metal graphics domain");
 #else
     std::unique_ptr<GraphicsDeviceDomain> graphicsDevice =
         GraphicsBackendFactory::createDeviceDomain();
@@ -228,8 +228,8 @@ void SubtitleRendererTest::rendersAssAndRestoresThePausedRoute() {
 }
 
 void SubtitleRendererTest::replacesAndClearsBitmapCompositions() {
-#ifndef Q_OS_WIN
-    QSKIP("The supported QRhi subtitle integration test is Windows D3D11");
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
+    QSKIP("This test requires a D3D11 or Metal graphics domain");
 #else
     std::unique_ptr<GraphicsDeviceDomain> graphicsDevice =
         GraphicsBackendFactory::createDeviceDomain();
@@ -305,8 +305,8 @@ void SubtitleRendererTest::replacesAndClearsBitmapCompositions() {
 }
 
 void SubtitleRendererTest::failureIsLatchedUntilNextGeneration() {
-#ifndef Q_OS_WIN
-    QSKIP("The supported QRhi subtitle integration test is Windows D3D11");
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
+    QSKIP("This test requires a D3D11 or Metal graphics domain");
 #else
     std::unique_ptr<GraphicsDeviceDomain> graphicsDevice =
         GraphicsBackendFactory::createDeviceDomain();

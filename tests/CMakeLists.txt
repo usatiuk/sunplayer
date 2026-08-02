@@ -584,6 +584,8 @@ add_test(
 
 if (WIN32)
     set(sunroom_test_platform_label windows)
+elseif (APPLE)
+    set(sunroom_test_platform_label macos)
 else ()
     set(sunroom_test_platform_label linux)
 endif ()
@@ -789,10 +791,6 @@ if (WIN32)
             integration/presentation/tst_QrhiCompositor.cpp
     )
 
-    qt_add_executable(sunroom_subtitle_renderer_tests
-            integration/subtitles/tst_SubtitleRenderer.cpp
-    )
-
     target_include_directories(sunroom_qrhi_compositor_tests
             PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/../src"
@@ -806,6 +804,41 @@ if (WIN32)
             sunroom_video_pipeline
     )
 
+    qt_add_shaders(
+            sunroom_qrhi_compositor_tests
+            "sunroom_qrhi_compositor_test_shaders"
+            ${sunroom_shader_options}
+            PREFIX
+            /shaders
+            BASE
+            ../src/presentation/shaders
+            FILES
+            ../src/presentation/shaders/fullscreen.vert
+            ../src/presentation/shaders/diagnostic_video.frag
+            ../src/presentation/shaders/compositor.frag
+    )
+
+    sunroom_stage_windows_runtime(
+            sunroom_qrhi_compositor_tests
+    )
+
+    add_test(
+            NAME qrhi-compositor
+            COMMAND sunroom_qrhi_compositor_tests
+    )
+    set_tests_properties(
+            qrhi-compositor
+            PROPERTIES
+            LABELS "gpu;windows"
+            TIMEOUT 30
+    )
+
+endif ()
+
+if (WIN32 OR APPLE)
+    qt_add_executable(sunroom_subtitle_renderer_tests
+            integration/subtitles/tst_SubtitleRenderer.cpp
+    )
     target_include_directories(sunroom_subtitle_renderer_tests
             PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/../src"
@@ -821,40 +854,11 @@ if (WIN32)
             Qt6::Test
             sunroom_video_pipeline
     )
-
-    qt_add_shaders(
-            sunroom_qrhi_compositor_tests
-            "sunroom_qrhi_compositor_test_shaders"
-            PRECOMPILE
-            OPTIMIZED
-            PREFIX
-            /shaders
-            BASE
-            ../src/presentation/shaders
-            FILES
-            ../src/presentation/shaders/fullscreen.vert
-            ../src/presentation/shaders/diagnostic_video.frag
-            ../src/presentation/shaders/compositor.frag
-    )
-
-    sunroom_stage_windows_runtime(
-            sunroom_qrhi_compositor_tests
-    )
-    sunroom_stage_windows_runtime(
-            sunroom_subtitle_renderer_tests
-    )
-
-    add_test(
-            NAME qrhi-compositor
-            COMMAND sunroom_qrhi_compositor_tests
-    )
-    set_tests_properties(
-            qrhi-compositor
-            PROPERTIES
-            LABELS "gpu;windows"
-            TIMEOUT 30
-    )
-
+    if (WIN32)
+        sunroom_stage_windows_runtime(
+                sunroom_subtitle_renderer_tests
+        )
+    endif ()
     add_test(
             NAME subtitle-renderer
             COMMAND sunroom_subtitle_renderer_tests
@@ -862,9 +866,13 @@ if (WIN32)
     set_tests_properties(
             subtitle-renderer
             PROPERTIES
-            LABELS "gpu;subtitles;integration;windows"
+            LABELS
+                "gpu;subtitles;integration;${sunroom_test_platform_label}"
             TIMEOUT 30
     )
+endif ()
+
+if (WIN32 OR APPLE)
 
     qt_add_executable(sunroom_ffmpeg_first_frame_tests
             integration/video/tst_FfmpegFirstFrame.cpp
@@ -890,8 +898,7 @@ if (WIN32)
     qt_add_shaders(
             sunroom_ffmpeg_first_frame_tests
             "sunroom_ffmpeg_first_frame_test_shaders"
-            PRECOMPILE
-            OPTIMIZED
+            ${sunroom_shader_options}
             PREFIX
             /shaders
             BASE
@@ -900,9 +907,11 @@ if (WIN32)
             ../src/presentation/shaders/fullscreen.vert
             ../src/presentation/shaders/compositor.frag
     )
-    sunroom_stage_windows_runtime(
-            sunroom_ffmpeg_first_frame_tests
-    )
+    if (WIN32)
+        sunroom_stage_windows_runtime(
+                sunroom_ffmpeg_first_frame_tests
+        )
+    endif ()
     add_test(
             NAME ffmpeg-first-frame
             COMMAND sunroom_ffmpeg_first_frame_tests
@@ -910,9 +919,19 @@ if (WIN32)
     set_tests_properties(
             ffmpeg-first-frame
             PROPERTIES
-            LABELS "ffmpeg;gpu;hardware-decode;integration;windows"
+            LABELS
+                "ffmpeg;gpu;hardware-decode;integration;${sunroom_test_platform_label}"
             TIMEOUT 30
-            ENVIRONMENT
-                "SUNROOM_REQUIRE_D3D11VA=1"
     )
+    if (WIN32)
+        set_tests_properties(
+                ffmpeg-first-frame
+                PROPERTIES ENVIRONMENT "SUNROOM_REQUIRE_D3D11VA=1"
+        )
+    else ()
+        set_tests_properties(
+                ffmpeg-first-frame
+                PROPERTIES ENVIRONMENT "SUNROOM_REQUIRE_VIDEOTOOLBOX=1"
+        )
+    endif ()
 endif ()

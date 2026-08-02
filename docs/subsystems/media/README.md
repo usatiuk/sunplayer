@@ -3,11 +3,15 @@
 ## Status
 
 Sunroom integrates FFmpeg through one shared media boundary: the official
-vcpkg FFmpeg 8.1.2 package on Windows and system FFmpeg 8.0.1 on Linux. Both
+vcpkg FFmpeg 8.1.2 package on Windows and macOS, and system FFmpeg 8.0.1 on
+Linux. All
 provide `avformat`, `avcodec`, core `avutil`, `swresample`, and zlib-backed
 Matroska track decompression. The Windows package includes D3D11VA, D3D12VA,
 DXVA2, and Media Foundation support. Sunroom exercises D3D11VA for supported
 Windows video streams and keeps software decoding as an explicit fallback.
+The macOS package exposes VideoToolbox; Sunroom exercises H.264/NV12 and
+Main10 HEVC/P010 hardware decode and direct Metal-plane import on Apple
+Silicon.
 Linux currently uses the same production operation with software video decode;
 the system FFmpeg exposes VAAPI/DRM capability, but native-frame import is not
 implemented yet.
@@ -48,6 +52,14 @@ On Linux the graphics capability currently reports software decode. The
 software `AVFrame` path is shared with Windows and renders through the Vulkan
 libplacebo target. VAAPI/DRM PRIME negotiation and native image import remain
 one future acceleration slice rather than a second media pipeline.
+
+On macOS the graphics domain creates an FFmpeg VideoToolbox device capability
+tagged with the Metal-domain generation. Hardware frames retain their
+`AVHWFramesContext` and `CVPixelBuffer`; the native importer exposes NV12 as
+R8/RG8 Metal planes and P010 as R16/RG16 planes on QRhi's `MTLDevice`.
+Libplacebo samples those planes directly, while nonblocking GPU-completion
+polling controls release. Unsupported hardware formats use the same bounded
+whole-operation software restart as Windows rather than a per-frame download.
 
 If the retained hardware surface later cannot be imported by the active
 graphics backend, `MediaSession` consumes at most one software-only re-decode
@@ -111,7 +123,7 @@ recovery remain unimplemented.
 
 ## Dependency boundary
 
-The Windows vcpkg manifest requests:
+The Windows and macOS vcpkg manifest requests:
 
 ```json
 {
@@ -131,7 +143,8 @@ planar/interleaved conversion. Add codec libraries only for a documented
 coverage or performance requirement.
 
 On Windows the dependency is dynamically linked under the project clang-cl
-vcpkg triplet.
+vcpkg triplet. On macOS it is built under stock `arm64-osx` and linked into the
+development bundle; final deployment ownership is deferred to packaging.
 `avutil`, `swresample`, `avcodec`, and `avformat` DLLs are staged explicitly
 beside linked build-tree targets and installed beside the application. This
 prevents loader dialogs and avoids relying on CMake's transitive-runtime
@@ -201,8 +214,9 @@ rotated-content output still needs a dedicated fixture and capture.
 3. Dispatch subtitle packets without letting one selected stream prevent
    progress for another.
 4. Add packet byte/duration and decode-time diagnostics.
-5. Add VAAPI/DRM PRIME and VideoToolbox hardware-device negotiation and native
-   import behind the existing graphics-domain contract.
+5. Add VAAPI/DRM PRIME hardware-device negotiation and native import behind
+   the existing graphics-domain contract. VideoToolbox NV12/P010 negotiation
+   and import are complete for the initial macOS scope.
 
 ## Verification
 
@@ -211,6 +225,9 @@ libswresample and the required native decoders. On Windows it also loads the
 four staged DLLs, confirms D3D11VA, and checks the intentionally minimal vcpkg
 feature shape. On Linux it links the system libraries and verifies the exposed
 VAAPI/DRM pixel-format and device APIs without claiming native-frame import.
+On macOS it verifies the pinned ABI, native H.264/HEVC decoders,
+VideoToolbox device/pixel-format support, and the intentionally minimal vcpkg
+feature shape.
 
 The decoded-frame unit test releases the originating `AVFrame` and verifies the
 Sunroom wrapper still owns valid software pixels and semantic snapshots.
@@ -235,6 +252,13 @@ generation reset, and stop wakeup. A separate twelve-frame FFV1 fixture drives
 the production session beyond mailbox capacity and verifies pause-induced
 decoder backpressure, resume/refill, due-frame dropping, complete drain, end,
 and replay.
+
+On Apple M2/macOS 26, the H.264 fixture decodes through VideoToolbox as NV12
+and the Main10 HEVC/PQ fixture decodes as P010. Both import retained CoreVideo
+Metal planes directly, report zero input transfers/copies and zero output
+copies, and agree with software decode at representative pixels. A three-frame
+H.264 run through one producer verifies replacement and deferred native-surface
+lifetime across GPU completion.
 The playback fixture also verifies exact-zero and nonzero seeking,
 paused/playing intent, end seeking, and position-preserving hardware-import
 fallback. A separate pinned H.264 fixture has closed sparse GOPs and B-frames;

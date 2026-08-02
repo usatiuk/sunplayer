@@ -5,7 +5,7 @@
   "dependencies": [
     {
       "name": "cubeb",
-      "platform": "windows"
+      "platform": "windows | osx"
     },
     {
       "name": "ffmpeg",
@@ -22,10 +22,21 @@
       "default-features": false,
       "features": [
         "d3d11"
-      ]
+      ],
+      "platform": "windows"
     },
     {
-      "name": "libass"
+      "name": "libplacebo",
+      "default-features": false,
+      "features": [
+        "vulkan"
+      ],
+      "platform": "osx"
+    },
+    "libass",
+    {
+      "name": "moltenvk",
+      "platform": "osx"
     }
   ]
 }

@@ -9,7 +9,11 @@ diagnostic comparison. This switch is not a player fallback: real playback
 will use libplacebo and report an error if no supported libplacebo target path
 can be created. On Windows, libplacebo shares the QRhi D3D11 device and
 immediate context, wraps the QRhi-owned RGBA16F texture, and renders directly
-without an output copy. A real FFmpeg software `AVFrame` now maps through
+without an output copy. On macOS, libplacebo Vulkan over MoltenVK imports the
+QRhi-owned RGBA16F Metal texture directly and uses a shared GPU timeline for
+producer/compositor handoff. VideoToolbox NV12 and P010 `CVPixelBuffer` planes
+map through retained CoreVideo Metal views without a CPU transfer or GPU copy.
+A real FFmpeg software `AVFrame` now maps through
 libplacebo with one reusable input upload and retains its source across
 target-only rerenders. Supported D3D11VA frames map their retained NV12, P010,
 P012, or P016 texture-array slice directly into libplacebo plane views with no
@@ -17,8 +21,8 @@ input copy or CPU transfer. A deterministic Dolby Vision Profile 8.1 fixture
 proves that FFmpeg retains raw and parsed RPU metadata and libplacebo maps the
 reshape on the production software-frame path. This is not a claim of support
 for every Dolby Vision profile, enhancement layer, trim, or physical target.
-Same-device-copy and CPU target fallbacks, and non-Windows native importers,
-are not implemented.
+Same-device-copy and CPU target fallbacks, and Linux native importers, are not
+implemented.
 
 The broad investigation in
 [../../ARCHITECTURE_NOTES.md](../../ARCHITECTURE_NOTES.md) is non-binding
@@ -70,9 +74,11 @@ The known seams are established with their first implementations:
   differs from the active domain. An unavailable hardware mapping is reported
   as a typed failure so playback can perform one software re-decode; the
   importer itself does not own fallback policy.
-* Future platform importers map Vulkan/DRM/VAAPI or VideoToolbox surfaces into
-  the same libplacebo boundary while retaining their native lifetime and
-  synchronization state.
+* The macOS importer maps VideoToolbox NV12/P010 planes into the same
+  libplacebo boundary and retains the `CVPixelBuffer`, CoreVideo texture views,
+  and libplacebo textures until nonblocking GPU-completion polling releases
+  them. A future Linux importer applies the same lifetime contract to
+  Vulkan/DRM/VAAPI resources.
 
 These are purpose-specific boundaries, not another general graphics API.
 
@@ -231,7 +237,7 @@ sleep/wake events only need to converge to the newest semantic target.
 | --- | --- | --- |
 | Windows | Shared video-capable D3D11 device; D3D11VA plane import and direct RGBA16F target | P010/P012/P016 capture, real device-loss injection, and GPU/CPU copy fallbacks |
 | Wayland Linux | Shared Vulkan device and image | Layout, queue, semaphore ownership, and compositor color-management support |
-| macOS | QRhi Metal/EDR domain with a narrow native import path | EDR behavior, VideoToolbox/IOSurface formats, and synchronization |
+| macOS | QRhi Metal/EDR presentation plus same-device MoltenVK target and VideoToolbox NV12/P010 Metal-plane import | Physical EDR and unlike-display transitions, broader formats, and device recovery |
 
 Native graphics and decoder types remain in backend implementations. Playback,
 best-effort diagnostics, renderer policy, subtitles, and the compositor remain
@@ -257,15 +263,16 @@ shared.
    an explicit diagnostic comparison only.
 8. [x] Add the QRhi-owned Vulkan implementation and exercise its software-
    decoded path on native Wayland under WSLg.
-9. [ ] Validate QRhi Metal/EDR presentation and the narrow
-   MoltenVK/Vulkan-to-IOSurface/Metal video bridge on macOS; retain shared
-   MoltenVK presentation only as an evidence-driven alternative.
+9. [x] Implement QRhi Metal/EDR presentation and the narrow same-device
+   MoltenVK/Vulkan-to-Metal texture bridge on macOS. Direct target import and
+   GPU-only synchronization pass on Apple M2; physical EDR above SDR white and
+   unlike-display transitions remain native-hardware gates.
 10. [x] Add the retained FFmpeg `AVFrame` contract, software-plane importer,
     persistent upload reuse, and real decoded-frame capture.
 11. [x] Make the Windows graphics domain own a video-capable,
     multithread-protected D3D11 device and add direct D3D11VA plane import.
-12. [ ] Add Vulkan/DRM/VAAPI and VideoToolbox platform importers as their
-    backends are implemented.
+12. [ ] Add the Vulkan/DRM/VAAPI platform importer. The macOS VideoToolbox
+    NV12/P010 importer is complete for its initial scope.
 
 ## Verification
 
@@ -323,5 +330,6 @@ production QRhi-owned Vulkan target; a WSLg llvmpipe smoke exercises software
 decode, direct rendering, composition, swapchain presentation, and teardown.
 Physical display correctness, physical HLG/dynamic-HDR target accuracy, actual
 display-gamut propagation, P010/P012/P016 capture, general display-matrix
-rotation, macOS EDR viability, native-GPU Vulkan coverage, and the broader
-Vulkan resize/surface-recreation synchronization matrix remain unproven.
+rotation, physical macOS EDR output above SDR white and unlike-display
+transitions, native-GPU Linux Vulkan coverage, and the broader Vulkan
+resize/surface-recreation synchronization matrix remain unproven.

@@ -7,6 +7,8 @@ extern "C" {
 #ifdef Q_OS_LINUX
 #include <libavutil/hwcontext_drm.h>
 #include <libavutil/hwcontext_vaapi.h>
+#elif defined(Q_OS_MACOS)
+#include <libavutil/hwcontext_videotoolbox.h>
 #endif
 #include <libswresample/swresample.h>
 }
@@ -72,6 +74,17 @@ void FfmpegDependencyTest::pinnedMinimalFeatureSet() {
     QCOMPARE(
         av_hwdevice_find_type_by_name("drm"),
         AV_HWDEVICE_TYPE_DRM);
+#elif defined(Q_OS_MACOS)
+    const QString configuration = QString::fromLatin1(
+        avcodec_configuration());
+    QVERIFY(sizeof(AVVTFramesContext) > 0);
+    QVERIFY(configuration.contains(
+        QStringLiteral("--enable-videotoolbox")));
+    QVERIFY(configuration.contains(
+        QStringLiteral("--disable-swscale")));
+    QCOMPARE(
+        av_hwdevice_find_type_by_name("videotoolbox"),
+        AV_HWDEVICE_TYPE_VIDEOTOOLBOX);
 #else
 #error "Define the required FFmpeg hardware facilities for this platform"
 #endif

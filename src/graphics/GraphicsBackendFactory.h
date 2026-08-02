@@ -15,7 +15,7 @@ public:
     static QSurface::SurfaceType windowSurfaceType();
     static std::unique_ptr<GraphicsDeviceDomain> createDeviceDomain(
         QWindow &window);
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     static std::unique_ptr<GraphicsDeviceDomain> createDeviceDomain();
 #endif
 };

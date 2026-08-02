@@ -2,14 +2,18 @@
 
 ## Status
 
-The CMake project builds the Windows player and a runnable native-Wayland
-Vulkan player on Ubuntu 26.04. Windows retains pinned vcpkg dependencies.
+The CMake project builds the Windows player, an Apple-Silicon macOS player,
+and a runnable native-Wayland Vulkan player on Ubuntu 26.04. Windows and macOS
+use pinned vcpkg libraries; macOS uses the Qt 6.11.1 Online Installer tree.
 Linux uses only system Qt, FFmpeg, libplacebo, cubeb, libass, Vulkan, Wayland,
 VAAPI, and DRM packages. Embedded subtitle discovery, FFmpeg decoding,
 libass/bitmap rendering, shared subtitle state, Wayland capability inventory,
 the Linux Vulkan graphics domain, and system-cubeb output are integrated.
 Native Linux route-change/recovery evidence, VAAPI/DRM PRIME, managed HDR, and
-complete distributable packaging remain open.
+complete distributable packaging remain open. The macOS development build,
+Metal/MoltenVK presentation, VideoToolbox, AudioUnit, and shared tests are
+validated on the available Apple M2/macOS 26 host; the macOS 13 dependency
+archive floor and self-contained bundle remain packaging gates.
 
 The root-level GitHub Actions workflow is configured for Ubuntu 26.04 system
 dependencies and the existing Windows Qt/vcpkg contract. It has been validated
@@ -37,6 +41,12 @@ libraries, libplacebo 7.360.0, libass 0.17.4, the Ubuntu cubeb snapshot,
 Vulkan 1.4.341, Wayland 1.24 with wayland-protocols 1.47, VA-API 1.23, and DRM
 2.4.131.
 
+The validated macOS development configuration uses Apple Clang 16, ordinary
+CMake/Ninja, Qt 6.11.1 from the Online Installer, the stock vcpkg `arm64-osx`
+triplet, FFmpeg 8.1.2 with VideoToolbox, libplacebo 7.360.1 with Vulkan,
+MoltenVK 1.4.2, the pinned cubeb AudioUnit backend, and libass. It is a host
+validation claim, not yet a distributable macOS 13 compatibility claim.
+
 The Visual Studio C++ Clang tools component is required for Windows dependency
 builds. The application and installed Qt package remain MSVC-built; clang-cl
 supplies the same Windows ABI and runtime conventions for the vcpkg dependency
@@ -47,13 +57,15 @@ belong in ignored local agent or IDE configuration.
 
 ## Dependency management
 
-Windows uses vcpkg manifest mode. The repository owns:
+Windows and macOS use vcpkg manifest mode. The repository owns:
 
 * `vcpkg.json`, including the pinned registry baseline and requested features.
 * `vcpkg-configuration.json`, including project-local overlay ports and
   triplets.
 * `vcpkg-ports/libplacebo`, because the pinned registry does not provide the
-  required package.
+  required D3D11/Vulkan platform configurations.
+* `vcpkg-ports/moltenvk`, which packages the pinned macOS Vulkan runtime and
+  CMake target used by libplacebo.
 * `vcpkg-ports/spirv-cross-c-shared`, because the registry's static-only
   SPIRV-Cross port cannot satisfy libplacebo's shared C dependency.
 * `vcpkg-ports/cubeb`, because the registry port is older than the reviewed
@@ -69,12 +81,12 @@ Windows uses vcpkg manifest mode. The repository owns:
   Windows and the system pkg-config package on Linux through one project-local
   target without duplicating libass's dependency graph.
 
-The vcpkg executable itself is supplied by Visual Studio rather than cloned
-into the repository. CMake uses an explicitly supplied toolchain when present,
-then falls back to `VCPKG_ROOT` or the Visual Studio vcpkg discovered from a
-sourced developer environment. Windows configurations default to the
-`x64-windows-clangcl` dependency triplet while preserving an explicit caller
-override.
+On Windows the vcpkg executable may be supplied by Visual Studio. On macOS the
+developer supplies a normal vcpkg checkout. CMake uses an explicitly supplied
+toolchain when present, then falls back to `VCPKG_ROOT` or the Visual Studio
+vcpkg discovered from a sourced developer environment. Windows configurations
+default to `x64-windows-clangcl`; macOS defaults to stock `arm64-osx`; both
+preserve an explicit caller override.
 
 Manifest installation output lives under the configured build directory's
 `vcpkg_installed/` tree. Source downloads and binary archives use vcpkg's
@@ -133,16 +145,33 @@ D3D11VA, D3D12VA, DXVA2, and Media Foundation without a separate manifest
 feature. It excludes Vulkan, swscale, filter/device libraries, command-line
 tools, vendor SDKs, and external codec libraries in this slice.
 
-The project-local cubeb overlay is explicitly Windows-only and builds the
-native WASAPI backend with tests, tools, and Rust backends disabled.
+The project-local cubeb overlay builds the native WASAPI backend on Windows and
+AudioUnit on macOS, with tests, tools, and Rust backends disabled.
 `BUNDLE_SPEEX=OFF`
 prefers an external SpeexDSP package, but cubeb retains its embedded Speex
 fallback when none is present; the overlay ships both notices. This does not
 require a Rust toolchain on Windows. Linux instead consumes the distribution's
 system cubeb package; WSLg verifies that package's Pulse backend through the
-real sink and application. macOS packaging remains undecided. vcpkg downloads
-and binary caches remain project-build or per-user cache state and do not
-install cubeb system-wide.
+real sink and application. macOS bundle deployment remains deferred. vcpkg
+downloads and binary caches remain project-build or per-user cache state and
+do not install cubeb system-wide.
+
+An ordinary macOS development configuration is:
+
+```sh
+cmake -S . -B build/macos-debug -G Ninja \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DBUILD_TESTING=ON \
+  -DCMAKE_PREFIX_PATH=/path/to/Qt/6.11.1/macos \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build build/macos-debug
+ctest --test-dir build/macos-debug --output-on-failure
+```
+
+The project defaults Apple-Silicon dependency builds to vcpkg's stock
+`arm64-osx` triplet. No custom triplet, wrapper CMake, or Homebrew-installed
+project library is required. The Qt Online Installer tree and vcpkg checkout
+remain developer-supplied; this command does not define the later package.
 
 ## Qt dependency
 
@@ -203,8 +232,8 @@ Windows:
 * `WindowsApp`.
 
 The application is marked as a Windows GUI executable and a macOS bundle at the
-CMake target level. Windows and native-Wayland Linux have production graphics
-startup; macOS remains unsupported even if a toolchain reaches configuration.
+CMake target level. Windows, Apple-Silicon macOS, and native-Wayland Linux all
+have production graphics startup.
 
 ## Installation
 
@@ -253,12 +282,15 @@ producer/compositor capture. A shared dependency integration test verifies the
 platform-specific libplacebo version and feature contract plus real log
 create/destroy lifecycle. Windows requires its pinned D3D11/Shaderc
 configuration; Linux requires API 360, Vulkan, a shader compiler, built-in
-DOVI, and records LCMS availability.
+DOVI, and records LCMS availability. macOS requires the pinned Vulkan/Shaderc
+configuration, MoltenVK Metal-object interop, and built-in DOVI handling.
 
 A separate FFmpeg dependency test verifies the four selected DLLs, pinned
 major versions, D3D11VA availability, native H.264/HEVC decoders, and the
 absence of Vulkan and swscale on Windows. The same source verifies the system
-ABI majors plus VAAPI and DRM hardware-device support on Linux. A shared cubeb
+ABI majors plus VAAPI and DRM hardware-device support on Linux; on macOS it
+verifies VideoToolbox and the absence of unrelated Vulkan decode integration.
+A shared cubeb
 dependency test compiles and links its common public C ABI without requiring
 COM, a live sound server, or an available device. A Linux-only native
 dependency test links Vulkan, Wayland client, VA-API DRM, DRM, and Qt's private
@@ -272,6 +304,12 @@ D3D11VA decode, libplacebo upload, and final QRhi composition. Additional focuse
 aspect fitting, active-source routing, media-session cancellation/generation,
 the real Player/HDR-Lab QML shell, one-pass A/V decode with libswresample, and
 the bounded controlled audio sink.
+
+On macOS, the GPU/FFmpeg target additionally covers direct VideoToolbox NV12
+and P010 import plus multi-frame native-surface lifetime; the shared subtitle
+renderer target runs through Metal, and the device-backed audio target requires
+AudioUnit. The application playback smoke exercises the production Metal,
+MoltenVK, VideoToolbox-capable media, QML, subtitle, and default-audio wiring.
 
 On Windows, the application and each test target stage their transitive runtime
 DLLs beside the executable with CMake's `TARGET_RUNTIME_DLLS` support. The
@@ -366,3 +404,14 @@ declaration, HDR, and physical displays remain open.
 The Windows build and application runtime were user-confirmed after the cross-
 platform change. A fresh full 28-test Windows rerun remains an explicit
 regression gate.
+
+On the Apple M2/macOS 26 host, Debug and clean Release source builds succeed
+with tests enabled, and QML lint plus focused Metal, SDR/HDR, VideoToolbox,
+subtitle, audio, seek, and production application scenarios pass. One full
+Debug run passed 25 of 26 tests; the lone media-session seek failure did not
+reproduce in ten isolated reruns, a complete executable rerun, or CTest's
+failed-test rerun. A final post-review full run remains the development-build
+gate. The Release executable itself declares macOS 13, but cached vcpkg static
+archives were built for the newer host target; rebuilding and validating the
+complete dependency graph for macOS 13 is intentionally deferred to packaging,
+and no release-support claim is made from that binary.

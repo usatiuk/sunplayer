@@ -48,6 +48,32 @@
 #error "The initial Linux libplacebo build must include built-in DOVI support"
 #endif
 
+#elif defined(Q_OS_MACOS)
+
+#if !defined(PL_HAVE_VULKAN) || !PL_HAVE_VULKAN
+#error "The macOS libplacebo build must include Vulkan"
+#endif
+
+#if !defined(PL_HAVE_SHADERC) || !PL_HAVE_SHADERC
+#error "The macOS libplacebo build must include Shaderc"
+#endif
+
+#if !defined(PL_HAVE_DOVI) || !PL_HAVE_DOVI
+#error "The macOS libplacebo build must include built-in DOVI support"
+#endif
+
+#if defined(PL_HAVE_LIBDOVI) && PL_HAVE_LIBDOVI
+#error "The macOS libplacebo build must not depend on libdovi"
+#endif
+
+#if defined(PL_HAVE_D3D11) && PL_HAVE_D3D11
+#error "The macOS libplacebo build must not include D3D11"
+#endif
+
+#if defined(PL_HAVE_OPENGL) && PL_HAVE_OPENGL
+#error "The macOS libplacebo build must not include OpenGL"
+#endif
+
 #else
 #error "Define the required libplacebo features for this platform"
 #endif
@@ -72,7 +98,7 @@ private slots:
 void LibplaceboDependencyTest::pinnedFeatureSetAndLogLifecycle() {
     QCOMPARE(PL_MAJOR_VER, 7);
     QCOMPARE(PL_API_VER, 360);
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     QCOMPARE(PL_FIX_VER, 1);
     QCOMPARE(QString::fromLatin1(PL_VERSION), QStringLiteral("v7.360.1"));
 #else

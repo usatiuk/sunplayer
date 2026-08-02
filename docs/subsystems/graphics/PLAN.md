@@ -260,7 +260,11 @@ The first slice defines the known shared contracts; later platform work
 exercises and refines them from evidence without changing their semantic
 responsibilities.
 
-* [ ] Implement macOS Metal/EDR presentation and display observation.
+* [x] Implement Apple-Silicon macOS QRhi Metal presentation, relative AppKit
+  EDR-headroom observation, semantic display reconciliation, direct
+  Metal/MoltenVK target interop, and VideoToolbox NV12/P010 import. Physical
+  current headroom above `1.0`, unlike-display movement, and live HDR/SDR
+  switching still require suitable native hardware.
 * [x] Implement native Wayland Linux Vulkan presentation, unmanaged piecewise-
   sRGB fallback, and startup-managed gamma-2.2 SDR selection. X11 and XWayland
   are unsupported.

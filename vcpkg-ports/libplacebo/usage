@@ -3,4 +3,4 @@ libplacebo provides the CMake target:
     find_package(libplacebo CONFIG REQUIRED)
     target_link_libraries(target PRIVATE libplacebo::libplacebo)
 
-The initial Sunroom overlay port supports the Windows D3D11 backend only.
+The Sunroom overlay port supplies D3D11 on Windows and Vulkan on macOS.

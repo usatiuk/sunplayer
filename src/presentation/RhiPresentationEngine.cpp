@@ -62,8 +62,17 @@ void advanceRevision(std::uint64_t &revision) {
 
 QRhiSwapChain::Format desiredSwapChainFormat(
         const PresentationSurfaceContract &surfaceContract,
-        QRhiSwapChain &swapChain) {
-    return surfaceContract.extendedLinearAllowed
+        QRhiSwapChain &swapChain,
+        bool displayHdrAvailable) {
+    bool extendedLinearAllowed =
+        surfaceContract.extendedLinearAllowed;
+#ifdef Q_OS_MACOS
+    extendedLinearAllowed =
+        extendedLinearAllowed && displayHdrAvailable;
+#else
+    Q_UNUSED(displayHdrAvailable);
+#endif
+    return extendedLinearAllowed
             && swapChain.isFormatSupported(
                 QRhiSwapChain::HDRExtendedSrgbLinear)
         ? QRhiSwapChain::HDRExtendedSrgbLinear
@@ -509,6 +518,11 @@ void RhiPresentationEngine::handleExposure() {
         return;
     }
 
+#ifdef Q_OS_MACOS
+    // AppKit EDR headroom can change while the native surface is hidden.
+    m_outputState.reprobePresentation();
+#endif
+
     // The first presentation must happen before requestUpdate() can switch to
     // DXGI's vsync service. Scheduling before the swapchain exists can leave
     // both Qt's timer path and its DXGI path trying to deliver one request.
@@ -627,7 +641,10 @@ bool RhiPresentationEngine::createSwapChain() {
     m_swapChain->setWindow(&m_window);
 
     m_swapChain->setFormat(
-        desiredSwapChainFormat(m_surfaceContract, *m_swapChain));
+        desiredSwapChainFormat(
+            m_surfaceContract,
+            *m_swapChain,
+            m_outputState.displayHdrEnabled()));
     m_renderPassDescriptor.reset(
         m_swapChain->newCompatibleRenderPassDescriptor());
     m_swapChain->setRenderPassDescriptor(m_renderPassDescriptor.get());
@@ -857,11 +874,22 @@ void RhiPresentationEngine::updateBackendState() {
     const QRhiSwapChainHdrInfo info = m_swapChain->hdrInfo();
     state.sceneReferred =
         info.luminanceBehavior == QRhiSwapChainHdrInfo::SceneReferred;
+#ifdef Q_OS_MACOS
+    // Apple EDR is display-referred. Numeric 1.0 already means the current
+    // SDR white, while AppKit exposes relative component headroom rather than
+    // that white's physical luminance.
+    state.sdrWhiteKnown = false;
+    state.sdrWhiteNits = 80.0f;
+#else
     state.sdrWhiteKnown =
         std::isfinite(info.sdrWhiteLevel) && info.sdrWhiteLevel > 0.0f;
     state.sdrWhiteNits = positiveOrFallback(
         info.sdrWhiteLevel, 80.0f, "SDR white level");
+#endif
     if (info.limitsType == QRhiSwapChainHdrInfo::LuminanceInNits) {
+#ifdef Q_OS_MACOS
+        state.luminanceKnown = false;
+#else
         state.luminanceKnown =
             std::isfinite(info.limits.luminanceInNits.maxLuminance)
             && info.limits.luminanceInNits.maxLuminance > 0.0f;
@@ -871,6 +899,7 @@ void RhiPresentationEngine::updateBackendState() {
         state.maxLuminanceNits = nonNegativeOrZero(
             info.limits.luminanceInNits.maxLuminance,
             "maximum luminance");
+#endif
     } else {
         state.currentHeadroom = positiveOrFallback(
             info.limits.colorComponentValue.maxColorComponentValue,
@@ -902,7 +931,10 @@ void RhiPresentationEngine::reconcileOutputCharacteristics() {
         return;
 
     const QRhiSwapChain::Format desiredFormat =
-        desiredSwapChainFormat(m_surfaceContract, *m_swapChain);
+        desiredSwapChainFormat(
+            m_surfaceContract,
+            *m_swapChain,
+            m_outputState.displayHdrEnabled());
     if (m_swapChain->format() != desiredFormat) {
         releaseSwapChainResources();
         return;

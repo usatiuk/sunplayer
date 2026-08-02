@@ -4,7 +4,7 @@
   "description": "Reusable library for GPU-accelerated video and image rendering",
   "homepage": "https://libplacebo.org/",
   "license": "LGPL-2.1-or-later",
-  "supports": "windows & !uwp",
+  "supports": "(windows & !uwp) | osx",
   "dependencies": [
     {
       "name": "vcpkg-tool-meson",
@@ -17,6 +17,12 @@
       "dependencies": [
         "shaderc",
         "spirv-cross-c-shared"
+      ]
+    },
+    "vulkan": {
+      "description": "Build the Vulkan renderer without linking a Vulkan loader",
+      "dependencies": [
+        "shaderc"
       ]
     }
   }

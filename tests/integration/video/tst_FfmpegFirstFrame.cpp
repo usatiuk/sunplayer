@@ -41,6 +41,7 @@ extern "C" {
 #include "presentation/HdrCompositor.h"
 #include "video/DecodedVideoSource.h"
 #include "video/LibplaceboDecodedVideoProducer.h"
+#include "video/VideoTargetInterop.h"
 
 namespace {
 struct FloatPixel {
@@ -317,6 +318,10 @@ private slots:
     void seekDecodesInterFramePreroll();
     void longTimelineSeekUses64BitTarget();
     void hardwareDecodeFailureRetriesSoftware();
+    void videoToolboxHardwareDecodeDirectImport_data();
+    void videoToolboxHardwareDecodeDirectImport();
+    void continuousVideoToolboxDecodeAndImport();
+    void metalTargetResizesBeforeFirstSubmission();
     void continuousD3d11DecodeRetainsBoundedFrames();
     void d3d11HardwareDecodeDirectImport();
 };
@@ -486,8 +491,8 @@ void FfmpegFirstFrameTest::hdrInputAcceptance_data() {
 }
 
 void FfmpegFirstFrameTest::hdrInputAcceptance() {
-#ifndef Q_OS_WIN
-    QSKIP("The current libplacebo integration is Windows D3D11");
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
+    QSKIP("This test requires a D3D11 or Metal graphics domain");
 #else
     QFETCH(QString, fixtureStem);
     QFETCH(QString, expectedTransfer);
@@ -574,7 +579,7 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
 
     std::unique_ptr<GraphicsDeviceDomain> graphics =
         GraphicsBackendFactory::createDeviceDomain();
-    QVERIFY2(graphics, "Could not create D3D11 graphics domain");
+    QVERIFY2(graphics, "Could not create the graphics domain");
     constexpr float referenceWhiteNits = 100.0f;
     constexpr float targetPeakHeadroom = 6.0f;
     const DecodedFrameCapture capture = captureDecodedFrame(
@@ -741,8 +746,8 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
 
 void FfmpegFirstFrameTest::
 realDemuxDecodeImportAndComposition() {
-#ifndef Q_OS_WIN
-    QSKIP("The current libplacebo integration is Windows D3D11");
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
+    QSKIP("This test requires a D3D11 or Metal graphics domain");
 #else
     const QString fixture = QStringLiteral(
         SUNROOM_TEST_FIXTURE_DIR
@@ -811,7 +816,7 @@ realDemuxDecodeImportAndComposition() {
 
     std::unique_ptr<GraphicsDeviceDomain> graphics =
         GraphicsBackendFactory::createDeviceDomain();
-    QVERIFY2(graphics, "Could not create D3D11 graphics domain");
+    QVERIFY2(graphics, "Could not create the graphics domain");
     QRhi &rhi = graphics->rhi();
     DecodedVideoSource source(
         decoded.frame, VideoTargetReadback::Enabled);
@@ -1023,8 +1028,8 @@ realDemuxDecodeImportAndComposition() {
 
 void FfmpegFirstFrameTest::
 compressedYuvMetadataAndRendering() {
-#ifndef Q_OS_WIN
-    QSKIP("The current libplacebo integration is Windows D3D11");
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
+    QSKIP("This test requires a D3D11 or Metal graphics domain");
 #else
     const QString fixture = QStringLiteral(
         SUNROOM_TEST_FIXTURE_DIR
@@ -1041,7 +1046,7 @@ compressedYuvMetadataAndRendering() {
 
     std::unique_ptr<GraphicsDeviceDomain> graphics =
         GraphicsBackendFactory::createDeviceDomain();
-    QVERIFY2(graphics, "Could not create D3D11 graphics domain");
+    QVERIFY2(graphics, "Could not create the graphics domain");
     const FfmpegFirstFrameResult decoded =
         decodeFirstVideoFrame(
             fixture,
@@ -1481,6 +1486,313 @@ hardwareDecodeFailureRetriesSoftware() {
 }
 
 void FfmpegFirstFrameTest::
+videoToolboxHardwareDecodeDirectImport_data() {
+    QTest::addColumn<QString>("fixtureName");
+    QTest::addColumn<QString>("softwareFormat");
+    QTest::addColumn<int>("componentDepth");
+    QTest::addColumn<float>("comparisonTolerance");
+
+    QTest::newRow("nv12-h264")
+        << QStringLiteral("sdr-bt709-h264.mkv")
+        << QStringLiteral("nv12")
+        << 8
+        << 0.035f;
+    QTest::newRow("p010-hevc")
+        << QStringLiteral("hdr10-pq-hevc.hevc")
+        << QStringLiteral("p010le")
+        << 10
+        << 0.04f;
+}
+
+void FfmpegFirstFrameTest::
+videoToolboxHardwareDecodeDirectImport() {
+#ifndef Q_OS_MACOS
+    QSKIP("VideoToolbox direct import is macOS-specific");
+#else
+    QFETCH(QString, fixtureName);
+    QFETCH(QString, softwareFormat);
+    QFETCH(int, componentDepth);
+    QFETCH(float, comparisonTolerance);
+
+    const QString fixture = QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR "/media/%1")
+        .arg(fixtureName);
+    std::unique_ptr<GraphicsDeviceDomain> graphics =
+        GraphicsBackendFactory::createDeviceDomain();
+    QVERIFY2(graphics, "Could not create the Metal graphics domain");
+    QCOMPARE(graphics->backend(), GraphicsBackend::Metal);
+
+    const VideoHardwareDecodeCapability &hardwareDecode =
+        graphics->videoDecodeCapability();
+    if (!hardwareDecode.isAvailable()) {
+        const QString reason = QStringLiteral(
+            "VideoToolbox unavailable: %1")
+            .arg(hardwareDecode.unavailableReason);
+        if (qEnvironmentVariableIntValue(
+                "SUNROOM_REQUIRE_VIDEOTOOLBOX") != 0) {
+            QFAIL(qPrintable(reason));
+        }
+        QSKIP(qPrintable(reason));
+    }
+
+    const FfmpegFirstFrameResult hardware =
+        decodeFirstVideoFrame(
+            fixture,
+            {
+                .playbackGeneration = 51,
+                .decoderRevision = 1,
+                .frameId = 1,
+            },
+            hardwareDecode);
+    QVERIFY2(hardware.isSuccess(), qPrintable(hardware.error));
+    QVERIFY(hardware.diagnostics.hardwareAccelerated);
+    QCOMPARE(
+        hardware.diagnostics.decodePath,
+        QStringLiteral("VideoToolbox"));
+    QVERIFY(hardware.diagnostics.hardwareFallbackReason.isEmpty());
+    QCOMPARE(
+        hardware.frame->storage().kind,
+        VideoFrameStorageKind::VideoToolboxSurface);
+    QCOMPARE(
+        hardware.frame->storage().hardwareFormat,
+        QStringLiteral("videotoolbox_vld"));
+    QCOMPARE(
+        hardware.frame->storage().softwareFormat,
+        softwareFormat);
+    QCOMPARE(
+        hardware.frame->storage().graphicsDeviceGeneration,
+        std::optional<std::uint64_t>(graphics->generation()));
+    QCOMPARE(
+        hardware.frame->signal().componentDepth,
+        componentDepth);
+
+    const FfmpegFirstFrameResult software =
+        decodeFirstVideoFrame(
+            fixture,
+            {
+                .playbackGeneration = 52,
+                .decoderRevision = 1,
+                .frameId = 1,
+            });
+    QVERIFY2(software.isSuccess(), qPrintable(software.error));
+    QVERIFY(!software.diagnostics.hardwareAccelerated);
+
+    const DecodedFrameCapture hardwareCapture =
+        captureDecodedFrame(*graphics, hardware.frame);
+    QVERIFY2(
+        hardwareCapture.isSuccess(),
+        qPrintable(hardwareCapture.error));
+    const DecodedFrameCapture softwareCapture =
+        captureDecodedFrame(*graphics, software.frame);
+    QVERIFY2(
+        softwareCapture.isSuccess(),
+        qPrintable(softwareCapture.error));
+
+    QCOMPARE(
+        hardwareCapture.input.path,
+        VideoFrameImportPath::DirectHardwareSurface);
+    QCOMPARE(
+        hardwareCapture.input.knownCpuDownloadsPerFrame,
+        0U);
+    QCOMPARE(
+        hardwareCapture.input.knownCpuUploadsPerFrame,
+        0U);
+    QCOMPARE(
+        hardwareCapture.input.knownGpuCopiesPerFrame,
+        0U);
+    QVERIFY(hardwareCapture.input.nativeResource.contains(
+        softwareFormat.toUpper()));
+    QVERIFY(hardwareCapture.input.synchronizationMode.contains(
+        QStringLiteral("CVPixelBuffer")));
+    QCOMPARE(
+        hardwareCapture.producer.target.outputPath,
+        VideoOutputPath::DirectRenderTarget);
+    QCOMPARE(
+        hardwareCapture.producer.target
+            .knownOutputGpuCopiesPerRender,
+        0U);
+    QCOMPARE(
+        hardwareCapture.producer.target
+            .knownOutputCpuTransfersPerRender,
+        0U);
+    QCOMPARE(
+        hardwareCapture.readback.pixelSize,
+        softwareCapture.readback.pixelSize);
+
+    const int width = hardwareCapture.readback.pixelSize.width();
+    const int height = hardwareCapture.readback.pixelSize.height();
+    const std::array samplePoints{
+        QPoint{width / 6, height / 4},
+        QPoint{width / 2, height / 4},
+        QPoint{width * 5 / 6, height / 4},
+        QPoint{width / 6, height * 3 / 4},
+        QPoint{width / 2, height * 3 / 4},
+        QPoint{width * 5 / 6, height * 3 / 4},
+    };
+    for (const QPoint &sample : samplePoints) {
+        const FloatPixel hardwarePixel = pixel(
+            hardwareCapture.readback,
+            sample.x(),
+            sample.y());
+        const FloatPixel softwarePixel = pixel(
+            softwareCapture.readback,
+            sample.x(),
+            sample.y());
+        compareNear(
+            hardwarePixel.red,
+            softwarePixel.red,
+            comparisonTolerance);
+        compareNear(
+            hardwarePixel.green,
+            softwarePixel.green,
+            comparisonTolerance);
+        compareNear(
+            hardwarePixel.blue,
+            softwarePixel.blue,
+            comparisonTolerance);
+        compareNear(hardwarePixel.alpha, 1.0f, 0.002f);
+    }
+#endif
+}
+
+void FfmpegFirstFrameTest::
+metalTargetResizesBeforeFirstSubmission() {
+#ifndef Q_OS_MACOS
+    QSKIP("The deferred Metal handoff is macOS-specific");
+#else
+    std::unique_ptr<GraphicsDeviceDomain> graphics =
+        GraphicsBackendFactory::createDeviceDomain();
+    QVERIFY2(graphics, "Could not create the Metal graphics domain");
+    GraphicsDeviceExecutionScope execution =
+        graphics->acquireExecutionScope();
+    std::unique_ptr<VideoTargetInterop> target =
+        graphics->createVideoTarget({
+            .producerApi = VideoProducerApi::Libplacebo,
+            .readback = VideoTargetReadback::Disabled,
+        });
+    QVERIFY(target);
+
+    const RenderedVideoSurfaceDescription initial =
+        surfaceState(*graphics, 1, 203.0f, {8, 8}).description;
+    const RenderedVideoSurfaceDescription resized =
+        surfaceState(*graphics, 2, 203.0f, {12, 10}).description;
+    QCOMPARE(target->ensureTarget(initial), VideoTargetUpdate::Created);
+    QCOMPARE(target->ensureTarget(resized), VideoTargetUpdate::Resized);
+
+    QRhi &rhi = graphics->rhi();
+    QRhiCommandBuffer *commandBuffer = nullptr;
+    QCOMPARE(
+        rhi.beginOffscreenFrame(&commandBuffer),
+        QRhi::FrameOpSuccess);
+    QVERIFY(commandBuffer);
+    QCOMPARE(
+        target->prepareForComposition(*commandBuffer),
+        VideoOperationResult::Ready);
+    const QRhi::FrameOpResult result = rhi.endOffscreenFrame();
+    if (result == QRhi::FrameOpSuccess)
+        target->submissionAccepted();
+    else
+        target->submissionAborted();
+    QCOMPARE(result, QRhi::FrameOpSuccess);
+#endif
+}
+
+void FfmpegFirstFrameTest::
+continuousVideoToolboxDecodeAndImport() {
+#ifndef Q_OS_MACOS
+    QSKIP("VideoToolbox decoding is macOS-specific");
+#else
+    const QString fixture = QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-h264.mkv");
+    std::unique_ptr<GraphicsDeviceDomain> graphics =
+        GraphicsBackendFactory::createDeviceDomain();
+    QVERIFY2(graphics, "Could not create the Metal graphics domain");
+    const VideoHardwareDecodeCapability &hardwareDecode =
+        graphics->videoDecodeCapability();
+    QVERIFY2(
+        hardwareDecode.isAvailable(),
+        qPrintable(hardwareDecode.unavailableReason));
+
+    std::vector<std::shared_ptr<const DecodedVideoFrame>> frames;
+    const FfmpegVideoDecodeResult decoded = decodeVideoFrames(
+        {
+            .path = fixture,
+            .firstFrameIdentity = {
+                .playbackGeneration = 61,
+                .decoderRevision = 1,
+                .frameId = 1,
+            },
+            .hardwareDecode = hardwareDecode,
+            .extraHardwareFrames = static_cast<int>(
+                VideoFrameQueue::capacity + 2),
+        },
+        [&frames](
+                std::shared_ptr<const DecodedVideoFrame> frame,
+                const FfmpegVideoStreamDiagnostics &) {
+            frames.push_back(std::move(frame));
+            return true;
+        });
+    QVERIFY2(decoded.isSuccess(), qPrintable(decoded.error));
+    QVERIFY(decoded.endOfStream);
+    QVERIFY(decoded.diagnostics.hardwareAccelerated);
+    QCOMPARE(
+        decoded.diagnostics.decodePath,
+        QStringLiteral("VideoToolbox"));
+    QCOMPARE(frames.size(), std::size_t(3));
+
+    GraphicsDeviceExecutionScope execution =
+        graphics->acquireExecutionScope();
+    DecodedVideoSource source(
+        std::move(frames[0]),
+        VideoTargetReadback::Disabled);
+    LibplaceboDecodedVideoProducer producer(
+        *graphics,
+        source,
+        VideoTargetReadback::Disabled);
+    QRhi &rhi = graphics->rhi();
+
+    for (std::size_t index = 0; index < frames.size(); ++index) {
+        if (index > 0)
+            source.setFrame(std::move(frames[index]));
+        const RenderedVideoSurfaceState state = surfaceState(
+            *graphics,
+            source.contentRevision(),
+            203.0f,
+            source.currentFrame()->geometry().visibleSize);
+        QCOMPARE(
+            producer.ensureSurface(state),
+            VideoOperationResult::Ready);
+
+        QRhiCommandBuffer *commandBuffer = nullptr;
+        QCOMPARE(
+            rhi.beginOffscreenFrame(&commandBuffer),
+            QRhi::FrameOpSuccess);
+        QVERIFY(commandBuffer);
+        QCOMPARE(
+            producer.render(*commandBuffer, state),
+            VideoOperationResult::Ready);
+        QCOMPARE(
+            producer.prepareForComposition(*commandBuffer),
+            VideoOperationResult::Ready);
+        QCOMPARE(
+            rhi.endOffscreenFrame(),
+            QRhi::FrameOpSuccess);
+        producer.submissionAccepted();
+        producer.commitPendingRender();
+    }
+
+    QCOMPARE(producer.inputImportCount(), 3U);
+    QCOMPARE(
+        producer.frameImportDiagnostics().path,
+        VideoFrameImportPath::DirectHardwareSurface);
+    QCOMPARE(
+        producer.frameImportDiagnostics().knownGpuCopiesPerFrame,
+        0U);
+#endif
+}
+
+void FfmpegFirstFrameTest::
 continuousD3d11DecodeRetainsBoundedFrames() {
 #ifndef Q_OS_WIN
     QSKIP("D3D11VA decoding is Windows-specific");
@@ -1841,7 +2153,11 @@ d3d11HardwareDecodeDirectImport() {
 #endif
 }
 
-// This target links Qt Gui for headless QRhi. QTEST_MAIN would create a
-// QGuiApplication, while the offscreen test only needs QCoreApplication.
+// Metal device creation needs the macOS GUI application lifecycle. The
+// Windows offscreen D3D11 path remains independent of a window system.
+#ifdef Q_OS_MACOS
+QTEST_MAIN(FfmpegFirstFrameTest)
+#else
 QTEST_GUILESS_MAIN(FfmpegFirstFrameTest)
+#endif
 #include "tst_FfmpegFirstFrame.moc"

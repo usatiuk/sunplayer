@@ -94,6 +94,13 @@ Progress and evidence are tracked in the
 7. Build a self-contained local `.app`, run the relevant shared/native tests,
    update subsystem truth, and close the checklist with durable evidence.
 
+Slices 1–6 are implemented on the available Apple M2/macOS 26 host. Slice 7
+is deliberately split: non-packaging documentation, review, and regression
+validation precede a separate packaging phase. That phase also owns rebuilding
+the vcpkg dependency archives for the declared macOS 13 deployment floor and
+testing their compatibility; the current cached archives were built against
+the host SDK and do not establish that release claim.
+
 ## Validation and completion
 
 * Build from a clean directory using the documented Qt/vcpkg configuration.
@@ -126,3 +133,41 @@ video-rendering, media, audio, build, application, and testing subsystem docs;
 and the dated color, adaptive-HDR, display/audio reconciliation, build, and
 testing research under `docs/research/`. Research remains evidence, while the
 accepted ADRs and subsystem documentation remain project truth.
+
+## Delivery evidence
+
+The current host build creates a QRhi Metal domain and a libplacebo MoltenVK
+domain on the same Apple M2 `MTLDevice`. Focused capture tests prove direct
+RGBA16F target sharing, GPU-only shared-event synchronization, safe target
+replacement before the first handoff is submitted, SDR composition, and
+production tone mapping for SDR, PQ, HLG, HDR10+, and Dolby Vision Profile
+8.1. VideoToolbox H.264/NV12 and Main10 HEVC/P010 frames import directly from
+retained `CVPixelBuffer` plane views and agree with software decode within the
+declared tolerances; a three-frame run exercises deferred native-surface
+lifetime. Subtitle rendering, representative seek paths, AudioUnit default-
+device playback, application playback smoke, QML lint, and the registered
+Debug suite have also run on this host.
+
+The built-in display reported current headroom `1.0` and potential headroom
+`2.0`. This proves native observation and the capable-display selection path,
+but not physical output above SDR white or movement between unlike displays.
+Default-audio-route movement was not exercised. A clean direct fullscreen
+smoke passed, while repeated live-desktop automation was sensitive to
+interactive AppKit input and is not a registered CTest. The rebuilt application
+is user-confirmed to open its native file sheet on the visible presentation
+window without creating a second blank window. These remaining native
+hardware checks and all packaging evidence stay visible in the checklist
+instead of being inferred from code.
+
+The final independent correctness review found one pre-submission target-
+replacement lifetime gap: the initial Vulkan-to-Metal hold could be queued
+before QRhi supplied a Metal command buffer to consume its wait. The target
+now defers that hold until first command-buffer access, and a focused regression
+creates and resizes the target before its first submission. The follow-up
+correctness review accepted the fix. Platform/test and explicit anti-
+overengineering reviews found no remaining blocker or high-severity issue; the
+one shared exposure reprobe noted by the latter was narrowed to macOS.
+
+The post-review Debug build succeeds and the complete registered suite passes
+26/26 in 25.43 seconds. A process check before and after the run found no
+pre-existing instance and no leaked Sunroom process.

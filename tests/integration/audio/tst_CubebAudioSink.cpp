@@ -83,6 +83,8 @@ opensSystemDefaultRouteWithoutStartingPlayback() {
         diagnostics.errorMessage.c_str());
 #ifdef Q_OS_WIN
     QCOMPARE(diagnostics.backendName, std::string("wasapi"));
+#elif defined(Q_OS_MACOS)
+    QCOMPARE(diagnostics.backendName, std::string("audiounit"));
 #else
     QVERIFY(!diagnostics.backendName.empty());
 #endif

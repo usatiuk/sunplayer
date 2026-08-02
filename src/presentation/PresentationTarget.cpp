@@ -22,6 +22,8 @@ PresentationTarget calculatePresentationTarget(
         activeDisplayHdr && display.sdrWhiteNits > 0.0f;
     const bool displayLuminanceKnown =
         activeDisplayHdr && display.maxLuminanceNits > 0.0f;
+    const bool displayHeadroomKnown =
+        display.valid && display.currentHeadroom > 0.0f;
 
     target.sdrWhiteKnown = displayWhiteKnown || backend.sdrWhiteKnown;
     target.sdrWhiteNits = displayWhiteKnown
@@ -46,12 +48,18 @@ PresentationTarget calculatePresentationTarget(
         : 1.0f;
     Q_ASSERT(std::isfinite(target.sdrScale) && target.sdrScale > 0.0f);
 
-    target.currentHeadroom = target.maxLuminanceNits > 0.0f
-        ? std::max(
-            1.0f, target.maxLuminanceNits / scRgbReferenceWhiteNits)
-        : std::max(1.0f, backend.currentHeadroom);
+    target.currentHeadroom = displayHeadroomKnown
+        ? std::max(1.0f, display.currentHeadroom)
+        : (target.maxLuminanceNits > 0.0f
+            ? std::max(
+                1.0f,
+                target.maxLuminanceNits / scRgbReferenceWhiteNits)
+            : std::max(1.0f, backend.currentHeadroom));
     target.potentialHeadroom = std::max(
-        target.currentHeadroom, backend.potentialHeadroom);
+        target.currentHeadroom,
+        display.valid && display.potentialHeadroom > 0.0f
+            ? display.potentialHeadroom
+            : backend.potentialHeadroom);
     target.effectiveTargetHeadroom = std::max(
         1.0f, target.currentHeadroom / target.sdrScale);
     return target;

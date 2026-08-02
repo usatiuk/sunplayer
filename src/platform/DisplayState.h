@@ -13,6 +13,10 @@ struct DisplayState {
     float sdrWhiteNits = 0.0f;
     float minLuminanceNits = 0.0f;
     float maxLuminanceNits = 0.0f;
+    // Display-referred platforms can expose relative EDR headroom without
+    // exposing the absolute luminance of SDR white.
+    float currentHeadroom = 0.0f;
+    float potentialHeadroom = 0.0f;
 };
 
 Q_DECLARE_METATYPE(DisplayState)

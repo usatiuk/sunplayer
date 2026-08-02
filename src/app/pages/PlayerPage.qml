@@ -231,9 +231,13 @@ VideoPage {
 
     FileDialog {
         id: openDialog
+        objectName: "openDialog"
 
         title: qsTr("Open media")
         fileMode: FileDialog.OpenFile
+        // A native macOS sheet must attach to the visible presentation window,
+        // not the offscreen QQuickWindow that owns this redirected scene.
+        parentWindow: Qt.platform.os === "osx" ? root.windowCommands : null
         nameFilters: [
             qsTr("Media files (*)")
         ]

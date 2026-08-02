@@ -106,6 +106,19 @@ function(sunroom_configure_ffmpeg)
                 "${runtime_targets}"
                 PARENT_SCOPE
         )
+    elseif (APPLE)
+        # The vcpkg module returns configuration-aware FFmpeg libraries and
+        # the Apple framework dependencies enabled by the pinned port.
+        find_package(FFMPEG REQUIRED)
+        target_include_directories(sunroom_ffmpeg
+                INTERFACE
+                ${FFMPEG_INCLUDE_DIRS}
+        )
+        target_link_libraries(sunroom_ffmpeg
+                INTERFACE
+                ${FFMPEG_LIBRARIES}
+        )
+        set(SUNROOM_FFMPEG_RUNTIME_TARGETS "" PARENT_SCOPE)
     elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
         find_package(PkgConfig REQUIRED)
         pkg_check_modules(SUNROOM_FFMPEG REQUIRED

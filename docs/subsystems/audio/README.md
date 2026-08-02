@@ -3,12 +3,12 @@
 ## Status
 
 Sunroom routes decoded audio through the production playback session and plays
-it through the system-default output on Windows and Linux. Presented cubeb
-frames are the ordinary media clock for sources with audio; video-only sources
-retain the monotonic clock.
+it through the system-default output on Windows, Apple-Silicon macOS, and
+Linux. Presented cubeb frames are the ordinary media clock for sources with
+audio; video-only sources retain the monotonic clock.
 
 The dependency graph includes FFmpeg libswresample, a pinned cubeb overlay on
-Windows, and the distribution cubeb package on Linux. A shared FFmpeg media
+Windows and macOS, and the distribution cubeb package on Linux. A shared FFmpeg media
 operation opens and probes one source once,
 routes selected audio and video packets under one global count/byte budget,
 decodes FLAC audio with the real FFmpeg decoder, and converts it to 48 kHz
@@ -29,7 +29,8 @@ operating-system device. It is deliberately lock-based and must not be reused
 as cubeb's real-time callback buffer.
 
 `CubebAudioSink` opens the system-default output through the pinned WASAPI
-backend on Windows and the system-selected cubeb backend on Linux. All cubeb
+backend on Windows, the AudioUnit backend on macOS, and the system-selected
+cubeb backend on Linux. All cubeb
 lifecycle and position calls run on one dedicated control thread; that thread
 also owns the required COM MTA lifetime on Windows. Its callback consumes a
 preallocated SPSC float queue, writes bounded underrun silence, applies one
@@ -289,9 +290,10 @@ publication, sticky stop/reset cancellation, zero fill, hold-silence mapping,
 and bounded ledger overwrite. The shared device-backed scenario opens the
 system-default endpoint and exercises silent preroll, start, position
 observation, pause, generation reset, drain, and destruction. Windows requires
-the selected `wasapi` backend and the sink-owned MTA; Linux accepts cubeb's
-nonempty system-selected backend. A focused regression proves that a PCM block
-cannot create a preroll/capacity dependency cycle.
+the selected `wasapi` backend and the sink-owned MTA; macOS requires
+`audiounit`; Linux accepts cubeb's nonempty system-selected backend. A focused
+regression proves that a PCM block cannot create a preroll/capacity dependency
+cycle.
 
 A registered application scenario launches the built `sunroom` executable
 with the production FFmpeg, Cubeb, QML, QRhi, libplacebo, compositor, and
@@ -311,7 +313,12 @@ through WSLg. Automated tests do not prove acoustic output, and WSLg does not
 prove native PulseAudio or PipeWire-Pulse default-route migration, callback timing
 under pressure, real cubeb fault recovery, or speaker-to-display A/V offset.
 Those require real-device fault scenarios and later physical flash/impulse
-measurement. macOS packaging and behavior remain future work.
+measurement. On the available Apple M2/macOS 26 host, the same dependency,
+device-backed sink, and production application playback scenarios pass through
+AudioUnit with an advancing audio-master clock, and user-confirmed playback is
+audible on the current default device. A live system-default output change and
+failure recovery remain native-device validation; bundle deployment remains
+packaging work.
 
 See [the subsystem plan](PLAN.md),
 [the Linux system-cubeb delivery plan](../../plans/audio/2026-08-02-linux-system-cubeb-audio.md),

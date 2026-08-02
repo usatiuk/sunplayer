@@ -209,6 +209,29 @@ void PresentationTargetTest::calculation_data() {
         QTest::newRow("headroom-never-falls-below-one")
             << DisplayState{} << backend << expected;
     }
+
+    {
+        DisplayState display;
+        display.valid = true;
+        display.hdrActive = true;
+        display.currentHeadroom = 3.5f;
+        display.potentialHeadroom = 5.0f;
+
+        PresentationBackendState backend;
+        backend.extendedLinearActive = true;
+        backend.sceneReferred = false;
+        backend.currentHeadroom = 2.0f;
+        backend.potentialHeadroom = 4.0f;
+
+        PresentationTarget expected;
+        expected.extendedLinearActive = true;
+        expected.currentHeadroom = 3.5f;
+        expected.potentialHeadroom = 5.0f;
+        expected.effectiveTargetHeadroom = 3.5f;
+
+        QTest::newRow("display-referred-edr-with-unknown-sdr-white")
+            << display << backend << expected;
+    }
 }
 
 void PresentationTargetTest::calculation() {

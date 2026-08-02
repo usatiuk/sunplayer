@@ -13,14 +13,14 @@ boundaries. The default regression test should therefore exercise the highest
 practical public boundary with real dependencies and representative data.
 
 The practical boundary changes as the player grows. Today the repository has
-Windows and native-Wayland QRhi presentation paths plus asynchronous
-synchronized A/V playback,
+Windows, Apple-Silicon macOS, and native-Wayland QRhi presentation paths plus
+asynchronous synchronized A/V playback,
 so useful tests cover display-target policy, resource-generation contracts,
 real QRhi composition, bounded frame-mailbox backpressure, stop-aware packet
 channels, timestamp-driven selection, active-source/session lifecycle, and
 retained software/D3D11VA `AVFrame`s, single-pass A/V decode and resampling,
 callback-safe PCM/metadata buffering, and real cubeb default-route lifecycle
-boundaries on Windows and Linux. A deterministic production-session scenario
+boundaries on Windows, macOS, and Linux. A deterministic production-session scenario
 now uses presented audio
 as the video scheduler's clock. Embedded-subtitle coverage crosses the same
 single FFmpeg operation, real libass and bitmap rendering, the QML track menu,
@@ -51,6 +51,21 @@ proven, and a user-confirmed real-file run is audible through WSLg. Native
 PulseAudio/PipeWire-Pulse acoustic output and live default-route switching,
 native GPU behavior, VAAPI import, live managed gamma-2.2 declaration, and HDR
 display behavior remain unproven.
+
+The Apple M2/macOS 26 lane exercises the real Metal QRhi device, same-device
+libplacebo Vulkan/MoltenVK target, direct RGBA16F Metal texture import,
+GPU-only handoff plus pre-submission target replacement, VideoToolbox
+NV12/P010 plane import, AudioUnit output, subtitle composition, seeking, and
+production application playback. Deterministic captures cover SDR
+and the shared PQ, HLG, HDR10+, and Dolby Vision Profile 8.1 tone-mapping path.
+The connected built-in display reported current EDR headroom `1.0` and
+potential headroom `2.0`; physical extended output, unlike-display movement,
+live HDR/SDR switching and live default-audio-route movement remain
+native-hardware checks. Playback is user-confirmed audible on the current
+default device. The final post-review Debug suite passes all 26 registered
+tests in 25.43 seconds without leaving an application process. Bundle closure
+and macOS 13 dependency
+compatibility remain packaging checks.
 
 The central principle is:
 
@@ -502,6 +517,15 @@ rerendering.
 Simulation proves shared policy. It does not prove that a platform adapter
 observes the real operating-system event or that the monitor emits the expected
 light.
+
+On the current macOS host, AppKit observation and the EDR-capable swapchain
+selection path run against a real `NSScreen`, while pure tests cover relative
+headroom mapping and equal-state reconciliation. One clean direct fullscreen
+smoke passed, and interactive fullscreen is user-confirmed working. Repeated
+fullscreen CTest automation was sensitive to live desktop input and was not
+registered as a deterministic test; broader display-transition evidence
+requires a controlled or manually recorded run. No test uses the currently
+broken HDR Lab as an acceptance oracle.
 
 The current WSLg lane is intentionally narrower. Its unmanaged assumed-sRGB
 surface and software Vulkan device exercise production ownership, rendering,

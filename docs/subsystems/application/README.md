@@ -2,9 +2,9 @@
 
 ## Status
 
-The application shell is a single-window Windows and native-Wayland
-presentation host with a thin QML `AppShell`, default Player page, and retained
-HDR Lab. It establishes
+The application shell is a single-window Windows, Apple-Silicon macOS, and
+native-Wayland presentation host with a thin QML `AppShell`, default Player
+page, and retained HDR Lab. It establishes
 startup, object ownership, native presentation events, redirected Qt Quick
 input, the active video-viewport boundary, and asynchronous continuous local
 audio/video playback with a position/duration seek timeline. It does not yet
@@ -34,8 +34,8 @@ Startup currently:
    state. XCB and XWayland are not fallback paths.
 2. Creates `QGuiApplication`, parses command-line options, and installs the
    application logger.
-3. Asks `GraphicsBackendFactory` to configure Qt Quick for D3D11 on Windows or
-   Vulkan on Linux.
+3. Asks `GraphicsBackendFactory` to configure Qt Quick for D3D11 on Windows,
+   Metal on macOS, or Vulkan on Linux.
 4. Installs one dark application palette used by the interface.
 5. On Linux, inventories optional Wayland color/decorations capabilities and
    creates the window-scoped `QVulkanInstance`.
@@ -50,7 +50,8 @@ normal/fullscreen and maximized/fullscreen transitions, restoration, continued
 video and audio-clock presentation, native keyboard routing, and idle cursor
 hiding. These are test scenarios, not a general remote-control interface. The
 fullscreen scenario is registered on Windows and run explicitly, non-gating,
-on Linux. There is no full
+on Linux. One clean direct run passes on macOS, but it is not registered while
+live-desktop AppKit automation remains sensitive to concurrent input. There is no full
 command-line model,
 single-instance policy, recent-file state, settings store, or application
 service container.
@@ -86,11 +87,11 @@ engine. Teardown first enters `Releasing`, destroys the engine/domain and
 display state, explicitly destroys the native `QWindow` surface, then lets the
 window context destroy the Vulkan instance.
 
-On Windows, the graphics engine is created before display observation attaches
+On Windows and macOS, the graphics engine is created before display observation attaches
 to the native window because attachment may create the platform window and
 deliver synchronous events.
 
-The window requests the factory-selected Direct3D or Vulkan surface type,
+The window requests the factory-selected Direct3D, Metal, or Vulkan surface type,
 starts at 1100 × 760 logical pixels, has a 760 × 560 minimum, and uses the
 title `Sunroom`.
 
@@ -122,6 +123,17 @@ sequence and its timestamp/device metadata. The visible native window handles
 non-repeating F11/Escape plus gated Space play/pause itself; QML publishes only
 whether a transient menu or dialog currently owns Escape. The hidden Quick
 scene has the same logical size as the native window.
+
+Qt Quick dialogs normally infer their parent from that hidden window. On
+macOS, the file dialog explicitly uses the visible `PresentationWindow` as its
+native sheet parent so opening media cannot materialize the redirected window
+as a second blank toplevel. Windows and Linux leave the property unset, keeping
+Qt's normal `QQuickWindow` parent and non-native fallback behavior. The rebuilt
+macOS application is user-confirmed to open the native file sheet without the
+second window. Qt has fixed the missing redirected-window resolution upstream;
+the pinned 6.11.1 build still needs the explicit binding. Recheck both native
+and forced non-native behavior before removing it during a Qt upgrade; the
+investigation is recorded under `docs/research/`.
 
 `PresentationWindow` is the sole fullscreen and native-cursor authority. Its
 QML-facing commands ask Qt to enter or leave compositor-managed fullscreen and
@@ -206,6 +218,14 @@ output, or route-change evidence. The scenarios exercise startup, initial
 playback wiring, and fullscreen;
 broader command,
 error, shutdown, and packaged-install scenarios remain future work.
+
+On Apple M2/macOS 26, the registered playback scenario passes through the real
+Metal/MoltenVK presentation path and AudioUnit-backed clock, then exits
+automatically. Focused subtitle and seek tests cover the shared application
+services. A clean direct fullscreen smoke passes and interactive fullscreen is
+user-confirmed working. Unlike-display/EDR transitions remain native
+validation gaps, while repeatable live-desktop fullscreen automation is a test
+gap rather than a product failure; packaging is a later phase.
 
 When features arrive, use:
 

@@ -7,11 +7,14 @@ Embedded subtitle playback is implemented and tracked by
 The Player exposes Off and the embedded tracks discovered by the existing
 single FFmpeg operation. Selected ASS/text subtitles render through libass;
 FFmpeg-decoded bitmap subtitles render from owned RGBA regions.
-The same production sources compile on Linux against system libass 0.17.4.
-Platform-neutral subtitle state and FFmpeg decode tests plus the real libass
-embedded-font rendering test pass there. The native Linux graphics domain now
-exists; a Linux QRhi subtitle-surface capture still needs to be added before
-claiming GPU rendering equivalence on that backend.
+The same production sources compile on Linux against system libass 0.17.4 and
+on macOS against the pinned vcpkg dependency. Platform-neutral subtitle state,
+FFmpeg decode, and real libass embedded-font tests pass on both. On Apple
+M2/macOS 26, the production Metal subtitle renderer additionally passes ASS
+animation/font/route restoration, bitmap replacement/clear, viewport
+placement, and generation-failure recovery. A Linux QRhi subtitle-surface
+capture still needs to be added before claiming GPU rendering equivalence on
+that backend.
 
 ## Responsibility
 

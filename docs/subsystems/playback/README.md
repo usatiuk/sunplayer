@@ -164,7 +164,7 @@ exposes `playRequested` independently of its interruption:
   separate from the Buffering fact.
 
 Ordinary default-route switching is delegated to the existing null-device
-cubeb stream on both Windows and Linux; it does not replace the audio-output
+cubeb stream on Windows, macOS, and Linux; it does not replace the audio-output
 epoch. Application-level physical stream replacement after a cubeb error is
 not implemented yet. Its accepted direction is to replace only the audio-
 output epoch from the frozen position, preroll it, and leave recovery only

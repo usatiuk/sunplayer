@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
-if (CMAKE_HOST_WIN32 AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+if ((CMAKE_HOST_WIN32 OR CMAKE_HOST_APPLE)
+        AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     set(_sunroom_vcpkg_toolchain)
 
     if (DEFINED ENV{VCPKG_ROOT})
@@ -39,7 +40,29 @@ if (CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET)
     )
 endif ()
 
+if (CMAKE_HOST_APPLE AND NOT DEFINED VCPKG_TARGET_TRIPLET)
+    set(
+            VCPKG_TARGET_TRIPLET
+            arm64-osx
+            CACHE STRING
+            "Sunroom dependency target triplet"
+    )
+endif ()
+
+if (CMAKE_HOST_APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(
+            CMAKE_OSX_DEPLOYMENT_TARGET
+            13.0
+            CACHE STRING
+            "Minimum supported macOS version"
+    )
+endif ()
+
 project(Sunroom VERSION 0.1.0 LANGUAGES C CXX)
+
+if (APPLE)
+    enable_language(OBJCXX)
+endif ()
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -48,9 +71,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(CTest)
 
-if (WIN32 AND NOT VCPKG_MANIFEST_MODE)
+if ((WIN32 OR APPLE) AND NOT VCPKG_MANIFEST_MODE)
     message(FATAL_ERROR
-            "The Windows build requires vcpkg manifest mode. Set "
+            "The Windows and macOS builds require vcpkg manifest mode. Set "
             "VCPKG_ROOT or configure with the vcpkg CMake toolchain.")
 endif ()
 
@@ -143,9 +166,30 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     )
     find_package(cubeb CONFIG REQUIRED)
     set(sunroom_qt_minimum_version 6.10)
+elseif (APPLE)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(SUNROOM_LIBPLACEBO REQUIRED
+            IMPORTED_TARGET
+            GLOBAL
+            libplacebo=7.360.1
+    )
+    add_library(libplacebo::libplacebo
+            ALIAS PkgConfig::SUNROOM_LIBPLACEBO)
+
+    find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS
+            GuiPrivate
+            Quick
+            QuickControls2
+            QuickDialogs2
+            ShaderTools
+    )
+    find_package(cubeb CONFIG REQUIRED)
+    find_package(MoltenVK 1.4.2 EXACT CONFIG REQUIRED)
+    set(sunroom_qt_minimum_version 6.11.1)
 else ()
     message(FATAL_ERROR
-            "Sunroom currently supports Windows and native Wayland Linux.")
+            "Sunroom currently supports Windows, Apple-Silicon macOS, and "
+            "native Wayland Linux.")
 endif ()
 
 qt_standard_project_setup(REQUIRES ${sunroom_qt_minimum_version})
@@ -333,6 +377,22 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_libraries(sunroom_video_pipeline PRIVATE
             Vulkan::Vulkan
     )
+elseif (APPLE)
+    target_sources(sunroom_video_pipeline PRIVATE
+            src/graphics/backends/MetalGraphicsDeviceDomain.h
+            src/graphics/backends/MetalGraphicsDeviceDomain.mm
+            src/graphics/backends/MetalLibplaceboFrameImporter.h
+            src/graphics/backends/MetalLibplaceboFrameImporter.mm
+            src/graphics/backends/MetalLibplaceboVideoTarget.h
+            src/graphics/backends/MetalLibplaceboVideoTarget.mm
+    )
+    target_compile_options(sunroom_video_pipeline PRIVATE
+            $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>
+    )
+    target_link_libraries(sunroom_video_pipeline PRIVATE
+            MoltenVK::MoltenVK
+            "-framework CoreVideo"
+    )
 endif ()
 
 qt_add_executable(sunroom
@@ -366,6 +426,16 @@ qt_add_executable(sunroom
         src/video/ActiveVideoSource.cpp
         src/video/ActiveVideoSource.h
 )
+
+if (APPLE)
+    target_sources(sunroom PRIVATE
+            src/platform/macos/MacDisplayStateProvider.h
+            src/platform/macos/MacDisplayStateProvider.mm
+    )
+    target_compile_options(sunroom PRIVATE
+            $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>
+    )
+endif ()
 
 set_source_files_properties(src/app/Main.qml PROPERTIES
         QT_RESOURCE_ALIAS Main.qml
@@ -451,9 +521,17 @@ qt_add_qml_module(sunroom
 
 qt_generate_foreign_qml_types(sunroom_video_pipeline sunroom)
 
+set(sunroom_shader_options PRECOMPILE)
+find_program(sunroom_spirv_opt spirv-opt)
+if (sunroom_spirv_opt)
+    list(APPEND sunroom_shader_options OPTIMIZED)
+else ()
+    message(STATUS
+            "spirv-opt was not found; skipping optional SPIR-V optimization")
+endif ()
+
 qt_add_shaders(sunroom "sunroom_shaders"
-        PRECOMPILE
-        OPTIMIZED
+        ${sunroom_shader_options}
         PREFIX
         /shaders
         BASE
@@ -463,6 +541,7 @@ qt_add_shaders(sunroom "sunroom_shaders"
         src/presentation/shaders/diagnostic_video.frag
         src/presentation/shaders/compositor.frag
 )
+unset(sunroom_spirv_opt CACHE)
 
 target_link_libraries(sunroom
         PRIVATE
@@ -532,7 +611,7 @@ if (WIN32)
 endif ()
 
 if (BUILD_TESTING)
-    if (WIN32)
+    if (WIN32 OR APPLE)
         find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS Test)
     else ()
         find_package(Qt6 6.10...<6.11 REQUIRED COMPONENTS Test)

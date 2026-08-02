@@ -5,7 +5,7 @@
   "description": "Cross-platform audio I/O library",
   "homepage": "https://github.com/mozilla/cubeb",
   "license": "ISC AND BSD-3-Clause",
-  "supports": "windows",
+  "supports": "windows | osx",
   "dependencies": [
     {
       "name": "vcpkg-cmake",

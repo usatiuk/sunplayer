@@ -8,9 +8,9 @@ viewport boundary are production structure; HDR Lab remains developer tooling
 and is reached from Player rather than occupying permanent playback chrome.
 
 Player opens a local file and presents the movie across the full page. Windows
-uses the production libplacebo video and default cubeb audio paths; Linux uses
-the same software-decoded libplacebo path through Vulkan and the same cubeb
-sink through the system-selected audio backend. A compact two-row transport
+uses D3D11/D3D11VA, macOS uses Metal/MoltenVK/VideoToolbox, and Linux uses the
+software-decoded Vulkan path; all three share the production libplacebo video,
+compositor, and default-route cubeb boundaries. A compact two-row transport
 island appears on pointer activity,
 keeps the timeline above its controls, and fades during uninterrupted playback.
 The transport uses a small vendored Lucide 1.28.0 SVG subset inside fully
@@ -186,10 +186,10 @@ a multiple of the active platform reference white. This deliberately lets an
 SDR-white/display change rerender one unchanged PQ signal.
 
 Diagnostics label the input path separately from output interop. The current
-libplacebo lab source reports one fixed-size software-frame CPU upload; the direct
-D3D11 target reports zero output copies or CPU transfers. Future hardware-frame
-import must therefore remain distinguishable rather than making every path
-look “zero-copy.”
+libplacebo lab source reports one fixed-size software-frame CPU upload; the
+direct D3D11 and Metal targets report zero output copies or CPU transfers.
+Hardware-frame imports remain separately diagnosed rather than making every
+path look “zero-copy.”
 
 Player is the default page and HDR Lab remains reachable through Player's
 overflow menu or empty state. Reusable read-only pipeline diagnostics appear in
@@ -215,7 +215,7 @@ native-cursor intent without launching a native dialog. The shell test also
 checks disabled, normal, maximized, and fullscreen application-chrome state;
 stable empty-page inset; full-root, media-independent outline visibility and
 DPR-derived thickness; and the invariant that title fade never moves an active
-video viewport. The real D3D11 capture
+video viewport. The real D3D11 and Metal captures
 verifies that zero video geometry and the compositor's fallback
 binding produce the normal background rather than sampling the retained video
 surface. It also destroys a bound diagnostic producer, creates the other
@@ -225,12 +225,25 @@ FFmpeg, Cubeb, QML, QRhi, libplacebo, and swapchain paths and exits
 noninteractively after observing real presentation plus continued clock
 progress.
 
+The component test also asserts that macOS resolves `FileDialog.parentWindow`
+to the supplied visible window-command host, while other platforms leave the
+property unset for Qt Quick's automatic/native-fallback behavior. This protects
+the redirected-scene boundary without opening a modal operating-system dialog
+in automation. A user-confirmed run of the rebuilt application also opens the
+native file sheet without materializing a second blank window.
+
 The Windows-registered fullscreen application scenario additionally crosses
 the real window, QRhi swapchain, QML, media, and video-presentation boundaries
 while driving native F11, Escape, Space, and redirected background double-click
 input and checking normal/maximized restoration, cursor hiding, and one
 advancing cubeb audio epoch. Linux runs it explicitly and non-gating while its
 current WSLg buffer/configure failure remains unresolved.
+
+On Apple M2/macOS 26, the registered playback scenario crosses the production
+Metal/MoltenVK window and AudioUnit clock. One clean direct fullscreen smoke
+passes, and interactive fullscreen is user-confirmed working. Repeatable
+live-desktop automation remains non-gating because concurrent input can affect
+the harness.
 
 Extend Qt Quick component coverage as commands gain behavior. Add
 actual-application scenarios for file open, navigation, diagnostics access,

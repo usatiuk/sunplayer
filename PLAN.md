@@ -66,8 +66,9 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 
 ## Current implementation status
 
-As of 2026-08-02, the repository contains Windows D3D11 and native-Wayland
-Vulkan presentation foundations plus continuous local-file playback:
+As of 2026-08-02, the repository contains Windows D3D11, Apple-Silicon macOS
+Metal, and native-Wayland Vulkan presentation paths plus continuous local-file
+playback:
 
 * A factory-selected graphics-device domain owns the current D3D11 QRhi,
   same-device libplacebo GPU, FFmpeg D3D11VA device, shared immediate-context
@@ -128,6 +129,21 @@ Vulkan presentation foundations plus continuous local-file playback:
 * The configured Windows Debug target builds successfully with Qt 6.11.1,
   MSVC, pinned D3D11-only libplacebo 7.360.1, and official minimal FFmpeg
   8.1.2 dependencies built through the project-local vcpkg configuration.
+* Apple-Silicon macOS uses Qt 6.11.1 QRhi Metal for presentation and
+  libplacebo Vulkan over MoltenVK for video. Both domains are required to
+  select the same `MTLDevice`. A QRhi-owned RGBA16F Metal texture is imported
+  directly by libplacebo, with a Vulkan timeline semaphore exported as a
+  Metal shared event for GPU-only handoff and no output copy. AppKit supplies
+  current and potential relative EDR headroom; value `1.0` remains current SDR
+  white, while the system owns the final ColorSync display conversion.
+  VideoToolbox NV12 and P010 `CVPixelBuffer` planes import directly through
+  CoreVideo Metal texture views and remain retained until libplacebo reports
+  GPU completion. SDR, PQ, HLG, HDR10+, Dolby Vision Profile 8.1, subtitles,
+  seeking, and AudioUnit-backed system-default playback pass focused tests on
+  the available M2/macOS 26 host; the final registered Debug suite passes
+  26/26. Physical EDR above `1.0`, unlike-display
+  movement, live default-audio-route switching, older-macOS dependency
+  compatibility, and packaging remain open validation gates.
 * Native-Wayland Linux configures from system Qt 6.10, FFmpeg 8, libplacebo,
   cubeb, libass, Vulkan, Wayland, VA-API, and DRM packages. It now selects
   Wayland before Qt startup, inventories optional color/decorations
@@ -170,10 +186,12 @@ Vulkan presentation foundations plus continuous local-file playback:
   session passes the active graphics capability without adding a parallel
   audio demux context. Hardware fallback intentionally restarts the entire
   playback generation with fresh shared contexts.
-* One `CubebAudioSink` opens the system-default route on Windows and Linux. Its
+* One `CubebAudioSink` opens the system-default route on Windows, macOS, and
+  Linux. Its
   dedicated control thread owns the cubeb lifecycle and, on Windows, the COM
-  MTA. Windows requests WASAPI; Linux lets the distribution cubeb package
-  select its backend. The real-time callback consumes preallocated PCM,
+  MTA. Windows requests WASAPI; macOS verifies AudioUnit; Linux lets the
+  distribution cubeb package select its backend. The real-time callback
+  consumes preallocated PCM,
   records bounded output-to-media mappings, and represents short underruns as
   hold silence. Cubeb and the operating-system sound service own ordinary
   default-route migration within one cubeb-stream epoch; Sunroom adds no
@@ -329,7 +347,7 @@ Documentation: `docs/subsystems/playback/`
 * [x] Redirected Qt Quick rendering integration
 * [x] Final video, subtitle, and UI compositor
 * [x] Windows extended-linear HDR and SDR swapchain presentation
-* [ ] macOS EDR and SDR swapchain presentation
+* [x] Initial macOS EDR and SDR swapchain presentation
 * [x] Wayland Linux Vulkan SDR presentation foundation
 * [ ] Wayland Linux managed HDR swapchain presentation
 * [x] Shared presentation and display-state model
@@ -339,7 +357,7 @@ Documentation: `docs/subsystems/playback/`
   surface invalidation or swapchain churn
 * [ ] Optional Windows raw display capability diagnostics where renderer or
   support tooling has a concrete consumer
-* [ ] macOS display adapter
+* [x] Initial macOS AppKit EDR-headroom and display-change adapter
 * [x] Initial Wayland startup capability and SDR-surface selection adapter
 * [ ] Wayland preferred-target and managed-HDR display adapter
 * [x] Graphics-device loss and recreation
@@ -364,7 +382,8 @@ Documentation: `docs/subsystems/graphics/`
 * [x] D3D11VA NV12/P010/P012/P016 direct importer
 * [x] Vulkan direct libplacebo output target
 * [ ] VAAPI and DRM PRIME hardware-frame importer
-* [ ] VideoToolbox/IOSurface importer and macOS Metal/MoltenVK interop
+* [x] VideoToolbox NV12/P010 direct Metal-plane importer and macOS
+  Metal/MoltenVK output interop
 * [x] Offscreen HDR render-target contract and temporary QRhi producer
 * [x] Display-target and SDR-white updates
 * [x] Analytic reference-white-adaptive SDR/static-PQ display mapping without
@@ -386,7 +405,7 @@ Documentation: `docs/subsystems/video-rendering/`
 * [x] Audio-output backend direction and pinned cubeb dependency
 * [x] Initial real FFmpeg audio decoding and libswresample conversion
 * [x] Bounded controlled PCM buffering
-* [x] Real-time-safe Windows and Linux cubeb callback and default-route
+* [x] Real-time-safe Windows, macOS, and Linux cubeb callback and default-route
   lifecycle
 * [x] Production session output and presented-audio master clock
 * [x] Session-lifetime volume and mute at the audio-output boundary
@@ -490,7 +509,7 @@ Documentation: `docs/TESTING.md` and `docs/subsystems/testing/`
 * [x] Reproducible libass integration
 * [x] Root-level Windows/Linux GitHub Actions build, QML-lint, and
   capability-honest CTest workflow configured; first hosted run pending
-* [ ] Cross-platform libplacebo dependency configurations
+* [x] Cross-platform libplacebo dependency configurations
 * [ ] Windows packaging
 * [ ] macOS packaging
 * [ ] Wayland Linux packaging and runtime requirements

@@ -122,8 +122,10 @@ explicit recovery semantics.
   reconnect, sleep/wake, and service interruption on Windows.
 * [x] Build and run the Linux production sink through Ubuntu's system cubeb
   package and WSLg's Pulse-compatible server.
-* [ ] Package and validate cubeb's current macOS backend choice with locked
-  Rust dependencies if that backend remains selected upstream.
+* [x] Build and validate the pinned cubeb AudioUnit backend on Apple-Silicon
+  macOS through its dependency, real sink, and production playback scenarios.
+  Bundle deployment remains in the macOS packaging phase; live default-route
+  switching and physical recovery remain native-device validation.
 * [ ] Validate PulseAudio and PipeWire-Pulse behavior on supported Linux
   configurations.
 

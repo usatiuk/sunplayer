@@ -261,15 +261,17 @@ Windows V1 color release gate:
 
 ## Stage 6: macOS and Wayland presentation
 
-* [ ] Implement Metal/EDR presentation with an accurately declared
-  extended-linear surface, current headroom observation, and no second system
-  media tone mapper.
-* [ ] Implement and validate ADR 0014's libplacebo MoltenVK/Vulkan producer to
-  IOSurface/Metal target bridge, including synchronization, lifetime, copy
-  accounting, device recovery, and comparison with a shared-MoltenVK
-  alternative.
-* [ ] Add the VideoToolbox/IOSurface importer with the macOS graphics domain,
-  and add Vulkan/DRM PRIME/VAAPI importers with the Wayland Linux graphics
+* [x] Implement Metal/EDR presentation with an accurately declared
+  extended-linear surface, current relative headroom observation, and no
+  second system media tone mapper. Physical current headroom above `1.0` and
+  unlike-display transitions remain native-hardware validation.
+* [x] Implement ADR 0014's same-device libplacebo MoltenVK/Vulkan producer to
+  Metal target bridge with direct texture import, exported shared-event
+  synchronization, explicit lifetime/copy diagnostics, and no CPU wait or
+  output copy. Device-loss injection remains broader graphics validation.
+* [x] Add the VideoToolbox NV12/P010 Metal-plane importer with the macOS
+  graphics domain, retained through libplacebo GPU completion.
+* [ ] Add Vulkan/DRM PRIME/VAAPI importers with the Wayland Linux graphics
   domain.
 * [x] Inventory Linux color-management-v1 capabilities. Use Qt-owned gamma-2.2
   surface descriptions when managed SDR can be declared, add preferred-

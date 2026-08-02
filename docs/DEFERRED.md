@@ -7,14 +7,36 @@ accepted behavior merely because it is documented here.
 
 ## Graphics and display
 
-### macOS presentation backend
+### Remaining macOS native-hardware and packaging validation
 
-The factory-selected implementation configures Windows for D3D11 and native-
-Wayland Linux for Vulkan. macOS Metal/EDR presentation remains unimplemented,
-so startup terminates on that platform.
+The Apple-Silicon macOS path now runs QRhi Metal presentation, direct
+Metal/MoltenVK video-target interop, AppKit relative EDR observation,
+VideoToolbox NV12/P010 import, subtitles, seeking, and cubeb AudioUnit playback
+on the available Apple M2/macOS 26 host. That host's built-in display reported
+current EDR headroom `1.0` and potential headroom `2.0`. Physical output above
+SDR white, movement between unlike SDR/EDR displays, live HDR/SDR switching,
+brightness/headroom changes, hotplug, sleep/wake, and paused-frame behavior
+across those changes remain native-hardware checks. Playback is user-confirmed
+audible on the current macOS default device; a live system-default route change
+remains unverified.
 
-Track under the backend-realization section of
-`docs/subsystems/graphics/PLAN.md`.
+Packaging is intentionally after the non-packaging port. It must build and
+inspect a self-contained bundle, close Qt/plugin/native-library dependencies,
+verify the signature/runtime from outside the build tree, and rebuild the
+vcpkg dependency archives for the declared macOS 13 floor. The current cached
+archives were built for the newer host target, so the application binary's
+`minos 13.0` load command alone is not a macOS 13 compatibility claim. Intel,
+notarization, and App Store distribution remain out of scope.
+
+One direct fullscreen smoke passed and interactive fullscreen works in
+user-confirmed playback. Repeated live-desktop AppKit automation was sensitive
+to concurrent user input and is not registered as a deterministic CTest.
+Revisit automation only with reproducible supported-environment evidence or a
+controlled boundary; do not add timing or event-order workarounds.
+
+The HDR Lab is currently broken and was explicitly excluded from macOS port
+acceptance. Do not use or repair it as part of this port; its existing target-
+control issue remains recorded separately below.
 
 ### Remaining decoded-video coverage and cross-platform hardware import
 
@@ -34,8 +56,10 @@ BT.709 YUV420P and non-square-pixel aspect fitting. The Windows graphics domain
 owns a video-capable,
 multithread-protected D3D11 device; an H.264 scenario proves D3D11VA NV12 direct
 plane import, zero input copies/transfers, and observable software fallback.
-P010/P012/P016 capture, same-device-copy and CPU fallback paths, real
-device-loss injection, and the other platform importers remain required.
+Windows P010/P012/P016 capture, same-device-copy and CPU fallback paths, real
+device-loss injection, and the Linux native importer remain required. macOS
+H.264/NV12 and Main10 HEVC/P010 direct import are capture-validated across
+multiple frames.
 General display-matrix rotation still lacks a dedicated render capture.
 
 All SDR, PQ/HDR10, HLG, HDR10+, and Dolby Vision inputs use the same
@@ -65,7 +89,10 @@ system Qt 6.10 family. Updating either family requires deliberate compile and
 runtime validation of resource creation, `QQuickRenderControl`, swapchain HDR
 information, surface loss, device recovery, and the matching Wayland private
 ABI where applicable. Narrow wrappers reduce exposure but cannot remove this
-maintenance cost.
+maintenance cost. A Qt version containing qtdeclarative commit
+`bd1da1d7972f02a3be6e872a5fa05f73556d56d3` may make Sunroom's explicit macOS
+native-dialog parent binding redundant; remove it only after native and forced
+non-native dialog paths are both verified with the new Qt build.
 
 ### Runtime HDR validation and graphics tests
 
@@ -145,8 +172,9 @@ with PQ, HLG, HDR10+, or Dolby Vision remains unsupported pending a separate
 target model or upstream-supported integration.
 
 Sunroom relies on the operating system or compositor for final display-profile
-calibration on managed paths: Windows Advanced Color, future macOS
-ColorSync/EDR, and the implemented Qt-owned Wayland managed-SDR declaration.
+calibration on managed paths: Windows Advanced Color, implemented macOS
+ColorSync/EDR surface declaration, and the implemented Qt-owned Wayland
+managed-SDR declaration.
 Managed Wayland HDR transitions remain pending. Ordinary Windows DirectX SDR
 output with Advanced Color inactive and native Wayland without a usable
 managed-SDR capability are unmanaged sRGB-assumed fallbacks.
@@ -176,8 +204,8 @@ the test solely for initial CI.
 Linux hosted CI uses lavapipe and a Pulse null sink. A VAAPI/DRM PRIME hardware
 runner, an HDR/display lab, and physical-audio/default-route scenarios remain
 separate future lanes. Packaging/release workflows remain deferred until
-packaging is defined, and macOS CI remains deferred until the product has a
-macOS backend and dependency contract.
+packaging is defined. macOS CI remains deferred until its bundle/deployment
+contract and useful hosted-versus-native-hardware test split are defined.
 
 ## Application and player
 
@@ -236,7 +264,8 @@ preserve the logical position.
 
 The production session now uses one-open A/V packet routing, real FFmpeg audio
 decode, libswresample conversion, a common nonzero timeline, and either bounded
-controlled output or the system-default cubeb route on Windows and Linux.
+controlled output or the system-default cubeb route on Windows, macOS, and
+Linux.
 Presented audio is the ordinary master clock; video-only media uses a monotonic
 clock, and video continuing after audio drain uses an explicitly anchored
 monotonic tail. The active graphics capability and whole-operation hardware
@@ -258,7 +287,9 @@ and underruns. It still lacks click-free gain ramps, persistence, audio-track
 selection, and a general diagnostics view. WSLg system-cubeb output and its
 advancing clock are validated; native PulseAudio/PipeWire-Pulse switching and
 recovery and acoustic output, physical speaker-to-display A/V measurement, and
-macOS packaging remain unvalidated.
+live macOS default-route movement remain unvalidated. macOS AudioUnit sink and
+production playback checks pass on the available Apple M2 host, where playback
+is user-confirmed audible; macOS packaging remains separate.
 
 ### Expanded subtitle features
 
@@ -271,11 +302,11 @@ geometry, and exact VSFilter color behavior. Seeking deliberately does not scan
 or reread subtitle history; an already-active cue may remain absent until the
 next naturally decoded update.
 
-Cubeb's WASAPI and Pulse-family backends can follow a null-device stream through
-ordinary system-default routing, but they do not expose one portable stream-
-specific success notification or guarantee gapless delivery of audio queued to
-the old endpoint. Sunroom opens cubeb's default route and keeps one output
-epoch for one cubeb stream while cubeb and the sound service perform ordinary
+Cubeb's WASAPI, AudioUnit, and Pulse-family backends can follow a null-device
+stream through ordinary system-default routing, but they do not expose one
+portable stream-specific success notification or guarantee gapless delivery
+of audio queued to the old endpoint. Sunroom opens cubeb's default route and
+keeps one output epoch for one cubeb stream while cubeb and the sound service perform ordinary
 route migration, as decided by ADR 0016.
 
 Application-level recreation after a cubeb error remains deferred. That path

@@ -6,6 +6,10 @@
 
 #include "diagnostics/LogCategories.h"
 
+#ifdef Q_OS_MACOS
+#include "platform/macos/MacDisplayStateProvider.h"
+#endif
+
 #ifdef Q_OS_WIN
 
 #include <Windows.h>
@@ -224,6 +228,8 @@ std::unique_ptr<DisplayStateProvider> createDisplayStateProvider(QObject *parent
     qRegisterMetaType<DisplayState>();
 #ifdef Q_OS_WIN
     return std::make_unique<WindowsDisplayStateProvider>(parent);
+#elif defined(Q_OS_MACOS)
+    return createMacDisplayStateProvider(parent);
 #else
     return std::make_unique<NullDisplayStateProvider>(parent);
 #endif

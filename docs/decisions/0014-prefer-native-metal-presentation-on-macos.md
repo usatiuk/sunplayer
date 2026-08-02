@@ -23,8 +23,8 @@ playback.
 
 The intended first macOS presentation path uses QRhi Metal for Qt Quick,
 composition, EDR, and ColorSync surface declaration. Libplacebo uses Vulkan
-over MoltenVK as the video producer, with a narrow backend-owned
-IOSurface/Metal interop path into the QRhi composition domain.
+over MoltenVK as the video producer, with a narrow backend-owned Metal-texture
+interop path into the QRhi composition domain.
 
 Sunroom will not force QRhi Vulkan merely to share one graphics API if doing so
 makes EDR declaration, ColorSync behavior, or energy characteristics less
@@ -39,11 +39,16 @@ target-interop contract owns sharing, copies, synchronization, and diagnostics.
 ## Consequences
 
 * Native macOS presentation and display calibration have a clear owner.
-* The first macOS slice must validate IOSurface formats, texture lifetime,
-  cross-API synchronization, copy counts, EDR headroom, surface color-space
-  tagging, and device recovery.
-* A direct no-copy path is a goal, not an assumption. Any GPU copy or CPU
-  fallback remains explicit and diagnosed.
+* The implemented first slice requires QRhi and MoltenVK to expose the same
+  `MTLDevice`, imports QRhi's RGBA16F Metal texture directly into libplacebo,
+  and orders access with an exported Vulkan timeline semaphore/Metal shared
+  event. VideoToolbox planes use retained CoreVideo Metal views on that same
+  device.
+* Direct no-copy output and NV12/P010 input are verified on the available
+  Apple M2 host. Any later GPU copy or CPU fallback remains explicit and
+  diagnosed.
+* Physical EDR headroom, unlike-display transitions, device recovery, and the
+  packaged deployment matrix remain separate validation gates.
 * The architecture remains compatible with a later shared-MoltenVK result
   without changing playback or the rendered-video surface contract.
 

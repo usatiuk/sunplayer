@@ -2,14 +2,18 @@
 
 ## Status
 
-The repository contains working Windows D3D11 and native-Wayland Vulkan
-presentation paths. They share the application-owned QRhi, redirected Qt
-Quick, final-compositor, video-target, presentation, and recovery model.
+The repository contains working Windows D3D11, Apple-Silicon macOS Metal, and
+native-Wayland Vulkan presentation paths. They share the application-owned
+QRhi, redirected Qt Quick, final-compositor, video-target, presentation, and
+recovery model.
 
 The production decoded-frame/render boundary is wired into the Player and
 capture-tested headlessly. Software `AVFrame` planes upload through
 libplacebo; on Windows, supported H.264 input decodes into a retained D3D11VA
-texture slice on the same device and maps directly into libplacebo without an input copy.
+texture slice on the same device and maps directly into libplacebo without an
+input copy. On macOS, VideoToolbox NV12/P010 `CVPixelBuffer` planes become
+same-device Metal texture views and remain retained until GPU consumption
+completes.
 HDR Lab still uses the analytic libplacebo producer by default, with the
 retained procedural QRhi producer available only for diagnostic A/B
 comparison. Continuous decoding, subtitles, and playback scheduling are
@@ -21,12 +25,12 @@ cross-platform target:
 
 | Area | Current state |
 | --- | --- |
-| Operating system | Windows and native-Wayland Linux |
-| Graphics domain | Factory-selected D3D11 or Vulkan implementation owning QRhi, same-device libplacebo state, execution synchronization, diagnostics, and device generation |
-| Presentation | Windows extended-linear sRGB/scRGB or SDR; Linux unmanaged piecewise-sRGB SDR or managed gamma-2.2 SDR selected before native creation |
+| Operating system | Windows, Apple-Silicon macOS, and native-Wayland Linux |
+| Graphics domain | Factory-selected D3D11, Metal/MoltenVK, or Vulkan implementation owning QRhi, libplacebo state, execution synchronization, diagnostics, and device generation |
+| Presentation | Windows extended-linear sRGB/scRGB or SDR; macOS extended-linear sRGB EDR or ColorSync-managed sRGB SDR; Linux unmanaged piecewise-sRGB SDR or managed gamma-2.2 SDR selected before native creation |
 | Qt Quick | Redirected into an application-owned full-window RGBA16F texture with matching depth/stencil |
 | Video | Shared QRhi diagnostic, analytic libplacebo, or FFmpeg-frame libplacebo producer → direct target → display-targeted RGBA16F surface |
-| Display telemetry | Shared Qt/QRhi state plus Windows Advanced Color; Linux preferred-output/HDR observation remains pending |
+| Display telemetry | Shared Qt/QRhi state plus Windows Advanced Color and macOS AppKit relative EDR headroom; Linux preferred-output/HDR observation remains pending |
 | Rendering cadence | Demand-driven, continuous only while the pattern or UI animates |
 
 The active work required to turn this foundation into a real player boundary is
@@ -52,10 +56,8 @@ The future subsystem boundary also includes:
 
 * A display-targeted video surface produced by libplacebo.
 * Subtitle and diagnostic layers.
-* VAAPI/DRM PRIME and VideoToolbox native input import hidden behind shared
-  interfaces.
-* Platform graphics and display adapters for macOS plus managed-HDR feedback
-  on native Wayland Linux.
+* VAAPI/DRM PRIME native input import hidden behind shared interfaces.
+* Managed-HDR feedback on native Wayland Linux.
 
 It does not own demuxing, decoding, media clocks, frame scheduling, audio, or
 track selection.
@@ -73,6 +75,11 @@ RhiPresentationEngine
     │       │       ├── video-capable native device + execution guard
     │       │       ├── imported QRhi and same-device libplacebo GPU
     │       │       └── FFmpeg D3D11VA context + native frame importer
+    │       ├── Metal backend
+    │       │       ├── QRhi-owned Metal device and command queue
+    │       │       ├── same-device libplacebo Vulkan GPU over MoltenVK
+    │       │       ├── shared-event target synchronization
+    │       │       └── FFmpeg VideoToolbox context + native plane importer
     │       └── Vulkan backend
     │               ├── QRhi-owned Vulkan 1.3 device and graphics queue
     │               ├── borrowed libplacebo Vulkan GPU
@@ -130,7 +137,7 @@ geometry, and display policy remain outside the native execution scope.
 | `RenderedVideoSurfaceState` | Pure description and device/display/content reuse key for a completed display-targeted surface. It does not own a native texture. |
 | `HdrCompositor` | Places an optional already processed video surface, converts and blends the flattened UI layer, applies presentation scaling, and encodes the swapchain. It owns a valid fallback binding for UI-only frames and has no source peak, transfer, metadata, or tone-mapping inputs. |
 | `PresentationOutputState` | Combines screen metrics, operating-system display state, and the successfully created swapchain's properties into one QML-facing presentation snapshot. |
-| `DisplayStateProvider` | Narrow platform adapter for dynamic display color information. The Windows implementation uses WinRT; other platforms currently return an invalid snapshot. |
+| `DisplayStateProvider` | Narrow platform adapter for dynamic display color information. Windows uses WinRT Advanced Color; macOS uses the active `NSScreen`'s current and potential relative EDR headroom; Linux currently returns an invalid snapshot. |
 | `PresentationSettings` | Holds the current target-peak policy. It is not the eventual persistent player-settings model. |
 
 ## Ownership and execution model
@@ -140,9 +147,9 @@ one `PresentationWindow`. The domain owns QRhi and its monotonic device
 generation. Qt Quick adopts that QRhi with
 `QQuickGraphicsDevice::fromRhi()`. The redirected Quick scene, diagnostic
 producer, final compositor, and visible swapchain therefore use the same native
-D3D11 or Vulkan device.
+graphics domain and the same underlying device required by each backend.
 
-The domain creates that D3D11 device with video support before media can open,
+The Windows domain creates its D3D11 device with video support before media can open,
 then imports its device and immediate context into QRhi and gives the same
 device to libplacebo and FFmpeg. An immutable hardware-decode capability can be
 snapshotted by a worker request without exposing D3D11 types. FFmpeg references
@@ -156,6 +163,20 @@ device's required feature set and imports the same native handles into
 libplacebo as borrowed objects. Software FFmpeg frames use the shared importer;
 hardware decode capability reports unavailable until VAAPI/DRM PRIME is
 implemented.
+
+On macOS, QRhi owns the Metal device and command queue. Libplacebo creates a
+Vulkan device over MoltenVK with `VK_EXT_metal_objects`; construction exports
+that Vulkan device's `MTLDevice` and rejects the domain unless it is identical
+to QRhi's device. FFmpeg receives a generation-scoped VideoToolbox capability.
+The output target imports QRhi's exact RGBA16F `MTLTexture` into libplacebo.
+A Vulkan timeline semaphore exported as an `MTLSharedEvent` orders QRhi Metal
+access and libplacebo Vulkan writes entirely on the GPU. The initial hold is
+deferred until a QRhi Metal command buffer can consume its wait, so a target
+provisioned before `beginFrame()` can be replaced safely after a swapchain-
+out-of-date retry. VideoToolbox imports
+create R8/RG8 or R16/RG16 Metal plane views from retained NV12/P010
+`CVPixelBuffer`s and release those native resources only after nonblocking
+libplacebo completion polling says they are idle.
 
 The Vulkan libplacebo target wraps one QRhi-owned RGBA16F image. A target-owned
 timeline semaphore makes all earlier QRhi work available before libplacebo's
@@ -308,10 +329,16 @@ the swapchain was rebuilt.
   current and potential component-value headroom.
 * Windows `DisplayInformation::GetAdvancedColorInfo()` state: current HDR mode,
   SDR white, minimum luminance, and maximum luminance.
+* macOS `NSScreen` current and potential extended-dynamic-range component
+  values, expressed relative to current SDR white.
 
 Windows display updates arrive through `AdvancedColorInfoChanged`. A
 `QWindow::screenChanged` event refreshes the cached window-bound observer and
 marks output characteristics dirty.
+
+macOS refreshes the active `NSScreen` on `QWindow::screenChanged`, expose, and
+`NSApplicationDidChangeScreenParametersNotification`. These callbacks publish
+the latest semantic value; they do not mutate QRhi resources immediately.
 
 [ADR 0016](../../decisions/0016-reconcile-output-changes-semantically.md)
 is implemented: native events trigger a latest-state refresh, semantic target
@@ -334,6 +361,14 @@ SDR Advanced Color/WCG FP16 is display-referred and maps working white to
 `1.0`. With Advanced Color inactive, the SDR DirectX fallback is unmanaged and
 assumes sRGB behavior.
 
+On macOS, the engine selects `HDRExtendedSrgbLinear` when the active screen's
+potential EDR headroom exceeds `1.0` and QRhi reports that format supported;
+otherwise it selects SDR. EDR is display-referred extended-linear sRGB:
+component value `1.0` is current SDR white, values above it request available
+EDR headroom, and ColorSync owns the final display-profile conversion. Sunroom
+does not infer an absolute SDR-white luminance from the relative AppKit values
+and does not add a second display ICC transform.
+
 Linux selects one initial SDR surface contract before Qt creates the native
 window. If color-management-v1 exposes the complete parametric sRGB-primary,
 gamma-2.2, perceptual-intent capability set, Qt requests `QColorSpace::SRgb`
@@ -350,9 +385,10 @@ Backend selection is platform-shaped:
 * Linux selects Qt Quick Vulkan and a Vulkan window surface; the window context
   creates the instance and QRhi owns the logical device imported by
   libplacebo.
+* macOS selects Qt Quick Metal; QRhi owns presentation while libplacebo Vulkan
+  over MoltenVK imports the same-device Metal target and VideoToolbox planes.
 * Application, presentation, and video code consume the shared factory/domain
-  contracts without D3D11 or Vulkan types.
-* macOS remains unavailable.
+  contracts without D3D11, Metal, or Vulkan types.
 
 The decision and fallback policy are recorded in
 [ADR 0004](../../decisions/0004-cross-platform-graphics-domain-and-video-interop.md);
@@ -382,6 +418,12 @@ Values reported directly by Windows are preferred while Windows describes an
 active HDR display. QRhi swapchain information provides the fallback and
 describes non-Windows-style component headroom when absolute luminance is not
 available.
+
+On macOS, the effective target headroom is the current AppKit EDR component
+value and the presentation scale remains `1.0`. Libplacebo therefore receives
+`203 * currentHeadroom` in its virtual target units while surface value `1.0`
+continues to mean current SDR white. Potential headroom selects whether the EDR
+surface is worthwhile; it does not replace current headroom for tone mapping.
 
 ### Rendered-video surface
 
