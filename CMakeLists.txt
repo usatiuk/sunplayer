@@ -40,6 +40,15 @@ if (CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET)
     )
 endif ()
 
+if (CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_HOST_TRIPLET)
+    set(
+            VCPKG_HOST_TRIPLET
+            x64-windows
+            CACHE STRING
+            "Sunroom dependency host-tool triplet"
+    )
+endif ()
+
 if (CMAKE_HOST_APPLE AND NOT DEFINED VCPKG_TARGET_TRIPLET)
     set(
             VCPKG_TARGET_TRIPLET

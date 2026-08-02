@@ -186,3 +186,12 @@ build, lint, and CTest parallelism without retries, skips, or scheduling changes
 that would conceal the failure. The media-session failure remains visible pending
 a product-test fix outside this CI-enablement slice. Another hosted rerun remains
 the validation boundary for the SVG runtime correction.
+
+The first complete Windows dependency installation then reached project CMake
+and showed that libass discovery lacked a host `pkg-config` executable. The
+D3D11-only libplacebo overlay installed successfully; graphics configuration
+was not the failure. The manifest now owns Windows `pkgconf` as a host
+dependency, and the pre-project CMake bootstrap declares the matching
+`x64-windows` host triplet so vcpkg exposes that tool through its standard
+program path. Hosted configure/build validation of this correction remains
+pending.

@@ -80,6 +80,9 @@ Windows and macOS use vcpkg manifest mode. The repository owns:
 * `cmake/SunroomLibass.cmake`, which exposes vcpkg's pkg-config package on
   Windows and the system pkg-config package on Linux through one project-local
   target without duplicating libass's dependency graph.
+* the manifest's Windows-only `pkgconf` host dependency and explicit
+  `x64-windows` host triplet, which let CMake discover vcpkg's libass metadata
+  through vcpkg's standard host-tool path.
 
 On Windows the vcpkg executable may be supplied by Visual Studio. On macOS the
 developer supplies a normal vcpkg checkout. CMake uses an explicitly supplied

@@ -57,6 +57,13 @@ own package ABI before reuse. Raw source downloads are not cached: a successful
 binary hit already avoids them, and duplicating those archives would consume
 cache quota without improving the normal path.
 
+Windows project configuration also consumes libass's vcpkg-installed
+pkg-config metadata. The manifest therefore declares `pkgconf` as a Windows
+host tool and CMake declares the `x64-windows` host triplet before `project()`.
+The vcpkg toolchain installs manifest dependencies before adding host tools to
+`CMAKE_PROGRAM_PATH`, so CMake's standard `FindPkgConfig` module can discover
+`pkgconf` without a runner package manager or a hard-coded internal path.
+
 GitHub recommends an explicit least-privilege token policy and full commit SHA
 pins for actions. The workflow needs only `contents: read`. `pull_request`, a
 push to `main`, and manual dispatch provide useful coverage without scheduled
@@ -70,6 +77,7 @@ Primary sources:
 * [GitHub Actions security hardening](https://docs.github.com/en/code-security/tutorials/secure-your-organization/protect-against-threats)
 * [Windows 2022 runner image contents](https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md)
 * [vcpkg binary-cache providers](https://learn.microsoft.com/en-us/vcpkg/reference/binarycaching)
+* [vcpkg host dependencies](https://learn.microsoft.com/en-us/vcpkg/users/host-dependencies)
 * [Qt 6.11.1 Windows repository](https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6111/)
 * [aqtinstall 3.3.0 command reference](https://aqtinstall.readthedocs.io/en/v3.3.0/cli.html)
 * [aqtinstall Qt 6.11 Windows layout fix](https://github.com/miurahr/aqtinstall/pull/1000)
