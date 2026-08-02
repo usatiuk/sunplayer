@@ -40,7 +40,7 @@ roadmap state actually changes.
 | BASE-02 | Download matching Ubuntu Qt/FFmpeg/libplacebo/cubeb source packages | Done | [Ubuntu platform baseline](../../research/2026-08-01-ubuntu-26-04-linux-platform-baseline.md) | Packaging Git clones are unnecessary for installed-package inspection |
 | BASE-03 | Record current WSL execution capability | Done | [Ubuntu platform baseline](../../research/2026-08-01-ubuntu-26-04-linux-platform-baseline.md) | WSLg Wayland; llvmpipe CPU Vulkan; no `/dev/dri`, `/dev/dxg`, or usable VAAPI |
 | BASE-04 | Rebase plan and implementation onto current upstream and run independent correctness, delivery, and simplicity reviews | Done | [System dependency foundation](linux-port-evidence/2026-08-01-system-dependency-foundation.md) | Deeply reconciled through `5357d96`, including system libass and the shared subtitle pipeline; review findings resolved |
-| BASE-05 | Limit Linux V1 to the modern managed Wayland capability contract while supporting SDR and HDR monitors | Done | [ADR 0017](../../decisions/0017-require-wayland-color-management-v1.md) | No unmanaged legacy-Wayland fallback |
+| BASE-05 | Require native Wayland while allowing simple unmanaged assumed-sRGB SDR when managed color is unavailable | Done | [ADR 0018](../../decisions/0018-support-unmanaged-srgb-wayland-sdr.md) | Managed gamma-2.2 SDR and extended-linear HDR have separate capability gates |
 
 ## 1. System build foundation
 
@@ -63,20 +63,20 @@ roadmap state actually changes.
 
 | ID | Gate | Status | Evidence | Blocker or notes |
 | --- | --- | --- | --- | --- |
-| SDR-01 | Select Wayland before `QGuiApplication`; require the native `wayland` QPA and the V1 color-management-v1 capability set | Pending | — | Fail unsupported XCB, XWayland, and unmanaged legacy Wayland environments |
+| SDR-01 | Select Wayland before `QGuiApplication`, require the native `wayland` QPA, and inventory optional managed-SDR and HDR capabilities | Pending | — | Fail XCB/XWayland; inability to declare managed SDR selects unmanaged assumed-sRGB SDR |
 | SDR-02 | Add a typed window-scoped Vulkan context installed before native-surface creation | Pending | — | Context outlives recoverable device domains |
 | SDR-03 | Prove final teardown: engine/domain, native `QWindow` surface, then `QVulkanInstance` | Decision needed | — | Default derived/base destruction order is insufficient |
 | SDR-04 | Spike shared-device creation direction and record the accepted feature/extension/queue contract in an ADR | Decision needed | — | Try standard QRhi ownership first; use libplacebo ownership only if a measured feature requirement forces it |
 | SDR-05 | Spike producer-to-fragment-sampler synchronization and record the accepted layout/barrier/semaphore contract in an ADR | Decision needed | — | Qt 6.10 external wait stage is too late for fragment sampling |
 | SDR-06 | Implement the direct QRhi-owned RGBA16F libplacebo target with canonical accepted and aborted states | Pending | — | No normal CPU copy or `vkQueueWaitIdle` |
-| SDR-07 | Play representative software-decoded SDR through FFmpeg, libplacebo, QRhi, Qt Quick, and Qt's color-management-v1 gamma-2.2 SDR surface | Pending | — | First production vertical slice; an HDR monitor is not required |
+| SDR-07 | Play representative software-decoded SDR through FFmpeg, libplacebo, QRhi, and Qt Quick on unmanaged assumed-sRGB and managed gamma-2.2 Wayland surfaces | Pending | — | Unmanaged is the baseline; exercise managed SDR whenever it can be declared independently of HDR support |
 | SDR-08 | Preserve the domain/media operation across resize, minimize/restore, scale/DPR, expose, and present-compatible surface recreation | Pending | — | Rebuild only surface-bound resources |
 | SDR-09 | Publish physical device, queue, format/layout, generation, software path, copy count, and fallback diagnostics | Pending | — | Required before support claims |
 | SDR-10 | Pass Vulkan standard and synchronization validation for normal, aborted, resize, surface-recreation, and teardown paths | Pending | — | llvmpipe/WSL proof first; native GPU proof later |
 | SDR-11 | Pass focused video-only native-Wayland fullscreen and restoration transitions | Pending | — | Require asynchronous convergence, continued frames, and unchanged media/device generations; the audio-bearing application scenario follows in slice 3 |
-| SDR-12 | Prove startup rejects missing/incomplete color-management-v1 capabilities with a precise diagnostic | Pending | — | No unmanaged legacy-Wayland fallback |
+| SDR-12 | Prove inability to declare managed gamma-2.2 SDR selects unmanaged assumed-sRGB with managed color and HDR diagnosed unavailable | Pending | — | Missing HDR-only capabilities retain managed SDR; no extra surface object or retry loop |
 | SDR-13 | Classify compositor connection loss as a clear process-fatal result | Pending | — | No inert graphics retry loop |
-| SDR-14 | Prove the final SDR compositor emits the gamma-2.2 transfer declared by Qt | Pending | — | Analytic near-black, mid-gray, and endpoint checks must reject the existing piecewise sRGB OETF |
+| SDR-14 | Prove the final compositor emits piecewise sRGB for unmanaged SDR and `linear^(1/2.2)` for Qt-managed `gamma22` SDR | Pending | — | Analytic near-black, mid-gray, and endpoint checks must distinguish the curves and exponent direction |
 
 ## 3. Linux system-cubeb audio
 
@@ -95,11 +95,11 @@ roadmap state actually changes.
 
 | ID | Gate | Status | Evidence | Blocker or notes |
 | --- | --- | --- | --- | --- |
-| DISP-01 | Bind and require color-management-v1, parametric descriptions, named sRGB primaries, Qt 6.10's `gamma22`/`ext_linear` transfer functions, and surface feedback | Pending | — | Qt remains declaration owner; missing required capability is fatal for Linux V1 |
+| DISP-01 | Inventory color-management-v1, parametric descriptions, named sRGB primaries, Qt 6.10's `gamma22`/`ext_linear` transfer functions, and surface feedback | Pending | — | Qt remains declaration owner; gate managed SDR and HDR from the capabilities each actually needs |
 | DISP-02 | Parse completed preferred descriptions into semantic display state and ignore equivalent updates | Pending | — | Protocol identities remain adapter-local |
 | DISP-03 | Keep Qt as the sole color-management surface and image-description owner | Pending | — | Use `QSurfaceFormat::setColorSpace`; the adapter observes only missing preferred-output information |
 | DISP-04 | Implement coupled gamma-2.2 SDR → extended-linear FP16 surface recreation | Pending | — | Qt color-space request and buffer encoding change together; transient convergence is acceptable |
-| DISP-05 | Implement bounded HDR rollback by recreating Qt's gamma-2.2 `SystemManaged` SDR surface | Pending | — | Never retain a linear declaration with SDR buffers; no unmanaged Wayland mode |
+| DISP-05 | Implement bounded HDR rollback by recreating Qt's gamma-2.2 `SystemManaged` SDR surface | Pending | — | Suppress repeat HDR attempts for the same semantic target/device generation; retry only when either materially changes |
 | DISP-06 | Rerender the retained current frame when effective target values change, including while paused | Pending | — | Reconcile at the existing safe frame boundary |
 | DISP-07 | Validate windowed movement between SDR and HDR outputs | Needs native hardware | — | Include both transition directions and stable final diagnostics |
 | DISP-08 | Validate fullscreen entry when the compositor selects/configures another output | Needs native hardware | — | Preserve media/device state and refresh feedback after convergence |
@@ -127,7 +127,7 @@ roadmap state actually changes.
 | REL-01 | Stress repeated open/close, long playback, seek, fullscreen, minimize, surface recreation, output changes, suspend, and bounded recovery | Pending | — | Separate WSL/CI and native-hardware evidence |
 | REL-02 | Choose and record the Ubuntu artifact/package format | Decision needed | — | `.deb` is the leading system-dependency option, not yet accepted |
 | REL-03 | Separate build dependencies from runtime dependencies and generate shared-library ABI dependencies where the format supports it | Pending | — | Private Qt development packages must not leak into runtime metadata |
-| REL-04 | Prove the installed artifact uses system Qt/FFmpeg/libplacebo/libass/cubeb, the matching Qt Wayland plugin, and requires the V1 color-management-v1 capability set | Pending | — | No bundled copies, XCB fallback, or unmanaged legacy-Wayland mode |
+| REL-04 | Prove the installed artifact uses system Qt/FFmpeg/libplacebo/libass/cubeb and the matching Qt Wayland plugin across unmanaged SDR and capability-gated managed presentation | Pending | — | No bundled copies or XCB/XWayland fallback |
 | REL-05 | Install through the selected package mechanism on a clean Ubuntu 26.04 machine | Pending | — | Launch and both SDR application scenarios must pass |
 | REL-06 | Record distro FFmpeg configuration, runtime closure, licenses/notices, and source-offer obligations | Pending | — | Release gate |
 | REL-07 | Synchronize subsystem docs, testing matrix, root roadmap, ADRs, and deferred gaps with delivered behavior | Pending | — | Do not update implementation truth early |
@@ -150,11 +150,11 @@ roadmap state actually changes.
 | Environment or claim | Status | Required evidence |
 | --- | --- | --- |
 | WSL system-dependency build | Done | [Debug/Release, tests on/off, shared tests, and dependency versions](linux-port-evidence/2026-08-01-system-dependency-foundation.md) |
-| WSLg native-Wayland lifecycle | Pending | Only if the active/nested compositor exposes the required protocol capabilities; explicit software-Vulkan opt-in and no GPU/HDR claim |
-| Native-Wayland SDR video | Pending | Modern color-management-v1 compositor, Qt-managed gamma-2.2 surface, real GPU, software decode, direct target, validation, diagnostics |
+| WSLg native-Wayland lifecycle | Pending | Unmanaged assumed-sRGB SDR is sufficient; explicit software-Vulkan opt-in and no GPU/managed-color/HDR claim |
+| Native-Wayland SDR video | Pending | Unmanaged assumed-sRGB baseline plus managed gamma-2.2 coverage where available, real GPU, software decode, direct target, validation, diagnostics |
 | Linux cubeb audio | Pending | Real advancing audio plus PulseAudio and PipeWire-Pulse behavior |
 | Linux fullscreen | Pending | Production scenario plus output/surface transitions without generation replacement |
-| Complete Linux Wayland SDR | Pending | Managed gamma-2.2 video on a modern compositor, audio, fullscreen, clean install, no legacy fallback |
+| Complete Linux Wayland SDR | Pending | Unmanaged assumed-sRGB and available managed gamma-2.2 video, audio, fullscreen, clean install, native Wayland only |
 | Managed Linux HDR | Needs native hardware | Coupled declaration/FP16 path, physical procedure, display transitions, gamma-2.2 SDR rollback |
 | Intel VAAPI acceleration | Needs native hardware | Exact-device DRM PRIME import, NV12/P010, zero CPU transfer and no extra full-frame input copy, software fallback |
 | AMD VAAPI acceleration | Needs native hardware | Exact-device DRM PRIME import, NV12/P010, zero CPU transfer and no extra full-frame input copy, software fallback |

@@ -41,11 +41,12 @@ loader, but `vulkaninfo` exposes only Mesa 26.0.3 llvmpipe as a CPU device.
 Neither `/dev/dxg` nor `/dev/dri` exists. `vainfo` reports VA-API 1.23 but
 cannot find or initialize a driver. Consequently WSL2 is sufficient for
 package discovery, compilation, unit tests, software-Vulkan validation, and
-limited WSLg lifecycle smoke tests only if the active or nested compositor
-exposes the required color-management-v1 capabilities. It is not evidence for GPU Vulkan,
+limited unmanaged assumed-sRGB WSLg lifecycle smoke tests. Managed-color tests
+still require an active or nested compositor exposing the complete
+color-management-v1 capability set. WSL is not evidence for GPU Vulkan,
 native-compositor HDR, real display luminance, VAAPI/DRM PRIME modifier
-behavior, device identity, or physical audio routing. Those claims need
-native Ubuntu hardware.
+behavior, device identity, or physical audio routing. Those claims need native
+Ubuntu hardware.
 
 ## Build-system findings
 
@@ -139,13 +140,19 @@ HDR attempt, and recreate it as managed gamma-2.2 SDR if that attempt fails.
 This transition and Qt's surface recreation behavior require a real-compositor
 spike.
 
-The selected Linux V1 product scope requires the color-management-v1 global,
-parametric description support, named sRGB primaries, the `gamma22` and
-`ext_linear` transfer functions Qt 6.10 consumes, and preferred surface
-feedback. A compositor that lacks that capability set is unsupported rather
-than an unmanaged SDR fallback. SDR monitors remain supported through a
-managed gamma-2.2 surface; the requirement is on the compositor stack, not on
-the monitor being HDR-capable.
+Product-scope amendment (2026-08-02): ADR 0018 supersedes the managed-only
+selection below. Native Wayland that cannot declare managed gamma-2.2 SDR now
+uses unmanaged assumed-sRGB SDR; HDR has its own additional capability gate.
+The package and Qt behavior evidence remains valid for the optional managed
+SDR/HDR paths.
+
+The originally selected Linux V1 product scope required the
+color-management-v1 global, parametric description support, named sRGB
+primaries, the `gamma22` and `ext_linear` transfer functions Qt 6.10 consumes,
+and preferred surface feedback. A compositor lacking that capability set was
+to be unsupported rather than an unmanaged SDR fallback. SDR monitors were to
+remain supported through a managed gamma-2.2 surface; the requirement was on
+the compositor stack, not on the monitor being HDR-capable.
 
 The relevant primary specifications and APIs are:
 
@@ -245,9 +252,10 @@ Linux dependency build preemptively.
 * Keep one shared player, renderer, presentation engine, media reader, and
   audio sink; add only the platform domains/adapters required by existing
   seams.
-* Treat managed gamma-2.2 native Wayland SDR and physically validated managed
-  HDR as separate completion gates on the same required modern protocol stack.
+* Treat unmanaged assumed-sRGB SDR, managed gamma-2.2 SDR, and physically
+  validated managed HDR as separate completion gates. Managed SDR and HDR each
+  require only their respective color-management-v1 capability subset.
 * Keep WSL/lavapipe validation and native-hardware acceptance distinct.
 * Do not clone packaging repositories, build custom dependency forks, or add
-  X11/XWayland/unmanaged legacy-Wayland paths unless a later accepted decision
-  changes the V1 scope.
+  X11/XWayland paths. Keep unmanaged native-Wayland SDR limited to the simple
+  assumed-sRGB fallback accepted by ADR 0018.

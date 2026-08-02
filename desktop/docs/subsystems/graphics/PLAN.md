@@ -274,7 +274,8 @@ For each implemented milestone, validate at least:
 
 | Scenario | Expected behavior |
 | --- | --- |
-| SDR output | Correct sRGB encoding and no HDR headroom claims |
+| Unmanaged SDR output | Exact piecewise-sRGB encoding and no HDR headroom claims |
+| Managed SDR output | Exact `encoded = linear^(1/2.2)` encoding matching the `gamma22` surface declaration |
 | HDR output | Extended-linear presentation and correct SDR-white placement |
 | HDR disabled on capable display | State and swapchain settle without mismatched encoding |
 | Move between unlike displays | Targeted content rerenders; swapchain work occurs only if presentation encoding or lifetime changes |

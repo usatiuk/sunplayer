@@ -52,6 +52,8 @@ display-profile transform to that swapchain path.
 The intended macOS EDR and Wayland color-management-v1 paths are
 `SystemManaged`. Sunroom will declare an extended-linear presentation space
 and will not request a second platform media tone mapper after libplacebo.
+Native Wayland without the usable managed-SDR capability is
+`UnmanagedSrgb` under [ADR 0018](0018-support-unmanaged-srgb-wayland-sdr.md).
 X11 and XWayland are not unmanaged fallbacks; they are unsupported by
 [ADR 0015](0015-wayland-only-linux-desktop.md).
 
@@ -77,8 +79,8 @@ build, as recorded in ADR 0012.
   white, usable peak—or to the surface encoding advance the video-target
   revision. A platform presentation-description change may recreate or rebind
   presentation separately.
-* Windows SDR without Advanced Color is an honest unmanaged fallback, not a
-  claim of calibrated output.
+* Windows SDR without Advanced Color and native Wayland without usable color
+  management are honest unmanaged fallbacks, not claims of calibrated output.
 * A future application-managed ICC path must include Qt Quick and subtitles
   and therefore belongs after composition.
 

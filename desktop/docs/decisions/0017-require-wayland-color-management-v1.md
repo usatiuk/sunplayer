@@ -1,6 +1,7 @@
 # 0017: Require color-management-v1 for the first Linux release
 
-* Status: Accepted
+* Status: Superseded by
+  [0018: Support unmanaged sRGB SDR on native Wayland](0018-support-unmanaged-srgb-wayland-sdr.md)
 * Date: 2026-08-01
 * Related:
   [0013: Rely on system display calibration on managed presentation paths](0013-rely-on-system-display-calibration.md),
@@ -8,6 +9,10 @@
   [0016: Reconcile output changes by semantic value](0016-reconcile-output-changes-semantically.md)
 
 ## Context
+
+This record preserves the earlier managed-only product decision. ADR 0018
+supersedes it after reconsidering whether absence of the optional protocol
+should prevent otherwise ordinary native-Wayland SDR playback.
 
 ADR 0015 selected native Wayland and allowed an unmanaged sRGB fallback when a
 Wayland compositor lacked color management. That fallback still creates a

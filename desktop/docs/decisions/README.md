@@ -31,4 +31,5 @@ with a new decision when the accepted choice changes materially.
 * [0014: Prefer native Metal presentation for the macOS graphics domain](0014-prefer-native-metal-presentation-on-macos.md)
 * [0015: Target Wayland and leave X11 unsupported](0015-wayland-only-linux-desktop.md)
 * [0016: Reconcile output changes by semantic value](0016-reconcile-output-changes-semantically.md)
-* [0017: Require color-management-v1 for the first Linux release](0017-require-wayland-color-management-v1.md)
+* [0017: Require color-management-v1 for the first Linux release (superseded)](0017-require-wayland-color-management-v1.md)
+* [0018: Support unmanaged sRGB SDR on native Wayland](0018-support-unmanaged-srgb-wayland-sdr.md)

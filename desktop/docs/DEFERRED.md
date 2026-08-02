@@ -144,9 +144,10 @@ target model or upstream-supported integration.
 Sunroom relies on the operating system or compositor for final display-profile
 calibration on managed paths: Windows Advanced Color, future macOS
 ColorSync/EDR, and future Wayland color-management-v1. Ordinary Windows
-DirectX SDR output with Advanced Color inactive is an unmanaged sRGB-assumed
-fallback. Application-managed display ICC is deferred; if implemented it must
-transform the complete post-QRhi composition rather than video alone.
+DirectX SDR output with Advanced Color inactive and native Wayland without a
+usable managed-SDR capability are unmanaged sRGB-assumed fallbacks.
+Application-managed display ICC is deferred; if implemented it must transform
+the complete post-QRhi composition rather than video alone.
 
 ### HDR Lab target control affects production playback state
 

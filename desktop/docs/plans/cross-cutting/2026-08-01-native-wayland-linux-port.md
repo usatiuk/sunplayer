@@ -14,9 +14,11 @@ There are two explicit completion levels:
 
 1. **Linux Wayland SDR:** the installed application opens local media, renders
    software-decoded video through the production FFmpeg/libplacebo/QRhi path,
-   presents a compositor-managed gamma-2.2 SDR surface through Vulkan on native
-   Wayland color-management-v1, and plays synchronized audio through system
-   cubeb. There is no X11, XWayland, or legacy unmanaged-Wayland path.
+   presents SDR through Vulkan on native Wayland, and plays synchronized audio
+   through system cubeb. A usable color-management-v1 SDR declaration selects
+   managed gamma-2.2 SDR; otherwise the same renderer uses unmanaged assumed-
+   sRGB SDR.
+   There is no X11 or XWayland path.
 2. **Linux Wayland HDR:** the application additionally declares and proves a
    managed extended-linear surface through color-management-v1, reacts to
    semantic preferred-target changes, and passes physical HDR-display
@@ -46,17 +48,19 @@ checklist must not duplicate or silently change them.
 * `GraphicsBackendFactory` fails on non-Windows, the presentation runtime uses
   a null display provider there, and `MediaSession` creates no physical audio
   sink.
-* The current CMake entry point requires vcpkg globally and pins Qt 6.11.1 and
-  libplacebo 7.360.1. The libplacebo overlay deliberately rejects non-Windows
-  targets and enables a D3D11/Shaderc feature set.
+* The CMake entry point retains pinned vcpkg dependencies on Windows and uses
+  Ubuntu system Qt 6.10, FFmpeg, libplacebo, cubeb, libass, Vulkan, Wayland,
+  VA-API, and DRM packages on Linux. Shared production sources, subtitle/media
+  behavior, and the current platform-neutral test set build on Linux; the
+  native graphics and audio implementations remain absent.
 * The accepted graphics domain and video target/importer interfaces already
   model a Vulkan implementation. The port should fill those seams, not create
   a parallel Linux renderer or playback core.
 * ADRs 0004, 0013, 0015, and 0016 already establish shared native-device
   ownership, system-managed calibration, native-Wayland-only scope, and
-  semantic display-target reconciliation. ADR 0017 narrows Linux V1 further
-  by requiring color-management-v1 instead of supporting unmanaged legacy
-  Wayland.
+  semantic display-target reconciliation. ADR 0018 keeps unmanaged assumed-
+  sRGB SDR available when color-management-v1 is unavailable while reserving
+  managed SDR and HDR behavior for their respective protocol capabilities.
 * Ubuntu package/source inspection found a viable system stack and a narrow
   Qt Wayland feedback seam. The exact results and remaining hardware evidence
   limits are recorded in [the Ubuntu 26.04 platform baseline](../../research/2026-08-01-ubuntu-26-04-linux-platform-baseline.md).
@@ -67,12 +71,14 @@ checklist must not duplicate or silently change them.
 
 * Ubuntu 26.04 is the initial reference and packaging target. Other Linux
   distributions are not claimed merely because they may configure.
-* Linux V1 requires native Wayland color-management-v1 with the global,
-  parametric-description feature, named sRGB primaries, `gamma22` and
-  `ext_linear` transfer functions, perceptual rendering intent, and surface
-  feedback. Treat this as a capability contract rather than a compositor
-  brand or release-number list. Missing required protocol capability is an
-  unsupported environment and fails clearly during startup.
+* Linux V1 requires native Wayland. The color-management-v1 global,
+  parametric-description feature, named sRGB primaries, `gamma22`, and
+  perceptual rendering intent form the optional managed-SDR capability.
+  `ext_linear`, preferred surface feedback, and description information add
+  the managed-HDR capability. Treat these as capability contracts rather than
+  compositor brand or release-number lists. If managed SDR cannot be declared,
+  select unmanaged assumed-sRGB SDR; if only HDR capabilities are incomplete,
+  retain managed SDR. Report why each higher mode is unavailable.
 * The initial Linux implementation uses only system packages. Windows retains
   its current vcpkg manifest and exact pins; Linux neither requires nor
   populates vcpkg. Do not add a project-specific dependency-provider switch:
@@ -98,7 +104,8 @@ checklist must not duplicate or silently change them.
 * Select Wayland before constructing `QGuiApplication`, then fail fast unless
   Qt reports the `wayland` QPA. Do not recognize `xcb`, XWayland, or an
   automatic presentation fallback as supported.
-* Qt owns the `wl_surface` and Vulkan `VkSurfaceKHR`. Exactly one component
+* Qt owns the `wl_surface` and Vulkan `VkSurfaceKHR`. When managed color is in
+  use, exactly one component
   owns `wp_color_management_surface_v1`; a duplicate is a protocol error. Qt's
   Wayland integration is that owner. Sunroom selects the requested
   `QSurfaceFormat` color space and matching buffer encoding, but does not create
@@ -108,19 +115,27 @@ checklist must not duplicate or silently change them.
   destruction signals. The adapter binds capabilities, owns preferred-
   description parsing, and publishes semantic output state. It does not
   duplicate Qt's image-description creation or surface policy.
-* Support two explicit, coupled presentation encodings:
+* Support three explicit presentation encodings. `UnmanagedSrgb` leaves the
+  Qt surface color space unset, assumes an SDR target, and emits exact
+  piecewise sRGB. The two managed encodings remain coupled to their Qt
+  declarations:
   `ManagedGamma22Sdr` declares sRGB primaries plus `gamma22` and uses an SDR
-  swapchain whose final compositor applies a power-2.2 OETF;
+  swapchain whose final compositor encodes normalized non-negative linear
+  values as `linear^(1/2.2)`;
   `ManagedExtendedLinear` declares sRGB primaries plus `ext_linear` and uses
   the FP16 extended-linear swapchain with the 80-nit reference-white anchor.
   The existing piecewise sRGB OETF must not be emitted under a gamma-2.2
   declaration.
 * Keep transfer selection at the existing final-compositor boundary. A small
   shared `PiecewiseSrgb`, `Gamma22`, or `ExtendedLinear` value is derived from
-  the successfully created surface contract; Linux V1 uses the latter two and
-  Windows retains its existing piecewise-sRGB fallback. This is not a second
-  renderer or platform color-policy layer.
-* Select the mode from the latest complete preferred target. Set
+  the selected surface contract. Linux and Windows share piecewise sRGB for
+  their unmanaged assumed-sRGB modes; managed Linux uses gamma 2.2 or extended
+  linear. This is not a second renderer or platform color-policy layer.
+* Complete the startup capability inventory before creating the native
+  surface. If managed SDR cannot be declared, leave Qt's requested color space
+  unset and keep `UnmanagedSrgb` for the window lifetime. Otherwise start with
+  managed SDR. When the additional HDR capabilities provide a complete
+  preferred target, select the managed mode from its latest semantic value: set
   `QColorSpace::SRgb` for gamma-2.2 SDR or `QColorSpace::SRgbLinear` for
   extended-linear HDR before creating the corresponding native surface, and
   couple that surface with the matching swapchain and compositor encoding.
@@ -128,8 +143,11 @@ checklist must not duplicate or silently change them.
   first buffer, add a declaration generation, or take surface ownership merely
   to perfect that transient ordering; reconcile the latest semantic mode at
   the next safe presentation boundary. Failure of an optional extended-linear
-  attempt rolls back to a newly created managed gamma-2.2 SDR surface.
-  Failure to establish the required managed SDR surface is fatal for Linux V1.
+  attempt rolls back to a newly created managed gamma-2.2 SDR surface and
+  suppresses another attempt for the same semantic target and graphics-device
+  generation. Only a materially different target or a new device generation
+  retries HDR; equivalent feedback does not. The unmanaged startup mode does
+  not attempt HDR or acquire managed color later.
   Qt's unexposed internal description-failure path is treated as an upstream
   defect, not as a product state requiring duplicate machinery.
 * Convert completed preferred descriptions into the existing semantic
@@ -137,10 +155,11 @@ checklist must not duplicate or silently change them.
   the adapter; equivalent values do not cause shared state churn. A surface
   recreation invalidates the old feedback object before binding the new one.
 * Managed HDR remains linear sRGB with an 80-nit reference-white anchor;
-  managed SDR is explicitly gamma 2.2. The semantic display target controls
-  usable headroom. Do not claim full target-gamut propagation until the existing
-  linear-sRGB surface contract and compositor behavior are extended and
-  validated explicitly.
+  managed SDR is explicitly gamma 2.2. Unmanaged SDR assumes one-times
+  reference-white headroom and an sRGB target without claiming calibration.
+  The managed semantic display target controls usable headroom. Do not claim
+  full target-gamut propagation until the existing linear-sRGB surface
+  contract and compositor behavior are extended and validated explicitly.
 
 ### Shared Vulkan domain
 
@@ -248,8 +267,8 @@ checklist must not duplicate or silently change them.
 ## Non-goals
 
 * X11, XCB, XWayland, GLX, or an OpenGL presentation fallback.
-* Legacy or unmanaged Wayland compositors without the required
-  color-management-v1 capabilities.
+* Managed color or HDR claims on Wayland compositors without the complete
+  color-management-v1 capability set.
 * A second Wayland toplevel or custom fullscreen protocol path.
 * A second playback core, renderer, compositor, media probe, metadata policy
   engine, or Linux audio abstraction.
@@ -291,9 +310,10 @@ Vulkan backend exists.
 
 ### 2. Native Wayland Vulkan SDR vertical slice
 
-1. Bind and inventory the required color-management-v1 capabilities after Qt
-   selects the Wayland QPA. Create the window-scoped Vulkan context and request
-   `QColorSpace::SRgb` before the SDR window's native handle exists; leave image
+1. Inventory color-management-v1 capabilities after Qt selects the Wayland
+   QPA. Create the window-scoped Vulkan context, leave the color space unset
+   for unmanaged sRGB, or request `QColorSpace::SRgb` before native-handle
+   creation when managed SDR can be declared. Leave managed image-
    description creation and attachment to Qt.
 2. Make initial device-domain creation wait for a valid native surface, then
    preserve a compatible domain across ordinary surface recreation. Allow
@@ -307,10 +327,10 @@ Vulkan backend exists.
    recording the resulting ADR.
 4. Route software-decoded SDR frames through the production media operation,
    libplacebo renderer, QRhi compositor, redirected Qt Quick layer, and the
-   managed gamma-2.2 SDR swapchain. Add analytic near-black, mid-gray, and
-   endpoint checks proving the final bytes use the declared power-2.2 transfer,
-   not the existing piecewise sRGB OETF. Preserve target-only rerender and
-   device-generation behavior.
+   selected SDR swapchain. Add analytic near-black, mid-gray, and endpoint
+   checks proving unmanaged output uses piecewise sRGB while managed output
+   uses `encoded = linear^(1/2.2)` for its declared `gamma22` transfer.
+   Preserve target-only rerender and device-generation behavior.
 5. Publish backend, physical-device, queue-family, target format/layout,
    software/hardware path, copy count, fallback reason, and validation state
    through existing diagnostics.
@@ -319,12 +339,13 @@ Vulkan backend exists.
    requirement. Wait for asynchronous Wayland convergence and prove continued
    frames plus unchanged graphics generation and media operation.
 
-Exit: representative local SDR media plays video on the required
-color-management-v1 gamma-2.2 SDR surface with software decode, zero target
-copies, clean Vulkan validation, resize and seek, and no alternate surface
-path. A transient frame during asynchronous description installation is
-acceptable; stable presentation must match the declaration. This is not yet
-the complete SDR milestone because audio is still absent.
+Exit: representative local SDR media plays video on native Wayland with
+software decode, zero target copies, clean Vulkan validation, resize and seek.
+It uses unmanaged assumed-sRGB SDR when managed color is unavailable and
+gamma-2.2 SDR when the managed-SDR capability is present. A transient
+frame during asynchronous managed-description installation is acceptable;
+stable managed presentation must match the declaration. This is not yet the
+complete SDR milestone because audio is still absent.
 
 ### 3. Linux system-cubeb audio
 
@@ -424,18 +445,19 @@ hardware subsets, with each claim backed by the corresponding evidence below.
   target-state, audio-state, media fallback, and diagnostic tests.
 * Headless/offscreen QML tests and a lavapipe direct-target capture where the
   software Vulkan implementation supports the required formats.
-* Nested native-Wayland SDR smoke testing only with a compositor exposing the
-  required color-management-v1 capabilities. Such results prove lifecycle and
-  protocol behavior, not HDR or hardware decode.
+* Nested native-Wayland SDR smoke testing with and without the managed-SDR
+  color-management-v1 capability. Unmanaged results prove ordinary
+  lifecycle and assumed-sRGB fallback behavior, not managed color, HDR, or
+  hardware decode.
 * The production `application-fullscreen` scenario on native Wayland, including
   continued presentation and unchanged media/device generations through
   asynchronous normal/fullscreen and maximized/fullscreen transitions.
 * Vulkan standard and synchronization validation with no relevant errors
   across normal render, aborted render, resize, surface recreation, and
   teardown.
-* Install-tree smoke test that resolves only declared Ubuntu dependencies and
-  refuses XCB, XWayland, and Wayland compositors missing the required color-
-  management-v1 capability set.
+* Install-tree smoke test that resolves only declared Ubuntu dependencies,
+  refuses XCB and XWayland, and selects unmanaged assumed-sRGB SDR when the
+  managed color capability set is absent.
 
 Tests that exercise a claimed capability should fail when that capability is
 present but broken. Generic runners may skip physical-device scenarios only
@@ -448,10 +470,11 @@ missing evidence.
   NV12/P010, modifier handling, zero CPU transfers, and fallback injection.
 * PulseAudio and PipeWire-Pulse lanes for clock progression, latency, drain,
   underrun, migration, route loss, reconnect, and suspend.
-* A real color-management-v1 compositor and HDR display for gamma-2.2 SDR and
-  FP16 extended-linear presentation, 80-nit
-  reference white, highlight headroom, output moves, HDR toggles, and managed
-  gamma-2.2 SDR rollback.
+* A real color-management-v1 compositor and SDR display for managed gamma-2.2
+  presentation.
+* A real HDR display for FP16 extended-linear presentation, 80-nit reference
+  white, highlight headroom, output moves, HDR toggles, and managed gamma-2.2
+  SDR rollback.
 * Windowed and fullscreen transitions between SDR and HDR outputs, including
   compositor-selected fullscreen placement, semantic feedback convergence,
   paused retained-frame rerender, and preservation of playback/device state.
@@ -464,8 +487,9 @@ missing evidence.
 | --- | --- |
 | Qt starts under XCB/XWayland | Fail at startup with a direct native-Wayland requirement; do not create graphics state. |
 | System dependency ABI or required feature mismatch | Fail configure or startup with the exact mismatched dependency/capability. |
-| color-management-v1 or a required gamma-2.2/extended-linear capability is absent | Fail startup with the missing required capability; do not run an unmanaged Wayland surface. |
-| Extended-linear surface or FP16 swapchain fails | Tear down the attempted HDR surface and recreate a color-management-v1 gamma-2.2 `SystemManaged` surface plus SDR swapchain. |
+| color-management-v1 cannot declare managed gamma-2.2 SDR at startup | Run native Wayland in unmanaged assumed-sRGB SDR, leave Qt's color space unset, and diagnose managed color and HDR as unavailable. |
+| Managed SDR is available but an HDR-only capability is absent | Keep managed gamma-2.2 SDR and diagnose HDR as unavailable. |
+| Extended-linear surface or FP16 swapchain fails | Tear down the attempted HDR surface, recreate a color-management-v1 gamma-2.2 `SystemManaged` surface plus SDR swapchain, and suppress HDR for the same semantic target/device-generation pair. Retry only after either materially changes. |
 | Preferred display description changes | Publish the latest semantic target once complete and rerender the retained frame at a safe boundary. |
 | Wayland surface is destroyed/recreated | Destroy feedback and swapchain state tied to the old surface; preserve the domain if it can present to the replacement, otherwise enter bounded domain recovery. |
 | Fullscreen or output transition is asynchronous | Wait for Qt/compositor convergence, keep the latest semantic target, preserve playback/device state, and rerender after presentation resources settle. |
@@ -514,11 +538,12 @@ architecture; otherwise keep the proof and implementation together.
 Three independent review lenses examined behavior/correctness,
 architecture/lifecycle, and delivery/testing risk, then repeated review after
 substantive corrections. The plan incorporates their common findings:
-system-dependency checks must be platform-shaped, modern managed Wayland must
-be enforced, SDR/software playback precedes HDR and VAAPI, Vulkan device and
-synchronization choices need blocking validation spikes, cubeb should retain
-the shared sink, fullscreen/display transitions are product gates, system LCMS
-must not change source-ICC policy, and hardware claims need native evidence.
+system-dependency checks must be platform-shaped, native Wayland must be
+enforced while managed color remains capability-gated, SDR/software playback
+precedes HDR and VAAPI, Vulkan device and synchronization choices need
+blocking validation spikes, cubeb should retain the shared sink,
+fullscreen/display transitions are product gates, system LCMS must not change
+source-ICC policy, and hardware claims need native evidence.
 
 The following review suggestions were deliberately not adopted:
 

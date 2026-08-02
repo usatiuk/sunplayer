@@ -270,18 +270,21 @@ Windows V1 color release gate:
 * [ ] Add the VideoToolbox/IOSurface importer with the macOS graphics domain,
   and add Vulkan/DRM PRIME/VAAPI importers with the Wayland Linux graphics
   domain.
-* [ ] Implement and require the Linux V1 color-management-v1 capability set,
-  Qt-owned surface descriptions, and preferred-description observation. Fail
-  unsupported legacy/unmanaged Wayland environments clearly.
+* [ ] Inventory Linux color-management-v1 capabilities. Use Qt-owned gamma-2.2
+  surface descriptions when managed SDR can be declared, add preferred-
+  description observation only for HDR, and otherwise select unmanaged
+  assumed-sRGB SDR without additional Wayland ownership. Continue to reject
+  X11 and XWayland.
 * [ ] Make final-compositor output transfer explicit at the surface boundary:
-  piecewise sRGB for the existing Windows fallback, gamma 2.2 for Qt Wayland
-  SDR, and extended linear for HDR. Keep one compositor and cover each branch
-  with analytic transfer tests.
+  piecewise sRGB for Windows and Wayland unmanaged fallbacks, gamma 2.2 for Qt
+  managed Wayland SDR, and extended linear for HDR. Keep one compositor and
+  cover each branch with analytic transfer tests.
 * [ ] Treat both managed gamma-2.2 SDR and managed extended-linear Wayland
   output as `SystemManaged`. Let Qt own surface descriptions, couple its
   requested color space with swapchain encoding, and roll a failed optional
   HDR transition back to a newly declared managed gamma-2.2 SDR surface rather
-  than `UnmanagedSrgb`.
+  than abandoning a working managed path. Treat the startup fallback as
+  `UnmanagedSrgb`, one-times SDR headroom, and HDR unavailable.
 
 X11 and XWayland are unsupported and do not receive a presentation backend,
 fallback path, packaging claim, or validation matrix.
