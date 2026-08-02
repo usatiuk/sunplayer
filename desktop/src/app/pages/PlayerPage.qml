@@ -530,6 +530,16 @@ VideoPage {
                     : "#d7ae68"
                 wrapMode: Text.Wrap
             }
+
+            Label {
+                objectName: "subtitleDiagnosticsLabel"
+                Layout.fillWidth: true
+                visible: root.session.subtitleError.length > 0
+                text: qsTr("Subtitles: %1")
+                    .arg(root.session.subtitleError)
+                color: "#d7ae68"
+                wrapMode: Text.Wrap
+            }
         }
     }
 
@@ -751,6 +761,43 @@ VideoPage {
                 checked: root.showPlaybackStatistics
                 onClicked:
                     root.showPlaybackStatistics = !root.showPlaybackStatistics
+            }
+
+            Menu {
+                id: subtitleMenu
+                objectName: "subtitleMenu"
+                title: qsTr("Subtitles")
+
+                Instantiator {
+                    id: subtitleTrackInstantiator
+                    model: root.session.subtitleTracks
+
+                    delegate: MenuItem {
+                        objectName: "subtitleTrack_" + streamIndex
+                        required property string label
+                        required property int streamIndex
+                        required property bool selected
+                        required property bool available
+
+                        text: label
+                        enabled: available
+                        checkable: true
+                        checked: selected
+                        onTriggered:
+                            root.session.selectSubtitleStream(streamIndex)
+                    }
+
+                    onObjectAdded: (index, object) =>
+                        subtitleMenu.insertItem(index, object)
+                    onObjectRemoved: (index, object) =>
+                        subtitleMenu.removeItem(object)
+                }
+
+                MenuItem {
+                    visible: subtitleTrackInstantiator.count === 1
+                    text: qsTr("No subtitles available")
+                    enabled: false
+                }
             }
 
             MenuItem {

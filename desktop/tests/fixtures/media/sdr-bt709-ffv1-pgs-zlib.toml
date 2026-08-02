@@ -1,0 +1,16 @@
+description = "Real Matroska video/audio plus zlib-compressed PGS subtitle packets"
+license = "CC0-1.0 generated additions; base fixture project-owned"
+sha256 = "2ce5e1bc3f6355b69b61a572673686f58ae01b285637497262cf71381f45b257"
+duration_microseconds = 8000000
+video_stream = 0
+audio_stream = 1
+subtitle_stream = 2
+subtitle_codec = "hdmv_pgs_subtitle"
+subtitle_content_encoding = "zlib"
+subtitle_canvas = "320x180"
+
+[mux]
+tool = "MKVToolNix mkvmerge 100.0"
+source = "sdr-bt709-ffv1-pgs.mkv"
+command = "mkvmerge --deterministic sunroom-zlib-pgs-v1 --no-date --output <output> --compression 2:zlib <source>"
+tool_sha256 = "5b9f0cf3c52a2f0d9e03e3b36413d42ad6ef455d8f4eeffb70a43e3b7df29c00"

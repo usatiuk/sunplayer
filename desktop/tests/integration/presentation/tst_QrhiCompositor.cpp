@@ -286,6 +286,9 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     std::unique_ptr<QRhiTexture> uiTexture(rhi->newTexture(
         QRhiTexture::RGBA8, {1, 1}, 1));
     QVERIFY(uiTexture->create());
+    std::unique_ptr<QRhiTexture> subtitleTexture(rhi->newTexture(
+        QRhiTexture::RGBA8, {1, 1}, 1));
+    QVERIFY(subtitleTexture->create());
 
     std::unique_ptr<QRhiTexture> outputTexture(rhi->newTexture(
         QRhiTexture::RGBA8,
@@ -327,6 +330,7 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
         compositor.initialize(
             *outputRenderPass,
             &producer->textureForComposition(),
+            subtitleTexture.get(),
             *uiTexture),
         HdrCompositor::ResourceResult::Ready);
     HdrCompositor linearOutputCompositor(*rhi);
@@ -334,6 +338,7 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
         linearOutputCompositor.initialize(
             *linearOutputRenderPass,
             &producer->textureForComposition(),
+            subtitleTexture.get(),
             *uiTexture),
         HdrCompositor::ResourceResult::Ready);
 
@@ -364,6 +369,10 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     QRhiResourceUpdateBatch *updates = rhi->nextResourceUpdateBatch();
     updates->uploadTexture(
         uiTexture.get(),
+        QRhiTextureUploadDescription(QRhiTextureUploadEntry(
+            0, 0, QRhiTextureSubresourceUploadDescription(transparentUi))));
+    updates->uploadTexture(
+        subtitleTexture.get(),
         QRhiTextureUploadDescription(QRhiTextureUploadEntry(
             0, 0, QRhiTextureSubresourceUploadDescription(transparentUi))));
     commandBuffer->resourceUpdate(updates);
@@ -475,21 +484,30 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     compareByteNear(composedVideo.b, expectedVideoByte);
     QCOMPARE(composedVideo.a, 255);
 
-    // A second frame changes only presentation and UI state. It must reuse the
-    // submitted video surface while exercising extended-linear output,
-    // non-unity SDR scaling, and premultiplied encoded UI.
+    // A second frame changes only presentation, subtitle, and UI state. It
+    // must reuse the submitted video surface while proving the intended layer
+    // order: video, then premultiplied sRGB subtitles, then UI.
     QCOMPARE(
         rhi->beginOffscreenFrame(&commandBuffer),
         QRhi::FrameOpSuccess);
     QByteArray translucentRedUi(4, '\0');
     translucentRedUi[0] = static_cast<char>(64);
     translucentRedUi[3] = static_cast<char>(128);
+    QByteArray translucentBlueSubtitle(4, '\0');
+    translucentBlueSubtitle[2] = static_cast<char>(64);
+    translucentBlueSubtitle[3] = static_cast<char>(128);
     updates = rhi->nextResourceUpdateBatch();
     updates->uploadTexture(
         uiTexture.get(),
         QRhiTextureUploadDescription(QRhiTextureUploadEntry(
             0, 0,
             QRhiTextureSubresourceUploadDescription(translucentRedUi))));
+    updates->uploadTexture(
+        subtitleTexture.get(),
+        QRhiTextureUploadDescription(QRhiTextureUploadEntry(
+            0, 0,
+            QRhiTextureSubresourceUploadDescription(
+                translucentBlueSubtitle))));
     commandBuffer->resourceUpdate(updates);
     QVERIFY(!producer->needsRender(requestedState));
     QCOMPARE(
@@ -527,17 +545,17 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     const float alpha = 128.0f / 255.0f;
     const float encodedStraightRed =
         (64.0f / 255.0f) / alpha;
-    const std::array<float, 3> backgroundEncoded{
-        0.0f,
-        0.0f,
-        0.0f,
-    };
-    const auto expectedLinearBlend =
-        [alpha](float baseLinear, float encodedUi, float scale) {
+    const auto expectedLinearBlend = [alpha](
+            float baseLinear,
+            float encodedSubtitle,
+            float encodedUi,
+            float scale) {
+            const float withSubtitle =
+                srgbToLinear(encodedSubtitle) * alpha
+                + baseLinear * (1.0f - alpha);
             return (
                 srgbToLinear(encodedUi) * alpha
-                + baseLinear * (1.0f - alpha))
-                * scale;
+                + withSubtitle * (1.0f - alpha)) * scale;
         };
 
     const FloatPixel blendedBackground =
@@ -545,21 +563,24 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     compareNear(
         blendedBackground.r,
         expectedLinearBlend(
-            srgbToLinear(backgroundEncoded[0]),
+            0.0f,
+            0.0f,
             encodedStraightRed,
             linearSdrScale),
         0.002f);
     compareNear(
         blendedBackground.g,
         expectedLinearBlend(
-            srgbToLinear(backgroundEncoded[1]),
+            0.0f,
+            0.0f,
             0.0f,
             linearSdrScale),
         0.002f);
     compareNear(
         blendedBackground.b,
         expectedLinearBlend(
-            srgbToLinear(backgroundEncoded[2]),
+            0.0f,
+            encodedStraightRed,
             0.0f,
             linearSdrScale),
         0.002f);
@@ -571,23 +592,25 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
         videoOriginX + extendedSampleX,
         videoOriginY + 1);
     const float expectedExtendedRed = expectedLinearBlend(
-        expectedExtended, encodedStraightRed, linearSdrScale);
-    const float expectedExtendedGreenBlue = expectedLinearBlend(
-        expectedExtended, 0.0f, linearSdrScale);
+        expectedExtended, 0.0f, encodedStraightRed, linearSdrScale);
+    const float expectedExtendedGreen = expectedLinearBlend(
+        expectedExtended, 0.0f, 0.0f, linearSdrScale);
+    const float expectedExtendedBlue = expectedLinearBlend(
+        expectedExtended, encodedStraightRed, 0.0f, linearSdrScale);
     QVERIFY(expectedExtendedRed > 1.0f);
-    QVERIFY(expectedExtendedGreenBlue > 1.0f);
+    QVERIFY(expectedExtendedGreen > 0.0f);
     compareNear(
         reusedExtendedVideo.r, expectedExtendedRed, 0.01f);
     compareNear(
-        reusedExtendedVideo.g, expectedExtendedGreenBlue, 0.01f);
+        reusedExtendedVideo.g, expectedExtendedGreen, 0.01f);
     compareNear(
-        reusedExtendedVideo.b, expectedExtendedGreenBlue, 0.01f);
+        reusedExtendedVideo.b, expectedExtendedBlue, 0.01f);
     compareNear(reusedExtendedVideo.a, 1.0f, 0.001f);
 
     // The compositor owns a valid fallback binding when no page publishes a
     // visible video viewport. No video surface is prepared or sampled.
     QCOMPARE(
-        compositor.setTextures(nullptr, *uiTexture),
+        compositor.setTextures(nullptr, nullptr, *uiTexture),
         HdrCompositor::ResourceResult::Ready);
     QCOMPARE(
         rhi->beginOffscreenFrame(&commandBuffer),
@@ -595,6 +618,11 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     updates = rhi->nextResourceUpdateBatch();
     updates->uploadTexture(
         uiTexture.get(),
+        QRhiTextureUploadDescription(QRhiTextureUploadEntry(
+            0, 0, QRhiTextureSubresourceUploadDescription(
+                transparentUi))));
+    updates->uploadTexture(
+        subtitleTexture.get(),
         QRhiTextureUploadDescription(QRhiTextureUploadEntry(
             0, 0, QRhiTextureSubresourceUploadDescription(
                 transparentUi))));
@@ -690,7 +718,9 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     QVERIFY(producer->needsRender(resizedState));
     QCOMPARE(
         compositor.setTextures(
-            &producer->textureForComposition(), *uiTexture),
+            &producer->textureForComposition(),
+            subtitleTexture.get(),
+            *uiTexture),
         HdrCompositor::ResourceResult::Ready);
 
     QCOMPARE(
@@ -699,6 +729,11 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     updates = rhi->nextResourceUpdateBatch();
     updates->uploadTexture(
         uiTexture.get(),
+        QRhiTextureUploadDescription(QRhiTextureUploadEntry(
+            0, 0, QRhiTextureSubresourceUploadDescription(
+                transparentUi))));
+    updates->uploadTexture(
+        subtitleTexture.get(),
         QRhiTextureUploadDescription(QRhiTextureUploadEntry(
             0, 0, QRhiTextureSubresourceUploadDescription(
                 transparentUi))));
@@ -977,6 +1012,9 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
     std::unique_ptr<QRhiTexture> uiTexture(rhi.newTexture(
         QRhiTexture::RGBA8, {1, 1}, 1));
     QVERIFY(uiTexture->create());
+    std::unique_ptr<QRhiTexture> subtitleTexture(rhi.newTexture(
+        QRhiTexture::RGBA8, {1, 1}, 1));
+    QVERIFY(subtitleTexture->create());
     std::unique_ptr<QRhiTexture> outputTexture(rhi.newTexture(
         QRhiTexture::RGBA16F,
         videoSize,
@@ -998,6 +1036,7 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
         compositor.initialize(
             *outputPass,
             &producer->textureForComposition(),
+            subtitleTexture.get(),
             *uiTexture),
         HdrCompositor::ResourceResult::Ready);
 
@@ -1124,6 +1163,14 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
         rhi.nextResourceUpdateBatch();
     updates->uploadTexture(
         uiTexture.get(),
+        QRhiTextureUploadDescription(
+            QRhiTextureUploadEntry(
+                0,
+                0,
+                QRhiTextureSubresourceUploadDescription(
+                    transparentUi))));
+    updates->uploadTexture(
+        subtitleTexture.get(),
         QRhiTextureUploadDescription(
             QRhiTextureUploadEntry(
                 0,
@@ -1315,6 +1362,7 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
     QCOMPARE(
         compositor.setTextures(
             &producer->textureForComposition(),
+            subtitleTexture.get(),
             *uiTexture),
         HdrCompositor::ResourceResult::Ready);
     compositor.render(

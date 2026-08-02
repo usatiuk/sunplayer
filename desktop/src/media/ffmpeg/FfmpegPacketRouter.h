@@ -13,6 +13,7 @@
 enum class FfmpegPacketStream {
     Video,
     Audio,
+    Subtitle,
 };
 
 enum class FfmpegPacketRouterTerminal {
@@ -44,7 +45,7 @@ struct FfmpegPacketRouterStatistics {
     std::size_t waitingConsumerCount = 0;
 };
 
-// Routes the two selected streams through one aggregate memory budget. A
+// Routes selected media streams through one aggregate memory budget. A
 // single packet larger than the byte limit is admitted only while the router
 // is empty, so unusual valid packets cannot deadlock demuxing while memory
 // remains bounded by max(limit, largest packet).
@@ -84,6 +85,7 @@ private:
     std::condition_variable_any m_wake;
     std::deque<Entry> m_videoPackets;
     std::deque<Entry> m_audioPackets;
+    std::deque<Entry> m_subtitlePackets;
     std::size_t m_queuedPacketCount = 0;
     std::size_t m_queuedBytes = 0;
     std::size_t m_maximumQueuedPacketCount = 0;

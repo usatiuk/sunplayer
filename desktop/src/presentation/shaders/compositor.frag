@@ -4,9 +4,10 @@ layout(location = 0) in vec2 uv;
 layout(location = 0) out vec4 fragColor;
 
 layout(binding = 0) uniform sampler2D videoTexture;
-layout(binding = 1) uniform sampler2D uiTexture;
+layout(binding = 1) uniform sampler2D subtitleTexture;
+layout(binding = 2) uniform sampler2D uiTexture;
 
-layout(std140, binding = 2) uniform CompositorParams {
+layout(std140, binding = 3) uniform CompositorParams {
     vec2 viewportSize;
     vec2 videoOrigin;
     vec2 videoSize;
@@ -31,6 +32,16 @@ vec3 linearToSrgb(vec3 value)
     return mix(powerPart, linearPart, low);
 }
 
+vec3 compositeSrgbPremultiplied(vec3 background, vec4 layer)
+{
+    float alpha = clamp(layer.a, 0.0, 1.0);
+    vec3 encodedStraight = alpha > 0.00001
+        ? clamp(layer.rgb / alpha, 0.0, 1.0)
+        : vec3(0.0);
+    vec3 linear = srgbToLinear(encodedStraight);
+    return linear * alpha + background * (1.0 - alpha);
+}
+
 void main()
 {
     vec2 displayUv = ndcYUp > 0.5 ? vec2(uv.x, 1.0 - uv.y) : uv;
@@ -43,13 +54,10 @@ void main()
         color = texture(videoTexture, videoUv).rgb;
     }
 
-    vec4 ui = texture(uiTexture, displayUv);
-    float alpha = clamp(ui.a, 0.0, 1.0);
-    vec3 encodedStraight = alpha > 0.00001
-        ? clamp(ui.rgb / alpha, 0.0, 1.0)
-        : vec3(0.0);
-    vec3 uiLinear = srgbToLinear(encodedStraight);
-    color = uiLinear * alpha + color * (1.0 - alpha);
+    color = compositeSrgbPremultiplied(
+        color, texture(subtitleTexture, displayUv));
+    color = compositeSrgbPremultiplied(
+        color, texture(uiTexture, displayUv));
     color *= sdrScale;
     vec3 outputColor = linearOutput > 0.5
         ? color

@@ -22,4 +22,11 @@ endif ()
 
 include("${_sunroom_vcpkg_root}/scripts/toolchains/windows.cmake")
 
+# vcpkg's Windows toolchain unconditionally adds /c65001 to RC flags. Ninja's
+# cmcldeps forwards that resource-only switch to clang-cl while dependency-
+# scanning .rc files, where clang-cl interprets it as a path and fails. Remove
+# only that switch; preserve platform and caller-supplied resource flags.
+string(REPLACE "/c65001" "" CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS}")
+set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS}" CACHE STRING "" FORCE)
+
 unset(_sunroom_vcpkg_root)

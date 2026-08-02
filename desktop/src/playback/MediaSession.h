@@ -23,6 +23,8 @@
 #include "playback/CoalescedGenerationWake.h"
 #include "playback/VideoFrameQueue.h"
 #include "playback/VideoFrameScheduler.h"
+#include "subtitles/SubtitleSource.h"
+#include "subtitles/SubtitleTrackModel.h"
 #include "video/DecodedVideoSource.h"
 
 class MediaSession final
@@ -80,6 +82,12 @@ class MediaSession final
                READ audioPresentedFrames NOTIFY audioDiagnosticsChanged)
     Q_PROPERTY(qulonglong audioUnderrunFrames
                READ audioUnderrunFrames NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(QAbstractItemModel *subtitleTracks
+               READ subtitleTracks CONSTANT)
+    Q_PROPERTY(int selectedSubtitleStreamIndex
+               READ selectedSubtitleStreamIndex NOTIFY subtitleChanged)
+    Q_PROPERTY(QString subtitleError
+               READ subtitleError NOTIFY subtitleChanged)
 
 public:
     enum class State {
@@ -116,8 +124,8 @@ public:
             const FfmpegVideoFrameSink &,
             const FfmpegAudioOutputSink &,
             const FfmpegMediaStreamSink &,
+            const FfmpegSubtitleOutputSink &,
             std::stop_token)>;
-
     explicit MediaSession(
         VideoTargetReadback readback,
         QObject *parent = nullptr);
@@ -169,6 +177,11 @@ public:
     qulonglong audioUnderrunFrames() const;
     std::optional<AudioPresentationSnapshot>
         currentAudioPresentation() const;
+    QAbstractItemModel *subtitleTracks();
+    int selectedSubtitleStreamIndex() const;
+    QString subtitleError() const;
+    SubtitlePresentationSnapshot subtitlePresentationSnapshot(
+        std::chrono::steady_clock::time_point now) const;
 
     DecodedVideoSource &videoSource();
     const DecodedVideoSource &videoSource() const;
@@ -185,6 +198,7 @@ public:
     void setMuted(bool muted);
     Q_INVOKABLE void seekToMilliseconds(
         qlonglong positionMilliseconds);
+    Q_INVOKABLE void selectSubtitleStream(int streamIndex);
 
 signals:
     void sessionChanged();
@@ -193,6 +207,7 @@ signals:
     void volumeChanged();
     void mutedChanged();
     void audioDiagnosticsChanged();
+    void subtitleChanged();
 
 private:
     struct OpenRequest {
@@ -282,6 +297,8 @@ private:
     MediaDecodeOperation m_decodeOperation;
     std::shared_ptr<AudioSink> m_audioSink;
     DecodedVideoSource m_videoSource;
+    SubtitleSource m_subtitleSource;
+    SubtitleTrackModel m_subtitleTracks;
     VideoFrameQueue m_frameQueue;
     VideoFrameScheduler m_frameScheduler;
     State m_state = State::Empty;
@@ -300,6 +317,8 @@ private:
     std::int64_t m_graphicsRecoveryPositionMicroseconds = 0;
     bool m_graphicsRecoverySeeking = false;
     bool m_hardwareImportFallbackConsumed = false;
+    int m_selectedSubtitleStreamIndex = -1;
+    QString m_subtitleError;
     bool m_userWantsPlaying = true;
     qreal m_volume = 1.0;
     bool m_muted = false;

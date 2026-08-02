@@ -828,6 +828,9 @@ realDemuxDecodeImportAndComposition() {
     std::unique_ptr<QRhiTexture> uiTexture(rhi.newTexture(
         QRhiTexture::RGBA8, {1, 1}, 1));
     QVERIFY(uiTexture->create());
+    std::unique_ptr<QRhiTexture> subtitleTexture(rhi.newTexture(
+        QRhiTexture::RGBA8, {1, 1}, 1));
+    QVERIFY(subtitleTexture->create());
     std::unique_ptr<QRhiTexture> compositionTexture(
         rhi.newTexture(
             QRhiTexture::RGBA16F,
@@ -851,6 +854,7 @@ realDemuxDecodeImportAndComposition() {
         compositor.initialize(
             *compositionPass,
             &producer.textureForComposition(),
+            subtitleTexture.get(),
             *uiTexture),
         HdrCompositor::ResourceResult::Ready);
 
@@ -870,6 +874,14 @@ realDemuxDecodeImportAndComposition() {
             rhi.nextResourceUpdateBatch();
         updates->uploadTexture(
             uiTexture.get(),
+            QRhiTextureUploadDescription(
+                QRhiTextureUploadEntry(
+                    0,
+                    0,
+                    QRhiTextureSubresourceUploadDescription(
+                        transparentUi))));
+        updates->uploadTexture(
+            subtitleTexture.get(),
             QRhiTextureUploadDescription(
                 QRhiTextureUploadEntry(
                     0,

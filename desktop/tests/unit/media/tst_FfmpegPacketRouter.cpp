@@ -73,7 +73,7 @@ appliesOneAggregateBudgetAcrossStreams() {
     std::atomic_bool accepted = false;
     std::jthread producer([&](std::stop_token stopToken) {
         accepted = router.push(
-            FfmpegPacketStream::Video,
+            FfmpegPacketStream::Subtitle,
             packet(1),
             stopToken);
         completedPromise.set_value();
@@ -92,6 +92,11 @@ appliesOneAggregateBudgetAcrossStreams() {
         == std::future_status::ready);
     QVERIFY(accepted.load());
     producer.join();
+
+    FfmpegRoutedPacket subtitle = router.pop(
+        FfmpegPacketStream::Subtitle);
+    QVERIFY(subtitle.packet);
+    QCOMPARE(subtitle.packet->size, 1);
 
     const FfmpegPacketRouterStatistics statistics =
         router.statistics();

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstring>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -9,8 +10,12 @@
 #include <utility>
 #include <vector>
 
+#include <QLocale>
+#include <QStringList>
+
 extern "C" {
 #include <libavcodec/avcodec.h>
+#include <libavcodec/codec_desc.h>
 #include <libavformat/avformat.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/error.h>
@@ -165,6 +170,418 @@ struct AudioWorkerStatus : WorkerStatus {
     std::uint64_t outputFrames = 0;
     std::optional<std::int64_t> observedEndMicroseconds;
 };
+
+struct SubtitleWorkerStatus : WorkerStatus {};
+
+QString metadataValue(const AVDictionary *metadata, const char *key) {
+    const AVDictionaryEntry *entry = av_dict_get(
+        metadata, key, nullptr, 0);
+    return entry && entry->value
+        ? QString::fromUtf8(entry->value)
+        : QString{};
+}
+
+QString subtitleTrackLabel(
+        const AVStream &stream, int ordinal) {
+    const QString languageTag = metadataValue(
+        stream.metadata, "language");
+    QString language = languageTag;
+    if (!languageTag.isEmpty()) {
+        const QLocale locale(languageTag);
+        if (locale.language() != QLocale::AnyLanguage
+                && locale.language() != QLocale::C) {
+            language = QLocale::languageToString(
+                locale.language());
+        }
+    }
+    const QString title = metadataValue(stream.metadata, "title");
+    QString label;
+    if (!language.isEmpty() && !title.isEmpty())
+        label = language + QStringLiteral(" - ") + title;
+    else if (!title.isEmpty())
+        label = title;
+    else if (!language.isEmpty())
+        label = language;
+    else
+        label = QStringLiteral("Subtitle %1").arg(ordinal);
+
+    QStringList traits;
+    if (stream.disposition & AV_DISPOSITION_DEFAULT)
+        traits.push_back(QStringLiteral("Default"));
+    if (stream.disposition & AV_DISPOSITION_FORCED)
+        traits.push_back(QStringLiteral("Forced"));
+    if (stream.disposition & AV_DISPOSITION_HEARING_IMPAIRED)
+        traits.push_back(QStringLiteral("SDH"));
+    if (stream.disposition & AV_DISPOSITION_COMMENT)
+        traits.push_back(QStringLiteral("Commentary"));
+    if (!traits.isEmpty()) {
+        label += QStringLiteral(" (%1)")
+            .arg(traits.join(QStringLiteral(", ")));
+    }
+    return label;
+}
+
+std::vector<SubtitleTrackDescriptor> discoverSubtitleTracks(
+        const AVFormatContext &formatContext) {
+    std::vector<SubtitleTrackDescriptor> tracks;
+    int ordinal = 0;
+    for (unsigned int index = 0;
+            index < formatContext.nb_streams;
+            ++index) {
+        const AVStream &stream = *formatContext.streams[index];
+        if (stream.codecpar->codec_type != AVMEDIA_TYPE_SUBTITLE)
+            continue;
+        ++ordinal;
+        const AVCodec *decoder = avcodec_find_decoder(
+            stream.codecpar->codec_id);
+        tracks.push_back({
+            .streamIndex = static_cast<int>(index),
+            .label = subtitleTrackLabel(stream, ordinal),
+            .language = metadataValue(stream.metadata, "language"),
+            .title = metadataValue(stream.metadata, "title"),
+            .codec = QString::fromLatin1(
+                avcodec_get_name(stream.codecpar->codec_id)),
+            .isDefault = static_cast<bool>(
+                stream.disposition & AV_DISPOSITION_DEFAULT),
+            .isForced = static_cast<bool>(
+                stream.disposition & AV_DISPOSITION_FORCED),
+            .isHearingImpaired = static_cast<bool>(
+                stream.disposition & AV_DISPOSITION_HEARING_IMPAIRED),
+            .isCommentary = static_cast<bool>(
+                stream.disposition & AV_DISPOSITION_COMMENT),
+            .supported = decoder != nullptr,
+        });
+    }
+    return tracks;
+}
+
+std::vector<SubtitleFontAttachment> collectSubtitleFonts(
+        const AVFormatContext &formatContext) {
+    constexpr std::size_t maximumFonts = 64;
+    constexpr std::size_t maximumFontBytes = 32U * 1024U * 1024U;
+    std::vector<SubtitleFontAttachment> fonts;
+    std::size_t retainedBytes = 0;
+    for (unsigned int index = 0;
+            index < formatContext.nb_streams
+                && fonts.size() < maximumFonts;
+            ++index) {
+        const AVStream &stream = *formatContext.streams[index];
+        if (stream.codecpar->codec_type != AVMEDIA_TYPE_ATTACHMENT
+                || (stream.codecpar->codec_id != AV_CODEC_ID_TTF
+                    && stream.codecpar->codec_id != AV_CODEC_ID_OTF)
+                || !stream.codecpar->extradata
+                || stream.codecpar->extradata_size <= 0) {
+            continue;
+        }
+        const std::size_t bytes = static_cast<std::size_t>(
+            stream.codecpar->extradata_size);
+        if (bytes > maximumFontBytes - retainedBytes)
+            continue;
+        QString name = metadataValue(stream.metadata, "filename");
+        if (name.isEmpty())
+            name = QStringLiteral("attachment-%1").arg(index);
+        fonts.push_back({
+            .name = std::move(name),
+            .bytes = QByteArray(
+                reinterpret_cast<const char *>(
+                    stream.codecpar->extradata),
+                stream.codecpar->extradata_size),
+        });
+        retainedBytes += bytes;
+    }
+    return fonts;
+}
+
+std::optional<std::int64_t> subtitleTime(
+        std::int64_t pts,
+        std::uint32_t offsetMilliseconds,
+        const std::optional<VideoTimelineOrigin> &origin) {
+    if (pts == AV_NOPTS_VALUE)
+        return std::nullopt;
+    const std::optional<std::int64_t> absolute = checkedTimestampAdd(
+        pts, static_cast<std::int64_t>(offsetMilliseconds) * 1'000);
+    if (!absolute)
+        return std::nullopt;
+    const std::optional<std::int64_t> originMicroseconds =
+        origin ? origin->microseconds() : std::nullopt;
+    const std::optional<std::int64_t> normalized = originMicroseconds
+        ? checkedTimestampSubtract(*absolute, *originMicroseconds)
+        : absolute;
+    return normalized && *normalized >= 0
+        ? normalized
+        : std::nullopt;
+}
+
+QByteArray escapedAssText(const char *text) {
+    QByteArray escaped = text ? QByteArray(text) : QByteArray{};
+    escaped.replace("\\", "\\\\");
+    escaped.replace("{", "\\{");
+    escaped.replace("}", "\\}");
+    escaped.replace("\r\n", "\\N");
+    escaped.replace("\n", "\\N");
+    escaped.replace("\r", "\\N");
+    return QByteArrayLiteral("0,0,Default,,0,0,0,,") + escaped;
+}
+
+std::shared_ptr<const SubtitleBitmapComposition> copyBitmapComposition(
+        const AVSubtitle &subtitle,
+        const AVCodecContext &codecContext,
+        const AVCodecParameters &parameters,
+        const QSize &fallbackCanvas,
+        QString &error) {
+    constexpr int maximumDimension = 16'384;
+    constexpr std::size_t maximumRegions = 256;
+    constexpr std::size_t maximumBytes = 128U * 1024U * 1024U;
+    const int canvasWidth = codecContext.width > 0
+        ? codecContext.width
+        : parameters.width > 0
+            ? parameters.width
+            : fallbackCanvas.width();
+    const int canvasHeight = codecContext.height > 0
+        ? codecContext.height
+        : parameters.height > 0
+            ? parameters.height
+            : fallbackCanvas.height();
+    if (canvasWidth <= 0 || canvasHeight <= 0
+            || canvasWidth > maximumDimension
+            || canvasHeight > maximumDimension) {
+        error = QStringLiteral("Bitmap subtitle canvas is invalid");
+        return {};
+    }
+
+    auto composition = std::make_shared<SubtitleBitmapComposition>();
+    composition->canvasSize = {canvasWidth, canvasHeight};
+    std::size_t retainedBytes = 0;
+    for (unsigned int index = 0; index < subtitle.num_rects; ++index) {
+        const AVSubtitleRect *rect = subtitle.rects[index];
+        if (!rect || rect->type != SUBTITLE_BITMAP)
+            continue;
+        if (composition->regions.size() >= maximumRegions
+                || rect->x < 0 || rect->y < 0
+                || rect->w <= 0 || rect->h <= 0
+                || rect->w > maximumDimension
+                || rect->h > maximumDimension
+                || rect->x > canvasWidth
+                || rect->w > canvasWidth - rect->x
+                || rect->y > canvasHeight
+                || rect->h > canvasHeight - rect->y
+                || !rect->data[0] || !rect->data[1]
+                || rect->linesize[0] < rect->w
+                || rect->nb_colors <= 0
+                || rect->nb_colors > 256) {
+            error = QStringLiteral("Bitmap subtitle region is invalid");
+            return {};
+        }
+        const std::size_t pixels =
+            static_cast<std::size_t>(rect->w)
+            * static_cast<std::size_t>(rect->h);
+        if (pixels > (maximumBytes - retainedBytes) / 4U) {
+            error = QStringLiteral("Bitmap subtitle exceeds its byte budget");
+            return {};
+        }
+        QByteArray rgba(
+            static_cast<qsizetype>(pixels * 4U), Qt::Uninitialized);
+        const auto *palette = reinterpret_cast<const std::uint32_t *>(
+            rect->data[1]);
+        auto *output = reinterpret_cast<unsigned char *>(rgba.data());
+        for (int y = 0; y < rect->h; ++y) {
+            const std::uint8_t *row = rect->data[0]
+                + static_cast<std::ptrdiff_t>(y) * rect->linesize[0];
+            for (int x = 0; x < rect->w; ++x) {
+                const std::uint8_t paletteIndex = row[x];
+                if (paletteIndex >= rect->nb_colors) {
+                    error = QStringLiteral(
+                        "Bitmap subtitle palette index is invalid");
+                    return {};
+                }
+                const std::uint32_t color = palette[paletteIndex];
+                *output++ = static_cast<unsigned char>((color >> 16U) & 0xffU);
+                *output++ = static_cast<unsigned char>((color >> 8U) & 0xffU);
+                *output++ = static_cast<unsigned char>(color & 0xffU);
+                *output++ = static_cast<unsigned char>((color >> 24U) & 0xffU);
+            }
+        }
+        retainedBytes += pixels * 4U;
+        composition->regions.push_back({
+            .x = rect->x,
+            .y = rect->y,
+            .size = {rect->w, rect->h},
+            .rgba = std::move(rgba),
+        });
+    }
+    if (!composition->isValid()) {
+        error = QStringLiteral("Bitmap subtitle composition is empty");
+        return {};
+    }
+    return composition;
+}
+
+bool publishSubtitle(
+        const AVSubtitle &subtitle,
+        const AVCodecContext &codecContext,
+        const AVCodecParameters &parameters,
+        bool bitmapCodec,
+        const QSize &fallbackCanvas,
+        const std::optional<VideoTimelineOrigin> &origin,
+        std::uint64_t playbackGeneration,
+        const FfmpegSubtitleOutputSink &sink,
+        std::stop_token stopToken,
+        QString &error) {
+    const std::optional<std::int64_t> start = subtitleTime(
+        subtitle.pts, subtitle.start_display_time, origin);
+    if (!start)
+        return true;
+    std::optional<std::int64_t> end;
+    if (subtitle.end_display_time != UINT32_MAX
+            && subtitle.end_display_time
+                > subtitle.start_display_time) {
+        end = subtitleTime(
+            subtitle.pts, subtitle.end_display_time, origin);
+    }
+
+    if (bitmapCodec && subtitle.num_rects == 0) {
+        return sink.submit({
+            .playbackGeneration = playbackGeneration,
+            .startMicroseconds = *start,
+            .type = SubtitlePayloadType::Clear,
+        }, stopToken);
+    }
+
+    bool hasBitmap = false;
+    for (unsigned int index = 0; index < subtitle.num_rects; ++index) {
+        const AVSubtitleRect *rect = subtitle.rects[index];
+        if (rect && rect->type == SUBTITLE_BITMAP) {
+            hasBitmap = true;
+            break;
+        }
+    }
+    if (hasBitmap) {
+        const auto composition = copyBitmapComposition(
+            subtitle,
+            codecContext,
+            parameters,
+            fallbackCanvas,
+            error);
+        if (!composition)
+            return false;
+        return sink.submit({
+            .playbackGeneration = playbackGeneration,
+            .startMicroseconds = *start,
+            .endMicroseconds = end,
+            .type = SubtitlePayloadType::Bitmap,
+            .bitmap = composition,
+        }, stopToken);
+    }
+
+    for (unsigned int index = 0; index < subtitle.num_rects; ++index) {
+        const AVSubtitleRect *rect = subtitle.rects[index];
+        if (!rect)
+            continue;
+        QByteArray ass;
+        if (rect->type == SUBTITLE_ASS && rect->ass)
+            ass = rect->ass;
+        else if (rect->type == SUBTITLE_TEXT && rect->text)
+            ass = escapedAssText(rect->text);
+        else
+            continue;
+        if (!sink.submit({
+                .playbackGeneration = playbackGeneration,
+                .startMicroseconds = *start,
+                .endMicroseconds = end,
+                .type = SubtitlePayloadType::AssText,
+                .ass = std::move(ass),
+            }, stopToken)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+SubtitleWorkerStatus decodeSubtitlePackets(
+        CodecContextPtr codecContext,
+        const AVCodecParameters &parameters,
+        bool bitmapCodec,
+        QSize fallbackCanvas,
+        const std::optional<VideoTimelineOrigin> &origin,
+        std::uint64_t playbackGeneration,
+        FfmpegPacketRouter &router,
+        const FfmpegSubtitleOutputSink &sink,
+        std::stop_token stopToken) {
+    SubtitleWorkerStatus result;
+    bool decoderFailed = false;
+    std::uint64_t packetCount = 0;
+    std::uint64_t outputCount = 0;
+    while (!stopToken.stop_requested()) {
+        FfmpegRoutedPacket input = router.pop(
+            FfmpegPacketStream::Subtitle, stopToken);
+        if (!input.packet) {
+            result.cancelled = input.terminal
+                == FfmpegPacketRouterTerminal::Cancelled;
+            result.endOfStream = input.terminal
+                == FfmpegPacketRouterTerminal::EndOfStream;
+            if (input.terminal == FfmpegPacketRouterTerminal::Failed)
+                result.error = std::move(input.error);
+            break;
+        }
+        if (decoderFailed)
+            continue;
+
+        AVSubtitle subtitle{};
+        int gotSubtitle = 0;
+        const int decodeResult = avcodec_decode_subtitle2(
+            codecContext.get(), &subtitle, &gotSubtitle,
+            input.packet.get());
+        ++packetCount;
+        qCDebug(sunroomLogMediaDecode).noquote()
+            << "event=subtitle.packet_decoded"
+            << "generation=" + QString::number(playbackGeneration)
+            << "packet=" + QString::number(packetCount)
+            << "pts=" + QString::number(input.packet->pts)
+            << "bytes=" + QString::number(input.packet->size)
+            << "consumed=" + QString::number(decodeResult)
+            << "output=" + QString(
+                gotSubtitle
+                ? QStringLiteral("true")
+                : QStringLiteral("false"));
+        if (decodeResult < 0) {
+            result.error = QStringLiteral(
+                "Subtitle decode failed: %1")
+                .arg(ffmpegError(decodeResult));
+            if (sink.failed)
+                sink.failed(result.error);
+            decoderFailed = true;
+            continue;
+        }
+        if (!gotSubtitle)
+            continue;
+        ++outputCount;
+        if (outputCount == 1) {
+            qCInfo(sunroomLogMediaDecode).noquote()
+                << "event=subtitle.first_output"
+                << "generation=" + QString::number(playbackGeneration)
+                << "packet=" + QString::number(packetCount)
+                << "pts=" + QString::number(subtitle.pts)
+                << "rects=" + QString::number(subtitle.num_rects);
+        }
+        const bool published = publishSubtitle(
+            subtitle, *codecContext, parameters, bitmapCodec,
+            fallbackCanvas,
+            origin, playbackGeneration, sink, stopToken,
+            result.error);
+        avsubtitle_free(&subtitle);
+        if (!published) {
+            if (result.error.isEmpty() && !stopToken.stop_requested()) {
+                result.error = QStringLiteral(
+                    "Subtitle output rejected a decoded event");
+            }
+            if (!result.error.isEmpty() && sink.failed)
+                sink.failed(result.error);
+            decoderFailed = true;
+        }
+    }
+    result.stopped = stopToken.stop_requested() && !result.cancelled;
+    return result;
+}
 
 void stopSibling(
         FfmpegPacketRouter &router,
@@ -1010,7 +1427,12 @@ bool FfmpegAudioOutputSink::isValid() const {
 bool FfmpegMediaDecodeRequest::isValid() const {
     return video.isValid()
         && (!decodeSelectedAudio
-            || audioOutput == AudioStreamFormat{48'000, 2});
+            || audioOutput == AudioStreamFormat{48'000, 2})
+        && selectedSubtitleStreamIndex >= -1;
+}
+
+bool FfmpegSubtitleOutputSink::isValid() const {
+    return static_cast<bool>(submit);
 }
 
 bool FfmpegMediaDecodeResult::isSuccess() const {
@@ -1058,6 +1480,17 @@ FfmpegMediaDecodeResult decodeMediaFrames(
         const FfmpegAudioOutputSink &audioSink,
         const FfmpegMediaStreamSink &streamSink,
         std::stop_token stopToken) {
+    return decodeMediaFrames(
+        request, videoSink, audioSink, streamSink, {}, stopToken);
+}
+
+FfmpegMediaDecodeResult decodeMediaFrames(
+        const FfmpegMediaDecodeRequest &request,
+        const FfmpegVideoFrameSink &videoSink,
+        const FfmpegAudioOutputSink &audioSink,
+        const FfmpegMediaStreamSink &streamSink,
+        const FfmpegSubtitleOutputSink &subtitleSink,
+        std::stop_token stopToken) {
     FfmpegMediaDecodeResult result;
     const auto fail = [&](QString error) {
         result.error = std::move(error);
@@ -1066,7 +1499,9 @@ FfmpegMediaDecodeResult decodeMediaFrames(
     };
     if (!request.isValid() || !videoSink
             || (request.decodeSelectedAudio
-                && !audioSink.isValid())) {
+                && !audioSink.isValid())
+            || (request.selectedSubtitleStreamIndex >= 0
+                && !subtitleSink.isValid())) {
         return fail(QStringLiteral("Media decode request is invalid"));
     }
 
@@ -1151,6 +1586,32 @@ FfmpegMediaDecodeResult decodeMediaFrames(
         }
     }
 
+    const std::vector<SubtitleTrackDescriptor> subtitleTracks =
+        discoverSubtitleTracks(*formatContext);
+    const AVCodec *subtitleDecoder = nullptr;
+    AVStream *subtitleStream = nullptr;
+    int subtitleIndex = -1;
+    if (request.selectedSubtitleStreamIndex >= 0) {
+        const auto selected = std::find_if(
+            subtitleTracks.begin(), subtitleTracks.end(),
+            [&](const SubtitleTrackDescriptor &track) {
+                return track.streamIndex
+                    == request.selectedSubtitleStreamIndex;
+            });
+        if (selected == subtitleTracks.end()) {
+            result.subtitleError = QStringLiteral(
+                "The selected subtitle track is unavailable");
+        } else if (!selected->supported) {
+            result.subtitleError = QStringLiteral(
+                "The selected subtitle codec is unsupported");
+        } else {
+            subtitleIndex = selected->streamIndex;
+            subtitleStream = formatContext->streams[subtitleIndex];
+            subtitleDecoder = avcodec_find_decoder(
+                subtitleStream->codecpar->codec_id);
+        }
+    }
+
     const std::optional<VideoTimelineOrigin> origin =
         ffmpegSharedTimelineOrigin(
             *formatContext,
@@ -1228,6 +1689,7 @@ FfmpegMediaDecodeResult decodeMediaFrames(
         formatContext->streams[index]->discard =
             static_cast<int>(index) == videoIndex
                 || static_cast<int>(index) == audioIndex
+                || static_cast<int>(index) == subtitleIndex
             ? AVDISCARD_DEFAULT
             : AVDISCARD_ALL;
     }
@@ -1271,11 +1733,93 @@ FfmpegMediaDecodeResult decodeMediaFrames(
         audioTimeBase = audioStream->time_base;
     }
 
+    CodecParametersPtr subtitleParameters;
+    CodecContextPtr subtitleCodecContext;
+    std::optional<SubtitleStreamConfiguration> subtitleConfiguration;
+    bool bitmapSubtitleCodec = false;
+    const QSize subtitleFallbackCanvas{
+        videoParameters->width,
+        videoParameters->height,
+    };
+    if (subtitleStream && subtitleDecoder) {
+        constexpr int maximumCodecPrivateBytes = 4 * 1024 * 1024;
+        subtitleParameters.reset(avcodec_parameters_alloc());
+        if (!subtitleParameters
+                || avcodec_parameters_copy(
+                    subtitleParameters.get(),
+                    subtitleStream->codecpar) < 0) {
+            result.subtitleError = QStringLiteral(
+                "Could not retain subtitle stream parameters");
+        } else {
+            subtitleCodecContext.reset(
+                avcodec_alloc_context3(subtitleDecoder));
+            status = subtitleCodecContext
+                ? avcodec_parameters_to_context(
+                    subtitleCodecContext.get(),
+                    subtitleParameters.get())
+                : AVERROR(ENOMEM);
+            if (status >= 0) {
+                subtitleCodecContext->pkt_timebase =
+                    subtitleStream->time_base;
+                status = avcodec_open2(
+                    subtitleCodecContext.get(),
+                    subtitleDecoder,
+                    nullptr);
+            }
+            if (status < 0) {
+                result.subtitleError = QStringLiteral(
+                    "Could not open subtitle decoder: %1")
+                    .arg(ffmpegError(status));
+                subtitleCodecContext.reset();
+            } else if (subtitleCodecContext->subtitle_header_size
+                    > maximumCodecPrivateBytes) {
+                result.subtitleError = QStringLiteral(
+                    "Subtitle codec private data exceeds its budget");
+                subtitleCodecContext.reset();
+            } else {
+                const AVCodecDescriptor *descriptor =
+                    avcodec_descriptor_get(
+                        subtitleParameters->codec_id);
+                bitmapSubtitleCodec = descriptor
+                    && (descriptor->props & AV_CODEC_PROP_BITMAP_SUB);
+                subtitleConfiguration = SubtitleStreamConfiguration{
+                    .playbackGeneration = request.video
+                        .firstFrameIdentity.playbackGeneration,
+                    .streamIndex = subtitleIndex,
+                    .codec = QString::fromLatin1(
+                        avcodec_get_name(
+                            subtitleParameters->codec_id)),
+                    .codecPrivate = QByteArray(
+                        reinterpret_cast<const char *>(
+                            subtitleCodecContext->subtitle_header),
+                        subtitleCodecContext->subtitle_header_size),
+                    .canvasSize = {
+                        subtitleParameters->width > 0
+                            ? subtitleParameters->width
+                            : subtitleFallbackCanvas.width(),
+                        subtitleParameters->height > 0
+                            ? subtitleParameters->height
+                            : subtitleFallbackCanvas.height(),
+                    },
+                    .fonts = collectSubtitleFonts(*formatContext),
+                };
+            }
+        }
+        if (!result.subtitleError.isEmpty()) {
+            subtitleIndex = -1;
+            subtitleStream = nullptr;
+            if (subtitleSink.failed)
+                subtitleSink.failed(result.subtitleError);
+        }
+    }
+
     if (streamSink) {
         streamSink({
             .audioStreamPresent = audioStream != nullptr,
             .audioOutputExpected = audioOutputExpected,
             .videoDiagnostics = initialVideoDiagnostics,
+            .subtitleTracks = subtitleTracks,
+            .subtitleConfiguration = subtitleConfiguration,
         });
     }
     if (operationStop.stop_requested())
@@ -1284,6 +1828,7 @@ FfmpegMediaDecodeResult decodeMediaFrames(
     FfmpegPacketRouter router;
     FfmpegVideoDecodeResult videoResult;
     AudioWorkerStatus audioResult;
+    SubtitleWorkerStatus subtitleResult;
     std::jthread videoWorker([&] {
         videoResult = decodeVideoPackets(
             request,
@@ -1318,6 +1863,23 @@ FfmpegMediaDecodeResult decodeMediaFrames(
             }
         });
     }
+    std::optional<std::jthread> subtitleWorker;
+    if (subtitleStream && subtitleCodecContext && subtitleParameters) {
+        subtitleWorker.emplace(
+            [&, codecContext = std::move(subtitleCodecContext)]() mutable {
+                subtitleResult = decodeSubtitlePackets(
+                    std::move(codecContext),
+                    *subtitleParameters,
+                    bitmapSubtitleCodec,
+                    subtitleFallbackCanvas,
+                    origin,
+                    request.video.firstFrameIdentity
+                        .playbackGeneration,
+                    router,
+                    subtitleSink,
+                    operationStop.get_token());
+            });
+    }
 
     while (!operationStop.stop_requested()) {
         PacketPtr packet(av_packet_alloc());
@@ -1349,6 +1911,8 @@ FfmpegMediaDecodeResult decodeMediaFrames(
             destination = FfmpegPacketStream::Video;
         else if (packet->stream_index == audioIndex)
             destination = FfmpegPacketStream::Audio;
+        else if (packet->stream_index == subtitleIndex)
+            destination = FfmpegPacketStream::Subtitle;
         if (destination
                 && !router.push(
                     *destination,
@@ -1363,6 +1927,8 @@ FfmpegMediaDecodeResult decodeMediaFrames(
     videoWorker.join();
     if (audioWorker)
         audioWorker->join();
+    if (subtitleWorker)
+        subtitleWorker->join();
 
     const FfmpegPacketRouterStatistics routerStatistics =
         router.statistics();
@@ -1388,6 +1954,9 @@ FfmpegMediaDecodeResult decodeMediaFrames(
             audioResult.endOfStream;
         result.audioStopped = audioResult.stopped;
     }
+    if (!subtitleResult.error.isEmpty())
+        result.subtitleError = subtitleResult.error;
+    result.subtitleEndOfStream = subtitleResult.endOfStream;
 
     if (!result.video.error.isEmpty()) {
         result.error = result.video.error;

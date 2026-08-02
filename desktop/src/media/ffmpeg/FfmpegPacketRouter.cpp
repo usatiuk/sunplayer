@@ -118,9 +118,15 @@ FfmpegPacketRouter::statistics() const {
 
 std::deque<FfmpegPacketRouter::Entry> &
 FfmpegPacketRouter::queue(FfmpegPacketStream stream) {
-    return stream == FfmpegPacketStream::Video
-        ? m_videoPackets
-        : m_audioPackets;
+    switch (stream) {
+    case FfmpegPacketStream::Video:
+        return m_videoPackets;
+    case FfmpegPacketStream::Audio:
+        return m_audioPackets;
+    case FfmpegPacketStream::Subtitle:
+        return m_subtitlePackets;
+    }
+    Q_UNREACHABLE_RETURN(m_videoPackets);
 }
 
 bool FfmpegPacketRouter::canAccept(std::size_t bytes) const {

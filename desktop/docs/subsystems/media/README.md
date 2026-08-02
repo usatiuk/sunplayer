@@ -3,14 +3,16 @@
 ## Status
 
 Sunroom integrates the official vcpkg FFmpeg 8.1.2 package with `avformat`,
-`avcodec`, core `avutil`, and `swresample`. The Windows package includes
+`avcodec`, core `avutil`, `swresample`, and zlib-backed Matroska track
+decompression. The Windows package includes
 D3D11VA, D3D12VA, DXVA2, and Media Foundation support. Sunroom exercises
 D3D11VA for supported production video streams and keeps software decoding as
 an explicit fallback.
 
-The production `decodeVideoFrames()` operation accepts one restartable request,
-opens a local file, discovers the best video stream, and continuously emits immutable
-`DecodedVideoFrame`s. `decodeFirstVideoFrame()` is now only a focused-test
+The production `decodeMediaFrames()` operation accepts one restartable request,
+opens a local file, discovers selected video/audio streams and every embedded
+subtitle track, and continuously emits immutable media values.
+`decodeFirstVideoFrame()` is now only a focused-test
 adapter over that same implementation, so hardware negotiation, metadata,
 timestamp, EOF, and fallback behavior do not diverge.
 
@@ -93,8 +95,11 @@ the selected A/V operation finalizes duration from the maximum observed
 normalized stream endpoint. This avoids a second file read and handles
 containers whose declared duration includes a leading empty timeline interval.
 
-Subtitle packet dispatch, a complete track-discovery model, remote input, and
-source-stall recovery remain unimplemented.
+Selected subtitle packets share the same aggregate packet budget and are
+decoded by their own worker. Track discovery, selection, embedded-font
+delivery, text/ASS output, and copied bitmap compositions are described in the
+[subtitle subsystem](../subtitles/README.md). Remote input and source-stall
+recovery remain unimplemented.
 
 ## Dependency boundary
 
@@ -104,13 +109,15 @@ The manifest requests:
 {
   "name": "ffmpeg",
   "default-features": false,
-  "features": ["avcodec", "avformat", "swresample"]
+  "features": ["avcodec", "avformat", "swresample", "zlib"]
 }
 ```
 
 This deliberately excludes FFmpeg tools, `avfilter`, `avdevice`, `swscale`,
-Vulkan, vendor SDKs, and external codec libraries. Native FFmpeg demuxers and
-software decoders remain available. libplacebo owns video conversion and
+Vulkan, vendor SDKs, and external codec libraries beyond zlib. zlib is required
+for Matroska track `ContentCompression`; it is not a second media reader or a
+Sunroom-authored codec path. Native FFmpeg demuxers and software decoders remain
+available. libplacebo owns video conversion and
 scaling; libswresample owns audio sample-format, rate, layout, and
 planar/interleaved conversion. Add codec libraries only for a documented
 coverage or performance requirement.

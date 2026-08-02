@@ -13,7 +13,8 @@
       "features": [
         "avcodec",
         "avformat",
-        "swresample"
+        "swresample",
+        "zlib"
       ]
     },
     {
@@ -22,6 +23,9 @@
       "features": [
         "d3d11"
       ]
+    },
+    {
+      "name": "libass"
     }
   ]
 }

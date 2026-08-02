@@ -1,9 +1,73 @@
 #pragma once
 
+#include <QAbstractListModel>
 #include <QObject>
 #include <QString>
 #include <QUrl>
 #include <QtQml/qqmlregistration.h>
+
+class ShellTestSubtitleTrackModel final : public QAbstractListModel {
+    Q_OBJECT
+
+public:
+    enum Role {
+        LabelRole = Qt::UserRole + 1,
+        StreamIndexRole,
+        SelectedRole,
+        AvailableRole,
+    };
+
+    explicit ShellTestSubtitleTrackModel(QObject *parent = nullptr)
+        : QAbstractListModel(parent) {}
+
+    int rowCount(const QModelIndex &parent = {}) const override {
+        return parent.isValid() ? 0 : 3;
+    }
+
+    QVariant data(const QModelIndex &index, int role) const override {
+        if (!index.isValid() || index.row() < 0 || index.row() >= 3)
+            return {};
+        static constexpr int streamIndexes[] = {-1, 2, 3};
+        static const QString labels[] = {
+            QStringLiteral("Off"),
+            QStringLiteral("English — Styled Ahem"),
+            QStringLiteral("Czech — Plain Czech (SDH)"),
+        };
+        switch (role) {
+        case Qt::DisplayRole:
+        case LabelRole:
+            return labels[index.row()];
+        case StreamIndexRole:
+            return streamIndexes[index.row()];
+        case SelectedRole:
+            return streamIndexes[index.row()] == m_selectedStreamIndex;
+        case AvailableRole:
+            return true;
+        default:
+            return {};
+        }
+    }
+
+    QHash<int, QByteArray> roleNames() const override {
+        return {
+            {LabelRole, QByteArrayLiteral("label")},
+            {StreamIndexRole, QByteArrayLiteral("streamIndex")},
+            {SelectedRole, QByteArrayLiteral("selected")},
+            {AvailableRole, QByteArrayLiteral("available")},
+        };
+    }
+
+    void select(int streamIndex) {
+        if (streamIndex == m_selectedStreamIndex)
+            return;
+        m_selectedStreamIndex = streamIndex;
+        emit dataChanged(
+            index(0), index(rowCount() - 1), {SelectedRole});
+    }
+
+private:
+    int m_selectedStreamIndex = -1;
+};
 
 class ShellTestWindowCommands final : public QObject {
     Q_OBJECT
@@ -221,6 +285,11 @@ class ShellTestMediaSession final : public QObject {
                NOTIFY audioDiagnosticsChanged)
     Q_PROPERTY(qulonglong audioUnderrunFrames MEMBER m_audioUnderrunFrames
                NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(QAbstractItemModel *subtitleTracks READ subtitleTracks CONSTANT)
+    Q_PROPERTY(int selectedSubtitleStreamIndex
+               READ selectedSubtitleStreamIndex NOTIFY subtitleChanged)
+    Q_PROPERTY(QString subtitleError MEMBER m_subtitleError
+               NOTIFY subtitleChanged)
 
 public:
     enum class State {
@@ -272,6 +341,10 @@ public:
     }
     qreal volume() const { return m_volume; }
     bool muted() const { return m_muted; }
+    QAbstractItemModel *subtitleTracks() { return &m_subtitleTracks; }
+    int selectedSubtitleStreamIndex() const {
+        return m_selectedSubtitleStreamIndex;
+    }
     int openCount() const { return m_openCount; }
     int cancelCount() const { return m_cancelCount; }
     int retryCount() const { return m_retryCount; }
@@ -362,6 +435,13 @@ public:
         m_positionMilliseconds = positionMilliseconds;
         emit timelineChanged();
     }
+    Q_INVOKABLE void selectSubtitleStream(int streamIndex) {
+        if (streamIndex != -1 && streamIndex != 2 && streamIndex != 3)
+            return;
+        m_selectedSubtitleStreamIndex = streamIndex;
+        m_subtitleTracks.select(streamIndex);
+        emit subtitleChanged();
+    }
 
 signals:
     void sessionChanged();
@@ -370,6 +450,7 @@ signals:
     void volumeChanged();
     void mutedChanged();
     void audioDiagnosticsChanged();
+    void subtitleChanged();
 
 private:
     State m_state = State::Empty;
@@ -397,6 +478,9 @@ private:
     qulonglong m_audioSubmittedFrames = 4'800;
     qulonglong m_audioPresentedFrames = 960;
     qulonglong m_audioUnderrunFrames = 0;
+    ShellTestSubtitleTrackModel m_subtitleTracks;
+    int m_selectedSubtitleStreamIndex = -1;
+    QString m_subtitleError;
     QUrl m_mediaUrl;
     QString m_displayName;
     QString m_errorMessage;

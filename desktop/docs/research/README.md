@@ -36,3 +36,4 @@ the newer note or decision rather than silently rewriting the investigation.
 * [2026-08-01: Display and audio migration project reconciliation](2026-08-01-display-audio-migration-reconciliation.md)
 * [2026-08-01: HDR input fixtures and HLG target behavior](2026-08-01-hdr-input-fixtures-and-hlg.md)
 * [2026-08-01: Ubuntu 26.04 Linux platform baseline](2026-08-01-ubuntu-26-04-linux-platform-baseline.md)
+* [2026-08-01: Embedded subtitle pipeline](2026-08-01-embedded-subtitle-pipeline.md)

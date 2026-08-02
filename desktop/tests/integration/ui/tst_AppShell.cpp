@@ -178,6 +178,15 @@ void AppShellTest::publishesActiveViewport() {
     QObject *const transportMenu =
         rootItem->findChild<QObject *>(
             QStringLiteral("transportMenu"));
+    QObject *const subtitleMenu =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("subtitleMenu"));
+    QObject *const subtitleOffItem =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("subtitleTrack_-1"));
+    QObject *const subtitleEnglishItem =
+        rootItem->findChild<QObject *>(
+            QStringLiteral("subtitleTrack_2"));
     QObject *const hdrLabMenuItem =
         rootItem->findChild<QObject *>(
             QStringLiteral("hdrLabMenuItem"));
@@ -221,6 +230,9 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(statisticsMenuItem);
     QVERIFY(moreButton);
     QVERIFY(transportMenu);
+    QVERIFY(subtitleMenu);
+    QVERIFY(subtitleOffItem);
+    QVERIFY(subtitleEnglishItem);
     QVERIFY(hdrLabMenuItem);
     QVERIFY(closeStatisticsButton);
     QVERIFY(statisticsPanel);
@@ -454,6 +466,15 @@ void AppShellTest::publishesActiveViewport() {
         transportMenu, "open", Qt::DirectConnection));
     QTRY_VERIFY(transportMenu->property("visible").toBool());
     QTRY_VERIFY(windowCommands.windowShortcutsBlocked());
+    QCOMPARE(mediaSession.selectedSubtitleStreamIndex(), -1);
+    QVERIFY(QMetaObject::invokeMethod(
+        subtitleEnglishItem, "triggered", Qt::DirectConnection));
+    QTRY_COMPARE(mediaSession.selectedSubtitleStreamIndex(), 2);
+    QTRY_VERIFY(subtitleEnglishItem->property("checked").toBool());
+    QVERIFY(QMetaObject::invokeMethod(
+        subtitleOffItem, "triggered", Qt::DirectConnection));
+    QTRY_COMPARE(mediaSession.selectedSubtitleStreamIndex(), -1);
+    QTRY_VERIFY(subtitleOffItem->property("checked").toBool());
     QTest::keyClick(&quickWindow, Qt::Key_Escape);
     QTRY_VERIFY(!transportMenu->property("visible").toBool());
     QTRY_VERIFY(!windowCommands.windowShortcutsBlocked());

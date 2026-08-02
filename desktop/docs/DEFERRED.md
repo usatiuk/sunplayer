@@ -199,8 +199,8 @@ A Jellyfin client is possible future product scope, not part of the current V1
 commitment. A server layer would own authentication, library/navigation,
 playback negotiation, progress reporting, and transcode-session lifetime, then
 hand one direct-play, remux, or HLS locator to the ordinary media pipeline.
-Track/subtitle selection and efficient remote seeking remain prerequisites for
-a complete experience. See
+Audio-track selection, remote subtitle discovery/download, and efficient remote
+seeking remain prerequisites for a complete experience. See
 [media input and source buffering](subsystems/media-io/README.md).
 
 ### Pre-Qt startup diagnostics
@@ -239,9 +239,20 @@ Volume and mute now apply at the output boundary without changing audio-clock
 progression, and `MediaSession` exposes the active clock, PCM queue, submitted
 and presented frames, and underrun count through a typed low-rate snapshot.
 The visible Player summary currently renders the clock, backend, PCM queue,
-and underruns. It still lacks click-free gain ramps, persistence, subtitles,
-track selection, and a general diagnostics view. macOS and Linux physical
-audio backends are not yet packaged or validated.
+and underruns. It still lacks click-free gain ramps, persistence, audio-track
+selection, and a general diagnostics view. macOS and Linux physical audio
+backends are not yet packaged or validated.
+
+### Expanded subtitle features
+
+Embedded subtitle discovery, selection, text/ASS rendering, embedded fonts, and
+FFmpeg-decoded bitmap composition are integrated. Deferred work includes
+external sidecar discovery and downloads, Jellyfin/server subtitle APIs, two
+simultaneous tracks, user font/color/position/scale/opacity/delay settings,
+forced-only policy, control-overlay avoidance, non-square-pixel ASS script
+geometry, and exact VSFilter color behavior. Seeking deliberately does not scan
+or reread subtitle history; an already-active cue may remain absent until the
+next naturally decoded update.
 
 Pinned cubeb's WASAPI backend can migrate a null-device stream internally and
 keeps a monotonic logical position, but it does not expose a stream-specific

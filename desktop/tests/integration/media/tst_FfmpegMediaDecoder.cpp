@@ -6,6 +6,7 @@
 #include <future>
 #include <memory>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include <QCryptographicHash>
@@ -54,6 +55,42 @@ QString audioGapFixturePath() {
     return QStringLiteral(
         SUNROOM_TEST_FIXTURE_DIR
         "/media/sdr-bt709-ffv1-audio-gap-flac.mkv");
+}
+
+QString pgsFixturePath() {
+    return QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-ffv1-pgs.mkv");
+}
+
+QString compressedPgsFixturePath() {
+    return QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-ffv1-pgs-zlib.mkv");
+}
+
+QString pgsManifestPath() {
+    return QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-ffv1-pgs.toml");
+}
+
+QString compressedPgsManifestPath() {
+    return QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-ffv1-pgs-zlib.toml");
+}
+
+QString textSubtitleFixturePath() {
+    return QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-ffv1-subtitles.mkv");
+}
+
+QString textSubtitleManifestPath() {
+    return QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-ffv1-subtitles.toml");
 }
 
 FfmpegMediaDecodeRequest requestFor(
@@ -193,6 +230,10 @@ private slots:
     void fillsMidStreamAudioTimestampGapWithSourceSilence();
     void seekingPastAudioEndIsACleanVideoInterval();
     void preservesVideoOnlyPlayback();
+    void discoversAndDecodesSelectedPgsInTheSingleMediaOperation_data();
+    void discoversAndDecodesSelectedPgsInTheSingleMediaOperation();
+    void continuesAvAfterSubtitleOutputFailure();
+    void discoversTextTracksFontsAndFfmpegAssConversion();
     void distinguishesVideoSinkStopFromCancellation();
     void distinguishesAudioSinkStopFromCancellation();
     void cancelsWhileAudioSubmissionIsBackpressured();
@@ -225,8 +266,8 @@ void FfmpegMediaDecoderTest::rejectsIncompleteAudioLifecycleSink() {
                 return true;
             },
         },
-        {},
-        {});
+        FfmpegMediaStreamSink{},
+        std::stop_token{});
     QVERIFY(!result.isSuccess());
     QCOMPARE(
         result.error,
@@ -538,6 +579,269 @@ void FfmpegMediaDecoderTest::preservesVideoOnlyPlayback() {
     QCOMPARE(result.outputAudioFrames, 0U);
     QCOMPARE(capture.video.size(), 3U);
     QVERIFY(capture.audio.empty());
+}
+
+void FfmpegMediaDecoderTest::
+discoversAndDecodesSelectedPgsInTheSingleMediaOperation_data() {
+    QTest::addColumn<QString>("fixturePath");
+    QTest::addColumn<QString>("manifestPath");
+
+    QTest::newRow("uncompressed")
+        << pgsFixturePath()
+        << pgsManifestPath();
+    QTest::newRow("matroska-zlib")
+        << compressedPgsFixturePath()
+        << compressedPgsManifestPath();
+}
+
+void FfmpegMediaDecoderTest::
+discoversAndDecodesSelectedPgsInTheSingleMediaOperation() {
+    QFETCH(QString, fixturePath);
+    QFETCH(QString, manifestPath);
+    QCOMPARE(
+        fixtureHash(fixturePath),
+        expectedFixtureHash(manifestPath));
+
+    FfmpegMediaDecodeRequest request = requestFor(fixturePath, 31);
+    request.selectedSubtitleStreamIndex = 2;
+    DecodeCapture capture;
+    std::vector<SubtitleTrackDescriptor> tracks;
+    std::optional<SubtitleStreamConfiguration> configuration;
+    std::vector<SubtitleEvent> events;
+    QString subtitleFailure;
+    const FfmpegMediaDecodeResult result = decodeMediaFrames(
+        request,
+        [&capture](
+                std::shared_ptr<const DecodedVideoFrame> frame,
+                const FfmpegVideoStreamDiagnostics &diagnostics) {
+            capture.videoDiagnostics = diagnostics;
+            capture.video.push_back(std::move(frame));
+            return true;
+        },
+        FfmpegAudioOutputSink{
+            .submit = [&capture](
+                    PcmAudioBlock block,
+                    const FfmpegAudioStreamDiagnostics &diagnostics,
+                    std::stop_token) {
+                capture.audioDiagnostics = diagnostics;
+                capture.audio.push_back(std::move(block));
+                return true;
+            },
+            .endOfStream = [](std::uint64_t) {},
+        },
+        [&tracks, &configuration](
+                const FfmpegMediaStreamSelection &selection) {
+            tracks = selection.subtitleTracks;
+            configuration = selection.subtitleConfiguration;
+        },
+        FfmpegSubtitleOutputSink{
+            .submit = [&events](
+                    SubtitleEvent event, std::stop_token) {
+                events.push_back(std::move(event));
+                return true;
+            },
+            .failed = [&subtitleFailure](QString error) {
+                subtitleFailure = std::move(error);
+            },
+        });
+
+    QVERIFY2(result.isSuccess(), qPrintable(result.error));
+    QVERIFY2(subtitleFailure.isEmpty(), qPrintable(subtitleFailure));
+    QVERIFY2(result.subtitleError.isEmpty(),
+        qPrintable(result.subtitleError));
+    QVERIFY(result.subtitleEndOfStream);
+    QCOMPARE(tracks.size(), 1U);
+    QCOMPARE(tracks.front().streamIndex, 2);
+    QCOMPARE(tracks.front().codec,
+        QStringLiteral("hdmv_pgs_subtitle"));
+    QVERIFY(tracks.front().supported);
+    QVERIFY(configuration);
+    QCOMPARE(configuration->playbackGeneration, 31U);
+    QCOMPARE(configuration->streamIndex, 2);
+    QCOMPARE(configuration->canvasSize, QSize(320, 180));
+
+    QCOMPARE(events.size(), 3U);
+    QCOMPARE(events[0].startMicroseconds, 0);
+    QCOMPARE(events[0].type, SubtitlePayloadType::Bitmap);
+    QVERIFY(events[0].bitmap);
+    QCOMPARE(events[0].bitmap->regions.size(), 2U);
+    QCOMPARE(events[0].bitmap->regions[0].x, 30);
+    QCOMPARE(events[0].bitmap->regions[0].y, 120);
+    QCOMPARE(events[0].bitmap->regions[0].size, QSize(60, 20));
+    QVERIFY(!events[0].endMicroseconds);
+    const QByteArray &white = events[0].bitmap->regions[0].rgba;
+    QVERIFY(static_cast<unsigned char>(white[0]) > 240);
+    QVERIFY(static_cast<unsigned char>(white[1]) > 240);
+    QVERIFY(static_cast<unsigned char>(white[2]) > 240);
+    QCOMPARE(static_cast<unsigned char>(white[3]), 255);
+    QCOMPARE(events[0].bitmap->regions[1].x, 230);
+    QCOMPARE(events[0].bitmap->regions[1].y, 30);
+    QCOMPARE(events[0].bitmap->regions[1].size, QSize(40, 24));
+    const QByteArray &yellow = events[0].bitmap->regions[1].rgba;
+    QVERIFY(static_cast<unsigned char>(yellow[0]) > 220);
+    QVERIFY(static_cast<unsigned char>(yellow[1]) > 180);
+    QVERIFY(static_cast<unsigned char>(yellow[2]) < 80);
+    QCOMPARE(static_cast<unsigned char>(yellow[3]), 255);
+
+    QCOMPARE(events[1].startMicroseconds, 2'000'000);
+    QCOMPARE(events[1].type, SubtitlePayloadType::Bitmap);
+    QVERIFY(events[1].bitmap);
+    QCOMPARE(events[1].bitmap->regions.size(), 1U);
+    QCOMPARE(events[1].bitmap->regions[0].x, 110);
+    QCOMPARE(events[1].bitmap->regions[0].y, 125);
+    QCOMPARE(events[2].startMicroseconds, 4'000'000);
+    QCOMPARE(events[2].type, SubtitlePayloadType::Clear);
+}
+
+void FfmpegMediaDecoderTest::
+discoversTextTracksFontsAndFfmpegAssConversion() {
+    QCOMPARE(
+        fixtureHash(textSubtitleFixturePath()),
+        expectedFixtureHash(textSubtitleManifestPath()));
+    struct SubtitleCapture {
+        std::vector<SubtitleTrackDescriptor> tracks;
+        std::optional<SubtitleStreamConfiguration> configuration;
+        std::vector<SubtitleEvent> events;
+        QString error;
+    };
+    const auto decodeTrack = [](int streamIndex, std::uint64_t generation) {
+        SubtitleCapture capture;
+        FfmpegMediaDecodeRequest request = requestFor(
+            textSubtitleFixturePath(), generation);
+        request.selectedSubtitleStreamIndex = streamIndex;
+        const FfmpegMediaDecodeResult result = decodeMediaFrames(
+            request,
+            [](std::shared_ptr<const DecodedVideoFrame>,
+                    const FfmpegVideoStreamDiagnostics &) {
+                return true;
+            },
+            FfmpegAudioOutputSink{
+                .submit = [](PcmAudioBlock,
+                        const FfmpegAudioStreamDiagnostics &,
+                        std::stop_token) {
+                    return true;
+                },
+                .endOfStream = [](std::uint64_t) {},
+            },
+            [&capture](const FfmpegMediaStreamSelection &selection) {
+                capture.tracks = selection.subtitleTracks;
+                capture.configuration = selection.subtitleConfiguration;
+            },
+            FfmpegSubtitleOutputSink{
+                .submit = [&capture](
+                        SubtitleEvent event, std::stop_token) {
+                    capture.events.push_back(std::move(event));
+                    return true;
+                },
+                .failed = [&capture](QString error) {
+                    capture.error = std::move(error);
+                },
+            });
+        return std::pair(std::move(capture), result);
+    };
+
+    auto [ass, assResult] = decodeTrack(2, 32);
+    QVERIFY2(assResult.isSuccess(), qPrintable(assResult.error));
+    QVERIFY2(ass.error.isEmpty(), qPrintable(ass.error));
+    QCOMPARE(ass.tracks.size(), 2U);
+    QCOMPARE(ass.tracks[0].streamIndex, 2);
+    QCOMPARE(ass.tracks[0].language, QStringLiteral("eng"));
+    QCOMPARE(ass.tracks[0].title, QStringLiteral("Styled Ahem"));
+    QCOMPARE(
+        ass.tracks[0].label,
+        QStringLiteral("English - Styled Ahem"));
+    QCOMPARE(ass.tracks[1].streamIndex, 3);
+    QCOMPARE(ass.tracks[1].language, QStringLiteral("ces"));
+    QCOMPARE(
+        ass.tracks[1].label,
+        QStringLiteral("Czech - Plain Czech (SDH)"));
+    QVERIFY(ass.tracks[1].isHearingImpaired);
+    QVERIFY(ass.configuration);
+    QCOMPARE(ass.configuration->codec, QStringLiteral("ass"));
+    QVERIFY(!ass.configuration->codecPrivate.isEmpty());
+    QCOMPARE(ass.configuration->fonts.size(), 1U);
+    QCOMPARE(ass.configuration->fonts[0].name, QStringLiteral("Ahem.ttf"));
+    QCOMPARE(
+        QCryptographicHash::hash(
+            ass.configuration->fonts[0].bytes,
+            QCryptographicHash::Sha256).toHex(),
+        QByteArrayLiteral(
+            "b719ecb31c5b21fc573c03f6421c74ac"
+            "63c271a5a3ff841e34f9705fb94b8448"));
+    QCOMPARE(ass.events.size(), 2U);
+    QCOMPARE(ass.events[0].startMicroseconds, 500'000);
+    QCOMPARE(ass.events[0].endMicroseconds, 2'500'000);
+    QCOMPARE(ass.events[0].type, SubtitlePayloadType::AssText);
+    QVERIFY(ass.events[0].ass.contains("ABCD"));
+    QVERIFY(ass.events[0].ass.contains("\\pos(40,40)"));
+    QCOMPARE(ass.events[1].startMicroseconds, 3'000'000);
+    QCOMPARE(ass.events[1].endMicroseconds, 6'000'000);
+    QVERIFY(ass.events[1].ass.contains("ANIMATE"));
+    QVERIFY(ass.events[1].ass.contains("\\t("));
+
+    auto [plain, plainResult] = decodeTrack(3, 33);
+    QVERIFY2(plainResult.isSuccess(), qPrintable(plainResult.error));
+    QVERIFY2(plain.error.isEmpty(), qPrintable(plain.error));
+    QVERIFY(plain.configuration);
+    QCOMPARE(plain.configuration->codec, QStringLiteral("subrip"));
+    QVERIFY(!plain.configuration->codecPrivate.isEmpty());
+    QCOMPARE(plain.events.size(), 2U);
+    QCOMPARE(plain.events[0].startMicroseconds, 1'000'000);
+    QCOMPARE(plain.events[0].endMicroseconds, 2'000'000);
+    QCOMPARE(plain.events[0].type, SubtitlePayloadType::AssText);
+    QVERIFY(plain.events[0].ass.contains(
+        QByteArray::fromStdString("Příliš")));
+    QCOMPARE(plain.events[1].startMicroseconds, 4'000'000);
+    QCOMPARE(plain.events[1].endMicroseconds, 5'500'000);
+}
+
+void FfmpegMediaDecoderTest::continuesAvAfterSubtitleOutputFailure() {
+    FfmpegMediaDecodeRequest request = requestFor(pgsFixturePath(), 34);
+    request.selectedSubtitleStreamIndex = 2;
+    DecodeCapture capture;
+    int rejectedEvents = 0;
+    QString subtitleFailure;
+    const FfmpegMediaDecodeResult result = decodeMediaFrames(
+        request,
+        [&capture](
+                std::shared_ptr<const DecodedVideoFrame> frame,
+                const FfmpegVideoStreamDiagnostics &diagnostics) {
+            capture.videoDiagnostics = diagnostics;
+            capture.video.push_back(std::move(frame));
+            return true;
+        },
+        FfmpegAudioOutputSink{
+            .submit = [&capture](
+                    PcmAudioBlock block,
+                    const FfmpegAudioStreamDiagnostics &diagnostics,
+                    std::stop_token) {
+                capture.audioDiagnostics = diagnostics;
+                capture.audio.push_back(std::move(block));
+                return true;
+            },
+            .endOfStream = [](std::uint64_t) {},
+        },
+        [](const FfmpegMediaStreamSelection &) {},
+        FfmpegSubtitleOutputSink{
+            .submit = [&rejectedEvents](
+                    SubtitleEvent, std::stop_token) {
+                ++rejectedEvents;
+                return false;
+            },
+            .failed = [&subtitleFailure](QString error) {
+                subtitleFailure = std::move(error);
+            },
+        });
+
+    QVERIFY2(result.isSuccess(), qPrintable(result.error));
+    QCOMPARE(rejectedEvents, 1);
+    QVERIFY(!subtitleFailure.isEmpty());
+    QVERIFY(!result.subtitleError.isEmpty());
+    QVERIFY(result.subtitleEndOfStream);
+    QVERIFY(result.video.endOfStream);
+    QVERIFY(result.audioEndOfStream);
+    QVERIFY(!capture.video.empty());
+    QVERIFY(!capture.audio.empty());
 }
 
 void FfmpegMediaDecoderTest::

@@ -50,8 +50,10 @@ public:
 
     ResourceResult initialize(QRhiRenderPassDescriptor &renderPassDescriptor,
                               QRhiTexture *videoTexture,
+                              QRhiTexture *subtitleTexture,
                               QRhiTexture &uiTexture);
     ResourceResult setTextures(QRhiTexture *videoTexture,
+                               QRhiTexture *subtitleTexture,
                                QRhiTexture &uiTexture);
     void render(QRhiCommandBuffer &commandBuffer,
                 QRhiRenderTarget &renderTarget,
@@ -60,13 +62,15 @@ public:
 
 private:
     ResourceResult createBindings(QRhiTexture *videoTexture,
+                                  QRhiTexture *subtitleTexture,
                                   QRhiTexture &uiTexture);
 
     QRhi &m_rhi;
     std::unique_ptr<QRhiBuffer> m_uniformBuffer;
     std::unique_ptr<QRhiSampler> m_sampler;
-    std::unique_ptr<QRhiTexture> m_emptyVideoTexture;
+    std::unique_ptr<QRhiTexture> m_emptyLayerTexture;
     std::unique_ptr<QRhiShaderResourceBindings> m_bindings;
     std::unique_ptr<QRhiGraphicsPipeline> m_pipeline;
     bool m_videoLayerAvailable = false;
+    bool m_emptyLayerUploadPending = true;
 };

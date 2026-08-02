@@ -28,12 +28,14 @@ FfmpegMediaDecodeResult decodeMedia(
         const FfmpegVideoFrameSink &videoSink,
         const FfmpegAudioOutputSink &audioSink,
         const FfmpegMediaStreamSink &streamSink,
+        const FfmpegSubtitleOutputSink &subtitleSink,
         std::stop_token stopToken) {
     return decodeMediaFrames(
         request,
         videoSink,
         audioSink,
         streamSink,
+        subtitleSink,
         stopToken);
 }
 
@@ -66,6 +68,7 @@ MediaSession::MediaSession(
                 const FfmpegVideoFrameSink &videoSink,
                 const FfmpegAudioOutputSink &,
                 const FfmpegMediaStreamSink &streamSink,
+                const FfmpegSubtitleOutputSink &,
                 std::stop_token stopToken) {
             if (streamSink)
                 streamSink({.audioStreamPresent = false});
@@ -306,6 +309,28 @@ MediaSession::currentAudioPresentation() const {
     return snapshot;
 }
 
+QAbstractItemModel *MediaSession::subtitleTracks() {
+    return &m_subtitleTracks;
+}
+
+int MediaSession::selectedSubtitleStreamIndex() const {
+    return m_selectedSubtitleStreamIndex;
+}
+
+QString MediaSession::subtitleError() const {
+    return m_subtitleError;
+}
+
+SubtitlePresentationSnapshot
+MediaSession::subtitlePresentationSnapshot(
+        std::chrono::steady_clock::time_point now) const {
+    return {
+        .state = m_subtitleSource.snapshot(),
+        .mediaTimeMicroseconds = mediaClockSnapshotAt(now)
+            .positionMicroseconds,
+    };
+}
+
 DecodedVideoSource &MediaSession::videoSource() {
     return m_videoSource;
 }
@@ -428,6 +453,9 @@ void MediaSession::cancel() {
     m_mediaUrl = {};
     m_displayName.clear();
     m_errorMessage.clear();
+    m_selectedSubtitleStreamIndex = -1;
+    m_subtitleTracks.setTracks({}, -1);
+    m_subtitleError.clear();
     resetDiagnostics();
     resetPlayback();
     publishSessionAndPlaybackMetrics(generation);
@@ -586,6 +614,32 @@ void MediaSession::seekToMilliseconds(
         true);
 }
 
+void MediaSession::selectSubtitleStream(int streamIndex) {
+    Q_ASSERT(QThread::currentThread() == thread());
+    if ((m_state != State::Opening && m_state != State::Ready)
+            || streamIndex == m_selectedSubtitleStreamIndex
+            || !m_subtitleTracks.canSelect(streamIndex)) {
+        return;
+    }
+    const std::int64_t position = m_state == State::Opening
+        ? m_requestedPositionMicroseconds
+        : mediaClockSnapshotAt(std::chrono::steady_clock::now())
+             .positionMicroseconds;
+    qCInfo(sunroomLogPlayback).noquote()
+        << "event=playback.subtitle_selected"
+        << "from=" + QString::number(m_selectedSubtitleStreamIndex)
+        << "to=" + QString::number(streamIndex)
+        << "positionUs=" + QString::number(position);
+    m_selectedSubtitleStreamIndex = streamIndex;
+    m_subtitleTracks.setSelectedStreamIndex(streamIndex);
+    m_subtitleError.clear();
+    emit subtitleChanged();
+    restartAt(
+        position,
+        m_activeVideoDecodeCapability,
+        false);
+}
+
 void MediaSession::startOpen(
         const QUrl &url,
         const QString &path,
@@ -636,6 +690,9 @@ void MediaSession::startDecode(
     if (newMedia) {
         m_mediaUrl = url;
         m_displayName = QFileInfo(path).fileName();
+        m_selectedSubtitleStreamIndex = -1;
+        m_subtitleTracks.setTracks({}, -1);
+        m_subtitleError.clear();
         resetDiagnostics();
     }
     m_activeVideoDecodeCapability = hardwareDecode;
@@ -699,6 +756,8 @@ void MediaSession::startDecode(
             },
             .decodeSelectedAudio =
                 static_cast<bool>(m_audioSink),
+            .selectedSubtitleStreamIndex =
+                m_selectedSubtitleStreamIndex,
         },
     });
     if (m_userWantsPlaying)
@@ -966,6 +1025,9 @@ void MediaSession::workerLoop(
                 [this,
                  generation = request.generation](
                         const FfmpegMediaStreamSelection &selection) {
+                    if (selection.subtitleConfiguration)
+                        m_subtitleSource.configure(
+                            *selection.subtitleConfiguration);
                     {
                         std::lock_guard lock(
                             m_streamDiscoveryMutex);
@@ -989,8 +1051,79 @@ void MediaSession::workerLoop(
                         << "audioOutputExpected=" + QString(
                             selection.audioOutputExpected
                             ? QStringLiteral("true")
-                            : QStringLiteral("false"));
+                            : QStringLiteral("false"))
+                        << "subtitleTracks=" + QString::number(
+                            selection.subtitleTracks.size())
+                        << "selectedSubtitle=" + QString::number(
+                            selection.subtitleConfiguration
+                                ? selection.subtitleConfiguration
+                                    ->streamIndex
+                                : -1)
+                        << "subtitleCodec=" + QString(
+                            selection.subtitleConfiguration
+                            ? selection.subtitleConfiguration->codec
+                            : QStringLiteral("none"));
+                    QMetaObject::invokeMethod(
+                        this,
+                        [this,
+                         generation,
+                         configured = selection.subtitleConfiguration
+                             .has_value(),
+                         tracks = selection.subtitleTracks]() mutable {
+                            if (generation != m_playbackGeneration)
+                                return;
+                            if (configured)
+                                m_subtitleError.clear();
+                            m_subtitleTracks.setTracks(
+                                std::move(tracks),
+                                m_selectedSubtitleStreamIndex);
+                            emit subtitleChanged();
+                        },
+                        Qt::QueuedConnection);
                     postFramesAvailable(generation);
+                },
+                FfmpegSubtitleOutputSink{
+                    .submit =
+                        [this,
+                         generation = request.generation](
+                                SubtitleEvent event,
+                                std::stop_token stopToken) {
+                            if (stopToken.stop_requested()
+                                    || event.playbackGeneration
+                                        != generation) {
+                                return false;
+                            }
+                            const bool accepted =
+                                m_subtitleSource.append(
+                                    std::move(event));
+                            if (accepted)
+                                postFramesAvailable(generation);
+                            return accepted;
+                        },
+                    .failed =
+                        [this,
+                         generation = request.generation](
+                                QString error) {
+                            m_subtitleSource.fail(
+                                generation, error);
+                            QMetaObject::invokeMethod(
+                                this,
+                                [this,
+                                 generation,
+                                 error = std::move(error)]() mutable {
+                                    if (generation
+                                            != m_playbackGeneration) {
+                                        return;
+                                    }
+                                    const SubtitleStateSnapshot state =
+                                        m_subtitleSource.snapshot();
+                                    m_subtitleError = state.error.isEmpty()
+                                        ? std::move(error)
+                                        : state.error;
+                                    emit subtitleChanged();
+                                },
+                                Qt::QueuedConnection);
+                        },
                 },
                 operationStopToken);
         const auto operationElapsed =
@@ -1135,6 +1268,16 @@ void MediaSession::completeDecode(
     }
     if (result.isCancelled())
         return;
+    if (!result.subtitleError.isEmpty()) {
+        m_subtitleSource.fail(
+            generation, result.subtitleError);
+        const SubtitleStateSnapshot state =
+            m_subtitleSource.snapshot();
+        m_subtitleError = state.error.isEmpty()
+            ? result.subtitleError
+            : state.error;
+        emit subtitleChanged();
+    }
     if (!result.isSuccess()) {
         std::string audioFailure;
         if (m_audioSink)
@@ -1271,6 +1414,9 @@ void MediaSession::failWithoutWorker(
     m_mediaUrl = url;
     m_displayName = url.fileName();
     m_errorMessage = message;
+    m_selectedSubtitleStreamIndex = -1;
+    m_subtitleTracks.setTracks({}, -1);
+    m_subtitleError.clear();
     resetDiagnostics();
     resetPlayback();
     publishSessionAndPlaybackMetrics(generation);
@@ -1356,6 +1502,8 @@ void MediaSession::resetDiagnostics() {
 void MediaSession::resetPlayback(
         std::int64_t positionMicroseconds) {
     Q_ASSERT(positionMicroseconds >= 0);
+    m_subtitleSource.reset(m_playbackGeneration);
+    emit subtitleChanged();
     {
         std::lock_guard lock(m_playbackMetricsMutex);
         m_playbackMetricsGeneration =

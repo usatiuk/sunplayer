@@ -1,0 +1,22 @@
+license = "CC0-1.0 (generated fixture data)"
+generator = "generate_pgs_subtitle_fixture.py"
+canvas = "320x180"
+sha256 = "a6c7026ce7d3908b999683748731e8e129e60482d688cd3bc049f6e0bdf52b4e"
+
+[[states]]
+start_seconds = 1
+description = "two regions: white 60x20 at 30,120 and yellow 40x24 at 230,30"
+
+[[states]]
+start_seconds = 3
+description = "replacement: white 100x28 at 110,125"
+
+[[states]]
+start_seconds = 5
+description = "explicit empty composition clears the display"
+
+[mux]
+base = "sdr-bt709-ffv1-short-audio-long-video-flac.mkv"
+output = "sdr-bt709-ffv1-pgs.mkv"
+tool = "FFmpeg 8.1.2"
+command = "ffmpeg -i <base> -f sup -i subtitles-pgs.sup -map 0:v:0 -map 0:a:0? -map 1:s:0 -c copy -metadata:s:s:0 language=eng -metadata:s:s:0 title='PGS fixture' <output>"

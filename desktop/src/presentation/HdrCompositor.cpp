@@ -1,6 +1,7 @@
 #include "presentation/HdrCompositor.h"
 
 #include <QFile>
+#include <QImage>
 #include <QtCore/qlogging.h>
 #include <rhi/qshader.h>
 #include <rhi/qrhi.h>
@@ -31,10 +32,11 @@ HdrCompositor::~HdrCompositor() = default;
 HdrCompositor::ResourceResult HdrCompositor::initialize(
         QRhiRenderPassDescriptor &renderPassDescriptor,
         QRhiTexture *videoTexture,
+        QRhiTexture *subtitleTexture,
         QRhiTexture &uiTexture) {
     Q_ASSERT(!m_uniformBuffer);
     Q_ASSERT(!m_sampler);
-    Q_ASSERT(!m_emptyVideoTexture);
+    Q_ASSERT(!m_emptyLayerTexture);
     Q_ASSERT(!m_bindings);
     Q_ASSERT(!m_pipeline);
 
@@ -64,19 +66,22 @@ HdrCompositor::ResourceResult HdrCompositor::initialize(
             "Could not create the HDR compositor sampler");
     }
 
-    m_emptyVideoTexture.reset(m_rhi.newTexture(
+    m_emptyLayerTexture.reset(m_rhi.newTexture(
         QRhiTexture::RGBA8, {1, 1}, 1));
-    m_emptyVideoTexture->setName(
-        QByteArrayLiteral("Sunroom empty video layer"));
-    if (!m_emptyVideoTexture->create()) {
+    m_emptyLayerTexture->setName(
+        QByteArrayLiteral("Sunroom empty composition layer"));
+    if (!m_emptyLayerTexture->create()) {
         if (m_rhi.isDeviceLost())
             return ResourceResult::DeviceLost;
         qCFatal(
             sunroomLogPresentation,
-            "Could not create the empty video-layer texture");
+            "Could not create the empty composition-layer texture");
     }
-    if (createBindings(videoTexture, uiTexture) == ResourceResult::DeviceLost)
+    if (createBindings(
+            videoTexture, subtitleTexture, uiTexture)
+            == ResourceResult::DeviceLost) {
         return ResourceResult::DeviceLost;
+    }
 
     const QShader vertexShader =
         loadShader(QStringLiteral(":/shaders/fullscreen.vert.qsb"));
@@ -102,8 +107,10 @@ HdrCompositor::ResourceResult HdrCompositor::initialize(
 
 HdrCompositor::ResourceResult HdrCompositor::setTextures(
         QRhiTexture *videoTexture,
+        QRhiTexture *subtitleTexture,
         QRhiTexture &uiTexture) {
-    return createBindings(videoTexture, uiTexture);
+    return createBindings(
+        videoTexture, subtitleTexture, uiTexture);
 }
 
 void HdrCompositor::render(QRhiCommandBuffer &commandBuffer,
@@ -123,6 +130,13 @@ void HdrCompositor::render(QRhiCommandBuffer &commandBuffer,
             && parameters.videoSize[1] == 0.0f));
 
     QRhiResourceUpdateBatch *updates = m_rhi.nextResourceUpdateBatch();
+    if (m_emptyLayerUploadPending) {
+        QImage transparent(1, 1, QImage::Format_RGBA8888);
+        transparent.fill(Qt::transparent);
+        updates->uploadTexture(
+            m_emptyLayerTexture.get(), transparent);
+        m_emptyLayerUploadPending = false;
+    }
     updates->updateDynamicBuffer(
         m_uniformBuffer.get(), 0, sizeof(parameters), &parameters);
 
@@ -139,13 +153,18 @@ void HdrCompositor::render(QRhiCommandBuffer &commandBuffer,
 
 HdrCompositor::ResourceResult HdrCompositor::createBindings(
         QRhiTexture *videoTexture,
+        QRhiTexture *subtitleTexture,
         QRhiTexture &uiTexture) {
     Q_ASSERT(m_uniformBuffer);
     Q_ASSERT(m_sampler);
-    Q_ASSERT(m_emptyVideoTexture);
+    Q_ASSERT(m_emptyLayerTexture);
 
     QRhiTexture *const compositionVideoTexture =
-        videoTexture ? videoTexture : m_emptyVideoTexture.get();
+        videoTexture ? videoTexture : m_emptyLayerTexture.get();
+    QRhiTexture *const compositionSubtitleTexture =
+        subtitleTexture
+        ? subtitleTexture
+        : m_emptyLayerTexture.get();
 
     if (!m_bindings)
         m_bindings.reset(m_rhi.newShaderResourceBindings());
@@ -155,9 +174,12 @@ HdrCompositor::ResourceResult HdrCompositor::createBindings(
             compositionVideoTexture, m_sampler.get()),
         QRhiShaderResourceBinding::sampledTexture(
             1, QRhiShaderResourceBinding::FragmentStage,
+            compositionSubtitleTexture, m_sampler.get()),
+        QRhiShaderResourceBinding::sampledTexture(
+            2, QRhiShaderResourceBinding::FragmentStage,
             &uiTexture, m_sampler.get()),
         QRhiShaderResourceBinding::uniformBuffer(
-            2, QRhiShaderResourceBinding::FragmentStage,
+            3, QRhiShaderResourceBinding::FragmentStage,
             m_uniformBuffer.get()),
     });
     if (!m_bindings->create()) {

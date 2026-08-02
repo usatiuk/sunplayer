@@ -20,11 +20,13 @@ channels, timestamp-driven selection, active-source/session lifecycle, and
 retained software/D3D11VA `AVFrame`s, single-pass A/V decode and resampling,
 callback-safe PCM/metadata buffering, and a real default-WASAPI lifecycle
 boundary. A deterministic production-session scenario now uses presented audio
-as the video scheduler's clock. A registered real-process scenario additionally
+as the video scheduler's clock. Embedded-subtitle coverage crosses the same
+single FFmpeg operation, real libass and bitmap rendering, the QML track menu,
+and final QRhi composition. A registered real-process scenario additionally
 crosses the production executable, default audio device, QML viewport,
-libplacebo render, and swapchain for an audio-first source. As libass,
-buffering, and device recovery arrive, deterministic whole-pipeline scenarios
-should become the bulk of behavioral coverage.
+libplacebo render, and swapchain for an audio-first source. As buffering and
+device recovery arrive, deterministic whole-pipeline scenarios should become
+the bulk of behavioral coverage.
 
 The central principle is:
 
@@ -344,7 +346,20 @@ Initial additions should be narrowly tied to milestones:
   fixtures already cover container routing and seek. Each HDR acceptance row
   performs one production FFmpeg demux/decode operation and renders the
   retained frames rather than probing or parsing the file a second time.
-* Further timeline, subtitle, audio, corruption, range/bit-depth, dynamic-HDR
+* Three subtitle Matroska fixtures cover native ASS and FFmpeg-converted
+  SubRip, an embedded purpose-built test font, and byte-generated PGS
+  compositions with multiple regions, authored colors and positions,
+  replacement, open-ended display, and explicit clear. The same PGS stream is
+  also muxed with Matroska zlib `ContentCompression`; decoding that checked-in
+  container through the production operation guards the required
+  `ffmpeg[zlib]` feature. The fixtures cross production demux/decode rather than
+  a private subtitle parser.
+* Subtitle failure coverage rejects a decoded PGS event at the production sink
+  and proves that the subtitle worker drains while real audio and video still
+  reach EOS. Renderer coverage separately proves generation-latched failure,
+  next-generation recovery, and bitmap placement into a scaled, offset video
+  viewport.
+* Further external-subtitle, audio, corruption, range/bit-depth, dynamic-HDR
   profile, and unusual-format fixtures only as those features arrive.
 
 FFmpeg FATE is valuable validation for the exact FFmpeg dependency build, but

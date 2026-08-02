@@ -4,6 +4,7 @@
 #include <memory>
 
 #include <QObject>
+#include <QString>
 #include <QTimer>
 
 class GraphicsDeviceDomain;
@@ -19,6 +20,7 @@ class QRhiRenderPassDescriptor;
 class QRhiSwapChain;
 class QWindow;
 class QuickUiLayer;
+class SubtitleRenderer;
 class RenderedVideoProducer;
 class VideoViewportState;
 enum class VideoOperationResult;
@@ -85,6 +87,7 @@ private:
     std::unique_ptr<QRhiSwapChain> m_swapChain;
     std::unique_ptr<QRhiRenderPassDescriptor> m_renderPassDescriptor;
     std::unique_ptr<QuickUiLayer> m_quickUi;
+    std::unique_ptr<SubtitleRenderer> m_subtitleRenderer;
     std::unique_ptr<RenderedVideoProducer> m_videoProducer;
     std::unique_ptr<HdrCompositor> m_compositor;
     QTimer m_deviceRecoveryTimer;
@@ -100,4 +103,6 @@ private:
     int m_deviceRecoveryAttempts = 0;
     std::uint64_t m_videoProducerConfigurationRevision = 0;
     std::uint64_t m_boundVideoTextureRevision = 0;
+    std::uint64_t m_boundSubtitleTextureRevision = 0;
+    QString m_reportedSubtitleError;
 };

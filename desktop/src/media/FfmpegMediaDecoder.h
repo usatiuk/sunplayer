@@ -5,11 +5,13 @@
 #include <functional>
 #include <optional>
 #include <stop_token>
+#include <vector>
 
 #include <QString>
 
 #include "audio/AudioTypes.h"
 #include "media/FfmpegVideoDecoder.h"
+#include "subtitles/SubtitleTypes.h"
 
 struct FfmpegAudioStreamDiagnostics {
     QString decoderName;
@@ -26,6 +28,7 @@ struct FfmpegMediaDecodeRequest {
     FfmpegVideoDecodeRequest video;
     bool decodeSelectedAudio = true;
     AudioStreamFormat audioOutput{48'000, 2};
+    int selectedSubtitleStreamIndex = -1;
 
     bool isValid() const;
 };
@@ -44,6 +47,8 @@ struct FfmpegMediaDecodeResult {
     bool audioStreamPresent = false;
     bool audioEndOfStream = false;
     bool audioStopped = false;
+    QString subtitleError;
+    bool subtitleEndOfStream = false;
     QString error;
     bool cancelled = false;
 
@@ -74,10 +79,19 @@ struct FfmpegMediaStreamSelection {
     // diagnostics, but playback need not wait for an output epoch.
     bool audioOutputExpected = false;
     FfmpegVideoStreamDiagnostics videoDiagnostics;
+    std::vector<SubtitleTrackDescriptor> subtitleTracks;
+    std::optional<SubtitleStreamConfiguration> subtitleConfiguration;
 };
 
 using FfmpegMediaStreamSink = std::function<void(
     const FfmpegMediaStreamSelection &)>;
+
+struct FfmpegSubtitleOutputSink {
+    std::function<bool(SubtitleEvent, std::stop_token)> submit;
+    std::function<void(QString)> failed;
+
+    bool isValid() const;
+};
 
 // Opens and probes the source once, then routes referenced packets for the
 // selected video and audio streams under one shared byte/count budget. This
@@ -101,4 +115,12 @@ FfmpegMediaDecodeResult decodeMediaFrames(
     const FfmpegVideoFrameSink &videoSink,
     const FfmpegAudioOutputSink &audioSink,
     const FfmpegMediaStreamSink &streamSink,
+    std::stop_token stopToken = {});
+
+FfmpegMediaDecodeResult decodeMediaFrames(
+    const FfmpegMediaDecodeRequest &request,
+    const FfmpegVideoFrameSink &videoSink,
+    const FfmpegAudioOutputSink &audioSink,
+    const FfmpegMediaStreamSink &streamSink,
+    const FfmpegSubtitleOutputSink &subtitleSink,
     std::stop_token stopToken = {});

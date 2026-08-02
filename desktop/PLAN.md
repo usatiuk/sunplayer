@@ -192,9 +192,10 @@ and continuous synchronized local-file audio/video playback:
   zero output copies/transfers, and tolerant agreement with the software-decode
   result.
 
-libass, physical audio-device replacement, general source buffering,
-drag-and-drop, subtitles, and persistence are not integrated. CTest/Qt Test
-coverage exists for pure
+Physical audio-device replacement, general source buffering, drag-and-drop, and
+persistence are not integrated. Embedded subtitle discovery, selection,
+FFmpeg decode, libass/bitmap rendering, and final composition are integrated.
+CTest/Qt Test coverage exists for pure
 presentation-target policy, video-viewport state, the real QML shell's
 viewport publication and diagnostic renderer selection, rendered-video surface
 validity/invalidation, decoded-frame ownership, the libplacebo and FFmpeg
@@ -267,7 +268,7 @@ Documentation: `docs/subsystems/media-io/`
 * [x] Bounded selected-video packet demuxing
 * [x] Continuous video decoding
 * [x] Initial single-pass selected-audio routing, decoding, and resampling
-* [ ] Subtitle decoding
+* [x] Embedded text and bitmap subtitle decoding in the shared media operation
 * [x] Initial Windows D3D11VA device capability and decoder negotiation
 * [x] Initial selected-video duration and timestamp normalization
 
@@ -299,8 +300,7 @@ Documentation: `docs/subsystems/playback/`
 * [x] Factory-selected graphics-device domain and backend contract
 * [x] Windows D3D11 QRhi integration
 * [x] Redirected Qt Quick rendering integration
-* [ ] Final video, subtitle, and UI compositor (the explicit video/UI boundary
-  and narrow final pass exist; subtitles do not)
+* [x] Final video, subtitle, and UI compositor
 * [x] Windows extended-linear HDR and SDR swapchain presentation
 * [ ] macOS EDR and SDR swapchain presentation
 * [ ] Wayland Linux HDR and SDR swapchain presentation
@@ -365,14 +365,15 @@ Documentation: `docs/subsystems/audio/`
 
 ### 8. Subtitles
 
-* [ ] Subtitle timeline
-* [ ] libass integration
-* [ ] Plain-text subtitle handling
-* [ ] Embedded fonts and attachments
-* [ ] Bitmap subtitle rendering
-* [ ] Authored and user-controlled positioning
-* [ ] Scaling across resolutions and display densities
-* [ ] Subtitle luminance in HDR
+* [x] Subtitle timeline
+* [x] libass integration
+* [x] Plain-text subtitle handling
+* [x] Embedded fonts and attachments
+* [x] Bitmap subtitle rendering
+* [x] Authored positioning
+* [ ] User-controlled positioning, scale, style, and delay
+* [x] Scaling authored subtitle geometry to the video viewport
+* [x] Subtitle luminance in HDR
 * [ ] Control-overlay avoidance
 
 Documentation: `docs/subsystems/subtitles/`
@@ -389,7 +390,7 @@ Documentation: `docs/subsystems/subtitles/`
 * [x] Seek bar and timestamps
 * [x] Jump backward and forward
 * [ ] Audio-track selection
-* [ ] Subtitle-track selection
+* [x] Subtitle-track selection
 * [x] Volume and mute
 * [x] Fullscreen
 * [x] Continuous video loading and media error presentation
@@ -437,7 +438,7 @@ Documentation: `docs/subsystems/diagnostics/`
 * [ ] Real-device output A/V seek, recovery, and physical-sync tests
 * [ ] Representative source-metadata and library-mapping tests
 * [ ] Renderer image tests
-* [ ] Subtitle layout tests
+* [x] Initial subtitle decode, rendering, layout, and UI tests
 * [x] Windows H.264 D3D11VA decode and zero-copy frame-import integration test
 * [ ] Display-change and multi-monitor tests
 * [x] Cooperative pipeline and queue cancellation tests
@@ -454,7 +455,7 @@ Documentation: `docs/TESTING.md` and `docs/subsystems/testing/`
 * [x] Reproducible D3D11-only libplacebo dependency integration
 * [x] Reproducible FFmpeg integration
 * [x] Pinned Windows cubeb dependency integration
-* [ ] Reproducible libass integration
+* [x] Reproducible libass integration
 * [ ] Cross-platform libplacebo dependency configurations
 * [ ] Windows packaging
 * [ ] macOS packaging

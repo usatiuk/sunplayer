@@ -56,6 +56,8 @@ endif ()
 
 include(cmake/SunroomFFmpeg.cmake)
 sunroom_configure_ffmpeg()
+include(cmake/SunroomLibass.cmake)
+sunroom_configure_libass()
 
 find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS
         GuiPrivate
@@ -161,6 +163,14 @@ add_library(sunroom_media STATIC
         src/media/ffmpeg/FfmpegVideoPacketDecoder.h
         src/media/ffmpeg/FfmpegVideoDecodeFallback.cpp
         src/media/ffmpeg/FfmpegVideoDecodeFallback.h
+        # Shared subtitle state and the session-facing track model are needed
+        # by both the application and MediaSession integration tests.
+        src/subtitles/SubtitleSource.cpp
+        src/subtitles/SubtitleSource.h
+        src/subtitles/SubtitleTrackModel.cpp
+        src/subtitles/SubtitleTrackModel.h
+        src/subtitles/SubtitleTypes.cpp
+        src/subtitles/SubtitleTypes.h
 )
 target_include_directories(sunroom_media
         PUBLIC
@@ -182,6 +192,8 @@ add_library(sunroom_video_pipeline STATIC
         src/graphics/GraphicsDeviceDomain.h
         src/presentation/HdrCompositor.cpp
         src/presentation/HdrCompositor.h
+        src/presentation/SubtitleRenderer.cpp
+        src/presentation/SubtitleRenderer.h
         src/presentation/VideoPresentationGeometry.cpp
         src/presentation/VideoPresentationGeometry.h
         src/video/DiagnosticVideoProducer.cpp
@@ -221,6 +233,7 @@ target_link_libraries(sunroom_video_pipeline
         Qt6::Quick
         sunroom_diagnostics
         sunroom_ffmpeg
+        sunroom_libass
         sunroom_media
 )
 
@@ -427,12 +440,12 @@ install(FILES src/app/icons/lucide/LICENSE
 )
 
 if (WIN32)
-    install(
-            IMPORTED_RUNTIME_ARTIFACTS
-            libplacebo::libplacebo
-            spirv-cross-c-shared
-            ${SUNROOM_FFMPEG_RUNTIME_TARGETS}
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    # The vcpkg toolchain already deploys the executable's recursively imported
+    # DLLs beside build-tree targets. Use the matching install helper so pkg-
+    # config libraries such as libass and their dependencies are not missed.
+    x_vcpkg_install_local_dependencies(
+            TARGETS sunroom
+            DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
 endif ()
 

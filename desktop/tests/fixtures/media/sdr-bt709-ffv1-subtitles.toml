@@ -1,0 +1,30 @@
+description = "Real Matroska video/audio with native ASS, SubRip, and an attached Ahem test font"
+license = "CC0-1.0 generated subtitle/container additions; base fixture project-owned"
+sha256 = "99cc775a12c5030dfa2670c3098a8b01c7b07fe934d1b1cd26a303899a990d8f"
+duration_microseconds = 7999000
+base = "sdr-bt709-ffv1-short-audio-long-video-flac.mkv"
+mux_tool = "FFmpeg 8.1.2"
+mux_command = "ffmpeg -i <base> -i subtitles-styled.ass -i subtitles-plain.srt -map 0:v:0 -map 0:a:0? -map 1:s:0 -map 2:s:0 -c copy -metadata:s:s:0 language=eng -metadata:s:s:0 title='Styled Ahem' -metadata:s:s:1 language=ces -metadata:s:s:1 title='Plain Czech' -disposition:s:1 hearing_impaired -attach Ahem.ttf -metadata:s:t mimetype=application/x-truetype-font -metadata:s:t filename=Ahem.ttf <output>"
+coverage = ["subtitle-discovery", "ass", "subrip-to-ass", "embedded-font", "dispositions"]
+
+[[subtitle_tracks]]
+stream_index = 2
+codec = "ass"
+language = "eng"
+title = "Styled Ahem"
+event_starts_microseconds = [500000, 3000000]
+
+[[subtitle_tracks]]
+stream_index = 3
+codec = "subrip"
+language = "ces"
+title = "Plain Czech"
+hearing_impaired = true
+event_starts_microseconds = [1000000, 4000000]
+
+[attachment]
+stream_index = 4
+filename = "Ahem.ttf"
+source = "https://github.com/web-platform-tests/wpt/blob/master/fonts/Ahem.ttf"
+license_file = "Ahem-LICENSE.txt"
+sha256 = "b719ecb31c5b21fc573c03f6421c74ac63c271a5a3ff841e34f9705fb94b8448"

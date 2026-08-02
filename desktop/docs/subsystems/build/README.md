@@ -4,9 +4,10 @@
 
 The current CMake project builds the Windows player prototype and its focused
 Qt Test targets. Qt, a pinned D3D11-only libplacebo dependency, minimal official
-FFmpeg components including libswresample, and a pinned cubeb dependency are
-integrated. cubeb provides production default-device output on Windows. libass
-and complete distributable packaging are not integrated.
+FFmpeg components including libswresample and Matroska zlib decompression, a
+pinned cubeb dependency, and libass are integrated. cubeb provides production
+default-device output on Windows. Complete distributable packaging remains
+unfinished.
 
 The currently validated configuration is:
 
@@ -18,7 +19,8 @@ The currently validated configuration is:
 | Windows dependency compiler | Visual Studio clang-cl through a project-local vcpkg triplet |
 | Qt | Exactly 6.11.1 |
 | libplacebo | Exactly 7.360.1, D3D11 enabled |
-| FFmpeg | Exactly 8.1.2, shared avutil/swresample/avcodec/avformat |
+| FFmpeg | Exactly 8.1.2, shared avutil/swresample/avcodec/avformat with zlib |
+| libass | Registry baseline package and its shaping/font dependencies |
 | cubeb | Upstream commit `ef47ae581df7c2f76058d554b3edde17f9ee7cba` |
 | Graphics backend | Windows D3D11 through QRhi |
 | Generator in the local configured tree | Ninja |
@@ -53,6 +55,8 @@ Sunroom uses vcpkg manifest mode. The repository owns:
 * `cmake/SunroomFFmpeg.cmake`, which discovers the vcpkg module before Qt can
   introduce its case-variant finder and wraps component import libraries and
   DLLs in configuration-aware imported targets.
+* `cmake/SunroomLibass.cmake`, which exposes the registry package through one
+  project-local target without duplicating libass's dependency graph.
 
 The vcpkg executable itself is supplied by Visual Studio rather than cloned
 into the repository. CMake uses an explicitly supplied toolchain when present,
@@ -78,7 +82,9 @@ are recorded in
 [the Windows dependency-build research note](../../research/2026-07-29-libplacebo-windows-dependency-build.md).
 
 The FFmpeg dependency uses the official registry port with `avcodec`,
-`avformat`, and `swresample`; `avutil` is core. The Windows port enables
+`avformat`, `swresample`, and `zlib`; `avutil` is core. zlib is required for
+Matroska tracks using `ContentCompression`, including real embedded PGS files.
+The Windows port enables
 D3D11VA, D3D12VA, DXVA2, and Media Foundation without a separate manifest
 feature. It excludes Vulkan, swscale, filter/device libraries, command-line
 tools, vendor SDKs, and external codec libraries in this slice.
@@ -156,18 +162,22 @@ supported player.
 ## Installation
 
 CMake installs the executable or bundle through `GNUInstallDirs`. On Windows,
-the libplacebo, SPIRV-Cross, and four selected FFmpeg shared runtime artifacts
-are installed explicitly before `qt_generate_deploy_qml_app_script()` supplies
+vcpkg's app-local dependency walker installs the executable's complete
+transitive runtime-DLL set before `qt_generate_deploy_qml_app_script()` supplies
 the current Qt deployment step with:
 
 * No compiler-runtime deployment.
 * No translation deployment.
 * No unsupported-platform configuration error.
 
-Build-tree application and test targets stage their transitive runtime DLLs
-with `TARGET_RUNTIME_DLLS`. Sunroom's config-aware FFmpeg component targets make
-its four DLLs participate in that standard traversal. This prevents loader
-dialogs and makes both dependency boundaries reproducible during development.
+Build-tree application and test targets use vcpkg's app-local walker and CMake's
+`TARGET_RUNTIME_DLLS`; the install path uses vcpkg's corresponding
+`x_vcpkg_install_local_dependencies()` helper. That executable-import traversal
+includes libass, its shaping/font libraries, FFmpeg, zlib, cubeb, libplacebo,
+and graphics dependencies even when pkg-config does not expose them as CMake
+runtime targets. Sunroom's config-aware FFmpeg component targets also make its
+four DLLs participate in CMake's standard traversal. This prevents loader
+dialogs and makes dependency boundaries reproducible during development.
 
 This remains scaffolding rather than a complete distributable package. It does
 not yet define:
@@ -223,7 +233,7 @@ See [../testing/PLAN.md](../testing/PLAN.md).
 
 ## Verification
 
-The complete Debug build and all 24 registered CTest cases pass in the current
+The complete Debug build and all 28 registered CTest cases pass in the current
 Windows/MSVC/Ninja environment after initializing the Visual Studio developer
 environment. The dependency graph is built under the project-local clang-cl
 triplet; the Sunroom executable remains MSVC-built. This includes the cubeb
@@ -232,9 +242,9 @@ bounded controlled sink, real D3D11VA decode/import, and GPU compositor tests.
 A bounded application scenario additionally opens an audio-first fixture in
 the built executable and observes live default-device clock progress plus two
 distinct video revisions reaching the swapchain before automatic exit.
-A build-local install-tree generation also succeeds and stages the expected
-Qt runtime, `libplacebo-360.dll`, `spirv-cross-c-sharedd.dll`, and selected
-FFmpeg DLLs.
+A build-local install-tree generation also succeeds and stages the expected Qt
+runtime plus libass, FreeType, FriBidi, HarfBuzz, zlib, cubeb, libplacebo,
+SPIRV-Cross, and selected FFmpeg DLLs.
 
 A prior build-tree GUI startup liveness smoke also passed with the configured
 Qt runtime available; the harness terminated the process after four seconds

@@ -19,6 +19,7 @@
 #include "presentation/HdrCompositor.h"
 #include "presentation/PresentationOutputState.h"
 #include "presentation/QuickUiLayer.h"
+#include "presentation/SubtitleRenderer.h"
 #include "presentation/VideoPresentationGeometry.h"
 #include "video/ActiveVideoSource.h"
 #include "video/DiagnosticVideoSource.h"
@@ -93,6 +94,8 @@ RhiPresentationEngine::RhiPresentationEngine(
             &RhiPresentationEngine::markOutputCharacteristicsDirty);
     connect(&m_deviceRecoveryTimer, &QTimer::timeout,
             this, &RhiPresentationEngine::requestFrame);
+    connect(&m_mediaSession, &MediaSession::subtitleChanged,
+            this, &RhiPresentationEngine::requestFrame);
 
     if (!initializeGraphicsDevice())
         qCFatal(
@@ -163,9 +166,11 @@ void RhiPresentationEngine::renderFrame() {
     // configuration, content, or display geometry.
     const bool videoViewportActive =
         m_videoViewport.isRenderable();
+    const auto presentationTime =
+        std::chrono::steady_clock::now();
     if (videoViewportActive) {
         m_videoSource.prepareForPresentation(
-            std::chrono::steady_clock::now());
+            presentationTime);
     }
 
     const float scaleX = static_cast<float>(pixelSize.width())
@@ -262,12 +267,34 @@ void RhiPresentationEngine::renderFrame() {
     const std::uint64_t compositionTextureRevision = requestedSurface
         ? m_videoProducer->compositionTextureRevision()
         : 0;
+    Q_ASSERT(m_subtitleRenderer);
+    const bool subtitleActive = videoViewportActive
+        && m_videoSource.route()
+            == ActiveVideoSource::Route::Player;
+    const bool subtitlePrepared = m_subtitleRenderer->prepare(
+        m_mediaSession.subtitlePresentationSnapshot(
+            presentationTime),
+        videoRect,
+        pixelSize,
+        subtitleActive);
+    const QString subtitleError = m_subtitleRenderer->error();
+    if (!subtitlePrepared && subtitleError != m_reportedSubtitleError) {
+        m_reportedSubtitleError = subtitleError;
+        qCWarning(sunroomLogPresentation).noquote()
+            << "event=subtitle.presentation_failed"
+            << "error=" + subtitleError;
+    } else if (subtitlePrepared) {
+        m_reportedSubtitleError.clear();
+    }
+    const std::uint64_t subtitleTextureRevision =
+        m_subtitleRenderer->textureRevision();
 
     if (!m_compositor) {
         m_compositor = std::make_unique<HdrCompositor>(*m_rhi);
         if (m_compositor->initialize(
                 *m_renderPassDescriptor,
                 compositionVideoTexture,
+                m_subtitleRenderer->texture(),
                 m_quickUi->texture())
                 == HdrCompositor::ResourceResult::DeviceLost) {
             handleDeviceLoss("creating the HDR compositor");
@@ -275,13 +302,18 @@ void RhiPresentationEngine::renderFrame() {
         }
         m_boundVideoTextureRevision =
             compositionTextureRevision;
+        m_boundSubtitleTextureRevision =
+            subtitleTextureRevision;
     } else if (videoProducerChanged
                || targetUpdate
                    == QuickUiLayer::RenderTargetUpdate::Recreated
                || m_boundVideoTextureRevision
-                   != compositionTextureRevision) {
+                   != compositionTextureRevision
+               || m_boundSubtitleTextureRevision
+                   != subtitleTextureRevision) {
         if (m_compositor->setTextures(
                 compositionVideoTexture,
+                m_subtitleRenderer->texture(),
                 m_quickUi->texture())
                 == HdrCompositor::ResourceResult::DeviceLost) {
             handleDeviceLoss("rebinding compositor layer textures");
@@ -289,6 +321,8 @@ void RhiPresentationEngine::renderFrame() {
         }
         m_boundVideoTextureRevision =
             compositionTextureRevision;
+        m_boundSubtitleTextureRevision =
+            subtitleTextureRevision;
     }
 
     QRhi::FrameOpResult result = m_rhi->beginFrame(m_swapChain.get());
@@ -380,6 +414,7 @@ void RhiPresentationEngine::renderFrame() {
             return;
         }
     }
+    m_subtitleRenderer->uploadIfNeeded(commandBuffer);
 
     const float sdrScale = m_outputState.sdrScale();
     Q_ASSERT(std::isfinite(sdrScale) && sdrScale > 0.0f);
@@ -490,6 +525,7 @@ void RhiPresentationEngine::releaseSwapChainResources() {
     // The independent Quick and video textures intentionally survive it.
     m_compositor.reset();
     m_boundVideoTextureRevision = 0;
+    m_boundSubtitleTextureRevision = 0;
     if (m_swapChain)
         m_swapChain->destroy();
     m_swapChain.reset();
@@ -521,6 +557,7 @@ bool RhiPresentationEngine::initializeDevice() {
         handleDeviceLoss("initializing Qt Quick");
         return false;
     }
+    m_subtitleRenderer = std::make_unique<SubtitleRenderer>(*m_rhi);
     refreshVideoProducer();
     m_recoveringDevice = false;
     m_deviceRecoveryAttempts = 0;
@@ -645,6 +682,8 @@ void RhiPresentationEngine::releaseDevice() {
     if (m_quickUi)
         disconnect(m_quickUi.get(), nullptr, this, nullptr);
     m_quickUi.reset();
+    m_subtitleRenderer.reset();
+    m_reportedSubtitleError.clear();
     m_rhi = nullptr;
     m_graphicsDevice.reset();
     m_outputCharacteristicsDirty = false;

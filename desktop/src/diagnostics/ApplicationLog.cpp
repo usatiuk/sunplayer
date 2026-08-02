@@ -419,6 +419,8 @@ void ApplicationLog::writerLoop(
     }
     initialized.set_value({});
 
+    constexpr std::size_t maximumRecordsBetweenFlushes = 64;
+    std::size_t recordsSinceFlush = 0;
     for (;;) {
         enum class Action {
             Record,
@@ -430,6 +432,7 @@ void ApplicationLog::writerLoop(
         PendingWrite pending;
         std::uint64_t droppedRecords = 0;
         std::uint64_t flushTarget = 0;
+        bool queueDrained = false;
         {
             std::unique_lock lock(m_queueMutex);
             m_queueCondition.wait(
@@ -473,6 +476,8 @@ void ApplicationLog::writerLoop(
                 m_pendingWrites.pop_front();
                 m_queuedBytes -= pending.record.size();
                 --m_queuedRecords;
+                queueDrained = m_pendingWrites.empty()
+                    && m_droppedRecords == 0;
             } else if (nextDroppedSequence
                     != std::numeric_limits<
                         std::uint64_t>::max()) {
@@ -488,12 +493,22 @@ void ApplicationLog::writerLoop(
 
         if (action == Action::Record) {
             writeRecord(file, pending.record);
+            ++recordsSinceFlush;
+            if (queueDrained
+                    || recordsSinceFlush
+                        >= maximumRecordsBetweenFlushes) {
+                file.flush();
+                recordsSinceFlush = 0;
+            }
         } else if (action
                 == Action::DroppedMarker) {
             writeDroppedRecordMarker(
                 file, droppedRecords);
+            file.flush();
+            recordsSinceFlush = 0;
         } else if (action == Action::Flush) {
             file.flush();
+            recordsSinceFlush = 0;
             {
                 std::lock_guard lock(m_queueMutex);
                 m_flushedSequence = std::max(

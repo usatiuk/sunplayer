@@ -1,0 +1,12 @@
+description = "Real Matroska video/audio plus generated PGS replacement and clear states"
+license = "CC0-1.0 generated additions; base fixture project-owned"
+sha256 = "4c8183f60055c38d21272b5550d07a973fc22f8f97bcb3fd1f9bbb0bf4d3cfd9"
+duration_microseconds = 7999000
+video_stream = 0
+audio_stream = 1
+subtitle_stream = 2
+subtitle_codec = "hdmv_pgs_subtitle"
+subtitle_canvas = "320x180"
+subtitle_packet_times_microseconds = [0, 2000000, 4000000]
+mux_tool = "FFmpeg 8.1.2"
+coverage = ["subtitle-discovery", "pgs", "bitmap-regions", "replacement", "clear"]

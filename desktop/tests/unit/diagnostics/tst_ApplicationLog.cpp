@@ -44,6 +44,7 @@ public:
 
 private slots:
     void writesCategorizedInfoRecord();
+    void publishesRecordsWhileTheApplicationIsRunning();
     void boundsSessionFile();
     void boundsProducerQueue();
     void concurrentFlushesShareOneWatermark();
@@ -84,6 +85,38 @@ void ApplicationLogTest::writesCategorizedInfoRecord() {
         "category=sunroom.application"));
     QVERIFY(contents.contains(
         "event=test.record value=42"));
+}
+
+void ApplicationLogTest::
+publishesRecordsWhileTheApplicationIsRunning() {
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path =
+        directory.filePath(QStringLiteral("live.log"));
+    QString error;
+    std::unique_ptr<ApplicationLog> logging =
+        ApplicationLog::install(
+            {
+                .filePath = path,
+                .maximumFileBytes = 4096,
+                .retainedFileCount = 2,
+            },
+            &error);
+    QVERIFY2(logging, qPrintable(error));
+
+    qCInfo(sunroomLogApplication).noquote()
+        << "event=test.live_record";
+
+    QTRY_VERIFY_WITH_TIMEOUT(
+        [&] {
+            QFile file(path);
+            return file.open(
+                       QIODevice::ReadOnly
+                       | QIODevice::Text)
+                && file.readAll().contains(
+                    "event=test.live_record");
+        }(),
+        2'000);
 }
 
 void ApplicationLogTest::boundsSessionFile() {

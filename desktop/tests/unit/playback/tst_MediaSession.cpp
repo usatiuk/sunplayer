@@ -63,6 +63,12 @@ QString longVideoTailFixturePath() {
         "/media/sdr-bt709-ffv1-short-audio-long-video-flac.mkv");
 }
 
+QString subtitleFixturePath() {
+    return QStringLiteral(
+        SUNROOM_TEST_FIXTURE_DIR
+        "/media/sdr-bt709-ffv1-subtitles.mkv");
+}
+
 QString interFrameSeekFixturePath() {
     return QStringLiteral(
         SUNROOM_TEST_FIXTURE_DIR
@@ -178,6 +184,7 @@ private slots:
     void playbackProgressDoesNotRequirePresentationConsumer();
     void trailingVideoContinuesAfterAudioDrains();
     void longPostAudioSeekDoesNotStall();
+    void embeddedSubtitleSelectionUsesPlaybackGeneration();
     void audioOutputFailureBecomesSessionError();
     void sustainedAudioUnderrunEntersBuffering();
     void unavailableAudioClockBecomesSessionError();
@@ -283,6 +290,7 @@ synchronizedPlaybackUsesPresentedAudioClock() {
                 const FfmpegVideoFrameSink &videoSink,
                 const FfmpegAudioOutputSink &audioOutput,
                 const FfmpegMediaStreamSink &streamSink,
+                const FfmpegSubtitleOutputSink &,
                 std::stop_token stopToken) {
             ++decodeOperations;
             return decodeMediaFrames(
@@ -432,6 +440,122 @@ synchronizedPlaybackUsesPresentedAudioClock() {
     QVERIFY(!session.playing());
 }
 
+void MediaSessionTest::embeddedSubtitleSelectionUsesPlaybackGeneration() {
+    auto audioSink = std::make_shared<ControlledAudioSink>(4'096);
+    std::mutex requestsMutex;
+    std::vector<int> requestedSubtitleStreams;
+    MediaSession session(
+        VideoTargetReadback::Disabled,
+        [&requestsMutex, &requestedSubtitleStreams](
+                const FfmpegMediaDecodeRequest &request,
+                const FfmpegVideoFrameSink &videoSink,
+                const FfmpegAudioOutputSink &audioOutput,
+                const FfmpegMediaStreamSink &streamSink,
+                const FfmpegSubtitleOutputSink &subtitleSink,
+                std::stop_token stopToken) {
+            {
+                std::lock_guard lock(requestsMutex);
+                requestedSubtitleStreams.push_back(
+                    request.selectedSubtitleStreamIndex);
+            }
+            return decodeMediaFrames(
+                request,
+                videoSink,
+                audioOutput,
+                streamSink,
+                subtitleSink,
+                stopToken);
+        },
+        audioSink);
+
+    const auto servicePlayback = [&] {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+        const ControlledAudioRender rendered = audioSink->render(257);
+        if (rendered.frames != 0)
+            audioSink->advancePresentedFrames(rendered.frames);
+        session.videoSource().prepareForPresentation(
+            std::chrono::steady_clock::now() + std::chrono::hours(24));
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+    };
+    const auto waitUntil = [&](auto predicate, int timeoutMs) {
+        QElapsedTimer timer;
+        timer.start();
+        while (!predicate() && timer.elapsed() < timeoutMs) {
+            servicePlayback();
+            QThread::yieldCurrentThread();
+        }
+        return predicate();
+    };
+
+    session.openMedia(QUrl::fromLocalFile(subtitleFixturePath()));
+    QVERIFY(waitUntil(
+        [&] {
+            return session.state() == MediaSession::State::Ready
+                && session.hasFrame()
+                && session.subtitleTracks()->rowCount() == 3;
+        },
+        10'000));
+    QCOMPARE(session.selectedSubtitleStreamIndex(), -1);
+    session.pause();
+
+    const std::uint64_t initialGeneration = session.playbackGeneration();
+    session.selectSubtitleStream(2);
+    QVERIFY(session.playbackGeneration() > initialGeneration);
+    QVERIFY(waitUntil(
+        [&] {
+            const SubtitlePresentationSnapshot snapshot =
+                session.subtitlePresentationSnapshot(
+                    std::chrono::steady_clock::now());
+            return session.state() == MediaSession::State::Ready
+                && session.selectedSubtitleStreamIndex() == 2
+                && snapshot.state.isEnabled()
+                && snapshot.state.configuration
+                && snapshot.state.configuration->streamIndex == 2
+                && snapshot.state.events
+                && !snapshot.state.events->empty();
+        },
+        10'000));
+    QVERIFY(!session.playing());
+
+    const std::uint64_t selectedGeneration = session.playbackGeneration();
+    session.seekToMilliseconds(4'000);
+    QVERIFY(waitUntil(
+        [&] {
+            return session.state() == MediaSession::State::Ready
+                && session.selectedSubtitleStreamIndex() == 2;
+        },
+        10'000));
+    QVERIFY(session.playbackGeneration() > selectedGeneration);
+    QCOMPARE(
+        session.subtitlePresentationSnapshot(
+            std::chrono::steady_clock::now())
+            .state.playbackGeneration,
+        session.playbackGeneration());
+
+    session.selectSubtitleStream(-1);
+    QCOMPARE(session.selectedSubtitleStreamIndex(), -1);
+    QVERIFY(!session.subtitlePresentationSnapshot(
+        std::chrono::steady_clock::now()).state.isEnabled());
+    QVERIFY(waitUntil(
+        [&] {
+            std::lock_guard lock(requestsMutex);
+            return !requestedSubtitleStreams.empty()
+                && requestedSubtitleStreams.back() == -1
+                && requestedSubtitleStreams.size() >= 3;
+        },
+        10'000));
+    {
+        std::lock_guard lock(requestsMutex);
+        QVERIFY(requestedSubtitleStreams.size() >= 3);
+        QCOMPARE(requestedSubtitleStreams.front(), -1);
+        QCOMPARE(requestedSubtitleStreams.back(), -1);
+        QVERIFY(std::find(
+            requestedSubtitleStreams.begin(),
+            requestedSubtitleStreams.end(),
+            2) != requestedSubtitleStreams.end());
+    }
+}
+
 void MediaSessionTest::
 mutedPlaybackKeepsPresentedAudioAsMaster() {
     auto audioSink =
@@ -443,6 +567,7 @@ mutedPlaybackKeepsPresentedAudioAsMaster() {
                 const FfmpegVideoFrameSink &videoSink,
                 const FfmpegAudioOutputSink &audioOutput,
                 const FfmpegMediaStreamSink &streamSink,
+                const FfmpegSubtitleOutputSink &,
                 std::stop_token stopToken) {
             return decodeMediaFrames(
                 request,
@@ -565,6 +690,7 @@ void MediaSessionTest::staggeredStarts() {
                 const FfmpegVideoFrameSink &videoSink,
                 const FfmpegAudioOutputSink &audioOutput,
                 const FfmpegMediaStreamSink &streamSink,
+                const FfmpegSubtitleOutputSink &,
                 std::stop_token stopToken) {
             return decodeMediaFrames(
                 request,
@@ -614,15 +740,24 @@ void MediaSessionTest::staggeredStarts() {
     timer.restart();
 
     if (videoStartsLate) {
-        QVERIFY(!session.hasFrame());
+        // FIXME: This pre-PTS checkpoint failed twice in a 100-run stress
+        // pass. Keep the state-rich assertions until the audio-clock boundary
+        // can be diagnosed from a future recurrence.
+        QVERIFY2(
+            !session.hasFrame(),
+            qPrintable(frameFailure()));
         while (audioSink->presentedFrames() < 43'200
                 && timer.elapsed() < 3'000) {
             service();
-            QVERIFY(!session.hasFrame());
+            QVERIFY2(
+                !session.hasFrame(),
+                qPrintable(frameFailure()));
         }
         QVERIFY(audioSink->presentedFrames() >= 43'200);
         QTest::qWait(120);
-        QVERIFY(!session.hasFrame());
+        QVERIFY2(
+            !session.hasFrame(),
+            qPrintable(frameFailure()));
         while (!session.hasFrame()
                 && timer.elapsed() < 5'000) {
             service();
@@ -673,6 +808,7 @@ playbackProgressDoesNotRequirePresentationConsumer() {
                 const FfmpegVideoFrameSink &videoSink,
                 const FfmpegAudioOutputSink &audioOutput,
                 const FfmpegMediaStreamSink &streamSink,
+                const FfmpegSubtitleOutputSink &,
                 std::stop_token stopToken) {
             return decodeMediaFrames(
                 request,
@@ -730,6 +866,7 @@ void MediaSessionTest::trailingVideoContinuesAfterAudioDrains() {
                 const FfmpegVideoFrameSink &videoSink,
                 const FfmpegAudioOutputSink &audioOutput,
                 const FfmpegMediaStreamSink &streamSink,
+                const FfmpegSubtitleOutputSink &,
                 std::stop_token stopToken) {
             ++decodeOperations;
             return decodeMediaFrames(
@@ -828,6 +965,7 @@ void MediaSessionTest::longPostAudioSeekDoesNotStall() {
                 const FfmpegVideoFrameSink &videoSink,
                 const FfmpegAudioOutputSink &audioOutput,
                 const FfmpegMediaStreamSink &streamSink,
+                const FfmpegSubtitleOutputSink &,
                 std::stop_token stopToken) {
             return decodeMediaFrames(
                 request,
@@ -907,6 +1045,7 @@ void MediaSessionTest::audioOutputFailureBecomesSessionError() {
                 const FfmpegVideoFrameSink &videoSink,
                 const FfmpegAudioOutputSink &audioOutput,
                 const FfmpegMediaStreamSink &streamSink,
+                const FfmpegSubtitleOutputSink &,
                 std::stop_token stopToken) {
             return decodeMediaFrames(
                 request,
@@ -958,6 +1097,7 @@ void MediaSessionTest::sustainedAudioUnderrunEntersBuffering() {
                 const FfmpegVideoFrameSink &videoSink,
                 const FfmpegAudioOutputSink &audioOutput,
                 const FfmpegMediaStreamSink &streamSink,
+                const FfmpegSubtitleOutputSink &,
                 std::stop_token stopToken) {
             return decodeMediaFrames(
                 request,
@@ -1075,6 +1215,7 @@ void MediaSessionTest::unavailableAudioClockBecomesSessionError() {
                 const FfmpegVideoFrameSink &videoSink,
                 const FfmpegAudioOutputSink &audioOutput,
                 const FfmpegMediaStreamSink &streamSink,
+                const FfmpegSubtitleOutputSink &,
                 std::stop_token stopToken) {
             return decodeMediaFrames(
                 request,
@@ -1138,6 +1279,7 @@ unanchoredAudioOutputEpochBecomesSessionError() {
                 const FfmpegVideoFrameSink &videoSink,
                 const FfmpegAudioOutputSink &audioOutput,
                 const FfmpegMediaStreamSink &streamSink,
+                const FfmpegSubtitleOutputSink &,
                 std::stop_token stopToken) {
             return decodeMediaFrames(
                 request,

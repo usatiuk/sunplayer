@@ -57,6 +57,10 @@ qt_add_executable(sunroom_ffmpeg_packet_router_tests
         unit/media/tst_FfmpegPacketRouter.cpp
 )
 
+qt_add_executable(sunroom_subtitle_source_tests
+        unit/subtitles/tst_SubtitleSource.cpp
+)
+
 qt_add_executable(sunroom_media_session_tests
         unit/playback/tst_MediaSession.cpp
         ../src/playback/CoalescedGenerationWake.h
@@ -105,6 +109,10 @@ if (WIN32)
 
     qt_add_executable(sunroom_libplacebo_dependency_tests
             integration/video/tst_LibplaceboDependency.cpp
+    )
+
+    qt_add_executable(sunroom_libass_dependency_tests
+            integration/subtitles/tst_LibassDependency.cpp
     )
 endif ()
 
@@ -228,6 +236,11 @@ target_include_directories(sunroom_media_session_tests
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
 )
 
+target_include_directories(sunroom_subtitle_source_tests
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+)
+
 target_include_directories(sunroom_video_frame_queue_tests
         PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
@@ -323,6 +336,12 @@ target_link_libraries(sunroom_ffmpeg_packet_router_tests
         sunroom_ffmpeg
 )
 
+target_link_libraries(sunroom_subtitle_source_tests
+        PRIVATE
+        Qt6::Test
+        sunroom_media
+)
+
 target_link_libraries(
         sunroom_video_presentation_geometry_tests
         PRIVATE
@@ -388,6 +407,17 @@ if (WIN32)
             libplacebo::libplacebo
     )
 
+    target_link_libraries(sunroom_libass_dependency_tests
+            PRIVATE
+            Qt6::Test
+            sunroom_libass
+    )
+    target_compile_definitions(
+            sunroom_libass_dependency_tests
+            PRIVATE
+            SUNROOM_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
+    )
+
     foreach (test_target IN ITEMS
             sunroom_presentation_target_tests
             sunroom_application_log_tests
@@ -400,13 +430,15 @@ if (WIN32)
             sunroom_video_presentation_geometry_tests
             sunroom_ffmpeg_video_timeline_tests
             sunroom_ffmpeg_packet_router_tests
+            sunroom_subtitle_source_tests
             sunroom_media_session_tests
             sunroom_video_frame_queue_tests
             sunroom_active_video_source_tests
             sunroom_cubeb_dependency_tests
             sunroom_cubeb_audio_sink_tests
             sunroom_qml_shell_tests
-            sunroom_libplacebo_dependency_tests)
+            sunroom_libplacebo_dependency_tests
+            sunroom_libass_dependency_tests)
         sunroom_stage_windows_runtime(${test_target})
     endforeach ()
     sunroom_stage_windows_runtime(
@@ -474,6 +506,11 @@ add_test(
 add_test(
         NAME ffmpeg-packet-router
         COMMAND sunroom_ffmpeg_packet_router_tests
+)
+
+add_test(
+        NAME subtitle-source
+        COMMAND sunroom_subtitle_source_tests
 )
 
 add_test(
@@ -565,6 +602,7 @@ set_tests_properties(
         ffmpeg-video-timeline
         video-frame-queue
         active-video-source
+        subtitle-source
         PROPERTIES LABELS "unit"
 )
 
@@ -649,6 +687,17 @@ if (WIN32)
             NAME libplacebo-dependency
             COMMAND sunroom_libplacebo_dependency_tests
     )
+
+    add_test(
+            NAME libass-dependency
+            COMMAND sunroom_libass_dependency_tests
+    )
+    set_tests_properties(
+            libass-dependency
+            PROPERTIES
+            LABELS "dependency;subtitles;integration;windows"
+            TIMEOUT 30
+    )
     set_tests_properties(
             libplacebo-dependency
             PROPERTIES
@@ -660,12 +709,32 @@ if (WIN32)
             integration/presentation/tst_QrhiCompositor.cpp
     )
 
+    qt_add_executable(sunroom_subtitle_renderer_tests
+            integration/subtitles/tst_SubtitleRenderer.cpp
+    )
+
     target_include_directories(sunroom_qrhi_compositor_tests
             PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/../src"
     )
 
     target_link_libraries(sunroom_qrhi_compositor_tests
+            PRIVATE
+            Qt6::GuiPrivate
+            Qt6::Quick
+            Qt6::Test
+            sunroom_video_pipeline
+    )
+
+    target_include_directories(sunroom_subtitle_renderer_tests
+            PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+    )
+    target_compile_definitions(sunroom_subtitle_renderer_tests
+            PRIVATE
+            SUNROOM_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
+    )
+    target_link_libraries(sunroom_subtitle_renderer_tests
             PRIVATE
             Qt6::GuiPrivate
             Qt6::Quick
@@ -691,6 +760,9 @@ if (WIN32)
     sunroom_stage_windows_runtime(
             sunroom_qrhi_compositor_tests
     )
+    sunroom_stage_windows_runtime(
+            sunroom_subtitle_renderer_tests
+    )
 
     add_test(
             NAME qrhi-compositor
@@ -700,6 +772,17 @@ if (WIN32)
             qrhi-compositor
             PROPERTIES
             LABELS "gpu;windows"
+            TIMEOUT 30
+    )
+
+    add_test(
+            NAME subtitle-renderer
+            COMMAND sunroom_subtitle_renderer_tests
+    )
+    set_tests_properties(
+            subtitle-renderer
+            PROPERTIES
+            LABELS "gpu;subtitles;integration;windows"
             TIMEOUT 30
     )
 
