@@ -9,11 +9,11 @@
 #include <QCommandLineParser>
 #include <QCoreApplication>
 #include <QDebug>
-#include <QDir>
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QKeyEvent>
+#include <QLibraryInfo>
 #include <QPalette>
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -531,12 +531,8 @@ int main(int argc, char *argv[]) {
 
     if (parser.isSet(verifyQmlOption)) {
 #ifdef Q_OS_WIN
-        const QString applicationDirectory =
-            QCoreApplication::applicationDirPath();
-        QCoreApplication::setLibraryPaths({applicationDirectory});
         const QString deployedQmlPath =
-            QDir(applicationDirectory).filePath(
-                QStringLiteral("qml"));
+            QLibraryInfo::path(QLibraryInfo::QmlImportsPath);
         if (!QFileInfo(deployedQmlPath).isDir()) {
             qCCritical(sunroomLogApplication).noquote()
                 << "Missing deployed QML directory:"

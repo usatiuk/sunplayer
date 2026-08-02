@@ -66,7 +66,7 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 
 ## Current implementation status
 
-As of 2026-08-02, the repository contains Windows D3D11, Apple-Silicon macOS
+As of 2026-08-03, the repository contains Windows D3D11, Apple-Silicon macOS
 Metal, and native-Wayland Vulkan presentation paths plus continuous local-file
 playback:
 
@@ -129,6 +129,9 @@ playback:
 * The configured Windows Debug target builds successfully with Qt 6.11.1,
   MSVC, pinned D3D11-only libplacebo 7.360.1, and official minimal FFmpeg
   8.1.2 dependencies built through the project-local vcpkg configuration.
+  Windows CI also defines a separate Release install-tree probe and a seven-day
+  developer artifact for trusted events after the full Debug validation path;
+  the new Release path still requires its first hosted run.
 * Apple-Silicon macOS uses Qt 6.11.1 QRhi Metal for presentation and
   libplacebo Vulkan over MoltenVK for video. Both domains are required to
   select the same `MTLDevice`. A QRhi-owned RGBA16F Metal texture is imported

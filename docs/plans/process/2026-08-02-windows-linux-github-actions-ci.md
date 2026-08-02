@@ -40,8 +40,9 @@ The workflow will:
 * cancel superseded runs for the same workflow/ref;
 * use explicit stable runner labels and bounded job timeouts;
 * use Debug builds with `BUILD_TESTING=ON`;
-* invoke `all_qmllint` and CTest directly; and
-* avoid secrets, deployment, artifact publication, or repository writes.
+* invoke `all_qmllint` and CTest directly;
+* avoid secrets, deployment, release publication, or repository writes; and
+* retain one successful trusted-event Windows developer bundle for seven days.
 
 ### Linux job
 
@@ -93,6 +94,16 @@ is required because the production D3D11 domain requests hardware and has no
 WARP path; do not add a CI-only graphics fallback or test abstraction. Record
 that this also excludes the mixed software/hardware `ffmpeg-first-frame`
 executable until its registration can be split for a real product reason.
+After those checks pass, configure and build a separate Release application,
+install it through the existing CMake deployment boundary, assert the generated
+relative `qt.conf`, and run the installed application's existing `--verify-qml`
+deployment probe. Trusted push and manual-dispatch runs then upload the complete
+install tree as `sunroom-windows-release-<commit>` for seven days. Pull requests
+exercise the same installation probe but do not publish contributor-built
+executables. This workflow artifact is a developer convenience, not an
+installer or clean-machine portability claim.
+The Debug and Release trees share one vcpkg installed directory and binary cache
+within the job; the second configure reuses the same manifest dependency set.
 
 ## Implementation steps
 
@@ -132,7 +143,8 @@ is implementation evidence rather than hosted acceptance.
 ## Deliberately deferred
 
 * macOS CI before the product has a macOS backend and dependency contract.
-* Release/install/package jobs before packaging decisions exist.
+* Release, installer, and durable package publication before packaging
+  decisions exist.
 * Scheduled stress, performance, validation-layer, or large-corpus jobs.
 * A dedicated Windows GPU/audio runner and physical-lab orchestration.
 * Splitting a hosted software subset from the mixed `ffmpeg-first-frame`
@@ -141,15 +153,16 @@ is implementation evidence rather than hosted acceptance.
   audio/default-route scenarios.
 * D3D11VA, VAAPI/DRM PRIME, HDR, display-transition, route-switch, and
   acoustic-sync claims on generic hosted runners.
-* Workflow factoring, custom images, dependency bots, and artifact retention
-  until repetition or a concrete consumer requires them.
+* Workflow factoring, custom images, dependency bots, and long-lived artifact
+  retention until repetition or a release consumer requires them.
 
 ## Delivery evidence
 
 Repository flattening is isolated in `137c64a`. The root workflow and corrected
-test labels are implemented. PyYAML parses the workflow; all four action uses
-are pinned to the reviewed 40-character checkout/cache SHAs; Bash parses every
-Linux run script; and the cache hash inputs exist at their new root paths.
+test labels are implemented. PyYAML parses the workflow; all five action uses
+are pinned to reviewed 40-character checkout, cache, or upload SHAs; Bash
+parses every Linux run script; and the cache hash inputs exist at their new
+root paths.
 
 A fresh root Debug tree at `/tmp/sunroom-ci-linux-debug` configured successfully,
 built all 237 Ninja edges, passed both `all_qmllint` targets, and passed all 26
@@ -194,4 +207,25 @@ was not the failure. The manifest now owns Windows `pkgconf` as a host
 dependency, and the pre-project CMake bootstrap declares the matching
 `x64-windows` host triplet so vcpkg exposes that tool through its standard
 program path. Hosted configure/build validation of this correction remains
-pending.
+pending. A separate Release application is also configured from source after
+successful Debug tests, then staged through the CMake install boundary as a
+seven-day Windows developer artifact; its configure, build, install, and upload
+steps remain hosted-validation work and do not change the deferred
+installer/package boundary. Pull requests stage
+and execute the installed QML verification probe without uploading executable
+artifacts; only trusted push and manual-dispatch events publish the short-lived
+download.
+
+Local Windows validation on 2026-08-03 used the existing CLion-configured Debug
+tree with the Visual Studio PowerShell development environment. The complete
+build and `all_qmllint` target passed. The CI-equivalent 22-test subset passed at
+the machine's full processor concurrency on the final run, including the
+build-tree `packaged-qml-module` probe. An earlier full-concurrency run reproduced
+the already-recorded timing-sensitive `media-session` timeout; its immediate
+single-test diagnostic and the final unchanged full-concurrency run both passed,
+so CI parallelism remains unchanged and the product-test issue remains visible.
+Installing the Debug tree to a fresh temporary prefix staged 152 files, including
+the relative `bin/qt.conf`, QML modules, plugins, transitive media dependencies,
+and compiler runtime; the installed `sunroom.exe --verify-qml` probe passed. The
+Release configure/build/install/upload path cannot be exercised from that
+single-config Debug tree and remains hosted evidence.

@@ -308,7 +308,7 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
           set "VCPKG_BINARY_SOURCES=clear;files,%RUNNER_TEMP%\sunroom-vcpkg-binary-cache,readwrite"
-          cmake -S . -B "%RUNNER_TEMP%\sunroom-windows-debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DCMAKE_PREFIX_PATH=%RUNNER_TEMP%\Qt\6.11.1\msvc2022_64"
+          cmake -S . -B "%RUNNER_TEMP%\sunroom-windows-debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DVCPKG_INSTALLED_DIR=%RUNNER_TEMP%\sunroom-vcpkg-installed" "-DCMAKE_PREFIX_PATH=%RUNNER_TEMP%\Qt\6.11.1\msvc2022_64"
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Build
@@ -334,3 +334,40 @@ jobs:
           if errorlevel 1 exit /b %errorlevel%
           ctest --test-dir "%RUNNER_TEMP%\sunroom-windows-debug" --output-on-failure --parallel %NUMBER_OF_PROCESSORS% -LE "device|gpu"
           if errorlevel 1 exit /b %errorlevel%
+
+      - name: Configure Release bundle
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b %errorlevel%
+          set "VCPKG_BINARY_SOURCES=clear;files,%RUNNER_TEMP%\sunroom-vcpkg-binary-cache,readwrite"
+          cmake -S . -B "%RUNNER_TEMP%\sunroom-windows-release" -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DVCPKG_INSTALLED_DIR=%RUNNER_TEMP%\sunroom-vcpkg-installed" "-DCMAKE_PREFIX_PATH=%RUNNER_TEMP%\Qt\6.11.1\msvc2022_64"
+          if errorlevel 1 exit /b %errorlevel%
+
+      - name: Build Release bundle
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b %errorlevel%
+          cmake --build "%RUNNER_TEMP%\sunroom-windows-release" --target sunroom --parallel %NUMBER_OF_PROCESSORS%
+          if errorlevel 1 exit /b %errorlevel%
+
+      - name: Stage Release bundle
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b %errorlevel%
+          cmake --install "%RUNNER_TEMP%\sunroom-windows-release" --config Release --prefix "%RUNNER_TEMP%\sunroom-windows-artifact"
+          if errorlevel 1 exit /b %errorlevel%
+          if not exist "%RUNNER_TEMP%\sunroom-windows-artifact\bin\qt.conf" exit /b 1
+          "%RUNNER_TEMP%\sunroom-windows-artifact\bin\sunroom.exe" --verify-qml
+          if errorlevel 1 exit /b %errorlevel%
+
+      - name: Upload Windows developer bundle
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sunroom-windows-release-${{ github.sha }}
+          path: ${{ runner.temp }}\sunroom-windows-artifact
+          if-no-files-found: error
+          retention-days: 7

@@ -652,7 +652,6 @@ if (WIN32)
     qt_generate_deploy_qml_app_script(
             TARGET sunroom
             OUTPUT_SCRIPT deploy_script
-            NO_COMPILER_RUNTIME
             NO_TRANSLATIONS
             NO_UNSUPPORTED_PLATFORM_ERROR
     )

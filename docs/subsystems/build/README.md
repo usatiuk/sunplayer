@@ -248,9 +248,21 @@ package dependencies. On Windows, vcpkg's app-local dependency walker installs t
 transitive runtime-DLL set before `qt_generate_deploy_qml_app_script()` supplies
 the current Qt deployment step with:
 
-* No compiler-runtime deployment.
+* Compiler-runtime deployment on Windows.
 * No translation deployment.
 * No unsupported-platform configuration error.
+
+The Qt deployment script generates the Windows install tree's relative
+`bin/qt.conf`. After a successful hosted Windows Debug build, lint, and
+deterministic test subset, CI builds and installs a separate Release
+application and runs its `--verify-qml` probe. That probe obtains its deployed
+import directory from `QLibraryInfo`, so the same boundary follows the build
+tree's local `qt.conf` and Qt's standard install layout without duplicating
+either path. Trusted push and manual-dispatch runs then upload that complete
+Release install tree as a seven-day `sunroom-windows-release-<commit>` developer
+artifact; pull requests do not publish contributor-built executables. Qt's
+deployment helper supplies the supported MSVC compiler-runtime payload. The
+bundle is not an installer or clean-machine packaging claim.
 
 Build-tree application and test targets use vcpkg's app-local walker and CMake's
 `TARGET_RUNTIME_DLLS`; the install path uses vcpkg's corresponding
@@ -358,10 +370,17 @@ hosted software subset is deferred while the complete test remains dedicated-
 machine coverage.
 
 The workflow requests only read-only repository contents, disables persisted
-checkout credentials, pins actions by full commit SHA, publishes nothing, and
-does not cache build trees, `vcpkg_installed`, downloads, artifacts, or
-credentials. Until an actual hosted run succeeds, this is implemented and
-locally validated configuration rather than a claim that hosted CI passes.
+checkout credentials, and pins actions by full commit SHA. Trusted main pushes
+and manual dispatches upload the verified Windows Release install tree for seven
+days; pull requests stage and probe the same tree without uploading it. The
+workflow does not publish releases and does not cache build trees, the shared
+in-job `vcpkg_installed` tree, downloads, artifacts, or credentials. Until the
+new Release path succeeds in a hosted run, it is implemented and locally
+reviewed configuration rather than a claim that hosted packaging passes.
+
+The short-lived artifact is project-internal developer output. It is not an
+approved public binary distribution: complete third-party notice,
+corresponding-source, codec-policy, and redistribution work remains deferred.
 
 ## Verification
 

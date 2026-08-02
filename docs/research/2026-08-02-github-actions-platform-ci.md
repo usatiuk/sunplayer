@@ -132,8 +132,18 @@ are materially different; a matrix would hide those facts behind conditions.
 
 Keep the workflow in one file and invoke the existing CMake/CTest boundaries
 directly. Do not add wrapper frameworks, a custom CI image, reusable workflows,
-CMake presets used only by CI, artifact publishing, or a test-selection script
-until repetition or another consumer justifies them.
+CMake presets used only by CI, or a test-selection script. The requested
+Windows developer download should use a separate Release build, reuse the
+existing CMake install boundary, then run the installed application's existing
+`--verify-qml` probe. Trusted push and manual-dispatch runs upload that tree for
+seven days after successful Debug tests; pull requests verify installation
+without publishing contributor-built executables. The artifact is not an
+installer and does not establish clean-machine portability.
+
+`actions/upload-artifact` 7.0.1 resolves to immutable commit
+`043fb46d1a93c77aae656e7c1c64a875d1fc6a0a`. Its `if-no-files-found: error`
+input makes a missing staged tree fail visibly, while the explicit seven-day
+retention bounds storage without adding cleanup automation.
 
 No architectural decision record is required. This work automates already
 accepted platform, dependency, and testing decisions without changing product
@@ -147,5 +157,5 @@ Qt 6.10.2, FFmpeg 8.0.1, and libplacebo 7.360.0. The packaged Weston 14.0.2
 manual confirms `--backend=headless`, `--renderer`, `--no-config`, `--socket`,
 `--idle-time=0`, and the headless `--width`/`--height` options. Official Git
 refs mapped the reviewed checkout and cache action SHAs to their current `v4`
-tags. These checks validate package/action inputs; they do not replace the
-required first hosted run.
+tags, and the reviewed upload action SHA to `v7.0.1`. These checks validate
+package/action inputs; they do not replace the required first hosted run.
