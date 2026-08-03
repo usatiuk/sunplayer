@@ -10,6 +10,22 @@ on the port?
 This note records package and source inspection performed before the Linux
 implementation. It is evidence for the execution plan, not a support claim.
 
+## 2026-08-03 HDR erratum
+
+The early HDR recommendation below is superseded by
+[ADR 0021](../decisions/0021-use-hdr10-pq-for-managed-wayland-hdr.md) and the
+[follow-up investigation](2026-08-03-wayland-hdr10-presentation.md). Sunroom
+now owns a version-2 BT.2020/PQ description and uses an RGB10A2 QRhi HDR10
+swapchain instead of recreating Qt surfaces for FP16 `SRgbLinear`.
+
+Linux working value `1.0` remains active platform reference white; it is not
+an 80-nit scRGB value. The final encoder places it at PQ's 203-nit source-
+reference coordinate, which the compositor anchors to the output. Mutter's
+current preferred target reports the 10,000-nit PQ envelope, while another
+compositor may report a lower, output-specific maximum. Sunroom trusts the
+declared target and caps only at PQ's representable `10000 / 203` working
+coordinate.
+
 ## Reference environment
 
 The inspected environment is Ubuntu 26.04 `resolute` under WSL2. Installed

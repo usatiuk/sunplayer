@@ -19,8 +19,11 @@ struct PresentationBackendState {
     QString videoSynchronization = QStringLiteral("Unavailable");
     QString videoCopySummary = QStringLiteral("Unavailable");
     QString videoFallbackReason;
-    bool extendedLinearActive = false;
+    bool hdrPresentationActive = false;
     bool sceneReferred = false;
+    // A stable HDR content surface may remain active on an SDR output, whose
+    // valid 1x preferred target still describes the compositor conversion.
+    bool useSdrDisplayTargetForHdrPresentation = false;
     bool sdrWhiteKnown = false;
     bool luminanceKnown = false;
     float sdrWhiteNits = 80.0f;
@@ -33,7 +36,7 @@ struct PresentationBackendState {
 struct PresentationTarget {
     bool operator==(const PresentationTarget &) const = default;
 
-    bool extendedLinearActive = false;
+    bool hdrPresentationActive = false;
     bool sceneReferred = false;
     bool sdrWhiteKnown = false;
     bool luminanceKnown = false;

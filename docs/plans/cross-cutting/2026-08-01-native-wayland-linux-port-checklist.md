@@ -40,7 +40,7 @@ roadmap state actually changes.
 | BASE-02 | Download matching Ubuntu Qt/FFmpeg/libplacebo/cubeb source packages | Done | [Ubuntu platform baseline](../../research/2026-08-01-ubuntu-26-04-linux-platform-baseline.md) | Packaging Git clones are unnecessary for installed-package inspection |
 | BASE-03 | Record current WSL execution capability | Done | [Ubuntu platform baseline](../../research/2026-08-01-ubuntu-26-04-linux-platform-baseline.md) | WSLg Wayland; llvmpipe CPU Vulkan; no `/dev/dri`, `/dev/dxg`, or usable VAAPI |
 | BASE-04 | Rebase plan and implementation onto current upstream and run independent correctness, delivery, and simplicity reviews | Done | [System dependency foundation](linux-port-evidence/2026-08-01-system-dependency-foundation.md), [Wayland Vulkan presentation](linux-port-evidence/2026-08-02-wayland-vulkan-presentation.md) | Deeply reconciled through `01257c6`; implementation and docs passed correctness, delivery, and anti-overengineering review |
-| BASE-05 | Require native Wayland while allowing simple unmanaged assumed-sRGB SDR when managed color is unavailable | Done | [ADR 0018](../../decisions/0018-support-unmanaged-srgb-wayland-sdr.md) | Managed gamma-2.2 SDR and extended-linear HDR have separate capability gates |
+| BASE-05 | Require native Wayland while allowing simple unmanaged assumed-sRGB SDR when managed color is unavailable | Done | [ADR 0018](../../decisions/0018-support-unmanaged-srgb-wayland-sdr.md) | Managed gamma-2.2 SDR and version-2 BT.2020/PQ HDR10 have separate capability gates |
 
 ## 1. System build foundation
 
@@ -96,18 +96,18 @@ roadmap state actually changes.
 
 | ID | Gate | Status | Evidence | Blocker or notes |
 | --- | --- | --- | --- | --- |
-| DISP-01 | Inventory color-management-v1, parametric descriptions, named sRGB primaries, Qt 6.10's `gamma22`/`ext_linear` transfer functions, and surface feedback | In progress | [Wayland Vulkan presentation](linux-port-evidence/2026-08-02-wayland-vulkan-presentation.md) | Startup global/feature inventory is implemented; preferred-surface feedback binding remains |
-| DISP-02 | Parse completed preferred descriptions into semantic display state and ignore equivalent updates | Pending | — | Protocol identities remain adapter-local |
-| DISP-03 | Keep Qt as the sole color-management surface and image-description owner | Done | [ADR 0020](../../decisions/0020-keep-qt-owned-wayland-windows-and-render-fallback-chrome-in-scene.md) | Startup chooses only Qt's requested color space; Sunroom creates no competing surface object |
-| DISP-04 | Implement coupled gamma-2.2 SDR → extended-linear FP16 surface recreation | Pending | — | Qt color-space request and buffer encoding change together; transient convergence is acceptable |
-| DISP-05 | Implement bounded HDR rollback by recreating Qt's gamma-2.2 `SystemManaged` SDR surface | Pending | — | Suppress repeat HDR attempts for the same semantic target/device generation; retry only when either materially changes |
-| DISP-06 | Rerender the retained current frame when effective target values change, including while paused | Pending | — | Reconcile at the existing safe frame boundary |
-| DISP-07 | Validate windowed movement between SDR and HDR outputs | Needs native hardware | — | Include both transition directions and stable final diagnostics |
-| DISP-08 | Validate fullscreen entry when the compositor selects/configures another output | Needs native hardware | — | Preserve media/device state and refresh feedback after convergence |
-| DISP-09 | Validate fullscreen movement and normal/maximized restoration across SDR/HDR outputs | Needs native hardware | — | Include F11, Escape, double-click, cursor and transport behavior |
-| DISP-10 | Validate HDR enable/disable, preferred-description change, hotplug, reconnect, scale/DPR, and surface recreation | Needs native hardware | — | No stale target or protocol lifetime |
-| DISP-11 | Validate 80-nit reference white, headroom response, compositor mapping, and gamma-2.2 SDR rollback with a documented physical procedure | Needs native hardware | — | Record patterns, expected values, tolerances, compositor, driver, GPU, display, and measurement method |
-| DISP-12 | Record tested compositor/GPU combinations and scope the HDR support statement to them | Needs native hardware | — | A second combination is required before a broad Ubuntu HDR statement |
+| DISP-01 | Bind color-management-v1 version 2, inventory parametric/perceptual/sRGB/BT.2020/gamma-2.2/PQ capabilities, and reject older globals from the managed path | Done | [Managed HDR plan](2026-08-03-managed-wayland-hdr.md), [ADR 0021](../../decisions/0021-use-hdr10-pq-for-managed-wayland-hdr.md) | Latest-only callbacks are compile-time checked and capability-tested; KWin v1 remains SDR |
+| DISP-02 | Parse completed preferred descriptions into semantic target state, ignore equivalent updates, and follow exceptional native-surface recreation | Done | [Managed HDR plan](2026-08-03-managed-wayland-hdr.md) | Protocol identities and obsolete-request suppression remain adapter-local; native lifecycle still needs physical exercise |
+| DISP-03 | Own one version-2 color-management surface with ready sRGB/PQ descriptions while keeping Qt as sole toplevel/window owner | Done | [ADR 0021](../../decisions/0021-use-hdr10-pq-for-managed-wayland-hdr.md) | Qt color space stays unset; QRhi uses pass-through and Sunroom owns only the narrow color declaration |
+| DISP-04 | Implement stable BT.2020/PQ HDR10 presentation across HDR/SDR output movement | Done | [ADR 0021](../../decisions/0021-use-hdr10-pq-for-managed-wayland-hdr.md) | Preferred output feedback never changes the content encoding or recreates the window |
+| DISP-05 | Implement complete managed gamma-2.2 SDR rollback after genuine HDR10 format/render-pass/create/resize failure | Done | [Managed HDR plan](2026-08-03-managed-wayland-hdr.md) | One rejection per graphics generation; only a new generation permits SDR→PQ retry |
+| DISP-06 | Rerender the retained current frame when effective preferred target values change, including while paused | Done | [Managed HDR plan](2026-08-03-managed-wayland-hdr.md) | Existing semantic target invalidation performs the rerender; native paused evidence remains |
+| DISP-07 | Validate windowed movement between SDR and HDR outputs while the `QWindow`, `wl_surface`, and HDR10 tuple remain stable | Needs native hardware | — | Include both directions, spanning, no window flash, and stable presentation diagnostics |
+| DISP-08 | Validate fullscreen entry when the compositor selects/configures another output | Needs native hardware | — | Preserve media/device state, HDR10 content encoding, and refresh preferred feedback |
+| DISP-09 | Validate fullscreen movement and normal/maximized restoration across SDR/HDR outputs | Needs native hardware | — | Include F11, Escape, double-click, cursor and transport behavior without output-driven format changes |
+| DISP-10 | Validate HDR enable/disable, preferred-description change, hotplug, reconnect, scale/DPR, and exceptional surface recreation | Needs native hardware | — | Preserve declared content encoding and reattach protocol objects without stale callbacks |
+| DISP-11 | Validate reference-white anchoring, target response, compositor HDR-to-SDR mapping, and gamma-2.2 fallback with a documented physical procedure | Needs native hardware | — | Do not assume Linux `1.0 = 80 nits`; record patterns, expected values, tolerances, compositor, driver, GPU, display, and measurement method |
+| DISP-12 | Record tested compositor/GPU combinations and scope the HDR support statement to them | Needs native hardware | — | A second version-2 compositor/GPU combination is required before a broad Ubuntu HDR statement |
 
 ## 5. VAAPI/DRM PRIME acceleration
 
@@ -156,7 +156,7 @@ roadmap state actually changes.
 | Linux cubeb audio | In progress | [WSLg system-cubeb sink and production playback pass](linux-port-evidence/2026-08-02-linux-system-cubeb-audio.md); native PulseAudio/PipeWire-Pulse route-change and recovery evidence remains |
 | Linux fullscreen | In progress | Video-only production scenario has passed WSLg; audio-bearing assertions are implemented, but the latest run ended in an unresolved buffer/configure protocol failure after a valid zero-size hint and cross-output scenarios remain |
 | Complete Linux Wayland SDR | Pending | Unmanaged assumed-sRGB and available managed gamma-2.2 video, audio, fullscreen, clean install, native Wayland only |
-| Managed Linux HDR | Needs native hardware | Coupled declaration/FP16 path, physical procedure, display transitions, gamma-2.2 SDR rollback |
+| Managed Linux HDR | Needs native hardware | Stable version-2 BT.2020/PQ declaration, RGB10A2 HDR10 plus pass-through, physical procedure, output movement, and gamma-2.2 SDR rollback |
 | Intel VAAPI acceleration | Needs native hardware | Exact-device DRM PRIME import, NV12/P010, zero CPU transfer and no extra full-frame input copy, software fallback |
 | AMD VAAPI acceleration | Needs native hardware | Exact-device DRM PRIME import, NV12/P010, zero CPU transfer and no extra full-frame input copy, software fallback |
 | Ubuntu 26.04 distributable | Decision needed | Chosen format, clean install, ABI dependencies, license closure, runtime scenarios |

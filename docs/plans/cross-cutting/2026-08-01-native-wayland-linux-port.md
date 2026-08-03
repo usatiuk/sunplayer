@@ -20,7 +20,7 @@ There are two explicit completion levels:
    sRGB SDR.
    There is no X11 or XWayland path.
 2. **Linux Wayland HDR:** the application additionally declares and proves a
-   managed extended-linear surface through color-management-v1, reacts to
+   managed BT.2020/PQ HDR10 surface through color-management-v1, reacts to
    semantic preferred-target changes, and passes physical HDR-display
    validation. Hardware decode is a separate acceleration gate and must not
    be confused with HDR correctness.
@@ -48,8 +48,9 @@ checklist must not duplicate or silently change them.
 * `GraphicsBackendFactory` now selects Vulkan on Linux. The production native-
   Wayland path creates the Qt Vulkan surface, a QRhi-owned Vulkan 1.3 device
   imported by libplacebo, and a direct RGBA16F video target. The presentation
-  runtime still uses a null preferred-output provider and `MediaSession`
-  creates no physical Linux audio sink.
+  runtime follows version-2 preferred surface descriptions and can transition
+  between managed gamma-2.2 SDR and BT.2020/PQ HDR10. `MediaSession` creates no
+  physical Linux audio sink.
 * The CMake entry point retains pinned vcpkg dependencies on Windows and uses
   Ubuntu system Qt 6.10, FFmpeg, libplacebo, cubeb, libass, Vulkan, Wayland,
   VA-API, and DRM packages on Linux. Shared production sources, subtitle/media
@@ -82,11 +83,12 @@ checklist must not duplicate or silently change them.
 * Linux V1 requires native Wayland. The color-management-v1 global,
   parametric-description feature, named sRGB primaries, `gamma22`, and
   perceptual rendering intent form the optional managed-SDR capability.
-  `ext_linear`, preferred surface feedback, and description information add
-  the managed-HDR capability. Treat these as capability contracts rather than
-  compositor brand or release-number lists. If managed SDR cannot be declared,
-  select unmanaged assumed-sRGB SDR; if only HDR capabilities are incomplete,
-  retain managed SDR. Report why each higher mode is unavailable.
+  Protocol version 2, named BT.2020 primaries, PQ transfer, preferred surface
+  feedback, and description information add the managed-HDR capability. Treat
+  these as capability contracts rather than compositor brand or release-
+  number lists. If managed SDR cannot be declared, select unmanaged assumed-
+  sRGB SDR; if only HDR capabilities are incomplete, retain managed SDR.
+  Report why each higher mode is unavailable.
 * The initial Linux implementation uses only system packages. Windows retains
   its current vcpkg manifest and exact pins; Linux neither requires nor
   populates vcpkg. Do not add a project-specific dependency-provider switch:
@@ -112,58 +114,58 @@ checklist must not duplicate or silently change them.
 * Select Wayland before constructing `QGuiApplication`, then fail fast unless
   Qt reports the `wayland` QPA. Do not recognize `xcb`, XWayland, or an
   automatic presentation fallback as supported.
-* Qt owns the `wl_surface` and Vulkan `VkSurfaceKHR`. When managed color is in
-  use, exactly one component
-  owns `wp_color_management_surface_v1`; a duplicate is a protocol error. Qt's
-  Wayland integration is that owner. Sunroom selects the requested
-  `QSurfaceFormat` color space and matching buffer encoding, but does not create
-  a second color-management surface or take over `wl_surface.commit`.
+* Qt owns the `QWindow`, `wl_surface`, xdg toplevel, and Vulkan
+  `VkSurfaceKHR`. When managed color is in use, exactly one component owns
+  `wp_color_management_surface_v1`; a duplicate is a protocol error. Sunroom's
+  narrow version-2 adapter is that color-declaration owner, while Qt's
+  requested color space remains empty and Vulkan WSI uses pass-through.
+  Sunroom does not take over the Qt surface or buffer commits.
 * A narrow Linux display adapter may use Qt 6.10's private native
   `QWaylandWindow` interface to obtain the surface and follow its creation and
-  destruction signals. The adapter binds capabilities, owns preferred-
-  description parsing, and publishes semantic output state. It does not
-  duplicate Qt's image-description creation or surface policy.
+  destruction signals. The adapter binds exactly protocol version 2, creates
+  ready managed descriptions, owns preferred-description parsing, reapplies
+  the current declaration after exceptional surface recreation, and publishes
+  semantic output state.
 * Support three explicit presentation encodings. `UnmanagedSrgb` leaves the
   Qt surface color space unset, assumes an SDR target, and emits exact
-  piecewise sRGB. The two managed encodings remain coupled to their Qt
-  declarations:
+  piecewise sRGB. The two managed encodings remain coupled to their Sunroom-
+  owned declarations:
   `ManagedGamma22Sdr` declares sRGB primaries plus `gamma22` and uses an SDR
   swapchain whose final compositor encodes normalized non-negative linear
   values as `linear^(1/2.2)`;
-  `ManagedExtendedLinear` declares sRGB primaries plus `ext_linear` and uses
-  the FP16 extended-linear swapchain with the 80-nit reference-white anchor.
+  `ManagedHdr10Pq` declares BT.2020 primaries plus `st2084_pq` and uses the
+  10-bit HDR10 swapchain. The final presentation encode maps working `1.0` to
+  the declaration's 203-nit source-reference coordinate; the compositor
+  anchors that coordinate to active output reference white.
   The existing piecewise sRGB OETF must not be emitted under a gamma-2.2
   declaration.
-* Keep transfer selection at the existing final-compositor boundary. A small
-  shared `PiecewiseSrgb`, `Gamma22`, or `ExtendedLinear` value is derived from
-  the selected surface contract. Linux and Windows share piecewise sRGB for
-  their unmanaged assumed-sRGB modes; managed Linux uses gamma 2.2 or extended
-  linear. This is not a second renderer or platform color-policy layer.
+* Keep encoding selection at the existing final-compositor boundary. A small
+  shared `Srgb`, `Gamma22Srgb`, `LinearSrgb`, or `Bt2020Pq` value is derived
+  from the selected surface contract. Managed Linux uses gamma 2.2 or performs
+  the one final linear-sRGB-to-BT.2020/PQ conversion. This is not a second
+  renderer or platform color-policy layer.
 * Complete the startup capability inventory before creating the native
   surface. If managed SDR cannot be declared, leave Qt's requested color space
-  unset and keep `UnmanagedSrgb` for the window lifetime. Otherwise start with
-  managed SDR. When the additional HDR capabilities provide a complete
-  preferred target, select the managed mode from its latest semantic value: set
-  `QColorSpace::SRgb` for gamma-2.2 SDR or `QColorSpace::SRgbLinear` for
-  extended-linear HDR before creating the corresponding native surface, and
-  couple that surface with the matching swapchain and compositor encoding.
-  Qt applies its Wayland image description asynchronously. Do not gate the
-  first buffer, add a declaration generation, or take surface ownership merely
-  to perfect that transient ordering; reconcile the latest semantic mode at
-  the next safe presentation boundary. Failure of an optional extended-linear
-  attempt rolls back to a newly created managed gamma-2.2 SDR surface and
-  suppresses another attempt for the same semantic target and graphics-device
-  generation. Only a materially different target or a new device generation
-  retries HDR; equivalent feedback does not. The unmanaged startup mode does
-  not attempt HDR or acquire managed color later.
-  Qt's unexposed internal description-failure path is treated as an upstream
-  defect, not as a product state requiring duplicate machinery.
+  unset and keep `UnmanagedSrgb` for the window lifetime. Otherwise create the
+  managed gamma-2.2 description and, when BT.2020/PQ capabilities are complete,
+  the HDR description before presentation; accept each only after `ready2`.
+  Start a capable window in `ManagedHdr10Pq` independently of its current
+  preferred output. Couple the description to the exact RGB10A2 HDR10 and
+  pass-through Vulkan formats and the matching final encoder.
+  Preferred feedback never changes that content encoding. Failure of an HDR10
+  format, render pass, swapchain create, or resize attempt changes the pending
+  declaration and rendering tuple to managed gamma-2.2 SDR on the stable
+  `wl_surface` and suppresses another attempt for that graphics-device
+  generation. A new device generation retries HDR once; output movement does
+  not. The unmanaged startup mode does not attempt HDR or acquire managed
+  color later.
 * Convert completed preferred descriptions into the existing semantic
   `DisplayState`. Protocol object identities and callbacks remain local to
   the adapter; equivalent values do not cause shared state churn. A surface
   recreation invalidates the old feedback object before binding the new one.
-* Managed HDR remains linear sRGB with an 80-nit reference-white anchor;
-  managed SDR is explicitly gamma 2.2. Unmanaged SDR assumes one-times
+* Managed HDR keeps Sunroom's linear-sRGB, active-reference-white working
+  space and encodes the complete composition to BT.2020/PQ once at the final
+  presentation boundary; managed SDR is explicitly gamma 2.2. Unmanaged SDR assumes one-times
   reference-white headroom and an sRGB target without claiming calibration.
   The managed semantic display target controls usable headroom. Do not claim
   full target-gamut propagation until the existing linear-sRGB surface
@@ -291,7 +293,7 @@ checklist must not duplicate or silently change them.
 * Applying source ICC profiles, full output-gamut propagation, absolute HLG
   monitoring, or broader HDR claims not already accepted by the shared color
   pipeline.
-* Treating WSLg, lavapipe, a protocol advertisement, or successful FP16
+* Treating WSLg, lavapipe, a protocol advertisement, or successful HDR10
   swapchain creation alone as proof of HDR support.
 
 ## Implementation slices
@@ -382,29 +384,29 @@ meets the first completion level.
 
 ### 4. Preferred-target observation and HDR acceptance
 
-1. Extend the capability/lifetime adapter established by the SDR slice with
-   preferred surface feedback and immutable description information.
-2. Keep Qt as the only color-management surface owner. Request its standard
-   gamma-2.2 SDR or extended-linear HDR color space before native-surface
-   creation; do not duplicate its image-description implementation.
-3. Implement semantic SDR/HDR transitions by recreating the native surface and
-   swapchain as one coupled presentation mode while preserving the logical
-   device and media operation whenever the replacement surface remains
-   present-compatible. Allow asynchronous Qt/compositor convergence and let
-   the latest semantic mode win.
-4. Feed currently supported preferred luminance and HDR semantics into
+1. Bind color-management-v1 version 2, create ready managed gamma-2.2 and
+   BT.2020/PQ descriptions, and follow the Qt-owned `wl_surface` with one
+   Sunroom-owned color-management surface and preferred-feedback object.
+2. Keep an HDR-capable content surface BT.2020/PQ across HDR and SDR outputs.
+   Require both raw Vulkan RGB10A2/HDR10 and RGB10A2/pass-through pairs and
+   QRhi HDR10 support before accepting the presentation tuple.
+3. Change only the pending color declaration and swapchain/encoder tuple after
+   genuine HDR presentation failure. Keep the native window and `wl_surface`
+   stable, suppress another attempt for that device generation, and permit one
+   SDR-to-PQ retry after a new graphics-device generation.
+4. Feed currently supported preferred target luminance into
    `PresentationOutputState`; reconcile at the existing safe frame boundary
    and rerender the retained frame when effective target values change. Parse,
    validate, and retain preferred primaries in adapter-local diagnostics until
    the shared linear-sRGB render contract is deliberately extended.
-5. Validate the declared 80-nit anchor, one-times SDR target, HDR headroom
+5. Validate reference-white anchoring, one-times SDR target, HDR target
    response, compositor tone
    mapping, output moves, compositor-selected fullscreen output, HDR toggles,
    hotplug/reconnect, and paused-frame rerender on real SDR and HDR displays.
    Keep observed protocol identities out of shared state.
 
 Exit: HDR is reported as supported only on tested protocol/compositor/display
-combinations for which stable Qt declaration, FP16 presentation, semantic
+combinations for which stable Sunroom declaration, HDR10 presentation, semantic
 target feedback, and visible/measurement behavior all pass.
 
 ### 5. VAAPI/DRM PRIME acceleration
@@ -485,8 +487,8 @@ missing evidence.
   underrun, migration, route loss, reconnect, and suspend.
 * A real color-management-v1 compositor and SDR display for managed gamma-2.2
   presentation.
-* A real HDR display for FP16 extended-linear presentation, 80-nit reference
-  white, highlight headroom, output moves, HDR toggles, and managed gamma-2.2
+* A real HDR display for BT.2020/PQ HDR10 presentation, reference-white
+  anchoring, highlight handling, output moves, HDR toggles, and managed gamma-2.2
   SDR rollback.
 * Windowed and fullscreen transitions between SDR and HDR outputs, including
   compositor-selected fullscreen placement, semantic feedback convergence,
@@ -502,7 +504,7 @@ missing evidence.
 | System dependency ABI or required feature mismatch | Fail configure or startup with the exact mismatched dependency/capability. |
 | color-management-v1 cannot declare managed gamma-2.2 SDR at startup | Run native Wayland in unmanaged assumed-sRGB SDR, leave Qt's color space unset, and diagnose managed color and HDR as unavailable. |
 | Managed SDR is available but an HDR-only capability is absent | Keep managed gamma-2.2 SDR and diagnose HDR as unavailable. |
-| Extended-linear surface or FP16 swapchain fails | Tear down the attempted HDR surface, recreate a color-management-v1 gamma-2.2 `SystemManaged` surface plus SDR swapchain, and suppress HDR for the same semantic target/device-generation pair. Retry only after either materially changes. |
+| BT.2020/PQ format, render pass, swapchain creation, or resize fails | Keep the native surface, select its ready gamma-2.2 description plus SDR swapchain and encoder, and suppress HDR for that graphics-device generation. Retry once after a new generation, not after output movement. |
 | Preferred display description changes | Publish the latest semantic target once complete and rerender the retained frame at a safe boundary. |
 | Wayland surface is destroyed/recreated | Destroy feedback and swapchain state tied to the old surface; preserve the domain if it can present to the replacement, otherwise enter bounded domain recovery. |
 | Fullscreen or output transition is asynchronous | Wait for Qt/compositor convergence, keep the latest semantic target, preserve playback/device state, and rerender after presentation resources settle. |
@@ -581,9 +583,9 @@ validation, so no alternate device creator or copy path was added.
   barrier and native-layout reconciliation. The
   accepted contract and validation evidence are recorded in ADR 0019 and the
   dated Linux presentation evidence note.
-* Qt's surface declaration must be validated on claimed real compositors,
-  including coupled surface recreation and rollback after a failed HDR-surface
-  or FP16 path.
+* Sunroom's version-2 declaration, exact HDR10/pass-through format gate, stable
+  cross-output behavior, and complete same-surface SDR rollback must be
+  validated on each claimed real compositor/GPU combination.
 * Native Ubuntu hardware is required for HDR, VAAPI/DRM PRIME, route migration,
   Bluetooth, and suspend evidence; WSL cannot close those gates.
 * The first distributable package needs a recorded license/dependency audit of

@@ -42,7 +42,8 @@ class PresentationOutputState final : public QObject {
     Q_PROPERTY(qreal devicePixelRatio READ devicePixelRatio NOTIFY stateChanged)
     Q_PROPERTY(qreal refreshRate READ refreshRate NOTIFY stateChanged)
     Q_PROPERTY(bool displayHdrEnabled READ displayHdrEnabled NOTIFY stateChanged)
-    Q_PROPERTY(bool extendedLinearActive READ extendedLinearActive NOTIFY stateChanged)
+    Q_PROPERTY(bool hdrPresentationActive READ hdrPresentationActive
+               NOTIFY stateChanged)
     Q_PROPERTY(bool sceneReferred READ sceneReferred NOTIFY stateChanged)
     Q_PROPERTY(bool sdrWhiteKnown READ sdrWhiteKnown NOTIFY stateChanged)
     Q_PROPERTY(bool luminanceKnown READ luminanceKnown NOTIFY stateChanged)
@@ -57,6 +58,9 @@ class PresentationOutputState final : public QObject {
 
 public:
     explicit PresentationOutputState(QObject *parent);
+    PresentationOutputState(
+        std::unique_ptr<DisplayStateProvider> provider,
+        QObject *parent);
     ~PresentationOutputState() override;
 
     void attach(QWindow &window);
@@ -76,7 +80,7 @@ public:
     qreal devicePixelRatio() const;
     qreal refreshRate() const;
     bool displayHdrEnabled() const;
-    bool extendedLinearActive() const;
+    bool hdrPresentationActive() const;
     bool sceneReferred() const;
     bool sdrWhiteKnown() const;
     bool luminanceKnown() const;

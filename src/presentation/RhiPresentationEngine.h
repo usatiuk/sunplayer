@@ -40,6 +40,7 @@ public:
                           MediaSession &mediaSession,
                           VideoViewportState &videoViewport,
                           PresentationSurfaceContract surfaceContract,
+                          PresentationSurfaceController *surfaceController,
                           QObject *parent = nullptr);
     ~RhiPresentationEngine() override;
 
@@ -66,6 +67,11 @@ private:
     bool createSwapChain();
     bool resizeSwapChain(bool force = false);
     bool createOrResizeSwapChain(const char *operation);
+    void handleSwapChainFailure(
+        const char *operation,
+        const char *hdrRejectionReason);
+    void scheduleSwapChainRecovery(const char *operation);
+    void completePresentationRecovery();
     void releaseSwapChainResources();
     void releaseDevice();
     void handleDeviceLoss(const char *operation);
@@ -77,6 +83,9 @@ private:
     void scheduleNextFrame(bool videoViewportActive);
     void markOutputCharacteristicsDirty();
     bool reconcileOutputCharacteristics();
+    void queueSurfaceTransition();
+    void rejectRequiredHdrSurface(const char *reason);
+    void rebuildForPresentIncompatibleSurface();
 
     QWindow &m_window;
     PresentationOutputState &m_outputState;
@@ -86,6 +95,7 @@ private:
     MediaSession &m_mediaSession;
     VideoViewportState &m_videoViewport;
     PresentationSurfaceContract m_surfaceContract;
+    PresentationSurfaceController *m_surfaceController = nullptr;
     std::unique_ptr<GraphicsDeviceDomain> m_graphicsDevice;
     QRhi *m_rhi = nullptr;
     std::unique_ptr<QRhiSwapChain> m_swapChain;
@@ -95,6 +105,7 @@ private:
     std::unique_ptr<RenderedVideoProducer> m_videoProducer;
     std::unique_ptr<HdrCompositor> m_compositor;
     QTimer m_deviceRecoveryTimer;
+    QTimer m_swapChainRecoveryTimer;
     bool m_rendering = false;
     // Mirrors an outstanding QWindow UpdateRequest owned by this engine.
     bool m_framePending = false;
@@ -102,6 +113,8 @@ private:
     bool m_frameRequestedWhileRendering = false;
     // Native display callbacks are hints. Query and mutate at the render point.
     bool m_outputCharacteristicsDirty = false;
+    bool m_surfaceTransitionPending = false;
+    bool m_surfaceDeclarationPending = false;
 #ifdef Q_OS_MACOS
     // Qt's Cocoa backing-property propagation can replace CAMetalLayer's
     // colorspace when the window changes screens. QRhi reapplies the selected
@@ -111,6 +124,7 @@ private:
     bool m_recoveringDevice = false;
     bool m_retriedFrameError = false;
     int m_deviceRecoveryAttempts = 0;
+    int m_swapChainRecoveryAttempts = 0;
     std::uint64_t m_videoProducerConfigurationRevision = 0;
     std::uint64_t m_boundVideoTextureRevision = 0;
     std::uint64_t m_boundSubtitleTextureRevision = 0;

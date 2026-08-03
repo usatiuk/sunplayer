@@ -34,7 +34,8 @@ The Ubuntu system build now compiles that shared media, subtitle, playback,
 and UI graph plus the native-Wayland Vulkan path. It passes 26 Linux CTests and
 QML lint, including a device-backed system-cubeb lifecycle, real audio-first
 application playback, FFmpeg/subtitle fixtures, system dependencies, exact
-unmanaged-sRGB versus managed-gamma-2.2 surface/transfer selection, and
+unmanaged-sRGB versus managed-gamma-2.2 surface encoding, version-2 managed
+HDR10 capability/stable-mode selection and bounded rejection, and
 application-chrome layout/state behavior. A WSLg production scenario exercises
 the real Qt Wayland window, llvmpipe Vulkan device, libplacebo direct target,
 redirected QML, swapchain, fullscreen/restoration, and teardown under Vulkan
@@ -50,7 +51,11 @@ WSLg's Pulse-compatible cubeb output and advancing application audio clock are
 proven, and a user-confirmed real-file run is audible through WSLg. Native
 PulseAudio/PipeWire-Pulse acoustic output and live default-route switching,
 native GPU behavior, VAAPI import, live managed gamma-2.2 declaration, and HDR
-display behavior remain unproven.
+display behavior remain unproven. The production Linux build compiles the
+shared final BT.709-to-BT.2020/PQ shader. Its analytic GPU pixel oracle remains
+inside the Windows-only real-compositor test and covers neutral reference white,
+signed pre-matrix input/post-matrix clamping, and ordinary color. This is not
+Linux HDR10 WSI or native-output evidence.
 
 The Apple M2/macOS 26 lane exercises the real Metal QRhi device, same-device
 libplacebo Vulkan/MoltenVK target, direct RGBA16F Metal texture import,

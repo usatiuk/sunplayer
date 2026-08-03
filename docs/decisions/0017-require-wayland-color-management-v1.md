@@ -12,7 +12,9 @@
 
 This record preserves the earlier managed-only product decision. ADR 0018
 supersedes it after reconsidering whether absence of the optional protocol
-should prevent otherwise ordinary native-Wayland SDR playback.
+should prevent otherwise ordinary native-Wayland SDR playback. ADR 0021 also
+supersedes its historical Qt-owned FP16 managed-HDR design with the current
+Sunroom-owned version-2 HDR10/PQ path.
 
 ADR 0015 selected native Wayland and allowed an unmanaged sRGB fallback when a
 Wayland compositor lacked color management. That fallback still creates a

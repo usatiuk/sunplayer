@@ -8,9 +8,16 @@
 #include "platform/DisplayStateProvider.h"
 
 PresentationOutputState::PresentationOutputState(QObject *parent)
-    : QObject(parent) {
-    m_provider = createDisplayStateProvider();
+    : PresentationOutputState(
+          createDisplayStateProvider(), parent) {}
+
+PresentationOutputState::PresentationOutputState(
+        std::unique_ptr<DisplayStateProvider> provider,
+        QObject *parent)
+    : QObject(parent),
+      m_provider(std::move(provider)) {
     Q_ASSERT(m_provider);
+    qRegisterMetaType<DisplayState>();
     connect(m_provider.get(), &DisplayStateProvider::stateChanged,
             this, &PresentationOutputState::applyDisplayState);
 }
@@ -64,8 +71,8 @@ qreal PresentationOutputState::refreshRate() const { return m_refreshRate; }
 bool PresentationOutputState::displayHdrEnabled() const {
     return m_state.valid && m_state.hdrActive;
 }
-bool PresentationOutputState::extendedLinearActive() const {
-    return presentationTarget().extendedLinearActive;
+bool PresentationOutputState::hdrPresentationActive() const {
+    return presentationTarget().hdrPresentationActive;
 }
 bool PresentationOutputState::sceneReferred() const {
     return presentationTarget().sceneReferred;

@@ -9,6 +9,8 @@
 #include "app/windowchrome/WindowChromeController.h"
 #include "presentation/PresentationSurfaceContract.h"
 
+class DisplayStateProvider;
+
 #ifdef Q_OS_LINUX
 class LinuxWaylandWindowContext;
 #endif
@@ -66,7 +68,10 @@ private:
         Releasing,
     };
 
-    void initialize(PresentationSurfaceContract surfaceContract);
+    void initialize(
+        PresentationSurfaceContract surfaceContract,
+        std::unique_ptr<DisplayStateProvider> displayStateProvider,
+        PresentationSurfaceController *surfaceController);
     void applyCursorVisibility();
     void forwardMouseEvent(QMouseEvent &event);
     bool playbackShortcutEnabled() const;

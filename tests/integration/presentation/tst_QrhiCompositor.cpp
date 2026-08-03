@@ -183,6 +183,37 @@ float linearToSrgb(float value) {
         : 1.055f * std::pow(value, 1.0f / 2.4f) - 0.055f;
 }
 
+std::array<float, 3> linearSrgbToBt2020(
+        const FloatPixel &value) {
+    return {
+        0.627404f * value.r
+            + 0.329283f * value.g
+            + 0.043313f * value.b,
+        0.069097f * value.r
+            + 0.919540f * value.g
+            + 0.011362f * value.b,
+        0.016391f * value.r
+            + 0.088013f * value.g
+            + 0.895595f * value.b,
+    };
+}
+
+float linearToPq(float value) {
+    constexpr float m1 = 2610.0f / 16384.0f;
+    constexpr float m2 = 2523.0f / 32.0f;
+    constexpr float c1 = 3424.0f / 4096.0f;
+    constexpr float c2 = 2413.0f / 128.0f;
+    constexpr float c3 = 2392.0f / 128.0f;
+    const float normalized = std::clamp(
+        value * (PL_COLOR_SDR_WHITE / 10000.0f),
+        0.0f,
+        1.0f);
+    const float powered = std::pow(normalized, m1);
+    return std::pow(
+        (c1 + c2 * powered) / (1.0f + c3 * powered),
+        m2);
+}
+
 int encodedByte(float linear) {
     const float encoded = linearToSrgb(std::clamp(linear, 0.0f, 1.0f));
     return static_cast<int>(std::lround(encoded * 255.0f));
@@ -364,7 +395,7 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     };
     compositorParameters.sdrScale = 1.0f;
     compositorParameters.ndcYUp = rhi->isYUpInNDC() ? 1.0f : 0.0f;
-    compositorParameters.outputTransfer = 0.0f;
+    compositorParameters.outputEncoding = 0.0f;
 
     QRhiCommandBuffer *commandBuffer = nullptr;
     QCOMPARE(
@@ -501,7 +532,7 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
         producer->prepareForComposition(*commandBuffer),
         VideoOperationResult::Ready);
     HdrCompositorParameters gamma22Parameters = compositorParameters;
-    gamma22Parameters.outputTransfer = 1.0f;
+    gamma22Parameters.outputEncoding = 1.0f;
     compositor.render(
         *commandBuffer,
         *outputTarget,
@@ -532,6 +563,190 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     compareByteNear(gamma22Video.g, expectedGamma22Byte);
     compareByteNear(gamma22Video.b, expectedGamma22Byte);
     QCOMPARE(gamma22Video.a, 255);
+
+    // Linux HDR10 keeps every layer linear through composition, then maps
+    // linear sRGB into the BT.2020/PQ surface exactly once.
+    QCOMPARE(
+        rhi->beginOffscreenFrame(&commandBuffer),
+        QRhi::FrameOpSuccess);
+    QCOMPARE(
+        producer->prepareForComposition(*commandBuffer),
+        VideoOperationResult::Ready);
+    HdrCompositorParameters pqParameters = compositorParameters;
+    pqParameters.outputEncoding = 3.0f;
+    linearOutputCompositor.render(
+        *commandBuffer,
+        *linearOutputTarget,
+        outputSize,
+        pqParameters);
+
+    bool pqReadbackCompleted = false;
+    QRhiReadbackResult pqReadback;
+    pqReadback.completed = [&pqReadbackCompleted] {
+        pqReadbackCompleted = true;
+    };
+    updates = rhi->nextResourceUpdateBatch();
+    updates->readBackTexture(
+        QRhiReadbackDescription(linearOutputTexture.get()),
+        &pqReadback);
+    commandBuffer->resourceUpdate(updates);
+    QCOMPARE(rhi->endOffscreenFrame(), QRhi::FrameOpSuccess);
+    producer->submissionAccepted();
+    QVERIFY(pqReadbackCompleted);
+
+    const FloatPixel pqVideo = readFloatPixel(
+        pqReadback,
+        *rhi,
+        videoOriginX + sampleX,
+        videoOriginY + 5);
+    const std::array<float, 3> expectedBt2020 =
+        linearSrgbToBt2020(middle);
+    compareNear(pqVideo.r, linearToPq(expectedBt2020[0]), 0.002f);
+    compareNear(pqVideo.g, linearToPq(expectedBt2020[1]), 0.002f);
+    compareNear(pqVideo.b, linearToPq(expectedBt2020[2]), 0.002f);
+    compareNear(pqVideo.a, 1.0f, 0.001f);
+
+    // Working neutral 1.0 is the platform reference white. The Linux final
+    // encoder serializes it at PQ's 203-nit source-reference coordinate.
+    QCOMPARE(
+        rhi->beginOffscreenFrame(&commandBuffer),
+        QRhi::FrameOpSuccess);
+    const QByteArray opaqueWhiteUi(4, static_cast<char>(0xff));
+    updates = rhi->nextResourceUpdateBatch();
+    updates->uploadTexture(
+        uiTexture.get(),
+        QRhiTextureUploadDescription(QRhiTextureUploadEntry(
+            0, 0,
+            QRhiTextureSubresourceUploadDescription(opaqueWhiteUi))));
+    updates->uploadTexture(
+        subtitleTexture.get(),
+        QRhiTextureUploadDescription(QRhiTextureUploadEntry(
+            0, 0,
+            QRhiTextureSubresourceUploadDescription(transparentUi))));
+    commandBuffer->resourceUpdate(updates);
+    HdrCompositorParameters neutralPqParameters = pqParameters;
+    neutralPqParameters.videoSize = {0.0f, 0.0f};
+    linearOutputCompositor.render(
+        *commandBuffer,
+        *linearOutputTarget,
+        outputSize,
+        neutralPqParameters);
+
+    bool neutralPqReadbackCompleted = false;
+    QRhiReadbackResult neutralPqReadback;
+    neutralPqReadback.completed = [&neutralPqReadbackCompleted] {
+        neutralPqReadbackCompleted = true;
+    };
+    updates = rhi->nextResourceUpdateBatch();
+    updates->readBackTexture(
+        QRhiReadbackDescription(linearOutputTexture.get()),
+        &neutralPqReadback);
+    commandBuffer->resourceUpdate(updates);
+    QCOMPARE(rhi->endOffscreenFrame(), QRhi::FrameOpSuccess);
+    producer->submissionAccepted();
+    QVERIFY(neutralPqReadbackCompleted);
+    const FloatPixel neutralPq = readFloatPixel(
+        neutralPqReadback, *rhi, 1, 1);
+    const float pqReferenceWhite = linearToPq(1.0f);
+    compareNear(pqReferenceWhite, 0.580688881f, 0.000001f);
+    compareNear(neutralPq.r, pqReferenceWhite, 0.002f);
+    compareNear(neutralPq.g, pqReferenceWhite, 0.002f);
+    compareNear(neutralPq.b, pqReferenceWhite, 0.002f);
+    compareNear(neutralPq.a, 1.0f, 0.001f);
+
+    // Do not clamp signed linear-sRGB components before changing primaries.
+    // This vector also produces a negative BT.2020 green component, which PQ
+    // must clamp only after the matrix.
+    std::unique_ptr<QRhiTexture> signedVideoTexture(rhi->newTexture(
+        QRhiTexture::RGBA16F, {1, 1}, 1));
+    QVERIFY(signedVideoTexture->create());
+    QCOMPARE(
+        linearOutputCompositor.setTextures(
+            signedVideoTexture.get(),
+            subtitleTexture.get(),
+            *uiTexture),
+        HdrCompositor::ResourceResult::Ready);
+    const std::array<qfloat16, 4> signedLinearSrgb{
+        qfloat16(1.0f),
+        qfloat16(-0.1f),
+        qfloat16(0.0f),
+        qfloat16(1.0f),
+    };
+    QByteArray signedPixelBytes(
+        static_cast<qsizetype>(sizeof(signedLinearSrgb)), '\0');
+    std::memcpy(
+        signedPixelBytes.data(),
+        signedLinearSrgb.data(),
+        sizeof(signedLinearSrgb));
+
+    QCOMPARE(
+        rhi->beginOffscreenFrame(&commandBuffer),
+        QRhi::FrameOpSuccess);
+    updates = rhi->nextResourceUpdateBatch();
+    updates->uploadTexture(
+        signedVideoTexture.get(),
+        QRhiTextureUploadDescription(QRhiTextureUploadEntry(
+            0, 0,
+            QRhiTextureSubresourceUploadDescription(signedPixelBytes))));
+    updates->uploadTexture(
+        uiTexture.get(),
+        QRhiTextureUploadDescription(QRhiTextureUploadEntry(
+            0, 0,
+            QRhiTextureSubresourceUploadDescription(transparentUi))));
+    commandBuffer->resourceUpdate(updates);
+    HdrCompositorParameters signedPqParameters = pqParameters;
+    signedPqParameters.videoOrigin = {0.0f, 0.0f};
+    signedPqParameters.videoSize = {
+        static_cast<float>(outputSize.width()),
+        static_cast<float>(outputSize.height()),
+    };
+    linearOutputCompositor.render(
+        *commandBuffer,
+        *linearOutputTarget,
+        outputSize,
+        signedPqParameters);
+
+    bool signedPqReadbackCompleted = false;
+    QRhiReadbackResult signedPqReadback;
+    signedPqReadback.completed = [&signedPqReadbackCompleted] {
+        signedPqReadbackCompleted = true;
+    };
+    updates = rhi->nextResourceUpdateBatch();
+    updates->readBackTexture(
+        QRhiReadbackDescription(linearOutputTexture.get()),
+        &signedPqReadback);
+    commandBuffer->resourceUpdate(updates);
+    QCOMPARE(rhi->endOffscreenFrame(), QRhi::FrameOpSuccess);
+    producer->submissionAccepted();
+    QVERIFY(signedPqReadbackCompleted);
+
+    const FloatPixel signedPq = readFloatPixel(
+        signedPqReadback, *rhi, 1, 1);
+    const FloatPixel signedInput{
+        1.0f, -0.1f, 0.0f, 1.0f,
+    };
+    const std::array<float, 3> signedBt2020 =
+        linearSrgbToBt2020(signedInput);
+    QVERIFY(signedBt2020[1] < 0.0f);
+    compareNear(
+        signedPq.r,
+        linearToPq(std::max(0.0f, signedBt2020[0])),
+        0.002f);
+    compareNear(
+        signedPq.g,
+        linearToPq(std::max(0.0f, signedBt2020[1])),
+        0.002f);
+    compareNear(
+        signedPq.b,
+        linearToPq(std::max(0.0f, signedBt2020[2])),
+        0.002f);
+    compareNear(signedPq.a, 1.0f, 0.001f);
+    QCOMPARE(
+        linearOutputCompositor.setTextures(
+            &producer->textureForComposition(),
+            subtitleTexture.get(),
+            *uiTexture),
+        HdrCompositor::ResourceResult::Ready);
 
     // A later frame changes only presentation, subtitle, and UI state. It
     // must reuse the submitted video surface while proving the intended layer
@@ -565,7 +780,7 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     HdrCompositorParameters linearParameters = compositorParameters;
     constexpr float linearSdrScale = 1.5f;
     linearParameters.sdrScale = linearSdrScale;
-    linearParameters.outputTransfer = 2.0f;
+    linearParameters.outputEncoding = 2.0f;
     linearOutputCompositor.render(
         *commandBuffer,
         *linearOutputTarget,
@@ -1245,7 +1460,7 @@ libplaceboD3d11SurfaceAndCompositionReadback() {
         hdrState.description.referenceWhiteNits / 80.0f;
     parameters.ndcYUp =
         rhi.isYUpInNDC() ? 1.0f : 0.0f;
-    parameters.outputTransfer = 2.0f;
+    parameters.outputEncoding = 2.0f;
     compositor.render(
         *commandBuffer,
         *outputTarget,

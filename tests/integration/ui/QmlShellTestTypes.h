@@ -174,7 +174,7 @@ class ShellTestPresentationOutputState final : public QObject {
     Q_PROPERTY(qreal devicePixelRatio MEMBER m_devicePixelRatio CONSTANT)
     Q_PROPERTY(qreal refreshRate MEMBER m_refreshRate CONSTANT)
     Q_PROPERTY(bool displayHdrEnabled MEMBER m_displayHdrEnabled CONSTANT)
-    Q_PROPERTY(bool extendedLinearActive MEMBER m_extendedLinearActive CONSTANT)
+    Q_PROPERTY(bool hdrPresentationActive MEMBER m_hdrPresentationActive CONSTANT)
     Q_PROPERTY(bool sceneReferred MEMBER m_sceneReferred CONSTANT)
     Q_PROPERTY(bool sdrWhiteKnown MEMBER m_sdrWhiteKnown CONSTANT)
     Q_PROPERTY(bool luminanceKnown MEMBER m_luminanceKnown CONSTANT)
@@ -208,7 +208,7 @@ private:
     qreal m_devicePixelRatio = 1.0;
     qreal m_refreshRate = 60.0;
     bool m_displayHdrEnabled = false;
-    bool m_extendedLinearActive = false;
+    bool m_hdrPresentationActive = false;
     bool m_sceneReferred = false;
     bool m_sdrWhiteKnown = true;
     bool m_luminanceKnown = true;

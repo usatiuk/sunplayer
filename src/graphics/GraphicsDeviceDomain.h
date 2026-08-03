@@ -7,6 +7,7 @@
 #include <libplacebo/gpu.h>
 
 class QRhi;
+class QWindow;
 class LibplaceboHardwareFrameImporter;
 struct VideoHardwareDecodeCapability;
 class VideoTargetInterop;
@@ -84,6 +85,8 @@ public:
         const VideoTargetRequest &request) = 0;
     virtual std::unique_ptr<LibplaceboHardwareFrameImporter>
         createHardwareFrameImporter() = 0;
+    virtual bool supportsPresentation(QWindow &window) const;
+    virtual bool supportsHdr10Presentation(QWindow &window) const;
 
     GraphicsBackend backend() const;
     std::uint64_t generation() const;

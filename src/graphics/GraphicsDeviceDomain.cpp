@@ -43,6 +43,14 @@ GraphicsDeviceDomain::GraphicsDeviceDomain() {
 
 GraphicsDeviceDomain::~GraphicsDeviceDomain() = default;
 
+bool GraphicsDeviceDomain::supportsPresentation(QWindow &) const {
+    return true;
+}
+
+bool GraphicsDeviceDomain::supportsHdr10Presentation(QWindow &) const {
+    return true;
+}
+
 GraphicsBackend GraphicsDeviceDomain::backend() const {
     return diagnostics().backend;
 }

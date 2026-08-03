@@ -225,7 +225,6 @@ public:
 #endif
 
 std::unique_ptr<DisplayStateProvider> createDisplayStateProvider(QObject *parent) {
-    qRegisterMetaType<DisplayState>();
 #ifdef Q_OS_WIN
     return std::make_unique<WindowsDisplayStateProvider>(parent);
 #elif defined(Q_OS_MACOS)

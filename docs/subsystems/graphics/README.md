@@ -27,10 +27,10 @@ cross-platform target:
 | --- | --- |
 | Operating system | Windows, Apple-Silicon macOS, and native-Wayland Linux |
 | Graphics domain | Factory-selected D3D11, Metal/MoltenVK, or Vulkan implementation owning QRhi, libplacebo state, execution synchronization, diagnostics, and device generation |
-| Presentation | Windows extended-linear sRGB/scRGB or SDR; macOS extended-linear sRGB EDR or ColorSync-managed sRGB SDR; Linux unmanaged piecewise-sRGB SDR or managed gamma-2.2 SDR selected before native creation |
+| Presentation | Windows extended-linear sRGB/scRGB or SDR; macOS extended-linear sRGB EDR or ColorSync-managed sRGB SDR; Linux unmanaged piecewise-sRGB SDR, managed gamma-2.2 SDR, or managed 10-bit BT.2020/PQ HDR |
 | Qt Quick | Redirected into an application-owned full-window RGBA16F texture with matching depth/stencil |
 | Video | Shared QRhi diagnostic, analytic libplacebo, or FFmpeg-frame libplacebo producer → direct target → display-targeted RGBA16F surface |
-| Display telemetry | Shared Qt/QRhi state plus Windows Advanced Color and macOS AppKit relative EDR headroom; Linux preferred-output/HDR observation remains pending |
+| Display telemetry | Shared Qt/QRhi state plus Windows Advanced Color, macOS AppKit relative EDR headroom, and Wayland version-2 preferred surface descriptions |
 | Rendering cadence | Demand-driven, continuous only while the pattern or UI animates |
 
 The active work required to turn this foundation into a real player boundary is
@@ -57,7 +57,8 @@ The future subsystem boundary also includes:
 * A display-targeted video surface produced by libplacebo.
 * Subtitle and diagnostic layers.
 * VAAPI/DRM PRIME native input import hidden behind shared interfaces.
-* Managed-HDR feedback on native Wayland Linux.
+* Physical validation of managed-HDR output on additional native Wayland
+  compositor/GPU/display combinations.
 
 It does not own demuxing, decoding, media clocks, frame scheduling, audio, or
 track selection.
@@ -102,7 +103,7 @@ RhiPresentationEngine
     └── HdrCompositor
             ├── display-targeted video surface or empty-layer binding
             ├── redirected Qt Quick texture
-            └── layer composition + extended-linear or SDR encoding
+            └── layer composition + extended-linear, PQ, or SDR encoding
 ```
 
 QRhi, libplacebo rendering, and presentation run on the GUI thread. FFmpeg
@@ -131,13 +132,13 @@ geometry, and display policy remain outside the native execution scope.
 | `LibplaceboDiagnosticVideoProducer` | Owns a persistent renderer and analytic RGBA32F upload texture; describes sRGB or BT.2020/PQ input and a linear BT.709 target to libplacebo. |
 | `D3D11LibplaceboVideoTarget` | Wraps the QRhi-owned RGBA16F D3D11 texture as a `pl_tex` and brackets same-immediate-context work through QRhi external commands. |
 | `D3D11LibplaceboFrameImporter` | Validates a retained D3D11VA texture/slice and maps NV12/P010/P012/P016 plane views into libplacebo without copying the frame. |
-| `LinuxWaylandWindowContext` | Owns the window-scoped `QVulkanInstance`, inventories optional managed-color and decoration capabilities before native creation, selects the initial SDR surface contract, and explicitly destroys the native surface before the instance. |
+| `LinuxWaylandWindowContext` | Owns the window-scoped `QVulkanInstance`, inventories optional managed-color and decoration capabilities before native creation, follows the current surface's preferred description, transactionally applies managed SDR/HDR modes, and explicitly destroys the native surface before the instance. |
 | `VulkanGraphicsDeviceDomain` | Lets QRhi own the Vulkan 1.3 device/queue, validates the selected device features, imports those handles into libplacebo, and owns their shared queue guard and diagnostics. |
 | `VulkanLibplaceboVideoTarget` | Wraps a QRhi-owned RGBA16F Vulkan image for libplacebo, transfers layout knowledge back to QRhi, and preserves same-queue producer-to-sampler order without an output copy. |
 | `RenderedVideoSurfaceState` | Pure description and device/display/content reuse key for a completed display-targeted surface. It does not own a native texture. |
 | `HdrCompositor` | Places an optional already processed video surface, converts and blends the flattened UI layer, applies presentation scaling, and encodes the swapchain. It owns a valid fallback binding for UI-only frames and has no source peak, transfer, metadata, or tone-mapping inputs. |
 | `PresentationOutputState` | Combines screen metrics, operating-system display state, and the successfully created swapchain's properties into one QML-facing presentation snapshot. |
-| `DisplayStateProvider` | Narrow platform adapter for dynamic display color information. Windows uses WinRT Advanced Color; macOS uses the active `NSScreen`'s current and potential relative EDR headroom; Linux currently returns an invalid snapshot. |
+| `DisplayStateProvider` | Narrow platform adapter for dynamic display color information. Windows uses WinRT Advanced Color; macOS uses the active `NSScreen`'s current and potential relative EDR headroom; Linux uses color-management-v1 version-2 preferred surface descriptions. |
 | `PresentationSettings` | Holds the current target-peak policy. It is not the eventual persistent player-settings model. |
 
 ## Ownership and execution model
@@ -287,8 +288,10 @@ The native surface and graphics device have different lifetimes:
 * `SurfaceAboutToBeDestroyed` releases swapchain-dependent resources.
 * A normal resize calls `createOrResize()` only when the surface pixel size
   changed, except when QRhi explicitly reports an out-of-date swapchain.
-* A display-mode change recreates the swapchain when its required format
-  changes. On macOS, an actual screen change also re-runs QRhi Metal
+* A platform contract change recreates the swapchain when its required format
+  changes. Managed Wayland output movement does not change the HDR10 content
+  contract; only genuine HDR presentation failure selects its SDR fallback.
+  On macOS, an actual screen change also re-runs QRhi Metal
   `createOrResize()` on the existing compatible swapchain because Qt's Cocoa
   backing-property propagation can replace the `CAMetalLayer` color-space
   declaration.
@@ -379,14 +382,38 @@ EDR headroom, and ColorSync owns the final display-profile conversion. Sunroom
 does not infer an absolute SDR-white luminance from the relative AppKit values
 and does not add a second display ICC transform.
 
-Linux selects one initial SDR surface contract before Qt creates the native
-window. If color-management-v1 exposes the complete parametric sRGB-primary,
-gamma-2.2, perceptual-intent capability set, Qt requests `QColorSpace::SRgb`
-and Sunroom emits the matching pure gamma-2.2 transfer. Otherwise Qt's color
-space remains unset and Sunroom emits exact piecewise sRGB into an unmanaged
-assumed-sRGB surface. Missing managed color is a normal SDR capability result,
-not a graphics fallback or startup failure. Preferred-target observation and
-extended-linear HDR transitions are not implemented yet.
+Linux leaves Qt's requested Wayland color space unset. With the complete
+version-2 parametric/perceptual/sRGB/gamma-2.2 capability set, Sunroom owns one
+color-management surface and a ready managed-sRGB description. Without that
+set, Sunroom emits exact piecewise sRGB into an unmanaged assumed-sRGB surface.
+Missing managed color is a normal SDR capability result, not a graphics
+failure or an X11 fallback.
+
+Named BT.2020 and PQ additionally select a stable managed HDR content surface.
+Sunroom applies a ready BT.2020/PQ description to the existing `wl_surface`,
+requires QRhi's `HDR10` plus raw Vulkan RGB10A2/HDR10 and RGB10A2/pass-through
+pairs, and emits the matching final encoding. The surface stays HDR10 while
+moving across HDR and SDR outputs; preferred feedback updates target rendering
+and diagnostics but never changes the content encoding or recreates the
+window. The compositor maps the same source description to each output.
+
+If HDR format validation, render-pass creation, swapchain creation, or later
+resize fails without device loss, the queued render-safe path changes pending
+surface state and the swapchain to the complete managed gamma-2.2 SDR tuple.
+It prepares the SDR frame first and sends the description immediately before
+present, so the first SDR buffer commit applies matching pixels and description
+together without an intervening Qt event-loop turn.
+The rejection is bounded to the graphics-device generation; a new generation
+may retry HDR once, while output movement cannot. Exceptional Qt native-
+surface recreation reattaches the current declaration without changing the
+logical policy. Ordinary SDR swapchain failures retry eight times on the
+presentation timer. Present-incompatible domain recovery retains its attempt
+count until a compatible swapchain is actually established.
+
+Preferred luminance diagnostics remain the compositor-reported target. The
+renderer trusts a lower reported maximum, while its separate fixed PQ source-
+coordinate ceiling prevents values above `10000 / 203`. Those are distinct
+facts, not compositor-specific reinterpretation.
 
 Backend selection is platform-shaped:
 
@@ -418,6 +445,11 @@ The diagnostic pattern and UI use SDR-white-relative values:
 * The effective target expressed relative to SDR white is
   `max(1, currentHeadroom / sdrScale)`.
 * Display-referred extended-linear output uses an SDR scale of `1.0`.
+* Managed Wayland PQ output also uses an SDR scale of `1.0`; the final encode
+  maps working `1.0` to PQ's 203-nit source-reference coordinate and the
+  compositor anchors it to active output reference white. The final PQ source
+  coordinate bounds effective rendering headroom at `10000 / 203`; lower
+  compositor-declared targets remain lower.
 * Unmanaged SDR output is clamped to `[0, 1]` and encoded with the exact sRGB
   transfer function. Managed Linux gamma-2.2 SDR uses
   `encoded = linear^(1/2.2)` for normalized non-negative values. These similar
@@ -434,6 +466,12 @@ value and the presentation scale remains `1.0`. Libplacebo therefore receives
 `203 * currentHeadroom` in its virtual target units while surface value `1.0`
 continues to mean current SDR white. Potential headroom selects whether the EDR
 surface is worthwhile; it does not replace current headroom for tone mapping.
+
+On managed Wayland, preferred reference and target luminance are compositor-
+declared target values. Mutter currently publishes the PQ envelope maximum;
+another compositor may publish a more output-specific maximum. Sunroom trusts
+the reported value without compositor-name policy. These target changes can
+rerender video but do not change the stable BT.2020/PQ surface encoding.
 
 ### Rendered-video surface
 
@@ -499,7 +537,9 @@ require a post-composition transform covering video, UI, and subtitles.
 The final compositor does not know the source peak, pattern phase, tone-map
 setting, source transfer function, or HDR metadata. It places the video layer,
 blends the UI in linear SDR-white-relative space, applies `sdrScale` once, and
-encodes extended-linear or SDR output.
+encodes extended-linear or SDR output. For managed Wayland HDR10 it converts
+the complete linear-sRGB composition to linear BT.2020 and applies ST 2084
+once; this is fixed presentation encoding rather than tone mapping.
 
 An invisible or empty active viewport disables video production and
 composition for that frame. The compositor retains a valid internal texture
@@ -552,8 +592,8 @@ The current HDR Lab page displays:
 * Device-pixel ratio and refresh rate.
 * Scene-referred versus display-referred behavior.
 * SDR white and UI scale.
-* Absolute luminance range or current/potential headroom.
-* Whether HDR or only extended-linear presentation is active.
+* Preferred target volume or current/potential headroom.
+* Whether an HDR or extended-range presentation format is active.
 * Active graphics adapter.
 * Active video-surface producer and color/format summary.
 * Video output-target path, synchronization mode, known GPU copies and CPU

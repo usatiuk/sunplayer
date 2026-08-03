@@ -35,3 +35,4 @@ with a new decision when the accepted choice changes materially.
 * [0018: Support unmanaged sRGB SDR on native Wayland](0018-support-unmanaged-srgb-wayland-sdr.md)
 * [0019: Import the QRhi Vulkan device into libplacebo](0019-import-the-qrhi-vulkan-device-into-libplacebo.md)
 * [0020: Keep Qt-owned Wayland windows and render fallback chrome in-scene](0020-keep-qt-owned-wayland-windows-and-render-fallback-chrome-in-scene.md)
+* [0021: Use HDR10/PQ for managed Wayland HDR presentation](0021-use-hdr10-pq-for-managed-wayland-hdr.md)

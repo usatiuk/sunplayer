@@ -273,24 +273,25 @@ Windows V1 color release gate:
   graphics domain, retained through libplacebo GPU completion.
 * [ ] Add Vulkan/DRM PRIME/VAAPI importers with the Wayland Linux graphics
   domain.
-* [x] Inventory Linux color-management-v1 capabilities. Use Qt-owned gamma-2.2
-  surface descriptions when managed SDR can be declared, add preferred-
-  description observation only for HDR, and otherwise select unmanaged
-  assumed-sRGB SDR without additional Wayland ownership. Continue to reject
-  X11 and XWayland.
-* [x] Make final-compositor output transfer explicit at the surface boundary:
-  piecewise sRGB for Windows and Wayland unmanaged fallbacks, gamma 2.2 for Qt
-  managed Wayland SDR, and extended linear for HDR. Keep one compositor. The
+* [x] Inventory Linux color-management-v1 capabilities. Own one latest-version
+  surface declaration with ready managed gamma-2.2 and BT.2020/PQ descriptions,
+  observe version-2 preferred targets independently, and otherwise select
+  unmanaged assumed-sRGB SDR without Wayland color ownership. Continue to
+  reject X11 and XWayland.
+* [x] Make final-compositor output encoding explicit at the surface boundary:
+  piecewise sRGB for Windows and Wayland unmanaged fallbacks, gamma 2.2 for
+  managed Wayland SDR, extended linear for Windows/macOS HDR, and BT.2020/PQ
+  for managed Wayland HDR. Keep one compositor. The
   shared shader branches and selection tests exist; backend-neutral pixel
   readback for the Linux gamma-2.2 branch remains pending.
 * [x] Treat managed gamma-2.2 Wayland SDR as `SystemManaged` and its startup
   fallback as `UnmanagedSrgb` with one-times SDR headroom and HDR unavailable.
-  Qt owns the surface description and its requested color space is coupled to
-  the compositor encoding before native creation.
-* [ ] Observe preferred-output HDR state, select a managed extended-linear
-  Wayland surface, and reconcile live HDR/SDR transitions. A failed optional
-  HDR transition must return to a newly declared managed gamma-2.2 SDR surface
-  rather than abandon a working managed path.
+  Sunroom owns the managed declaration while Qt remains the toplevel owner and
+  Vulkan pass-through prevents a competing WSI declaration.
+* [x] Observe preferred-output target state without using it as a content-
+  encoding command. Keep a capable window BT.2020/PQ across HDR/SDR outputs;
+  after genuine HDR presentation failure, atomically return to the complete
+  managed gamma-2.2 SDR tuple for that graphics generation.
 
 X11 and XWayland are unsupported and do not receive a presentation backend,
 fallback path, packaging claim, or validation matrix.

@@ -15,9 +15,10 @@ a normal Qt Vulkan window can otherwise be left without usable move, resize,
 or window buttons.
 
 Sunroom already has exactly one Qt-owned `QWindow`, `wl_surface`, xdg-shell
-toplevel, `VkSurfaceKHR`, redirected Qt Quick scene, and color-management
-surface owner. Libdecor is not a decoration attachment API for an existing xdg
-toplevel: it creates and manages the xdg surface/toplevel, configure
+toplevel, and `VkSurfaceKHR`, plus one redirected Qt Quick scene. Managed
+color adds one Sunroom-owned color-management object to that Qt-owned surface.
+Libdecor is not a decoration attachment API for an existing xdg toplevel: it
+creates and manages the xdg surface/toplevel, configure
 acknowledgements, geometry, commits, and destruction. Libadwaita supplies GTK
 windows and widgets rather than a service for foreign Qt surfaces.
 

@@ -13,7 +13,7 @@ layout(std140, binding = 3) uniform CompositorParams {
     vec2 videoSize;
     float sdrScale;
     float ndcYUp;
-    float outputTransfer;
+    float outputEncoding;
 };
 
 vec3 srgbToLinear(vec3 value)
@@ -35,6 +35,33 @@ vec3 linearToSrgb(vec3 value)
 vec3 linearToGamma22(vec3 value)
 {
     return pow(value, vec3(1.0 / 2.2));
+}
+
+vec3 linearSrgbToBt2020(vec3 value)
+{
+    return vec3(
+        dot(value, vec3(0.627404, 0.329283, 0.043313)),
+        dot(value, vec3(0.069097, 0.919540, 0.011362)),
+        dot(value, vec3(0.016391, 0.088013, 0.895595)));
+}
+
+vec3 linearToPq(vec3 value)
+{
+    const float m1 = 2610.0 / 16384.0;
+    const float m2 = 2523.0 / 32.0;
+    const float c1 = 3424.0 / 4096.0;
+    const float c2 = 2413.0 / 128.0;
+    const float c3 = 2392.0 / 128.0;
+    const float referenceWhiteNits = 203.0;
+    const float pqPeakNits = 10000.0;
+
+    vec3 normalized = clamp(
+        value * (referenceWhiteNits / pqPeakNits), 0.0, 1.0);
+    vec3 powered = pow(normalized, vec3(m1));
+    return pow(
+        (vec3(c1) + c2 * powered)
+            / (vec3(1.0) + c3 * powered),
+        vec3(m2));
 }
 
 vec3 compositeSrgbPremultiplied(vec3 background, vec4 layer)
@@ -65,10 +92,16 @@ void main()
         color, texture(uiTexture, displayUv));
     color *= sdrScale;
     vec3 encodedColor = clamp(color, 0.0, 1.0);
-    vec3 outputColor = outputTransfer > 1.5
-        ? color
-        : (outputTransfer > 0.5
-            ? linearToGamma22(encodedColor)
-            : linearToSrgb(encodedColor));
+    vec3 outputColor;
+    if (outputEncoding > 2.5) {
+        outputColor = linearToPq(
+            max(linearSrgbToBt2020(color), vec3(0.0)));
+    } else if (outputEncoding > 1.5) {
+        outputColor = color;
+    } else if (outputEncoding > 0.5) {
+        outputColor = linearToGamma22(encodedColor);
+    } else {
+        outputColor = linearToSrgb(encodedColor);
+    }
     fragColor = vec4(outputColor, 1.0);
 }

@@ -11,17 +11,19 @@ PresentationTarget calculatePresentationTarget(
         const DisplayState &display,
         const PresentationBackendState &backend) {
     PresentationTarget target;
-    if (!backend.extendedLinearActive)
+    if (!backend.hdrPresentationActive)
         return target;
 
-    target.extendedLinearActive = true;
+    target.hdrPresentationActive = true;
     target.sceneReferred = backend.sceneReferred;
 
-    const bool activeDisplayHdr = display.valid && display.hdrActive;
+    const bool displayTargetUsable = display.valid
+        && (display.hdrActive
+            || backend.useSdrDisplayTargetForHdrPresentation);
     const bool displayWhiteKnown =
-        activeDisplayHdr && display.sdrWhiteNits > 0.0f;
+        displayTargetUsable && display.sdrWhiteNits > 0.0f;
     const bool displayLuminanceKnown =
-        activeDisplayHdr && display.maxLuminanceNits > 0.0f;
+        displayTargetUsable && display.maxLuminanceNits > 0.0f;
     const bool displayHeadroomKnown =
         display.valid && display.currentHeadroom > 0.0f;
 

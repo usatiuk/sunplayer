@@ -24,8 +24,8 @@ struct alignas(16) HdrCompositorParameters {
     // Maps SDR white into a scene-referred extended-linear target.
     float sdrScale = 1.0f;
     float ndcYUp = 1.0f;
-    // Matches PresentationOutputTransfer's stable shader values.
-    float outputTransfer = 2.0f;
+    // Matches PresentationOutputEncoding's stable shader values.
+    float outputEncoding = 2.0f;
     std::array<float, 3> padding{};
 };
 
@@ -33,7 +33,7 @@ static_assert(std::is_standard_layout_v<HdrCompositorParameters>);
 static_assert(sizeof(HdrCompositorParameters) == 48);
 static_assert(offsetof(HdrCompositorParameters, sdrScale) == 24);
 static_assert(offsetof(HdrCompositorParameters, ndcYUp) == 28);
-static_assert(offsetof(HdrCompositorParameters, outputTransfer) == 32);
+static_assert(offsetof(HdrCompositorParameters, outputEncoding) == 32);
 
 // Final presentation pass; source color processing belongs to video producers.
 class HdrCompositor final {

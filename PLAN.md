@@ -157,8 +157,11 @@ playback:
   capabilities, creates a Vulkan 1.3 QRhi-owned device imported by libplacebo,
   and presents software-decoded video through the shared direct RGBA16F target
   and redirected QML compositor. Missing managed-color capability selects
-  unmanaged assumed-sRGB; a complete managed-SDR set selects Qt-declared
-  gamma-2.2. One bounded WSLg run completes the unmanaged llvmpipe production
+  unmanaged assumed-sRGB. A complete version-2 managed-HDR set selects a
+  Sunroom-declared BT.2020/PQ surface with RGB10A2 HDR10 presentation, stable
+  across HDR and SDR output movement; genuine presentation failure rolls the
+  complete tuple back to managed gamma-2.2 SDR for that graphics generation.
+  One bounded WSLg run completes the unmanaged llvmpipe production
   path, fullscreen/restoration, Vulkan synchronization validation, and
   application teardown. Two other runs timed out waiting for cursor-state
   convergence, and remaining WSLg compositor diagnostics are recorded
@@ -168,7 +171,8 @@ playback:
   audio-first application playback advance through the production cubeb clock.
   User-confirmed real-file playback is also audible through WSLg.
   Native PulseAudio/PipeWire-Pulse route-change and recovery evidence,
-  preferred-target/HDR transitions, VAAPI/DRM PRIME, native GPU/display
+  preferred-target rerendering, stable HDR-output movement, managed-SDR
+  rollback, VAAPI/DRM PRIME, native GPU/display
   validation, and packaging remain pending.
 * Qt remains the sole Wayland toplevel and surface owner. If xdg-decoration is
   absent, one modular QML chrome layer uses public Qt system move/resize/state
@@ -356,7 +360,8 @@ Documentation: `docs/subsystems/playback/`
 * [x] Windows extended-linear HDR and SDR swapchain presentation
 * [x] Initial macOS EDR and SDR swapchain presentation
 * [x] Wayland Linux Vulkan SDR presentation foundation
-* [ ] Wayland Linux managed HDR swapchain presentation
+* [x] Wayland Linux version-2 managed HDR10/PQ presentation, stable across
+  HDR/SDR output movement with complete managed-SDR presentation fallback
 * [x] Shared presentation and display-state model
 * [x] Initial Windows window-movement and Advanced Color observation
 * [x] Initial Windows dynamic Advanced Color notification
@@ -365,8 +370,9 @@ Documentation: `docs/subsystems/playback/`
 * [ ] Optional Windows raw display capability diagnostics where renderer or
   support tooling has a concrete consumer
 * [x] Initial macOS AppKit EDR-headroom and display-change adapter
-* [x] Initial Wayland startup capability and SDR-surface selection adapter
-* [ ] Wayland preferred-target and managed-HDR display adapter
+* [x] Initial Wayland startup capability, v2 surface-declaration, and
+  unmanaged/managed-SDR fallback adapter
+* [x] Wayland preferred-target observation and stable managed-HDR adapter
 * [x] Graphics-device loss and recreation
 
 Documentation: `docs/subsystems/graphics/`

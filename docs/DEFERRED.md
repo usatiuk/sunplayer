@@ -94,13 +94,13 @@ non-native dialog paths are both verified with the new Qt build.
 ### Runtime HDR validation and graphics tests
 
 Headless graphics tests capture QRhi- and libplacebo-produced RGBA16F surfaces
-plus SDR and extended-linear offscreen composition. WSLg exercises the real
+plus SDR, extended-linear, and BT.2020/PQ composition. WSLg exercises the real
 native-Wayland Vulkan/QRhi/libplacebo software path, but supplies neither a
 native GPU nor a managed HDR display. The project still has no recorded cross-
-display runtime matrix, extended-linear swapchain capture, maintained renderer
-image corpus, deterministic device-loss test, or automated physical HDR
-validation. Presentation behavior must not be treated as portable or
-colorimetrically verified until those tests exist.
+display runtime matrix, HDR swapchain capture, maintained renderer image
+corpus, deterministic device-loss test, or automated physical HDR validation.
+Presentation behavior must not be treated as portable or colorimetrically
+verified until those tests exist.
 
 ### Flattened translucent Qt Quick content
 
@@ -170,9 +170,11 @@ target model or upstream-supported integration.
 
 Sunroom relies on the operating system or compositor for final display-profile
 calibration on managed paths: Windows Advanced Color, implemented macOS
-ColorSync/EDR surface declaration, and the implemented Qt-owned Wayland
-managed-SDR declaration.
-Managed Wayland HDR transitions remain pending. Ordinary Windows DirectX SDR
+ColorSync/EDR surface declaration, and the implemented Sunroom-owned Wayland
+version-2 managed SDR and stable HDR10/PQ declarations.
+Managed Wayland HDR presentation and complete SDR rollback are implemented;
+broader compositor/GPU/display validation and any future version-1
+compatibility remain deferred. Ordinary Windows DirectX SDR
 output with Advanced Color inactive and native Wayland without a usable
 managed-SDR capability are unmanaged sRGB-assumed fallbacks.
 Application-managed display ICC is deferred; if implemented it must transform

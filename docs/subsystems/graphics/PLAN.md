@@ -141,7 +141,7 @@ Replace the temporary producer with a persistent libplacebo renderer.
 * [x] Create persistent libplacebo log, GPU, and renderer objects.
 * [x] Render known sRGB and BT.2020/PQ software-backed images into the video
   surface.
-* [x] Express active reference white and physical headroom for relative SDR and
+* [x] Express active reference white and target headroom for relative SDR and
   analytic static PQ through libplacebo's 203-nit target coordinate, remove
   the cancelling pre-output normalization, and capture one fixed PQ signal at
   80, 100, and 203 nits.
@@ -266,10 +266,12 @@ responsibilities.
   current headroom above `1.0`, unlike-display movement, and live HDR/SDR
   switching still require suitable native hardware.
 * [x] Implement native Wayland Linux Vulkan presentation, unmanaged piecewise-
-  sRGB fallback, and startup-managed gamma-2.2 SDR selection. X11 and XWayland
+  sRGB fallback, Sunroom-owned version-2 managed descriptions, preferred-
+  target observation, stable BT.2020/PQ HDR10 across output movement, and
+  complete gamma-2.2 SDR rollback after presentation failure. X11 and XWayland
   are unsupported.
-* [ ] Add preferred-output/HDR observation and live managed Wayland HDR/SDR
-  transitions, then validate them on a capable compositor and display.
+* [ ] Complete the physical managed-HDR matrix on additional capable
+  compositor/GPU/display combinations.
 * [ ] Validate backend-neutral orientation, texture, synchronization, and
   device-generation contracts.
 * [ ] Measure native import feasibility and costs before promising zero-copy
@@ -283,9 +285,9 @@ For each implemented milestone, validate at least:
 | --- | --- |
 | Unmanaged SDR output | Exact piecewise-sRGB encoding and no HDR headroom claims |
 | Managed SDR output | Exact `encoded = linear^(1/2.2)` encoding matching the `gamma22` surface declaration |
-| HDR output | Extended-linear presentation and correct SDR-white placement |
-| HDR disabled on capable display | State and swapchain settle without mismatched encoding |
-| Move between unlike displays | Targeted content rerenders; swapchain work occurs only if presentation encoding or lifetime changes |
+| HDR output | Extended-linear presentation on Windows/macOS or BT.2020/PQ on managed Wayland, with correct reference-white placement |
+| HDR disabled on capable Wayland output | Stable PQ content is compositor-mapped to the SDR output without client format churn |
+| Move between unlike Wayland displays | Targeted content rerenders while the window, surface, and HDR10 tuple remain stable |
 | DPI or window resize | UI and video geometry remain aligned |
 | Animation disabled | No continuous presentation loop |
 | Swapchain out of date | Resize/retry without stale render-pass resources |

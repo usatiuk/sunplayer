@@ -3,7 +3,8 @@
 * Status: Accepted
 * Date: 2026-07-28
 * Amended by:
-  [0013: Rely on system display calibration on managed presentation paths](0013-rely-on-system-display-calibration.md)
+  [0013: Rely on system display calibration on managed presentation paths](0013-rely-on-system-display-calibration.md),
+  [0021: Use HDR10/PQ for managed Wayland HDR presentation](0021-use-hdr10-pq-for-managed-wayland-hdr.md)
 
 ## Context
 
@@ -88,8 +89,9 @@ contract.
 
 Not selected as the desktop default. It complicates linear UI composition and
 makes the application responsible for a nonlinear display signal and metadata.
-It may be revisited for a platform where extended-linear presentation is
-unavailable or demonstrably unsuitable.
+ADR 0021 revisits this alternative for managed Wayland, where the standard
+extended-linear path cannot portably declare values above `1.0`. Windows and
+macOS retain the extended-linear preference established here.
 
 ### Treat `1.0` as an unspecified brightness
 

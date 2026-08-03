@@ -912,7 +912,7 @@ realDemuxDecodeImportAndComposition() {
         parameters.sdrScale = 1.0f;
         parameters.ndcYUp =
             rhi.isYUpInNDC() ? 1.0f : 0.0f;
-        parameters.outputTransfer = 2.0f;
+        parameters.outputEncoding = 2.0f;
         compositor.render(
             *commandBuffer,
             *compositionTarget,

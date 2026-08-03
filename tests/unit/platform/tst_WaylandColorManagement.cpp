@@ -9,18 +9,49 @@ private slots:
     void incompleteManagedContractUsesUnmanagedSrgb_data();
     void incompleteManagedContractUsesUnmanagedSrgb();
     void completeManagedContractUsesGamma22();
-    void extendedLinearIsObservedWithoutPrematureHdrActivation();
+    void hdr10CapabilitiesChooseStableHdr();
+    void completePreferredDescriptionPublishesDisplayState();
+    void referenceWhiteEqualsTargetMaximumIsSdr();
+    void incompleteOrInvalidPreferredDescriptionIsRejected();
+    void presentationModeTracksCapabilityAndBoundedRejection();
 };
 
 namespace {
 WaylandColorManagementCapabilities completeManagedSdrCapabilities() {
     return {
         .protocolAdvertised = true,
+        .protocolVersion =
+            WaylandColorManagementCapabilities::requiredProtocolVersion,
         .inventoryComplete = true,
         .parametricDescriptions = true,
         .perceptualIntent = true,
         .namedSrgbPrimaries = true,
         .gamma22Transfer = true,
+    };
+}
+
+WaylandColorPrimaries srgbPrimaries() {
+    return {
+        .red = {.x = 0.64f, .y = 0.33f},
+        .green = {.x = 0.30f, .y = 0.60f},
+        .blue = {.x = 0.15f, .y = 0.06f},
+        .white = {.x = 0.3127f, .y = 0.3290f},
+    };
+}
+
+WaylandPreferredDescription completeHdrDescription() {
+    return {
+        .parametric = true,
+        .primariesKnown = true,
+        .primaries = srgbPrimaries(),
+        .transferFunction = WaylandTransferFunction::Pq,
+        .luminancesKnown = true,
+        .minimumLuminanceNits = 0.005f,
+        .maximumLuminanceNits = 1000.0f,
+        .referenceWhiteNits = 200.0f,
+        .targetLuminanceKnown = true,
+        .targetMinimumLuminanceNits = 0.001f,
+        .targetMaximumLuminanceNits = 1000.0f,
     };
 }
 }
@@ -33,6 +64,10 @@ incompleteManagedContractUsesUnmanagedSrgb_data() {
         << WaylandColorManagementCapabilities{};
 
     auto capabilities = completeManagedSdrCapabilities();
+    capabilities.protocolVersion = 1;
+    QTest::newRow("older-protocol-version") << capabilities;
+
+    capabilities = completeManagedSdrCapabilities();
     capabilities.inventoryComplete = false;
     QTest::newRow("inventory-incomplete") << capabilities;
 
@@ -57,42 +92,171 @@ void WaylandColorManagementTest::
 incompleteManagedContractUsesUnmanagedSrgb() {
     QFETCH(WaylandColorManagementCapabilities, capabilities);
 
-    const WaylandSdrSurfaceSelection selection =
-        selectWaylandSdrSurface(capabilities);
+    const WaylandSurfaceSelection selection =
+        selectWaylandSurface(capabilities);
 
     QCOMPARE(selection.mode, WaylandSdrSurfaceMode::UnmanagedSrgb);
     const PresentationSurfaceContract presentation =
         selection.presentationContract();
     QCOMPARE(
-        presentation.sdrTransfer,
-        PresentationOutputTransfer::PiecewiseSrgb);
-    QVERIFY(!presentation.extendedLinearAllowed);
+        presentation.outputEncoding(false),
+        PresentationOutputEncoding::Srgb);
+    QVERIFY(!presentation.hdr10Required());
     QVERIFY(!selection.diagnostic.isEmpty());
 }
 
 void WaylandColorManagementTest::completeManagedContractUsesGamma22() {
-    const WaylandSdrSurfaceSelection selection =
-        selectWaylandSdrSurface(completeManagedSdrCapabilities());
+    const WaylandSurfaceSelection selection =
+        selectWaylandSurface(completeManagedSdrCapabilities());
 
     QCOMPARE(selection.mode, WaylandSdrSurfaceMode::ManagedGamma22);
     const PresentationSurfaceContract presentation =
         selection.presentationContract();
     QCOMPARE(
-        presentation.sdrTransfer,
-        PresentationOutputTransfer::Gamma22);
-    QVERIFY(!presentation.extendedLinearAllowed);
+        presentation.outputEncoding(false),
+        PresentationOutputEncoding::Gamma22Srgb);
+    QVERIFY(!presentation.hdr10Required());
+}
+
+void WaylandColorManagementTest::hdr10CapabilitiesChooseStableHdr() {
+    auto capabilities = completeManagedSdrCapabilities();
+    capabilities.namedBt2020Primaries = false;
+    QVERIFY(!capabilities.supportsManagedHdr10());
+    capabilities.namedBt2020Primaries = true;
+    capabilities.pqTransfer = false;
+    QVERIFY(!capabilities.supportsManagedHdr10());
+    capabilities.pqTransfer = true;
+    QVERIFY(capabilities.supportsManagedHdr10());
+    const WaylandSurfaceSelection selection =
+        selectWaylandSurface(capabilities);
+    QCOMPARE(selection.mode, WaylandSdrSurfaceMode::ManagedGamma22);
+    QVERIFY(selection.presentationContract().hdr10Required());
 }
 
 void WaylandColorManagementTest::
-extendedLinearIsObservedWithoutPrematureHdrActivation() {
-    auto capabilities = completeManagedSdrCapabilities();
-    capabilities.extendedLinearTransfer = true;
+completePreferredDescriptionPublishesDisplayState() {
+    const auto display = displayStateFromWaylandDescription(
+        completeHdrDescription());
 
-    QVERIFY(capabilities.supportsManagedHdrObservation());
-    const WaylandSdrSurfaceSelection selection =
-        selectWaylandSdrSurface(capabilities);
-    QCOMPARE(selection.mode, WaylandSdrSurfaceMode::ManagedGamma22);
-    QVERIFY(!selection.presentationContract().extendedLinearAllowed);
+    QVERIFY(display.has_value());
+    QVERIFY(display->valid);
+    QVERIFY(display->hdrActive);
+    QCOMPARE(display->sdrWhiteNits, 200.0f);
+    QCOMPARE(display->minLuminanceNits, 0.001f);
+    QCOMPARE(display->maxLuminanceNits, 1000.0f);
+    QCOMPARE(display->currentHeadroom, 5.0f);
+    QCOMPARE(display->potentialHeadroom, 5.0f);
+}
+
+void WaylandColorManagementTest::
+referenceWhiteEqualsTargetMaximumIsSdr() {
+    auto description = completeHdrDescription();
+    description.targetMaximumLuminanceNits =
+        description.referenceWhiteNits;
+
+    const auto display = displayStateFromWaylandDescription(description);
+
+    QVERIFY(display.has_value());
+    QVERIFY(display->valid);
+    QVERIFY(!display->hdrActive);
+    QCOMPARE(display->currentHeadroom, 1.0f);
+    QCOMPARE(display->potentialHeadroom, 1.0f);
+}
+
+void WaylandColorManagementTest::
+incompleteOrInvalidPreferredDescriptionIsRejected() {
+    auto description = completeHdrDescription();
+    description.parametric = false;
+    QVERIFY(!displayStateFromWaylandDescription(description).has_value());
+
+    description = completeHdrDescription();
+    description.primaries.green = description.primaries.red;
+    description.primaries.blue = description.primaries.red;
+    QVERIFY(!displayStateFromWaylandDescription(description).has_value());
+
+    description = completeHdrDescription();
+    description.referenceWhiteNits = description.minimumLuminanceNits;
+    QVERIFY(!displayStateFromWaylandDescription(description).has_value());
+
+    description = completeHdrDescription();
+    description.targetMaximumLuminanceNits =
+        description.targetMinimumLuminanceNits;
+    QVERIFY(!displayStateFromWaylandDescription(description).has_value());
+}
+
+void WaylandColorManagementTest::
+presentationModeTracksCapabilityAndBoundedRejection() {
+    auto capabilities = completeManagedSdrCapabilities();
+    QCOMPARE(
+        selectWaylandPresentationMode(
+            WaylandSdrSurfaceMode::ManagedGamma22,
+            capabilities,
+            7,
+            std::nullopt),
+        PresentationSurfaceMode::ManagedGamma22Sdr);
+
+    capabilities.namedBt2020Primaries = true;
+    capabilities.pqTransfer = true;
+    QCOMPARE(
+        selectWaylandPresentationMode(
+            WaylandSdrSurfaceMode::ManagedGamma22,
+            capabilities,
+            7,
+            std::nullopt),
+        PresentationSurfaceMode::ManagedHdr10Pq);
+    const PresentationSurfaceContract hdr10Contract{
+        .mode = PresentationSurfaceMode::ManagedHdr10Pq,
+    };
+    QVERIFY(hdr10Contract.hdr10Required());
+    QCOMPARE(
+        hdr10Contract.outputEncoding(false),
+        PresentationOutputEncoding::Bt2020Pq);
+    QCOMPARE(
+        hdr10Contract.constrainTargetHeadroom(1.0f),
+        1.0f);
+    QCOMPARE(
+        hdr10Contract.constrainTargetHeadroom(5.0f),
+        5.0f);
+    QCOMPARE(
+        hdr10Contract.constrainTargetHeadroom(10000.0f / 162.0f),
+        PresentationSurfaceContract::pqMaximumHeadroom);
+    QCOMPARE(
+        hdr10Contract.constrainTargetHeadroom(
+            PresentationSurfaceContract::pqMaximumHeadroom),
+        PresentationSurfaceContract::pqMaximumHeadroom);
+
+    const PresentationSurfaceContract managedSdrContract{
+        .mode = PresentationSurfaceMode::ManagedGamma22Sdr,
+    };
+    QCOMPARE(
+        managedSdrContract.constrainTargetHeadroom(5.0f),
+        1.0f);
+
+    const WaylandHdrRejection rejection{
+        .graphicsDeviceGeneration = 7,
+    };
+    QCOMPARE(
+        selectWaylandPresentationMode(
+            WaylandSdrSurfaceMode::ManagedGamma22,
+            capabilities,
+            7,
+            rejection),
+        PresentationSurfaceMode::ManagedGamma22Sdr);
+    QCOMPARE(
+        selectWaylandPresentationMode(
+            WaylandSdrSurfaceMode::ManagedGamma22,
+            capabilities,
+            8,
+            rejection),
+        PresentationSurfaceMode::ManagedHdr10Pq);
+
+    QCOMPARE(
+        selectWaylandPresentationMode(
+            WaylandSdrSurfaceMode::UnmanagedSrgb,
+            capabilities,
+            7,
+            std::nullopt),
+        PresentationSurfaceMode::UnmanagedSrgb);
 }
 
 QTEST_APPLESS_MAIN(WaylandColorManagementTest)

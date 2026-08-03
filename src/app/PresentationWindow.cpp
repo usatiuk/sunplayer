@@ -1,5 +1,7 @@
 #include "app/PresentationWindow.h"
 
+#include <utility>
+
 #include <QCoreApplication>
 #include <QCursor>
 #include <QKeyEvent>
@@ -13,6 +15,7 @@
 #include "app/PresentationSettings.h"
 #include "app/VideoViewportState.h"
 #include "graphics/GraphicsBackendFactory.h"
+#include "platform/DisplayStateProvider.h"
 #include "playback/MediaSession.h"
 #include "presentation/PresentationOutputState.h"
 #include "presentation/RhiPresentationEngine.h"
@@ -30,24 +33,31 @@ PresentationWindow::PresentationWindow(
           *this,
           windowContext.requiresClientSideDecorations()),
       m_windowContext(windowContext) {
-    initialize(windowContext.surfaceSelection().presentationContract());
+    initialize(
+        windowContext.surfaceSelection().presentationContract(),
+        windowContext.takeDisplayStateProvider(nullptr),
+        &windowContext);
 #else
 PresentationWindow::PresentationWindow()
     : m_windowChrome(*this, false) {
-    initialize(PresentationSurfaceContract{});
+    initialize(PresentationSurfaceContract{}, {}, nullptr);
 #endif
 }
 
 void PresentationWindow::initialize(
-        PresentationSurfaceContract surfaceContract) {
-    Q_ASSERT(surfaceContract.isValid());
+        PresentationSurfaceContract surfaceContract,
+        std::unique_ptr<DisplayStateProvider> displayStateProvider,
+        PresentationSurfaceController *surfaceController) {
     setSurfaceType(GraphicsBackendFactory::windowSurfaceType());
 #ifdef Q_OS_LINUX
     m_windowContext.configureWindow(*this);
 #endif
     setTitle(tr("Sunroom"));
 
-    m_outputState = std::make_unique<PresentationOutputState>(nullptr);
+    m_outputState = displayStateProvider
+        ? std::make_unique<PresentationOutputState>(
+            std::move(displayStateProvider), nullptr)
+        : std::make_unique<PresentationOutputState>(nullptr);
     m_settings = std::make_unique<PresentationSettings>(nullptr);
     m_diagnosticVideoSource =
         std::make_unique<DiagnosticVideoSource>(
@@ -66,7 +76,8 @@ void PresentationWindow::initialize(
         *m_diagnosticVideoSource,
         *m_mediaSession,
         *m_videoViewport,
-        surfaceContract);
+        surfaceContract,
+        surfaceController);
     connect(
         m_engine.get(),
         &RhiPresentationEngine::videoFramePresented,

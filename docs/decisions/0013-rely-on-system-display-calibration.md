@@ -49,9 +49,11 @@ reuse the HDR scale. Ordinary DirectX SDR output with Advanced Color inactive
 is `UnmanagedSrgb`; Windows assumes sRGB but does not automatically apply a
 display-profile transform to that swapchain path.
 
-The intended macOS EDR and Wayland color-management-v1 paths are
-`SystemManaged`. Sunroom will declare an extended-linear presentation space
-and will not request a second platform media tone mapper after libplacebo.
+The macOS EDR and Wayland color-management-v1 paths are `SystemManaged`.
+macOS declares extended-linear EDR. Managed Wayland HDR declares BT.2020/PQ
+under [ADR 0021](0021-use-hdr10-pq-for-managed-wayland-hdr.md), after the
+complete composition has been encoded once, and does not request a second
+platform media tone mapper after libplacebo.
 Native Wayland without the usable managed-SDR capability is
 `UnmanagedSrgb` under [ADR 0018](0018-support-unmanaged-srgb-wayland-sdr.md).
 X11 and XWayland are not unmanaged fallbacks; they are unsupported by

@@ -63,12 +63,22 @@ void advanceRevision(std::uint64_t &revision) {
 QRhiSwapChain::Format desiredSwapChainFormat(
         const PresentationSurfaceContract &surfaceContract,
         QRhiSwapChain &swapChain,
-        bool displayHdrAvailable) {
-    bool extendedLinearAllowed =
-        surfaceContract.extendedLinearAllowed;
+        bool displayHdrAvailable,
+        bool hdr10PlatformSupported) {
+    if (surfaceContract.hdr10Required()) {
+        return hdr10PlatformSupported
+                && swapChain.isFormatSupported(QRhiSwapChain::HDR10)
+            ? QRhiSwapChain::HDR10
+            : QRhiSwapChain::SDR;
+    }
+    if (surfaceContract.mode
+            != PresentationSurfaceMode::AdaptiveExtendedLinear) {
+        return QRhiSwapChain::SDR;
+    }
+
+    bool extendedLinearAllowed = true;
 #ifdef Q_OS_MACOS
-    extendedLinearAllowed =
-        extendedLinearAllowed && displayHdrAvailable;
+    extendedLinearAllowed = displayHdrAvailable;
 #else
     Q_UNUSED(displayHdrAvailable);
 #endif
@@ -89,6 +99,7 @@ RhiPresentationEngine::RhiPresentationEngine(
         MediaSession &mediaSession,
         VideoViewportState &videoViewport,
         PresentationSurfaceContract surfaceContract,
+        PresentationSurfaceController *surfaceController,
         QObject *parent)
     : QObject(parent),
       m_window(window),
@@ -98,9 +109,13 @@ RhiPresentationEngine::RhiPresentationEngine(
       m_diagnosticSource(diagnosticSource),
       m_mediaSession(mediaSession),
       m_videoViewport(videoViewport),
-      m_surfaceContract(surfaceContract) {
-    Q_ASSERT(m_surfaceContract.isValid());
+      m_surfaceContract(surfaceContract),
+      m_surfaceController(surfaceController) {
+    Q_ASSERT((m_surfaceController != nullptr)
+        == (m_surfaceContract.mode
+            != PresentationSurfaceMode::AdaptiveExtendedLinear));
     m_deviceRecoveryTimer.setSingleShot(true);
+    m_swapChainRecoveryTimer.setSingleShot(true);
 
     connect(&m_settings, &PresentationSettings::settingsChanged,
             this, &RhiPresentationEngine::requestFrame);
@@ -121,6 +136,8 @@ RhiPresentationEngine::RhiPresentationEngine(
     });
 #endif
     connect(&m_deviceRecoveryTimer, &QTimer::timeout,
+            this, &RhiPresentationEngine::requestFrame);
+    connect(&m_swapChainRecoveryTimer, &QTimer::timeout,
             this, &RhiPresentationEngine::requestFrame);
     connect(&m_mediaSession, &MediaSession::subtitleChanged,
             this, &RhiPresentationEngine::requestFrame);
@@ -149,8 +166,11 @@ void RhiPresentationEngine::render() {
 }
 
 void RhiPresentationEngine::renderFrame() {
-    if (!m_window.isExposed() || m_window.size().isEmpty())
+    if (m_surfaceTransitionPending
+            || !m_window.isExposed()
+            || m_window.size().isEmpty()) {
         return;
+    }
 
     if (!m_graphicsDevice && !initializeGraphicsDevice()) {
         scheduleDeviceRecovery();
@@ -227,9 +247,12 @@ void RhiPresentationEngine::renderFrame() {
     }
 
     if (!videoRect.isEmpty()) {
-        const float targetPeak = m_settings.automaticTargetPeak()
+        const float requestedTargetPeak = m_settings.automaticTargetPeak()
             ? m_outputState.effectiveTargetHeadroom()
             : m_settings.manualTargetHeadroom();
+        const float targetPeak =
+            m_surfaceContract.constrainTargetHeadroom(
+                requestedTargetPeak);
         Q_ASSERT(std::isfinite(targetPeak) && targetPeak >= 1.0f);
         const float referenceWhiteNits = m_outputState.sdrWhiteKnown()
             ? m_outputState.sdrWhiteNits()
@@ -464,11 +487,12 @@ void RhiPresentationEngine::renderFrame() {
     parameters.ndcYUp = m_rhi->isYUpInNDC() ? 1.0f : 0.0f;
     // Final encoding follows the successfully created presentation path, not
     // asynchronous OS HDR metadata that may already describe another output.
-    const PresentationOutputTransfer outputTransfer =
-        m_outputState.extendedLinearActive()
-        ? PresentationOutputTransfer::ExtendedLinear
-        : m_surfaceContract.sdrTransfer;
-    parameters.outputTransfer = static_cast<float>(outputTransfer);
+    const bool extendedLinearActive =
+        m_swapChain->format()
+            == QRhiSwapChain::HDRExtendedSrgbLinear;
+    const PresentationOutputEncoding outputEncoding =
+        m_surfaceContract.outputEncoding(extendedLinearActive);
+    parameters.outputEncoding = static_cast<float>(outputEncoding);
 
     Q_ASSERT(m_compositor);
     m_compositor->render(
@@ -477,6 +501,14 @@ void RhiPresentationEngine::renderFrame() {
         pixelSize,
         parameters);
 
+    if (m_surfaceDeclarationPending) {
+        Q_ASSERT(m_surfaceController);
+        // Queue the double-buffered declaration immediately before Vulkan WSI
+        // presents the matching buffer. No Qt event processing can insert an
+        // unrelated wl_surface commit between these two operations.
+        m_surfaceController->applyMode(
+            m_window, m_surfaceContract.mode);
+    }
     result = finishFrame({}, true);
     if (result == QRhi::FrameOpDeviceLost) {
         handleDeviceLoss("presenting a frame");
@@ -492,6 +524,7 @@ void RhiPresentationEngine::renderFrame() {
         return;
     }
 
+    m_surfaceDeclarationPending = false;
     m_retriedFrameError = false;
     if (requestedSurface) {
         emit videoFramePresented(
@@ -553,6 +586,8 @@ void RhiPresentationEngine::releaseSwapChain() {
         execution.emplace(
             m_graphicsDevice->acquireExecutionScope());
     }
+    m_swapChainRecoveryTimer.stop();
+    m_swapChainRecoveryAttempts = 0;
     releaseSwapChainResources();
 }
 
@@ -596,9 +631,6 @@ bool RhiPresentationEngine::initializeDevice() {
     }
     m_subtitleRenderer = std::make_unique<SubtitleRenderer>(*m_rhi);
     refreshVideoProducer();
-    m_recoveringDevice = false;
-    m_deviceRecoveryAttempts = 0;
-    m_deviceRecoveryTimer.stop();
     return true;
 }
 
@@ -612,6 +644,8 @@ bool RhiPresentationEngine::initializeGraphicsDevice() {
     m_rhi = &m_graphicsDevice->rhi();
     m_mediaSession.setVideoDecodeCapability(
         m_graphicsDevice->videoDecodeCapability());
+    if (m_surfaceController)
+        m_outputCharacteristicsDirty = true;
     return true;
 }
 
@@ -647,27 +681,40 @@ bool RhiPresentationEngine::createSwapChain() {
     m_swapChain.reset(m_rhi->newSwapChain());
     m_swapChain->setWindow(&m_window);
 
-    m_swapChain->setFormat(
+    const bool hdr10PlatformSupported =
+        !m_surfaceContract.hdr10Required()
+        || m_graphicsDevice->supportsHdr10Presentation(m_window);
+    const QRhiSwapChain::Format desiredFormat =
         desiredSwapChainFormat(
             m_surfaceContract,
             *m_swapChain,
-            m_outputState.displayHdrEnabled()));
-    m_renderPassDescriptor.reset(
-        m_swapChain->newCompatibleRenderPassDescriptor());
-    m_swapChain->setRenderPassDescriptor(m_renderPassDescriptor.get());
-    if (!m_swapChain->createOrResize()) {
-        const bool deviceLost = m_rhi->isDeviceLost();
+            m_outputState.displayHdrEnabled(),
+            hdr10PlatformSupported);
+    if (m_surfaceContract.hdr10Required()
+            && desiredFormat != QRhiSwapChain::HDR10) {
         m_swapChain.reset();
-        m_renderPassDescriptor.reset();
-        if (deviceLost)
-            handleDeviceLoss("creating the swapchain");
-        else
-            qCWarning(
-                sunroomLogPresentation,
-                "Could not create the QRhi swapchain; "
-                "waiting for another window update");
+        rejectRequiredHdrSurface(
+            "the current Wayland Vulkan surface does not expose "
+            "10-bit BT.2020/PQ plus pass-through");
         return false;
     }
+    m_swapChain->setFormat(desiredFormat);
+    m_renderPassDescriptor.reset(
+        m_swapChain->newCompatibleRenderPassDescriptor());
+    if (!m_renderPassDescriptor) {
+        handleSwapChainFailure(
+            "describing the swapchain render pass",
+            "QRhi could not describe the HDR10 render pass");
+        return false;
+    }
+    m_swapChain->setRenderPassDescriptor(m_renderPassDescriptor.get());
+    if (!m_swapChain->createOrResize()) {
+        handleSwapChainFailure(
+            "creating the swapchain",
+            "QRhi could not create the HDR10 swapchain");
+        return false;
+    }
+    completePresentationRecovery();
     updateBackendState();
     return true;
 }
@@ -687,21 +734,63 @@ bool RhiPresentationEngine::resizeSwapChain(bool force) {
 bool RhiPresentationEngine::createOrResizeSwapChain(const char *operation) {
     Q_ASSERT(m_swapChain);
     if (m_swapChain->createOrResize()) {
+        completePresentationRecovery();
         updateBackendState();
         return true;
     }
 
-    if (m_rhi->isDeviceLost()) {
-        handleDeviceLoss(operation);
-    } else {
-        qCWarning(
-            sunroomLogPresentation,
-            "Could not %s the QRhi swapchain; "
-            "waiting for another window update",
-            operation);
-        releaseSwapChainResources();
-    }
+    handleSwapChainFailure(
+        operation,
+        "QRhi could not resize the HDR10 swapchain");
     return false;
+}
+
+void RhiPresentationEngine::handleSwapChainFailure(
+        const char *operation,
+        const char *hdrRejectionReason) {
+    Q_ASSERT(m_graphicsDevice);
+    const bool deviceLost = m_rhi->isDeviceLost();
+    releaseSwapChainResources();
+    if (deviceLost) {
+        handleDeviceLoss(operation);
+    } else if (!m_graphicsDevice->supportsPresentation(m_window)) {
+        rebuildForPresentIncompatibleSurface();
+    } else if (m_surfaceContract.hdr10Required()) {
+        rejectRequiredHdrSurface(hdrRejectionReason);
+    } else {
+        scheduleSwapChainRecovery(operation);
+    }
+}
+
+void RhiPresentationEngine::scheduleSwapChainRecovery(
+        const char *operation) {
+    constexpr int maximumAttempts = 8;
+    constexpr auto retryDelay = std::chrono::milliseconds(250);
+
+    if (m_swapChainRecoveryAttempts >= maximumAttempts) {
+        qCFatal(
+            sunroomLogPresentation,
+            "QRhi swapchain recovery failed after %d attempts while %s",
+            maximumAttempts,
+            operation);
+    }
+
+    ++m_swapChainRecoveryAttempts;
+    qCWarning(
+        sunroomLogPresentation,
+        "Retrying QRhi swapchain creation after failure while %s (%d/%d)",
+        operation,
+        m_swapChainRecoveryAttempts,
+        maximumAttempts);
+    m_swapChainRecoveryTimer.start(retryDelay);
+}
+
+void RhiPresentationEngine::completePresentationRecovery() {
+    m_deviceRecoveryTimer.stop();
+    m_deviceRecoveryAttempts = 0;
+    m_swapChainRecoveryTimer.stop();
+    m_swapChainRecoveryAttempts = 0;
+    m_recoveringDevice = false;
 }
 
 void RhiPresentationEngine::releaseDevice() {
@@ -732,6 +821,8 @@ void RhiPresentationEngine::releaseDevice() {
     m_reportedSubtitleError.clear();
     m_rhi = nullptr;
     m_graphicsDevice.reset();
+    m_swapChainRecoveryTimer.stop();
+    m_swapChainRecoveryAttempts = 0;
     m_outputCharacteristicsDirty = false;
 #ifdef Q_OS_MACOS
     m_swapChainSurfaceDirty = false;
@@ -840,15 +931,20 @@ void RhiPresentationEngine::updateBackendState() {
         m_graphicsDevice->diagnostics();
     state.graphicsApi = graphicsDiagnostics.backendName;
     state.graphicsAdapter = graphicsDiagnostics.adapterName;
-    const bool extendedLinearSupported =
-        m_swapChain->isFormatSupported(QRhiSwapChain::HDRExtendedSrgbLinear);
-    state.extendedLinearActive =
-        extendedLinearSupported
-        && m_swapChain->format() == QRhiSwapChain::HDRExtendedSrgbLinear;
-    state.swapChainFormat =
-        state.extendedLinearActive
-        ? QStringLiteral("scRGB / extended linear sRGB")
-        : QStringLiteral("SDR / sRGB");
+    switch (m_swapChain->format()) {
+    case QRhiSwapChain::HDRExtendedSrgbLinear:
+        state.hdrPresentationActive = true;
+        state.swapChainFormat =
+            QStringLiteral("scRGB / extended linear sRGB");
+        break;
+    case QRhiSwapChain::HDR10:
+        state.hdrPresentationActive = true;
+        state.swapChainFormat = QStringLiteral("HDR10 / BT.2020 PQ");
+        break;
+    default:
+        state.swapChainFormat = QStringLiteral("SDR / sRGB");
+        break;
+    }
     state.videoSurfaceFormat =
         QStringLiteral("RGBA16F · linear sRGB · SDR-white-relative");
     const RenderedVideoProducerDiagnostics videoDiagnostics =
@@ -882,12 +978,20 @@ void RhiPresentationEngine::updateBackendState() {
         videoDiagnostics.target.fallbackReason;
 
     const QRhiSwapChainHdrInfo info = m_swapChain->hdrInfo();
+#if defined(Q_OS_MACOS) || defined(Q_OS_LINUX)
+    state.sceneReferred = false;
+#else
     state.sceneReferred =
         info.luminanceBehavior == QRhiSwapChainHdrInfo::SceneReferred;
-#ifdef Q_OS_MACOS
+#endif
+#ifdef Q_OS_LINUX
+    state.useSdrDisplayTargetForHdrPresentation = true;
+#endif
+#if defined(Q_OS_MACOS) || defined(Q_OS_LINUX)
     // Apple EDR is display-referred. Numeric 1.0 already means the current
-    // SDR white, while AppKit exposes relative component headroom rather than
-    // that white's physical luminance.
+    // SDR white. Managed Wayland uses the same surface-coordinate meaning;
+    // its preferred-description provider supplies the compositor's target.
+    // Vulkan's generic hdrInfo defaults are not Linux display observations.
     state.sdrWhiteKnown = false;
     state.sdrWhiteNits = 80.0f;
 #else
@@ -897,7 +1001,7 @@ void RhiPresentationEngine::updateBackendState() {
         info.sdrWhiteLevel, 80.0f, "SDR white level");
 #endif
     if (info.limitsType == QRhiSwapChainHdrInfo::LuminanceInNits) {
-#ifdef Q_OS_MACOS
+#if defined(Q_OS_MACOS) || defined(Q_OS_LINUX)
         state.luminanceKnown = false;
 #else
         state.luminanceKnown =
@@ -944,14 +1048,30 @@ bool RhiPresentationEngine::reconcileOutputCharacteristics() {
         return true;
 #endif
     m_outputCharacteristicsDirty = false;
+
+    if (m_surfaceController) {
+        Q_ASSERT(m_graphicsDevice);
+        const PresentationSurfaceMode desiredMode =
+            m_surfaceController->desiredMode(
+                m_graphicsDevice->generation());
+        if (desiredMode != m_surfaceContract.mode) {
+            queueSurfaceTransition();
+            return false;
+        }
+    }
+
     if (!m_swapChain)
         return true;
 
+    const bool hdr10PlatformSupported =
+        !m_surfaceContract.hdr10Required()
+        || m_graphicsDevice->supportsHdr10Presentation(m_window);
     const QRhiSwapChain::Format desiredFormat =
         desiredSwapChainFormat(
             m_surfaceContract,
             *m_swapChain,
-            m_outputState.displayHdrEnabled());
+            m_outputState.displayHdrEnabled(),
+            hdr10PlatformSupported);
     if (m_swapChain->format() != desiredFormat) {
         releaseSwapChainResources();
         return true;
@@ -970,4 +1090,62 @@ bool RhiPresentationEngine::reconcileOutputCharacteristics() {
     // already compatible presentation surface.
     updateBackendState();
     return true;
+}
+
+void RhiPresentationEngine::queueSurfaceTransition() {
+    Q_ASSERT(m_surfaceController);
+    if (m_surfaceTransitionPending)
+        return;
+
+    releaseSwapChainResources();
+    m_surfaceTransitionPending = true;
+    QMetaObject::invokeMethod(
+        this,
+        [this] {
+            if (!m_graphicsDevice) {
+                m_surfaceTransitionPending = false;
+                m_outputCharacteristicsDirty = true;
+                requestFrame();
+                return;
+            }
+
+            const PresentationSurfaceMode latestMode =
+                m_surfaceController->desiredMode(
+                    m_graphicsDevice->generation());
+            if (latestMode != m_surfaceContract.mode) {
+                m_surfaceContract.mode = latestMode;
+                m_surfaceDeclarationPending = true;
+            }
+
+            m_surfaceTransitionPending = false;
+            m_outputCharacteristicsDirty = true;
+            requestFrame();
+        },
+        Qt::QueuedConnection);
+}
+
+void RhiPresentationEngine::rejectRequiredHdrSurface(
+        const char *reason) {
+    Q_ASSERT(m_surfaceController);
+    Q_ASSERT(m_graphicsDevice);
+    Q_ASSERT(m_surfaceContract.hdr10Required());
+    m_surfaceController->rejectHdrTarget(
+        m_graphicsDevice->generation(),
+        reason);
+    m_outputCharacteristicsDirty = true;
+    queueSurfaceTransition();
+}
+
+void RhiPresentationEngine::rebuildForPresentIncompatibleSurface() {
+    Q_ASSERT(m_graphicsDevice);
+    qCWarning(
+        sunroomLogPresentation,
+        "The Vulkan device cannot present to the current Wayland "
+        "surface; rebuilding the graphics domain");
+    m_mediaSession.invalidateGraphicsDevice();
+    if (!m_recoveringDevice)
+        m_deviceRecoveryAttempts = 0;
+    m_recoveringDevice = true;
+    releaseDevice();
+    scheduleDeviceRecovery();
 }

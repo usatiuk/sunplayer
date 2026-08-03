@@ -70,10 +70,10 @@ VideoPage {
                 }
 
                 Label {
-                    text: root.outputState.extendedLinearActive
+                    text: root.outputState.hdrPresentationActive
                         ? (root.outputState.displayHdrEnabled
-                            ? qsTr("FP16 HDR presentation active")
-                            : qsTr("FP16 extended-linear presentation active"))
+                            ? qsTr("HDR presentation active")
+                            : qsTr("Extended-range presentation active"))
                         : (root.outputState.displayHdrEnabled
                             ? qsTr("SDR presentation on HDR display")
                             : qsTr("SDR presentation active"))
@@ -212,10 +212,10 @@ VideoPage {
                 }
 
                 Label {
-                    text: !root.outputState.extendedLinearActive
+                    text: !root.outputState.hdrPresentationActive
                         ? qsTr("SDR output · HDR headroom unavailable")
                         : (root.outputState.luminanceKnown
-                            ? qsTr("Display range %1–%2 nits · %3× white")
+                            ? qsTr("Compositor target %1–%2 nits · %3× reference")
                                 .arg(root.outputState.minLuminanceNits.toFixed(3))
                                 .arg(root.outputState.maxLuminanceNits.toFixed(1))
                                 .arg(root.effectiveTargetHeadroom.toFixed(2))

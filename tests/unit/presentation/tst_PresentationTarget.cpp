@@ -50,7 +50,7 @@ void PresentationTargetTest::calculation_data() {
 
     {
         PresentationBackendState backend;
-        backend.extendedLinearActive = true;
+        backend.hdrPresentationActive = true;
         backend.sceneReferred = true;
         backend.sdrWhiteKnown = true;
         backend.luminanceKnown = true;
@@ -61,7 +61,7 @@ void PresentationTargetTest::calculation_data() {
         backend.potentialHeadroom = 4.0f;
 
         PresentationTarget expected;
-        expected.extendedLinearActive = true;
+        expected.hdrPresentationActive = true;
         expected.sceneReferred = true;
         expected.sdrWhiteKnown = true;
         expected.luminanceKnown = true;
@@ -86,7 +86,7 @@ void PresentationTargetTest::calculation_data() {
         display.maxLuminanceNits = 1200.0f;
 
         PresentationBackendState backend;
-        backend.extendedLinearActive = true;
+        backend.hdrPresentationActive = true;
         backend.sceneReferred = true;
         backend.sdrWhiteKnown = true;
         backend.luminanceKnown = true;
@@ -97,7 +97,7 @@ void PresentationTargetTest::calculation_data() {
         backend.potentialHeadroom = 18.0f;
 
         PresentationTarget expected;
-        expected.extendedLinearActive = true;
+        expected.hdrPresentationActive = true;
         expected.sceneReferred = true;
         expected.sdrWhiteKnown = true;
         expected.luminanceKnown = true;
@@ -122,7 +122,7 @@ void PresentationTargetTest::calculation_data() {
         display.maxLuminanceNits = 2000.0f;
 
         PresentationBackendState backend;
-        backend.extendedLinearActive = true;
+        backend.hdrPresentationActive = true;
         backend.sceneReferred = false;
         backend.sdrWhiteKnown = true;
         backend.luminanceKnown = true;
@@ -133,7 +133,7 @@ void PresentationTargetTest::calculation_data() {
         backend.potentialHeadroom = 6.0f;
 
         PresentationTarget expected;
-        expected.extendedLinearActive = true;
+        expected.hdrPresentationActive = true;
         expected.sdrWhiteKnown = true;
         expected.luminanceKnown = true;
         expected.sdrWhiteNits = 120.0f;
@@ -149,13 +149,13 @@ void PresentationTargetTest::calculation_data() {
 
     {
         PresentationBackendState backend;
-        backend.extendedLinearActive = true;
+        backend.hdrPresentationActive = true;
         backend.sceneReferred = true;
         backend.currentHeadroom = 4.0f;
         backend.potentialHeadroom = 8.0f;
 
         PresentationTarget expected;
-        expected.extendedLinearActive = true;
+        expected.hdrPresentationActive = true;
         expected.sceneReferred = true;
         expected.currentHeadroom = 4.0f;
         expected.potentialHeadroom = 8.0f;
@@ -172,7 +172,7 @@ void PresentationTargetTest::calculation_data() {
         display.sdrWhiteNits = 160.0f;
 
         PresentationBackendState backend;
-        backend.extendedLinearActive = true;
+        backend.hdrPresentationActive = true;
         backend.sceneReferred = true;
         backend.luminanceKnown = true;
         backend.minLuminanceNits = 0.03f;
@@ -181,7 +181,7 @@ void PresentationTargetTest::calculation_data() {
         backend.potentialHeadroom = 9.0f;
 
         PresentationTarget expected;
-        expected.extendedLinearActive = true;
+        expected.hdrPresentationActive = true;
         expected.sceneReferred = true;
         expected.sdrWhiteKnown = true;
         expected.luminanceKnown = true;
@@ -199,12 +199,12 @@ void PresentationTargetTest::calculation_data() {
 
     {
         PresentationBackendState backend;
-        backend.extendedLinearActive = true;
+        backend.hdrPresentationActive = true;
         backend.currentHeadroom = 0.5f;
         backend.potentialHeadroom = 0.75f;
 
         PresentationTarget expected;
-        expected.extendedLinearActive = true;
+        expected.hdrPresentationActive = true;
 
         QTest::newRow("headroom-never-falls-below-one")
             << DisplayState{} << backend << expected;
@@ -218,18 +218,79 @@ void PresentationTargetTest::calculation_data() {
         display.potentialHeadroom = 5.0f;
 
         PresentationBackendState backend;
-        backend.extendedLinearActive = true;
+        backend.hdrPresentationActive = true;
         backend.sceneReferred = false;
         backend.currentHeadroom = 2.0f;
         backend.potentialHeadroom = 4.0f;
 
         PresentationTarget expected;
-        expected.extendedLinearActive = true;
+        expected.hdrPresentationActive = true;
         expected.currentHeadroom = 3.5f;
         expected.potentialHeadroom = 5.0f;
         expected.effectiveTargetHeadroom = 3.5f;
 
         QTest::newRow("display-referred-edr-with-unknown-sdr-white")
+            << display << backend << expected;
+    }
+
+    {
+        DisplayState display;
+        display.valid = true;
+        display.hdrActive = true;
+        display.sdrWhiteNits = 200.0f;
+        display.minLuminanceNits = 0.001f;
+        display.maxLuminanceNits = 1000.0f;
+        display.currentHeadroom = 5.0f;
+        display.potentialHeadroom = 5.0f;
+
+        PresentationBackendState backend;
+        backend.hdrPresentationActive = true;
+        backend.sceneReferred = false;
+
+        PresentationTarget expected;
+        expected.hdrPresentationActive = true;
+        expected.sdrWhiteKnown = true;
+        expected.luminanceKnown = true;
+        expected.sdrWhiteNits = 200.0f;
+        expected.minLuminanceNits = 0.001f;
+        expected.maxLuminanceNits = 1000.0f;
+        expected.currentHeadroom = 5.0f;
+        expected.potentialHeadroom = 5.0f;
+        expected.effectiveTargetHeadroom = 5.0f;
+        expected.sdrScale = 1.0f;
+
+        QTest::newRow("display-referred-reference-white-needs-no-scale")
+            << display << backend << expected;
+    }
+
+    {
+        DisplayState display;
+        display.valid = true;
+        display.hdrActive = false;
+        display.sdrWhiteNits = 162.0f;
+        display.minLuminanceNits = 0.2f;
+        display.maxLuminanceNits = 162.0f;
+        display.currentHeadroom = 1.0f;
+        display.potentialHeadroom = 1.0f;
+
+        PresentationBackendState backend;
+        backend.hdrPresentationActive = true;
+        backend.sceneReferred = false;
+        backend.useSdrDisplayTargetForHdrPresentation = true;
+
+        PresentationTarget expected;
+        expected.hdrPresentationActive = true;
+        expected.sdrWhiteKnown = true;
+        expected.luminanceKnown = true;
+        expected.sdrWhiteNits = 162.0f;
+        expected.minLuminanceNits = 0.2f;
+        expected.maxLuminanceNits = 162.0f;
+        expected.currentHeadroom = 1.0f;
+        expected.potentialHeadroom = 1.0f;
+        expected.effectiveTargetHeadroom = 1.0f;
+        expected.sdrScale = 1.0f;
+
+        QTest::newRow("stable-hdr-surface-on-sdr-output")
             << display << backend << expected;
     }
 }
@@ -242,7 +303,9 @@ void PresentationTargetTest::calculation() {
     const PresentationTarget actual =
         calculatePresentationTarget(display, backend);
 
-    QCOMPARE(actual.extendedLinearActive, expected.extendedLinearActive);
+    QCOMPARE(
+        actual.hdrPresentationActive,
+        expected.hdrPresentationActive);
     QCOMPARE(actual.sceneReferred, expected.sceneReferred);
     QCOMPARE(actual.sdrWhiteKnown, expected.sdrWhiteKnown);
     QCOMPARE(actual.luminanceKnown, expected.luminanceKnown);

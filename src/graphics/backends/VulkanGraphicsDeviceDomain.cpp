@@ -76,6 +76,7 @@ public:
                 "The presentation window has no valid Vulkan instance");
             return;
         }
+        m_instance = instance;
 
         QRhiVulkanInitParams parameters;
         parameters.inst = instance;
@@ -187,6 +188,7 @@ public:
         enabledFeatures13.robustImageAccess = VK_FALSE;
         m_graphicsQueueFamily = native->gfxQueueFamilyIdx;
         m_graphicsQueue = native->gfxQueue;
+        m_physicalDevice = native->physDev;
         pl_log_params logParameters{};
         logParameters.log_cb = logLibplacebo;
         logParameters.log_level = PL_LOG_WARN;
@@ -287,6 +289,65 @@ public:
         return {};
     }
 
+    bool supportsPresentation(QWindow &window) const override {
+        Q_ASSERT(m_instance);
+        Q_ASSERT(m_physicalDevice != VK_NULL_HANDLE);
+        return m_instance->supportsPresent(
+            m_physicalDevice,
+            m_graphicsQueueFamily,
+            &window);
+    }
+
+    bool supportsHdr10Presentation(QWindow &window) const override {
+        Q_ASSERT(m_instance);
+        Q_ASSERT(m_physicalDevice != VK_NULL_HANDLE);
+        const VkSurfaceKHR surface =
+            QVulkanInstance::surfaceForWindow(&window);
+        if (surface == VK_NULL_HANDLE)
+            return false;
+
+        const auto getSurfaceFormats =
+            reinterpret_cast<PFN_vkGetPhysicalDeviceSurfaceFormatsKHR>(
+                m_instance->getInstanceProcAddr(
+                    "vkGetPhysicalDeviceSurfaceFormatsKHR"));
+        if (!getSurfaceFormats)
+            return false;
+
+        std::uint32_t formatCount = 0;
+        if (getSurfaceFormats(
+                m_physicalDevice,
+                surface,
+                &formatCount,
+                nullptr) != VK_SUCCESS) {
+            return false;
+        }
+        std::vector<VkSurfaceFormatKHR> formats(formatCount);
+        if (formatCount != 0
+                && getSurfaceFormats(
+                    m_physicalDevice,
+                    surface,
+                    &formatCount,
+                    formats.data()) != VK_SUCCESS) {
+            return false;
+        }
+
+        bool hdr10 = false;
+        bool passThrough = false;
+        for (const VkSurfaceFormatKHR &format : formats) {
+            if (format.format
+                    != VK_FORMAT_A2B10G10R10_UNORM_PACK32) {
+                continue;
+            }
+            hdr10 = hdr10
+                || format.colorSpace
+                    == VK_COLOR_SPACE_HDR10_ST2084_EXT;
+            passThrough = passThrough
+                || format.colorSpace
+                    == VK_COLOR_SPACE_PASS_THROUGH_EXT;
+        }
+        return hdr10 && passThrough;
+    }
+
     bool isValid() const {
         return m_rhi
             && m_vulkan
@@ -298,6 +359,8 @@ private:
     std::shared_ptr<VulkanExecutionState> m_executionState =
         std::make_shared<VulkanExecutionState>();
     std::unique_ptr<QRhi> m_rhi;
+    QVulkanInstance *m_instance = nullptr;
+    VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
     pl_log m_log = nullptr;
     pl_vulkan m_vulkan = nullptr;
     QVulkanDeviceFunctions *m_deviceFunctions = nullptr;
