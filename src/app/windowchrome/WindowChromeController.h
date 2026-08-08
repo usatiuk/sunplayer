@@ -14,11 +14,8 @@ class WindowChromeController final : public QObject {
     Q_PROPERTY(bool fullscreen READ fullscreen NOTIFY stateChanged)
     Q_PROPERTY(bool maximized READ maximized NOTIFY stateChanged)
 
-public:
-    WindowChromeController(
-        QWindow &window,
-        bool enabled,
-        QObject *parent = nullptr);
+  public:
+    WindowChromeController(QWindow& window, bool enabled, QObject* parent = nullptr);
 
     bool enabled() const;
     bool fullscreen() const;
@@ -30,10 +27,10 @@ public:
     Q_INVOKABLE bool beginSystemMove();
     Q_INVOKABLE bool beginSystemResize(int edgeMask);
 
-signals:
+  signals:
     void stateChanged();
 
-private:
-    QWindow &m_window;
+  private:
+    QWindow& m_window;
     bool m_enabled = false;
 };

@@ -12,11 +12,10 @@ class DecodedVideoFrame;
 struct VideoHardwareDecodeCapability;
 struct VideoFrameIdentity;
 
-using FfmpegFirstFrameDiagnostics =
-    FfmpegVideoStreamDiagnostics;
+using FfmpegFirstFrameDiagnostics = FfmpegVideoStreamDiagnostics;
 
 struct FfmpegFirstFrameResult {
-    std::shared_ptr<const DecodedVideoFrame> frame;
+    std::shared_ptr<DecodedVideoFrame const> frame;
     FfmpegFirstFrameDiagnostics diagnostics;
     QString error;
     bool cancelled = false;
@@ -27,13 +26,9 @@ struct FfmpegFirstFrameResult {
 
 // Compatibility adapter used by focused frame/import tests. Production
 // playback and this helper share the same continuous decoder implementation.
-FfmpegFirstFrameResult decodeFirstVideoFrame(
-    const QString &path,
-    const VideoFrameIdentity &identity,
-    std::stop_token stopToken = {});
+FfmpegFirstFrameResult decodeFirstVideoFrame(QString const& path, VideoFrameIdentity const& identity,
+                                             std::stop_token stopToken = {});
 
-FfmpegFirstFrameResult decodeFirstVideoFrame(
-    const QString &path,
-    const VideoFrameIdentity &identity,
-    const VideoHardwareDecodeCapability &hardwareDecode,
-    std::stop_token stopToken = {});
+FfmpegFirstFrameResult decodeFirstVideoFrame(QString const& path, VideoFrameIdentity const& identity,
+                                             VideoHardwareDecodeCapability const& hardwareDecode,
+                                             std::stop_token stopToken = {});

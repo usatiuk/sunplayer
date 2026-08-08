@@ -11,12 +11,11 @@
 class LinuxPlatformDependenciesTest final : public QObject {
     Q_OBJECT
 
-private slots:
+  private slots:
     void publicApisLinkWithoutOpeningNativeResources();
 };
 
-void LinuxPlatformDependenciesTest::
-publicApisLinkWithoutOpeningNativeResources() {
+void LinuxPlatformDependenciesTest::publicApisLinkWithoutOpeningNativeResources() {
     auto volatile vulkanLoaderFunction = &vkGetInstanceProcAddr;
     auto volatile waylandConnectFunction = &wl_display_connect;
     auto volatile vaDisplayFunction = &vaGetDisplayDRM;

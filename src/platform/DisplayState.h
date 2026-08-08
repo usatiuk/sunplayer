@@ -4,7 +4,7 @@
 
 // Color state observed from the operating system for the selected display.
 struct DisplayState {
-    bool operator==(const DisplayState &) const = default;
+    bool operator==(DisplayState const&) const = default;
 
     // valid describes the current output; zero white/max means unknown.
     // A zero minimum luminance is a valid measured value.

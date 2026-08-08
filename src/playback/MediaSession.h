@@ -17,9 +17,9 @@
 
 #include "audio/AudioSink.h"
 #include "media/DecodedVideoFrame.h"
+#include "media/FfmpegHardwareDevice.h"
 #include "media/FfmpegMediaDecoder.h"
 #include "media/FfmpegVideoDecoder.h"
-#include "media/FfmpegHardwareDevice.h"
 #include "playback/CoalescedGenerationWake.h"
 #include "playback/VideoFrameQueue.h"
 #include "playback/VideoFrameScheduler.h"
@@ -27,9 +27,7 @@
 #include "subtitles/SubtitleTrackModel.h"
 #include "video/DecodedVideoSource.h"
 
-class MediaSession final
-    : public QObject,
-      private DecodedVideoFrameSelector {
+class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     Q_OBJECT
     QML_ELEMENT
     QML_UNCREATABLE("MediaSession is owned by the application")
@@ -41,8 +39,7 @@ class MediaSession final
     Q_PROPERTY(QString containerFormat READ containerFormat NOTIFY sessionChanged)
     Q_PROPERTY(QString decoderName READ decoderName NOTIFY sessionChanged)
     Q_PROPERTY(QString decodePath READ decodePath NOTIFY sessionChanged)
-    Q_PROPERTY(QString hardwareFallbackReason
-               READ hardwareFallbackReason NOTIFY sessionChanged)
+    Q_PROPERTY(QString hardwareFallbackReason READ hardwareFallbackReason NOTIFY sessionChanged)
     Q_PROPERTY(QString videoSummary READ videoSummary NOTIFY sessionChanged)
     Q_PROPERTY(bool hasFrame READ hasFrame NOTIFY sessionChanged)
     Q_PROPERTY(bool playing READ playing NOTIFY sessionChanged)
@@ -50,46 +47,28 @@ class MediaSession final
     Q_PROPERTY(bool ended READ ended NOTIFY sessionChanged)
     Q_PROPERTY(bool seekable READ seekable NOTIFY timelineChanged)
     Q_PROPERTY(bool seeking READ seeking NOTIFY timelineChanged)
-    Q_PROPERTY(qlonglong positionMilliseconds
-               READ positionMilliseconds NOTIFY timelineChanged)
-    Q_PROPERTY(qlonglong durationMilliseconds
-               READ durationMilliseconds NOTIFY timelineChanged)
-    Q_PROPERTY(qulonglong decodedVideoFrames
-               READ decodedFrameCount NOTIFY playbackMetricsChanged)
-    Q_PROPERTY(qulonglong selectedVideoFrames
-               READ selectedFrameCount NOTIFY playbackMetricsChanged)
-    Q_PROPERTY(qulonglong droppedVideoFrames
-               READ droppedFrameCount NOTIFY playbackMetricsChanged)
-    Q_PROPERTY(int queuedVideoFrames
-               READ queuedVideoFrames NOTIFY playbackMetricsChanged)
+    Q_PROPERTY(qlonglong positionMilliseconds READ positionMilliseconds NOTIFY timelineChanged)
+    Q_PROPERTY(qlonglong durationMilliseconds READ durationMilliseconds NOTIFY timelineChanged)
+    Q_PROPERTY(qulonglong decodedVideoFrames READ decodedFrameCount NOTIFY playbackMetricsChanged)
+    Q_PROPERTY(qulonglong selectedVideoFrames READ selectedFrameCount NOTIFY playbackMetricsChanged)
+    Q_PROPERTY(qulonglong droppedVideoFrames READ droppedFrameCount NOTIFY playbackMetricsChanged)
+    Q_PROPERTY(int queuedVideoFrames READ queuedVideoFrames NOTIFY playbackMetricsChanged)
     Q_PROPERTY(qreal volume READ volume WRITE setVolume NOTIFY volumeChanged)
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)
-    Q_PROPERTY(PlaybackInterruption playbackInterruption
-               READ playbackInterruption NOTIFY sessionChanged)
-    Q_PROPERTY(bool hasAudioOutput
-               READ hasAudioOutput NOTIFY audioDiagnosticsChanged)
-    Q_PROPERTY(QString audioBackend
-               READ audioBackend NOTIFY audioDiagnosticsChanged)
-    Q_PROPERTY(MediaClockSource mediaClockSource
-               READ mediaClockSource NOTIFY audioDiagnosticsChanged)
-    Q_PROPERTY(bool audioClockReliable
-               READ audioClockReliable NOTIFY audioDiagnosticsChanged)
-    Q_PROPERTY(int audioQueuedMilliseconds
-               READ audioQueuedMilliseconds NOTIFY audioDiagnosticsChanged)
-    Q_PROPERTY(qulonglong audioSubmittedFrames
-               READ audioSubmittedFrames NOTIFY audioDiagnosticsChanged)
-    Q_PROPERTY(qulonglong audioPresentedFrames
-               READ audioPresentedFrames NOTIFY audioDiagnosticsChanged)
-    Q_PROPERTY(qulonglong audioUnderrunFrames
-               READ audioUnderrunFrames NOTIFY audioDiagnosticsChanged)
-    Q_PROPERTY(QAbstractItemModel *subtitleTracks
-               READ subtitleTracks CONSTANT)
-    Q_PROPERTY(int selectedSubtitleStreamIndex
-               READ selectedSubtitleStreamIndex NOTIFY subtitleChanged)
-    Q_PROPERTY(QString subtitleError
-               READ subtitleError NOTIFY subtitleChanged)
+    Q_PROPERTY(PlaybackInterruption playbackInterruption READ playbackInterruption NOTIFY sessionChanged)
+    Q_PROPERTY(bool hasAudioOutput READ hasAudioOutput NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(QString audioBackend READ audioBackend NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(MediaClockSource mediaClockSource READ mediaClockSource NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(bool audioClockReliable READ audioClockReliable NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(int audioQueuedMilliseconds READ audioQueuedMilliseconds NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(qulonglong audioSubmittedFrames READ audioSubmittedFrames NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(qulonglong audioPresentedFrames READ audioPresentedFrames NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(qulonglong audioUnderrunFrames READ audioUnderrunFrames NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(QAbstractItemModel* subtitleTracks READ subtitleTracks CONSTANT)
+    Q_PROPERTY(int selectedSubtitleStreamIndex READ selectedSubtitleStreamIndex NOTIFY subtitleChanged)
+    Q_PROPERTY(QString subtitleError READ subtitleError NOTIFY subtitleChanged)
 
-public:
+  public:
     enum class State {
         Empty,
         Opening,
@@ -113,31 +92,15 @@ public:
     };
     Q_ENUM(PlaybackInterruption)
 
-    using DecodeOperation = std::function<
-        FfmpegVideoDecodeResult(
-            const FfmpegVideoDecodeRequest &,
-            const FfmpegVideoFrameSink &,
-            std::stop_token)>;
-    using MediaDecodeOperation = std::function<
-        FfmpegMediaDecodeResult(
-            const FfmpegMediaDecodeRequest &,
-            const FfmpegVideoFrameSink &,
-            const FfmpegAudioOutputSink &,
-            const FfmpegMediaStreamSink &,
-            const FfmpegSubtitleOutputSink &,
-            std::stop_token)>;
-    explicit MediaSession(
-        VideoTargetReadback readback,
-        QObject *parent = nullptr);
-    MediaSession(
-        VideoTargetReadback readback,
-        DecodeOperation decodeOperation,
-        QObject *parent = nullptr);
-    MediaSession(
-        VideoTargetReadback readback,
-        MediaDecodeOperation decodeOperation,
-        std::shared_ptr<AudioSink> audioSink,
-        QObject *parent = nullptr);
+    using DecodeOperation = std::function<FfmpegVideoDecodeResult(FfmpegVideoDecodeRequest const&,
+                                                                  FfmpegVideoFrameSink const&, std::stop_token)>;
+    using MediaDecodeOperation = std::function<FfmpegMediaDecodeResult(
+        FfmpegMediaDecodeRequest const&, FfmpegVideoFrameSink const&, FfmpegAudioOutputSink const&,
+        FfmpegMediaStreamSink const&, FfmpegSubtitleOutputSink const&, std::stop_token)>;
+    explicit MediaSession(VideoTargetReadback readback, QObject* parent = nullptr);
+    MediaSession(VideoTargetReadback readback, DecodeOperation decodeOperation, QObject* parent = nullptr);
+    MediaSession(VideoTargetReadback readback, MediaDecodeOperation decodeOperation,
+                 std::shared_ptr<AudioSink> audioSink, QObject* parent = nullptr);
     ~MediaSession() override;
 
     State state() const;
@@ -175,32 +138,28 @@ public:
     qulonglong audioSubmittedFrames() const;
     qulonglong audioPresentedFrames() const;
     qulonglong audioUnderrunFrames() const;
-    std::optional<AudioPresentationSnapshot>
-        currentAudioPresentation() const;
-    QAbstractItemModel *subtitleTracks();
+    std::optional<AudioPresentationSnapshot> currentAudioPresentation() const;
+    QAbstractItemModel* subtitleTracks();
     int selectedSubtitleStreamIndex() const;
     QString subtitleError() const;
-    SubtitlePresentationSnapshot subtitlePresentationSnapshot(
-        std::chrono::steady_clock::time_point now) const;
+    SubtitlePresentationSnapshot subtitlePresentationSnapshot(std::chrono::steady_clock::time_point now) const;
 
-    DecodedVideoSource &videoSource();
-    const DecodedVideoSource &videoSource() const;
+    DecodedVideoSource& videoSource();
+    DecodedVideoSource const& videoSource() const;
     void invalidateGraphicsDevice();
-    void setVideoDecodeCapability(
-        VideoHardwareDecodeCapability capability);
+    void setVideoDecodeCapability(VideoHardwareDecodeCapability capability);
 
-    Q_INVOKABLE void openMedia(const QUrl &url);
+    Q_INVOKABLE void openMedia(QUrl const& url);
     Q_INVOKABLE void cancel();
     Q_INVOKABLE void retry();
     Q_INVOKABLE void play();
     Q_INVOKABLE void pause();
     void setVolume(qreal volume);
     void setMuted(bool muted);
-    Q_INVOKABLE void seekToMilliseconds(
-        qlonglong positionMilliseconds);
+    Q_INVOKABLE void seekToMilliseconds(qlonglong positionMilliseconds);
     Q_INVOKABLE void selectSubtitleStream(int streamIndex);
 
-signals:
+  signals:
     void sessionChanged();
     void playbackMetricsChanged();
     void timelineChanged();
@@ -209,89 +168,55 @@ signals:
     void audioDiagnosticsChanged();
     void subtitleChanged();
 
-private:
+  private:
     struct OpenRequest {
         std::uint64_t generation = 0;
         FfmpegMediaDecodeRequest decode;
     };
 
-    void startOpen(
-        const QUrl &url,
-        const QString &path,
-        VideoHardwareDecodeCapability hardwareDecode);
-    void restartAt(
-        std::int64_t positionMicroseconds,
-        VideoHardwareDecodeCapability hardwareDecode,
-        bool seeking);
-    void startDecode(
-        const QUrl &url,
-        const QString &path,
-        VideoHardwareDecodeCapability hardwareDecode,
-        std::int64_t requestedPositionMicroseconds,
-        bool newMedia,
-        bool seeking);
+    void startOpen(QUrl const& url, QString const& path, VideoHardwareDecodeCapability hardwareDecode);
+    void restartAt(std::int64_t positionMicroseconds, VideoHardwareDecodeCapability hardwareDecode, bool seeking);
+    void startDecode(QUrl const& url, QString const& path, VideoHardwareDecodeCapability hardwareDecode,
+                     std::int64_t requestedPositionMicroseconds, bool newMedia, bool seeking);
     void submitOpen(OpenRequest request);
     void cancelPipeline();
     void workerLoop(std::stop_token workerStopToken);
-    void completeDecode(
-        std::uint64_t generation,
-        FfmpegMediaDecodeResult result);
-    void postFramesAvailable(
-        std::uint64_t generation);
-    bool recordDecodedFrame(
-        std::uint64_t generation);
-    void postPlaybackMetricsChanged(
-        std::uint64_t generation);
-    void handleFramesAvailable(
-        std::uint64_t generation);
+    void completeDecode(std::uint64_t generation, FfmpegMediaDecodeResult result);
+    void postFramesAvailable(std::uint64_t generation);
+    bool recordDecodedFrame(std::uint64_t generation);
+    void postPlaybackMetricsChanged(std::uint64_t generation);
+    void handleFramesAvailable(std::uint64_t generation);
     void handleVideoFrameChanged();
-    void failWithoutWorker(
-        const QUrl &url,
-        const QString &message);
-    void handlePresentationFailure(
-        const VideoFailure &failure);
+    void failWithoutWorker(QUrl const& url, QString const& message);
+    void handlePresentationFailure(VideoFailure const& failure);
     void shutdownWorker();
     void cancelAudioOutput();
     void advanceGeneration();
     void resetDiagnostics();
-    void resetPlayback(
-        std::int64_t positionMicroseconds = 0);
+    void resetPlayback(std::int64_t positionMicroseconds = 0);
     void applyAudioGain();
     void resetAudioDiagnostics();
-    void setPlaybackInterruption(
-        PlaybackInterruption interruption);
-    void updateAudioClockDiagnostics(
-        const AudioPresentationSnapshot &presentation);
+    void setPlaybackInterruption(PlaybackInterruption interruption);
+    void updateAudioClockDiagnostics(AudioPresentationSnapshot const& presentation);
     void sampleAudioSinkDiagnostics();
-    void publishSessionAndPlaybackMetrics(
-        std::uint64_t generation);
-    void applyDiagnostics(
-        const FfmpegVideoStreamDiagnostics &diagnostics);
-    bool observeAudioOutput(
-        std::chrono::steady_clock::time_point now,
-        std::optional<AudioPresentationSnapshot> &observation);
-    bool updateAudioOutputState(
-        std::chrono::steady_clock::time_point now,
-        const AudioPresentationSnapshot &snapshot);
-    bool failCurrentAudioOutput(
-        const AudioPresentationSnapshot &snapshot,
-        const QString &fallbackReason = {});
-    MediaClockSnapshot mediaClockSnapshotAt(
-        std::chrono::steady_clock::time_point now,
-        const AudioPresentationSnapshot *audio = nullptr) const;
+    void publishSessionAndPlaybackMetrics(std::uint64_t generation);
+    void applyDiagnostics(FfmpegVideoStreamDiagnostics const& diagnostics);
+    bool observeAudioOutput(std::chrono::steady_clock::time_point now,
+                            std::optional<AudioPresentationSnapshot>& observation);
+    bool updateAudioOutputState(std::chrono::steady_clock::time_point now, AudioPresentationSnapshot const& snapshot);
+    bool failCurrentAudioOutput(AudioPresentationSnapshot const& snapshot, QString const& fallbackReason = {});
+    MediaClockSnapshot mediaClockSnapshotAt(std::chrono::steady_clock::time_point now,
+                                            AudioPresentationSnapshot const* audio = nullptr) const;
     bool currentGenerationUsesAudioClock() const;
     bool needsPlaybackMonitoring() const;
     bool currentGenerationStreamsDiscovered() const;
-    std::optional<FfmpegVideoStreamDiagnostics>
-        currentGenerationInitialVideoDiagnostics() const;
-    bool enterReady(
-        std::chrono::steady_clock::time_point now);
-    void updateVideoSummary(const QueuedVideoFrame &frame);
+    std::optional<FfmpegVideoStreamDiagnostics> currentGenerationInitialVideoDiagnostics() const;
+    bool enterReady(std::chrono::steady_clock::time_point now);
+    void updateVideoSummary(QueuedVideoFrame const& frame);
     void monitorPlayback();
 
-    std::shared_ptr<const DecodedVideoFrame>
-        selectFrameForPresentation(
-            std::chrono::steady_clock::time_point now) override;
+    std::shared_ptr<DecodedVideoFrame const>
+    selectFrameForPresentation(std::chrono::steady_clock::time_point now) override;
     bool wantsContinuousVideoFrames() const override;
 
     MediaDecodeOperation m_decodeOperation;
@@ -311,8 +236,7 @@ private:
     QString m_hardwareFallbackReason;
     QString m_videoSummary;
     VideoHardwareDecodeCapability m_videoDecodeCapability;
-    VideoHardwareDecodeCapability
-        m_activeVideoDecodeCapability;
+    VideoHardwareDecodeCapability m_activeVideoDecodeCapability;
     bool m_reopenAfterGraphicsRecovery = false;
     std::int64_t m_graphicsRecoveryPositionMicroseconds = 0;
     bool m_graphicsRecoverySeeking = false;
@@ -329,17 +253,14 @@ private:
     std::optional<std::int64_t> m_durationMicroseconds;
     std::optional<VideoTimelineOrigin> m_timelineOrigin;
     std::int64_t m_requestedPositionMicroseconds = 0;
-    std::optional<std::chrono::steady_clock::time_point>
-        m_clockAnchorTime;
+    std::optional<std::chrono::steady_clock::time_point> m_clockAnchorTime;
     std::int64_t m_clockAnchorMediaMicroseconds = 0;
     bool m_audioClockEstablished = false;
     bool m_audioTailClockActive = false;
-    PlaybackInterruption m_playbackInterruption =
-        PlaybackInterruption::None;
+    PlaybackInterruption m_playbackInterruption = PlaybackInterruption::None;
     AudioSinkDiagnostics m_audioSinkDiagnostics;
     std::uint64_t m_audioOutputEpoch = 0;
-    MediaClockSource m_mediaClockSource =
-        MediaClockSource::Monotonic;
+    MediaClockSource m_mediaClockSource = MediaClockSource::Monotonic;
     std::uint64_t m_selectedFrameCount = 0;
     std::uint64_t m_droppedFrameCount = 0;
     std::uint64_t m_pendingPublicationGeneration = 0;
@@ -353,12 +274,9 @@ private:
     bool m_streamDiscoveryComplete = false;
     bool m_audioOutputExpected = false;
     bool m_audioOutputEndedWithoutFrames = false;
-    std::optional<FfmpegVideoStreamDiagnostics>
-        m_initialVideoDiagnostics;
-    std::optional<std::chrono::steady_clock::time_point>
-        m_audioHoldSince;
-    std::optional<std::chrono::steady_clock::time_point>
-        m_audioClockUnavailableSince;
+    std::optional<FfmpegVideoStreamDiagnostics> m_initialVideoDiagnostics;
+    std::optional<std::chrono::steady_clock::time_point> m_audioHoldSince;
+    std::optional<std::chrono::steady_clock::time_point> m_audioClockUnavailableSince;
     QTimer m_playbackMonitorTimer;
     std::atomic<std::uint64_t> m_audioSinkGeneration{0};
     std::atomic_bool m_audioPlayIntent{true};

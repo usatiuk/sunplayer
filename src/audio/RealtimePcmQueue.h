@@ -29,38 +29,27 @@ enum class RealtimePcmSubmitResult {
 // and a non-blocking producer notification, making it suitable for a device
 // callback after reset() has established a fixed format.
 class RealtimePcmQueue final {
-public:
-    RealtimePcmQueue(
-        std::size_t capacityFrames,
-        int maximumChannelCount);
+  public:
+    RealtimePcmQueue(std::size_t capacityFrames, int maximumChannelCount);
 
-    void reset(
-        std::uint64_t playbackGeneration,
-        AudioStreamFormat format);
+    void reset(std::uint64_t playbackGeneration, AudioStreamFormat format);
     void cancel();
-    bool submit(
-        const PcmAudioBlock &block,
-        std::stop_token stopToken = {});
-    RealtimePcmSubmitResult submitResult(
-        const PcmAudioBlock &block,
-        std::stop_token stopToken = {});
-    RealtimePcmRead consume(
-        std::span<float> output,
-        std::size_t requestedFrames);
+    bool submit(PcmAudioBlock const& block, std::stop_token stopToken = {});
+    RealtimePcmSubmitResult submitResult(PcmAudioBlock const& block, std::stop_token stopToken = {});
+    RealtimePcmRead consume(std::span<float> output, std::size_t requestedFrames);
 
     std::size_t capacityFrames() const;
     std::size_t queuedFrames() const;
     std::size_t maximumObservedQueuedFrames() const;
     std::size_t waitingProducerCount() const;
     std::uint64_t producedMediaFrames() const;
-    std::optional<std::int64_t>
-        firstMediaTimestampMicroseconds() const;
+    std::optional<std::int64_t> firstMediaTimestampMicroseconds() const;
 
-private:
+  private:
     std::size_t freeFrames() const;
 
-    const std::size_t m_capacityFrames;
-    const int m_maximumChannelCount;
+    std::size_t const m_capacityFrames;
+    int const m_maximumChannelCount;
     std::vector<float> m_samples;
     mutable std::mutex m_producerMutex;
     std::atomic<std::uint64_t> m_wakeRevision{0};

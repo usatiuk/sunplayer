@@ -22,206 +22,148 @@ extern "C" {
 #include <qt_windows.h>
 #endif
 
+#include "audio/ControlledAudioSink.h"
 #include "media/DecodedVideoFrame.h"
 #include "media/FfmpegMediaDecoder.h"
-#include "audio/ControlledAudioSink.h"
 
 namespace {
 QString synchronizedFixturePath() {
-    return QStringLiteral(
-        SUNROOM_TEST_FIXTURE_DIR
-        "/media/sdr-bt709-ffv1-flac-sync.mkv");
+    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-flac-sync.mkv");
 }
 
 QString synchronizedManifestPath() {
-    return QStringLiteral(
-        SUNROOM_TEST_FIXTURE_DIR
-        "/media/sdr-bt709-ffv1-flac-sync.toml");
+    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-flac-sync.toml");
 }
 
-QString videoOnlyFixturePath() {
-    return QStringLiteral(
-        SUNROOM_TEST_FIXTURE_DIR
-        "/media/sdr-bt709-ffv1.mkv");
-}
+QString videoOnlyFixturePath() { return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1.mkv"); }
 
 QString shortAudioFixturePath() {
-    return QStringLiteral(
-        SUNROOM_TEST_FIXTURE_DIR
-        "/media/sdr-bt709-ffv1-short-flac.mkv");
+    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-short-flac.mkv");
 }
 
 QString audioGapFixturePath() {
-    return QStringLiteral(
-        SUNROOM_TEST_FIXTURE_DIR
-        "/media/sdr-bt709-ffv1-audio-gap-flac.mkv");
+    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-audio-gap-flac.mkv");
 }
 
-QString pgsFixturePath() {
-    return QStringLiteral(
-        SUNROOM_TEST_FIXTURE_DIR
-        "/media/sdr-bt709-ffv1-pgs.mkv");
-}
+QString pgsFixturePath() { return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-pgs.mkv"); }
 
 QString compressedPgsFixturePath() {
-    return QStringLiteral(
-        SUNROOM_TEST_FIXTURE_DIR
-        "/media/sdr-bt709-ffv1-pgs-zlib.mkv");
+    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-pgs-zlib.mkv");
 }
 
-QString pgsManifestPath() {
-    return QStringLiteral(
-        SUNROOM_TEST_FIXTURE_DIR
-        "/media/sdr-bt709-ffv1-pgs.toml");
-}
+QString pgsManifestPath() { return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-pgs.toml"); }
 
 QString compressedPgsManifestPath() {
-    return QStringLiteral(
-        SUNROOM_TEST_FIXTURE_DIR
-        "/media/sdr-bt709-ffv1-pgs-zlib.toml");
+    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-pgs-zlib.toml");
 }
 
 QString textSubtitleFixturePath() {
-    return QStringLiteral(
-        SUNROOM_TEST_FIXTURE_DIR
-        "/media/sdr-bt709-ffv1-subtitles.mkv");
+    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-subtitles.mkv");
 }
 
 QString textSubtitleManifestPath() {
-    return QStringLiteral(
-        SUNROOM_TEST_FIXTURE_DIR
-        "/media/sdr-bt709-ffv1-subtitles.toml");
+    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-subtitles.toml");
 }
 
-FfmpegMediaDecodeRequest requestFor(
-        const QString &path,
-        std::uint64_t generation = 1) {
+FfmpegMediaDecodeRequest requestFor(QString const& path, std::uint64_t generation = 1) {
     return {
-        .video = {
-            .path = path,
-            .firstFrameIdentity = {
-                .playbackGeneration = generation,
-                .decoderRevision = 1,
-                .frameId = 1,
+        .video =
+            {
+                .path = path,
+                .firstFrameIdentity =
+                    {
+                        .playbackGeneration = generation,
+                        .decoderRevision = 1,
+                        .frameId = 1,
+                    },
+                .hardwareDecode =
+                    {
+                        .device = {},
+                        .unavailableReason = QStringLiteral("Deterministic software decode"),
+                    },
             },
-            .hardwareDecode = {
-                .device = {},
-                .unavailableReason = QStringLiteral(
-                    "Deterministic software decode"),
-            },
-        },
     };
 }
 
 struct DecodeCapture {
-    std::vector<std::shared_ptr<const DecodedVideoFrame>> video;
+    std::vector<std::shared_ptr<DecodedVideoFrame const>> video;
     std::vector<PcmAudioBlock> audio;
     std::optional<FfmpegVideoStreamDiagnostics> videoDiagnostics;
     std::optional<FfmpegAudioStreamDiagnostics> audioDiagnostics;
 };
 
-FfmpegMediaDecodeResult decode(
-        const FfmpegMediaDecodeRequest &request,
-        DecodeCapture &capture) {
+FfmpegMediaDecodeResult decode(FfmpegMediaDecodeRequest const& request, DecodeCapture& capture) {
     return decodeMediaFrames(
         request,
-        [&capture](
-                std::shared_ptr<const DecodedVideoFrame> frame,
-                const FfmpegVideoStreamDiagnostics &diagnostics) {
+        [&capture](std::shared_ptr<DecodedVideoFrame const> frame, FfmpegVideoStreamDiagnostics const& diagnostics) {
             capture.videoDiagnostics = diagnostics;
             capture.video.push_back(std::move(frame));
             return true;
         },
-        [&capture](
-                PcmAudioBlock block,
-                const FfmpegAudioStreamDiagnostics &diagnostics,
-                std::stop_token) {
+        [&capture](PcmAudioBlock block, FfmpegAudioStreamDiagnostics const& diagnostics, std::stop_token) {
             capture.audioDiagnostics = diagnostics;
             capture.audio.push_back(std::move(block));
             return true;
         });
 }
 
-std::vector<float> flattenAudio(
-        const std::vector<PcmAudioBlock> &blocks) {
+std::vector<float> flattenAudio(std::vector<PcmAudioBlock> const& blocks) {
     std::vector<float> samples;
-    for (const PcmAudioBlock &block : blocks) {
-        samples.insert(
-            samples.end(),
-            block.samples.begin(),
-            block.samples.end());
+    for (PcmAudioBlock const& block : blocks) {
+        samples.insert(samples.end(), block.samples.begin(), block.samples.end());
     }
     return samples;
 }
 
-float strongestLeftSample(
-        const std::vector<float> &samples,
-        std::size_t centerFrame,
-        std::size_t radius) {
+float strongestLeftSample(std::vector<float> const& samples, std::size_t centerFrame, std::size_t radius) {
     float maximum = 0.0F;
-    const std::size_t first = centerFrame - radius;
-    const std::size_t last = centerFrame + radius;
+    std::size_t const first = centerFrame - radius;
+    std::size_t const last = centerFrame + radius;
     for (std::size_t frame = first; frame <= last; ++frame) {
-        maximum = std::max(
-            maximum,
-            std::abs(samples[frame * 2]));
+        maximum = std::max(maximum, std::abs(samples[frame * 2]));
     }
     return maximum;
 }
 
-QByteArray expectedFixtureHash(const QString &manifestPath) {
+QByteArray expectedFixtureHash(QString const& manifestPath) {
     QFile manifest(manifestPath);
-    if (!manifest.open(QIODevice::ReadOnly))
+    if (!manifest.open(QIODevice::ReadOnly)) {
         return {};
-    const QRegularExpressionMatch match = QRegularExpression(
-        QStringLiteral(
-            "^sha256\\s*=\\s*\"([0-9a-f]{64})\"\\s*$"),
-        QRegularExpression::MultilineOption)
-        .match(QString::fromUtf8(manifest.readAll()));
-    return match.hasMatch()
-        ? match.captured(1).toLatin1()
-        : QByteArray();
+    }
+    QRegularExpressionMatch const match = QRegularExpression(QStringLiteral("^sha256\\s*=\\s*\"([0-9a-f]{64})\"\\s*$"),
+                                                             QRegularExpression::MultilineOption)
+                                              .match(QString::fromUtf8(manifest.readAll()));
+    return match.hasMatch() ? match.captured(1).toLatin1() : QByteArray();
 }
 
-QByteArray fixtureHash(const QString &fixturePath) {
+QByteArray fixtureHash(QString const& fixturePath) {
     QFile fixture(fixturePath);
-    if (!fixture.open(QIODevice::ReadOnly))
+    if (!fixture.open(QIODevice::ReadOnly)) {
         return {};
-    return QCryptographicHash::hash(
-        fixture.readAll(), QCryptographicHash::Sha256)
-        .toHex();
+    }
+    return QCryptographicHash::hash(fixture.readAll(), QCryptographicHash::Sha256).toHex();
 }
 
-float strongestLeftSampleInRange(
-        const std::vector<float> &samples,
-        std::size_t firstFrame,
-        std::size_t lastFrame) {
+float strongestLeftSampleInRange(std::vector<float> const& samples, std::size_t firstFrame, std::size_t lastFrame) {
     float maximum = 0.0F;
-    for (std::size_t frame = firstFrame;
-            frame < lastFrame;
-            ++frame) {
-        maximum = std::max(
-            maximum,
-            std::abs(samples[frame * 2]));
+    for (std::size_t frame = firstFrame; frame < lastFrame; ++frame) {
+        maximum = std::max(maximum, std::abs(samples[frame * 2]));
     }
     return maximum;
 }
-}
+} // namespace
 
 class FfmpegMediaDecoderTest final : public QObject {
     Q_OBJECT
 
-public:
+  public:
     static void initMain() {
 #ifdef Q_OS_WIN
-        SetErrorMode(
-            SEM_FAILCRITICALERRORS
-            | SEM_NOGPFAULTERRORBOX
-            | SEM_NOOPENFILEERRORBOX);
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 #endif
     }
 
-private slots:
+  private slots:
     void rejectsUnsupportedOutputFormat();
     void rejectsIncompleteAudioLifecycleSink();
     void decodesSynchronizedFixtureThroughOneDemuxOperation();
@@ -241,11 +183,10 @@ private slots:
 };
 
 void FfmpegMediaDecoderTest::rejectsUnsupportedOutputFormat() {
-    FfmpegMediaDecodeRequest request =
-        requestFor(synchronizedFixturePath());
+    FfmpegMediaDecodeRequest request = requestFor(synchronizedFixturePath());
     request.audioOutput = {48'000, 1};
     DecodeCapture capture;
-    const FfmpegMediaDecodeResult result = decode(request, capture);
+    FfmpegMediaDecodeResult const result = decode(request, capture);
     QVERIFY(!result.isSuccess());
     QCOMPARE(result.error, QStringLiteral("Media decode request is invalid"));
     QVERIFY(capture.audio.empty());
@@ -253,38 +194,24 @@ void FfmpegMediaDecoderTest::rejectsUnsupportedOutputFormat() {
 }
 
 void FfmpegMediaDecoderTest::rejectsIncompleteAudioLifecycleSink() {
-    const FfmpegMediaDecodeResult result = decodeMediaFrames(
+    FfmpegMediaDecodeResult const result = decodeMediaFrames(
         requestFor(synchronizedFixturePath()),
-        [](std::shared_ptr<const DecodedVideoFrame>,
-                const FfmpegVideoStreamDiagnostics &) {
-            return true;
-        },
+        [](std::shared_ptr<DecodedVideoFrame const>, FfmpegVideoStreamDiagnostics const&) { return true; },
         FfmpegAudioOutputSink{
-            .submit = [](PcmAudioBlock,
-                    const FfmpegAudioStreamDiagnostics &,
-                    std::stop_token) {
-                return true;
-            },
+            .submit = [](PcmAudioBlock, FfmpegAudioStreamDiagnostics const&, std::stop_token) { return true; },
         },
-        FfmpegMediaStreamSink{},
-        std::stop_token{});
+        FfmpegMediaStreamSink{}, std::stop_token{});
     QVERIFY(!result.isSuccess());
-    QCOMPARE(
-        result.error,
-        QStringLiteral("Media decode request is invalid"));
+    QCOMPARE(result.error, QStringLiteral("Media decode request is invalid"));
 }
 
-void FfmpegMediaDecoderTest::
-decodesSynchronizedFixtureThroughOneDemuxOperation() {
-    const QByteArray declaredHash =
-        expectedFixtureHash(synchronizedManifestPath());
-    QVERIFY2(!declaredHash.isEmpty(),
-        "Fixture manifest has no valid SHA-256");
+void FfmpegMediaDecoderTest::decodesSynchronizedFixtureThroughOneDemuxOperation() {
+    QByteArray const declaredHash = expectedFixtureHash(synchronizedManifestPath());
+    QVERIFY2(!declaredHash.isEmpty(), "Fixture manifest has no valid SHA-256");
     QCOMPARE(fixtureHash(synchronizedFixturePath()), declaredHash);
 
     DecodeCapture capture;
-    const FfmpegMediaDecodeResult result = decode(
-        requestFor(synchronizedFixturePath()), capture);
+    FfmpegMediaDecodeResult const result = decode(requestFor(synchronizedFixturePath()), capture);
     QVERIFY2(result.isSuccess(), qPrintable(result.error));
     QVERIFY(result.audioStreamPresent);
     QVERIFY(result.audioEndOfStream);
@@ -295,73 +222,47 @@ decodesSynchronizedFixtureThroughOneDemuxOperation() {
     QVERIFY(!capture.audio.empty());
     QVERIFY(capture.videoDiagnostics);
     QVERIFY(capture.audioDiagnostics);
-    QCOMPARE(
-        capture.videoDiagnostics->durationMicroseconds,
-        std::optional<std::int64_t>(8'000'000));
+    QCOMPARE(capture.videoDiagnostics->durationMicroseconds, std::optional<std::int64_t>(8'000'000));
     QVERIFY(!capture.videoDiagnostics->durationFinal);
-    QCOMPARE(
-        result.video.diagnostics.durationMicroseconds,
-        std::optional<std::int64_t>(3'000'000));
+    QCOMPARE(result.video.diagnostics.durationMicroseconds, std::optional<std::int64_t>(3'000'000));
     QVERIFY(result.video.diagnostics.durationFinal);
-    QCOMPARE(
-        result.video.observedEndMicroseconds,
-        std::optional<std::int64_t>(3'000'000));
-    QCOMPARE(
-        result.observedAudioEndMicroseconds,
-        std::optional<std::int64_t>(3'000'000));
+    QCOMPARE(result.video.observedEndMicroseconds, std::optional<std::int64_t>(3'000'000));
+    QCOMPARE(result.observedAudioEndMicroseconds, std::optional<std::int64_t>(3'000'000));
     QVERIFY(result.packetCountLimit > 0);
     QVERIFY(result.packetByteLimit > 0);
-    QVERIFY(result.maximumQueuedPacketCount
-        <= result.packetCountLimit);
-    QVERIFY(result.maximumQueuedPacketBytes
-        <= std::max(
-            result.packetByteLimit,
-            result.largestQueuedPacketBytes));
-    QCOMPARE(
-        capture.videoDiagnostics->timelineOrigin->microseconds(),
-        std::optional<std::int64_t>(5'000'000));
-    QCOMPARE(
-        capture.audioDiagnostics->outputFormat,
-        AudioStreamFormat(48'000, 2));
+    QVERIFY(result.maximumQueuedPacketCount <= result.packetCountLimit);
+    QVERIFY(result.maximumQueuedPacketBytes <= std::max(result.packetByteLimit, result.largestQueuedPacketBytes));
+    QCOMPARE(capture.videoDiagnostics->timelineOrigin->microseconds(), std::optional<std::int64_t>(5'000'000));
+    QCOMPARE(capture.audioDiagnostics->outputFormat, AudioStreamFormat(48'000, 2));
     QCOMPARE(capture.audioDiagnostics->sourceSampleRate, 32'000);
     QCOMPARE(capture.audioDiagnostics->sourceChannelCount, 1);
 
-    for (std::size_t index = 0;
-            index < capture.video.size();
-            ++index) {
-        const DecodedVideoFrame &frame = *capture.video[index];
+    for (std::size_t index = 0; index < capture.video.size(); ++index) {
+        DecodedVideoFrame const& frame = *capture.video[index];
         QCOMPARE(frame.identity().playbackGeneration, 1U);
-        QCOMPARE(
-            frame.timing().ptsMicroseconds(),
-            std::optional<std::int64_t>(
-                5'000'000
-                + static_cast<std::int64_t>(index) * 250'000));
-        const AVFrame &avFrame = frame.ffmpegFrame();
+        QCOMPARE(frame.timing().ptsMicroseconds(),
+                 std::optional<std::int64_t>(5'000'000 + static_cast<std::int64_t>(index) * 250'000));
+        AVFrame const& avFrame = frame.ffmpegFrame();
         QVERIFY(avFrame.data[0] != nullptr);
-        const int luma = avFrame.data[0][
-            32 * avFrame.linesize[0] + 48];
-        const bool white = index == 2 || index == 6 || index == 10;
-        if (white)
+        int const luma = avFrame.data[0][32 * avFrame.linesize[0] + 48];
+        bool const white = index == 2 || index == 6 || index == 10;
+        if (white) {
             QVERIFY(luma >= 230);
-        else
+        } else {
             QVERIFY(luma <= 20);
+        }
     }
 
     std::uint64_t expectedFrame = 0;
-    for (const PcmAudioBlock &block : capture.audio) {
+    for (PcmAudioBlock const& block : capture.audio) {
         QVERIFY(block.isValid());
         QCOMPARE(block.playbackGeneration, 1U);
         QCOMPARE(block.streamFrameIndex, expectedFrame);
-        const std::int64_t expectedTime =
-            static_cast<std::int64_t>(
-                expectedFrame * 1'000'000ULL / 48'000ULL);
-        QVERIFY(std::abs(
-            block.mediaStartMicroseconds - expectedTime) <= 1);
-        for (std::size_t frame = 0;
-                frame < block.frameCount();
-                ++frame) {
-            const float left = block.samples[frame * 2];
-            const float right = block.samples[frame * 2 + 1];
+        std::int64_t const expectedTime = static_cast<std::int64_t>(expectedFrame * 1'000'000ULL / 48'000ULL);
+        QVERIFY(std::abs(block.mediaStartMicroseconds - expectedTime) <= 1);
+        for (std::size_t frame = 0; frame < block.frameCount(); ++frame) {
+            float const left = block.samples[frame * 2];
+            float const right = block.samples[frame * 2 + 1];
             QVERIFY(std::isfinite(left));
             QVERIFY(std::isfinite(right));
             QCOMPARE(left, right);
@@ -370,19 +271,15 @@ decodesSynchronizedFixtureThroughOneDemuxOperation() {
     }
     QCOMPARE(expectedFrame, 144'000U);
 
-    const std::vector<float> samples =
-        flattenAudio(capture.audio);
+    std::vector<float> const samples = flattenAudio(capture.audio);
     QCOMPARE(samples.size(), 288'000U);
-    for (const std::size_t impulse :
-            {24'000U, 72'000U, 120'000U}) {
+    for (std::size_t const impulse : {24'000U, 72'000U, 120'000U}) {
         QVERIFY(strongestLeftSample(samples, impulse, 32) > 0.25F);
     }
-    QVERIFY(strongestLeftSampleInRange(
-        samples, 30'000, 60'000) < 0.0001F);
+    QVERIFY(strongestLeftSampleInRange(samples, 30'000, 60'000) < 0.0001F);
 }
 
-void FfmpegMediaDecoderTest::
-streamsRealDecodeThroughBoundedSink() {
+void FfmpegMediaDecoderTest::streamsRealDecodeThroughBoundedSink() {
     using namespace std::chrono_literals;
 
     constexpr std::size_t capacity = 4'096;
@@ -394,50 +291,36 @@ streamsRealDecodeThroughBoundedSink() {
     FfmpegMediaDecodeResult result;
     std::atomic_int streamSelections = 0;
     std::atomic_bool selectedAudio = false;
-    std::optional<FfmpegVideoStreamDiagnostics>
-        selectedVideoDiagnostics;
+    std::optional<FfmpegVideoStreamDiagnostics> selectedVideoDiagnostics;
     std::promise<void> completedPromise;
     std::future<void> completed = completedPromise.get_future();
     std::jthread decoder([&](std::stop_token stopToken) {
         result = decodeMediaFrames(
             requestFor(synchronizedFixturePath(), 40),
-            [&capture](
-                    std::shared_ptr<const DecodedVideoFrame> frame,
-                    const FfmpegVideoStreamDiagnostics &diagnostics) {
+            [&capture](std::shared_ptr<DecodedVideoFrame const> frame,
+                       FfmpegVideoStreamDiagnostics const& diagnostics) {
                 capture.videoDiagnostics = diagnostics;
                 capture.video.push_back(std::move(frame));
                 return true;
             },
             FfmpegAudioOutputSink{
-                .submit = [&sink](
-                        PcmAudioBlock block,
-                        const FfmpegAudioStreamDiagnostics &,
-                        std::stop_token stopToken) {
-                    return sink.submit(
-                        std::move(block), stopToken);
-                },
-                .endOfStream = [&sink](std::uint64_t generation) {
-                    sink.finish(generation);
-                },
+                .submit = [&sink](PcmAudioBlock block, FfmpegAudioStreamDiagnostics const&,
+                                  std::stop_token stopToken) { return sink.submit(std::move(block), stopToken); },
+                .endOfStream = [&sink](std::uint64_t generation) { sink.finish(generation); },
             },
-            [&streamSelections,
-             &selectedAudio,
-             &selectedVideoDiagnostics](
-                    const FfmpegMediaStreamSelection &selection) {
+            [&streamSelections, &selectedAudio,
+             &selectedVideoDiagnostics](FfmpegMediaStreamSelection const& selection) {
                 ++streamSelections;
                 selectedAudio = selection.audioStreamPresent;
-                selectedVideoDiagnostics =
-                    selection.videoDiagnostics;
+                selectedVideoDiagnostics = selection.videoDiagnostics;
             },
             stopToken);
         completedPromise.set_value();
     });
 
-    const auto deadline = std::chrono::steady_clock::now() + 20s;
-    while (sink.bufferedFrames() == 0
-            && completed.wait_for(0ms)
-                == std::future_status::timeout
-            && std::chrono::steady_clock::now() < deadline) {
+    auto const deadline = std::chrono::steady_clock::now() + 20s;
+    while (sink.bufferedFrames() == 0 && completed.wait_for(0ms) == std::future_status::timeout &&
+           std::chrono::steady_clock::now() < deadline) {
         std::this_thread::yield();
     }
     QVERIFY(sink.bufferedFrames() != 0);
@@ -445,20 +328,15 @@ streamsRealDecodeThroughBoundedSink() {
     QVERIFY(completed.wait_for(0ms) == std::future_status::timeout);
 
     std::vector<float> samples;
-    while ((completed.wait_for(0ms)
-                == std::future_status::timeout
-            || sink.bufferedFrames() != 0
-            || sink.submittedFrames() != sink.presentedFrames())
-            && std::chrono::steady_clock::now() < deadline) {
+    while ((completed.wait_for(0ms) == std::future_status::timeout || sink.bufferedFrames() != 0 ||
+            sink.submittedFrames() != sink.presentedFrames()) &&
+           std::chrono::steady_clock::now() < deadline) {
         ControlledAudioRender rendered = sink.render(257);
         if (rendered.frames == 0) {
             std::this_thread::yield();
             continue;
         }
-        samples.insert(
-            samples.end(),
-            rendered.samples.begin(),
-            rendered.samples.end());
+        samples.insert(samples.end(), rendered.samples.begin(), rendered.samples.end());
         sink.advancePresentedFrames(rendered.frames);
     }
     if (completed.wait_for(0ms) == std::future_status::timeout) {
@@ -478,101 +356,81 @@ streamsRealDecodeThroughBoundedSink() {
     QVERIFY(sink.snapshot().drained);
 }
 
-void FfmpegMediaDecoderTest::
-seeksAndTrimsAudioOnTheSharedTimeline() {
+void FfmpegMediaDecoderTest::seeksAndTrimsAudioOnTheSharedTimeline() {
     DecodeCapture initial;
-    const FfmpegMediaDecodeResult initialResult = decode(
-        requestFor(synchronizedFixturePath(), 20), initial);
+    FfmpegMediaDecodeResult const initialResult = decode(requestFor(synchronizedFixturePath(), 20), initial);
     QVERIFY2(initialResult.isSuccess(), qPrintable(initialResult.error));
     QVERIFY(initial.videoDiagnostics);
     QVERIFY(initial.videoDiagnostics->timelineOrigin);
 
-    FfmpegMediaDecodeRequest request =
-        requestFor(synchronizedFixturePath(), 21);
+    FfmpegMediaDecodeRequest request = requestFor(synchronizedFixturePath(), 21);
     request.video.start = {
         .targetPositionMicroseconds = 1'250'000,
         .timelineOrigin = initial.videoDiagnostics->timelineOrigin,
         .performDemuxSeek = true,
     };
     DecodeCapture capture;
-    const FfmpegMediaDecodeResult result = decode(request, capture);
+    FfmpegMediaDecodeResult const result = decode(request, capture);
     QVERIFY2(result.isSuccess(), qPrintable(result.error));
     QVERIFY(!capture.audio.empty());
     QCOMPARE(capture.audio.front().streamFrameIndex, 0U);
-    QCOMPARE(
-        capture.audio.front().mediaStartMicroseconds,
-        1'250'000);
+    QCOMPARE(capture.audio.front().mediaStartMicroseconds, 1'250'000);
     QCOMPARE(result.outputAudioFrames, 84'000U);
     QVERIFY(!capture.video.empty());
-    QVERIFY(std::any_of(
-        capture.video.begin(),
-        capture.video.end(),
-        [](const auto &frame) {
-            return frame->timing().ptsMicroseconds()
-                == std::optional<std::int64_t>(6'250'000);
-        }));
+    QVERIFY(std::any_of(capture.video.begin(), capture.video.end(), [](auto const& frame) {
+        return frame->timing().ptsMicroseconds() == std::optional<std::int64_t>(6'250'000);
+    }));
 }
 
-void FfmpegMediaDecoderTest::
-fillsMidStreamAudioTimestampGapWithSourceSilence() {
-    const QByteArray declaredHash(
-        "00947436b22bb52d317c0896edeb173c"
-        "6e06dd68f681447453f3b354ab06aa44");
+void FfmpegMediaDecoderTest::fillsMidStreamAudioTimestampGapWithSourceSilence() {
+    QByteArray const declaredHash("00947436b22bb52d317c0896edeb173c"
+                                  "6e06dd68f681447453f3b354ab06aa44");
     QCOMPARE(fixtureHash(audioGapFixturePath()), declaredHash);
 
     DecodeCapture capture;
-    const FfmpegMediaDecodeResult result = decode(
-        requestFor(audioGapFixturePath(), 24), capture);
+    FfmpegMediaDecodeResult const result = decode(requestFor(audioGapFixturePath(), 24), capture);
     QVERIFY2(result.isSuccess(), qPrintable(result.error));
     QVERIFY(result.audioEndOfStream);
     QCOMPARE(result.outputAudioFrames, 96'000U);
     QVERIFY(capture.audio.size() > 1U);
 
     std::uint64_t expectedFrame = 0;
-    for (const PcmAudioBlock &block : capture.audio) {
+    for (PcmAudioBlock const& block : capture.audio) {
         QCOMPARE(block.streamFrameIndex, expectedFrame);
         expectedFrame += block.frameCount();
     }
     QCOMPARE(expectedFrame, 96'000U);
-    QCOMPARE(
-        result.observedAudioEndMicroseconds,
-        std::optional<std::int64_t>(2'000'000));
+    QCOMPARE(result.observedAudioEndMicroseconds, std::optional<std::int64_t>(2'000'000));
 }
 
-void FfmpegMediaDecoderTest::
-seekingPastAudioEndIsACleanVideoInterval() {
+void FfmpegMediaDecoderTest::seekingPastAudioEndIsACleanVideoInterval() {
     DecodeCapture initial;
-    const FfmpegMediaDecodeResult initialResult = decode(
-        requestFor(shortAudioFixturePath(), 22), initial);
+    FfmpegMediaDecodeResult const initialResult = decode(requestFor(shortAudioFixturePath(), 22), initial);
     QVERIFY2(initialResult.isSuccess(), qPrintable(initialResult.error));
     QVERIFY(initial.videoDiagnostics);
     QVERIFY(initial.videoDiagnostics->timelineOrigin);
 
-    FfmpegMediaDecodeRequest request =
-        requestFor(shortAudioFixturePath(), 23);
+    FfmpegMediaDecodeRequest request = requestFor(shortAudioFixturePath(), 23);
     request.video.start = {
         .targetPositionMicroseconds = 2'000'000,
         .timelineOrigin = initial.videoDiagnostics->timelineOrigin,
         .performDemuxSeek = true,
     };
     DecodeCapture capture;
-    const FfmpegMediaDecodeResult result = decode(request, capture);
+    FfmpegMediaDecodeResult const result = decode(request, capture);
     QVERIFY2(result.isSuccess(), qPrintable(result.error));
     QVERIFY(result.audioStreamPresent);
     QVERIFY(result.audioEndOfStream);
     QCOMPARE(result.outputAudioFrames, 0U);
     QVERIFY(capture.audio.empty());
     QVERIFY(!capture.video.empty());
-    QCOMPARE(
-        result.video.diagnostics.durationMicroseconds,
-        std::optional<std::int64_t>(3'000'000));
+    QCOMPARE(result.video.diagnostics.durationMicroseconds, std::optional<std::int64_t>(3'000'000));
     QVERIFY(result.video.diagnostics.durationFinal);
 }
 
 void FfmpegMediaDecoderTest::preservesVideoOnlyPlayback() {
     DecodeCapture capture;
-    const FfmpegMediaDecodeResult result = decode(
-        requestFor(videoOnlyFixturePath(), 30), capture);
+    FfmpegMediaDecodeResult const result = decode(requestFor(videoOnlyFixturePath(), 30), capture);
     QVERIFY2(result.isSuccess(), qPrintable(result.error));
     QVERIFY(!result.audioStreamPresent);
     QVERIFY(!result.audio);
@@ -581,26 +439,18 @@ void FfmpegMediaDecoderTest::preservesVideoOnlyPlayback() {
     QVERIFY(capture.audio.empty());
 }
 
-void FfmpegMediaDecoderTest::
-discoversAndDecodesSelectedPgsInTheSingleMediaOperation_data() {
+void FfmpegMediaDecoderTest::discoversAndDecodesSelectedPgsInTheSingleMediaOperation_data() {
     QTest::addColumn<QString>("fixturePath");
     QTest::addColumn<QString>("manifestPath");
 
-    QTest::newRow("uncompressed")
-        << pgsFixturePath()
-        << pgsManifestPath();
-    QTest::newRow("matroska-zlib")
-        << compressedPgsFixturePath()
-        << compressedPgsManifestPath();
+    QTest::newRow("uncompressed") << pgsFixturePath() << pgsManifestPath();
+    QTest::newRow("matroska-zlib") << compressedPgsFixturePath() << compressedPgsManifestPath();
 }
 
-void FfmpegMediaDecoderTest::
-discoversAndDecodesSelectedPgsInTheSingleMediaOperation() {
+void FfmpegMediaDecoderTest::discoversAndDecodesSelectedPgsInTheSingleMediaOperation() {
     QFETCH(QString, fixturePath);
     QFETCH(QString, manifestPath);
-    QCOMPARE(
-        fixtureHash(fixturePath),
-        expectedFixtureHash(manifestPath));
+    QCOMPARE(fixtureHash(fixturePath), expectedFixtureHash(manifestPath));
 
     FfmpegMediaDecodeRequest request = requestFor(fixturePath, 31);
     request.selectedSubtitleStreamIndex = 2;
@@ -609,51 +459,42 @@ discoversAndDecodesSelectedPgsInTheSingleMediaOperation() {
     std::optional<SubtitleStreamConfiguration> configuration;
     std::vector<SubtitleEvent> events;
     QString subtitleFailure;
-    const FfmpegMediaDecodeResult result = decodeMediaFrames(
+    FfmpegMediaDecodeResult const result = decodeMediaFrames(
         request,
-        [&capture](
-                std::shared_ptr<const DecodedVideoFrame> frame,
-                const FfmpegVideoStreamDiagnostics &diagnostics) {
+        [&capture](std::shared_ptr<DecodedVideoFrame const> frame, FfmpegVideoStreamDiagnostics const& diagnostics) {
             capture.videoDiagnostics = diagnostics;
             capture.video.push_back(std::move(frame));
             return true;
         },
         FfmpegAudioOutputSink{
-            .submit = [&capture](
-                    PcmAudioBlock block,
-                    const FfmpegAudioStreamDiagnostics &diagnostics,
-                    std::stop_token) {
-                capture.audioDiagnostics = diagnostics;
-                capture.audio.push_back(std::move(block));
-                return true;
-            },
+            .submit =
+                [&capture](PcmAudioBlock block, FfmpegAudioStreamDiagnostics const& diagnostics, std::stop_token) {
+                    capture.audioDiagnostics = diagnostics;
+                    capture.audio.push_back(std::move(block));
+                    return true;
+                },
             .endOfStream = [](std::uint64_t) {},
         },
-        [&tracks, &configuration](
-                const FfmpegMediaStreamSelection &selection) {
+        [&tracks, &configuration](FfmpegMediaStreamSelection const& selection) {
             tracks = selection.subtitleTracks;
             configuration = selection.subtitleConfiguration;
         },
         FfmpegSubtitleOutputSink{
-            .submit = [&events](
-                    SubtitleEvent event, std::stop_token) {
-                events.push_back(std::move(event));
-                return true;
-            },
-            .failed = [&subtitleFailure](QString error) {
-                subtitleFailure = std::move(error);
-            },
+            .submit =
+                [&events](SubtitleEvent event, std::stop_token) {
+                    events.push_back(std::move(event));
+                    return true;
+                },
+            .failed = [&subtitleFailure](QString error) { subtitleFailure = std::move(error); },
         });
 
     QVERIFY2(result.isSuccess(), qPrintable(result.error));
     QVERIFY2(subtitleFailure.isEmpty(), qPrintable(subtitleFailure));
-    QVERIFY2(result.subtitleError.isEmpty(),
-        qPrintable(result.subtitleError));
+    QVERIFY2(result.subtitleError.isEmpty(), qPrintable(result.subtitleError));
     QVERIFY(result.subtitleEndOfStream);
     QCOMPARE(tracks.size(), 1U);
     QCOMPARE(tracks.front().streamIndex, 2);
-    QCOMPARE(tracks.front().codec,
-        QStringLiteral("hdmv_pgs_subtitle"));
+    QCOMPARE(tracks.front().codec, QStringLiteral("hdmv_pgs_subtitle"));
     QVERIFY(tracks.front().supported);
     QVERIFY(configuration);
     QCOMPARE(configuration->playbackGeneration, 31U);
@@ -669,7 +510,7 @@ discoversAndDecodesSelectedPgsInTheSingleMediaOperation() {
     QCOMPARE(events[0].bitmap->regions[0].y, 120);
     QCOMPARE(events[0].bitmap->regions[0].size, QSize(60, 20));
     QVERIFY(!events[0].endMicroseconds);
-    const QByteArray &white = events[0].bitmap->regions[0].rgba;
+    QByteArray const& white = events[0].bitmap->regions[0].rgba;
     QVERIFY(static_cast<unsigned char>(white[0]) > 240);
     QVERIFY(static_cast<unsigned char>(white[1]) > 240);
     QVERIFY(static_cast<unsigned char>(white[2]) > 240);
@@ -677,7 +518,7 @@ discoversAndDecodesSelectedPgsInTheSingleMediaOperation() {
     QCOMPARE(events[0].bitmap->regions[1].x, 230);
     QCOMPARE(events[0].bitmap->regions[1].y, 30);
     QCOMPARE(events[0].bitmap->regions[1].size, QSize(40, 24));
-    const QByteArray &yellow = events[0].bitmap->regions[1].rgba;
+    QByteArray const& yellow = events[0].bitmap->regions[1].rgba;
     QVERIFY(static_cast<unsigned char>(yellow[0]) > 220);
     QVERIFY(static_cast<unsigned char>(yellow[1]) > 180);
     QVERIFY(static_cast<unsigned char>(yellow[2]) < 80);
@@ -693,49 +534,35 @@ discoversAndDecodesSelectedPgsInTheSingleMediaOperation() {
     QCOMPARE(events[2].type, SubtitlePayloadType::Clear);
 }
 
-void FfmpegMediaDecoderTest::
-discoversTextTracksFontsAndFfmpegAssConversion() {
-    QCOMPARE(
-        fixtureHash(textSubtitleFixturePath()),
-        expectedFixtureHash(textSubtitleManifestPath()));
+void FfmpegMediaDecoderTest::discoversTextTracksFontsAndFfmpegAssConversion() {
+    QCOMPARE(fixtureHash(textSubtitleFixturePath()), expectedFixtureHash(textSubtitleManifestPath()));
     struct SubtitleCapture {
         std::vector<SubtitleTrackDescriptor> tracks;
         std::optional<SubtitleStreamConfiguration> configuration;
         std::vector<SubtitleEvent> events;
         QString error;
     };
-    const auto decodeTrack = [](int streamIndex, std::uint64_t generation) {
+    auto const decodeTrack = [](int streamIndex, std::uint64_t generation) {
         SubtitleCapture capture;
-        FfmpegMediaDecodeRequest request = requestFor(
-            textSubtitleFixturePath(), generation);
+        FfmpegMediaDecodeRequest request = requestFor(textSubtitleFixturePath(), generation);
         request.selectedSubtitleStreamIndex = streamIndex;
-        const FfmpegMediaDecodeResult result = decodeMediaFrames(
-            request,
-            [](std::shared_ptr<const DecodedVideoFrame>,
-                    const FfmpegVideoStreamDiagnostics &) {
-                return true;
-            },
+        FfmpegMediaDecodeResult const result = decodeMediaFrames(
+            request, [](std::shared_ptr<DecodedVideoFrame const>, FfmpegVideoStreamDiagnostics const&) { return true; },
             FfmpegAudioOutputSink{
-                .submit = [](PcmAudioBlock,
-                        const FfmpegAudioStreamDiagnostics &,
-                        std::stop_token) {
-                    return true;
-                },
+                .submit = [](PcmAudioBlock, FfmpegAudioStreamDiagnostics const&, std::stop_token) { return true; },
                 .endOfStream = [](std::uint64_t) {},
             },
-            [&capture](const FfmpegMediaStreamSelection &selection) {
+            [&capture](FfmpegMediaStreamSelection const& selection) {
                 capture.tracks = selection.subtitleTracks;
                 capture.configuration = selection.subtitleConfiguration;
             },
             FfmpegSubtitleOutputSink{
-                .submit = [&capture](
-                        SubtitleEvent event, std::stop_token) {
-                    capture.events.push_back(std::move(event));
-                    return true;
-                },
-                .failed = [&capture](QString error) {
-                    capture.error = std::move(error);
-                },
+                .submit =
+                    [&capture](SubtitleEvent event, std::stop_token) {
+                        capture.events.push_back(std::move(event));
+                        return true;
+                    },
+                .failed = [&capture](QString error) { capture.error = std::move(error); },
             });
         return std::pair(std::move(capture), result);
     };
@@ -747,27 +574,19 @@ discoversTextTracksFontsAndFfmpegAssConversion() {
     QCOMPARE(ass.tracks[0].streamIndex, 2);
     QCOMPARE(ass.tracks[0].language, QStringLiteral("eng"));
     QCOMPARE(ass.tracks[0].title, QStringLiteral("Styled Ahem"));
-    QCOMPARE(
-        ass.tracks[0].label,
-        QStringLiteral("English - Styled Ahem"));
+    QCOMPARE(ass.tracks[0].label, QStringLiteral("English - Styled Ahem"));
     QCOMPARE(ass.tracks[1].streamIndex, 3);
     QCOMPARE(ass.tracks[1].language, QStringLiteral("ces"));
-    QCOMPARE(
-        ass.tracks[1].label,
-        QStringLiteral("Czech - Plain Czech (SDH)"));
+    QCOMPARE(ass.tracks[1].label, QStringLiteral("Czech - Plain Czech (SDH)"));
     QVERIFY(ass.tracks[1].isHearingImpaired);
     QVERIFY(ass.configuration);
     QCOMPARE(ass.configuration->codec, QStringLiteral("ass"));
     QVERIFY(!ass.configuration->codecPrivate.isEmpty());
     QCOMPARE(ass.configuration->fonts.size(), 1U);
     QCOMPARE(ass.configuration->fonts[0].name, QStringLiteral("Ahem.ttf"));
-    QCOMPARE(
-        QCryptographicHash::hash(
-            ass.configuration->fonts[0].bytes,
-            QCryptographicHash::Sha256).toHex(),
-        QByteArrayLiteral(
-            "b719ecb31c5b21fc573c03f6421c74ac"
-            "63c271a5a3ff841e34f9705fb94b8448"));
+    QCOMPARE(QCryptographicHash::hash(ass.configuration->fonts[0].bytes, QCryptographicHash::Sha256).toHex(),
+             QByteArrayLiteral("b719ecb31c5b21fc573c03f6421c74ac"
+                               "63c271a5a3ff841e34f9705fb94b8448"));
     QCOMPARE(ass.events.size(), 2U);
     QCOMPARE(ass.events[0].startMicroseconds, 500'000);
     QCOMPARE(ass.events[0].endMicroseconds, 2'500'000);
@@ -789,8 +608,7 @@ discoversTextTracksFontsAndFfmpegAssConversion() {
     QCOMPARE(plain.events[0].startMicroseconds, 1'000'000);
     QCOMPARE(plain.events[0].endMicroseconds, 2'000'000);
     QCOMPARE(plain.events[0].type, SubtitlePayloadType::AssText);
-    QVERIFY(plain.events[0].ass.contains(
-        QByteArray::fromStdString("Příliš")));
+    QVERIFY(plain.events[0].ass.contains(QByteArray::fromStdString("Příliš")));
     QCOMPARE(plain.events[1].startMicroseconds, 4'000'000);
     QCOMPARE(plain.events[1].endMicroseconds, 5'500'000);
 }
@@ -801,36 +619,30 @@ void FfmpegMediaDecoderTest::continuesAvAfterSubtitleOutputFailure() {
     DecodeCapture capture;
     int rejectedEvents = 0;
     QString subtitleFailure;
-    const FfmpegMediaDecodeResult result = decodeMediaFrames(
+    FfmpegMediaDecodeResult const result = decodeMediaFrames(
         request,
-        [&capture](
-                std::shared_ptr<const DecodedVideoFrame> frame,
-                const FfmpegVideoStreamDiagnostics &diagnostics) {
+        [&capture](std::shared_ptr<DecodedVideoFrame const> frame, FfmpegVideoStreamDiagnostics const& diagnostics) {
             capture.videoDiagnostics = diagnostics;
             capture.video.push_back(std::move(frame));
             return true;
         },
         FfmpegAudioOutputSink{
-            .submit = [&capture](
-                    PcmAudioBlock block,
-                    const FfmpegAudioStreamDiagnostics &diagnostics,
-                    std::stop_token) {
-                capture.audioDiagnostics = diagnostics;
-                capture.audio.push_back(std::move(block));
-                return true;
-            },
+            .submit =
+                [&capture](PcmAudioBlock block, FfmpegAudioStreamDiagnostics const& diagnostics, std::stop_token) {
+                    capture.audioDiagnostics = diagnostics;
+                    capture.audio.push_back(std::move(block));
+                    return true;
+                },
             .endOfStream = [](std::uint64_t) {},
         },
-        [](const FfmpegMediaStreamSelection &) {},
+        [](FfmpegMediaStreamSelection const&) {},
         FfmpegSubtitleOutputSink{
-            .submit = [&rejectedEvents](
-                    SubtitleEvent, std::stop_token) {
-                ++rejectedEvents;
-                return false;
-            },
-            .failed = [&subtitleFailure](QString error) {
-                subtitleFailure = std::move(error);
-            },
+            .submit =
+                [&rejectedEvents](SubtitleEvent, std::stop_token) {
+                    ++rejectedEvents;
+                    return false;
+                },
+            .failed = [&subtitleFailure](QString error) { subtitleFailure = std::move(error); },
         });
 
     QVERIFY2(result.isSuccess(), qPrintable(result.error));
@@ -844,41 +656,30 @@ void FfmpegMediaDecoderTest::continuesAvAfterSubtitleOutputFailure() {
     QVERIFY(!capture.audio.empty());
 }
 
-void FfmpegMediaDecoderTest::
-distinguishesVideoSinkStopFromCancellation() {
-    const auto stoppingVideoSink = [](
-            std::shared_ptr<const DecodedVideoFrame>,
-            const FfmpegVideoStreamDiagnostics &) {
+void FfmpegMediaDecoderTest::distinguishesVideoSinkStopFromCancellation() {
+    auto const stoppingVideoSink = [](std::shared_ptr<DecodedVideoFrame const>, FfmpegVideoStreamDiagnostics const&) {
         return false;
     };
-    const auto acceptingAudioSink = [](
-            PcmAudioBlock,
-            const FfmpegAudioStreamDiagnostics &,
-            std::stop_token) {
+    auto const acceptingAudioSink = [](PcmAudioBlock, FfmpegAudioStreamDiagnostics const&, std::stop_token) {
         return true;
     };
-    const FfmpegMediaDecodeResult result = decodeMediaFrames(
-        requestFor(synchronizedFixturePath(), 50),
-        stoppingVideoSink,
-        acceptingAudioSink);
+    FfmpegMediaDecodeResult const result =
+        decodeMediaFrames(requestFor(synchronizedFixturePath(), 50), stoppingVideoSink, acceptingAudioSink);
     QVERIFY(result.isStopped());
     QVERIFY(result.video.stopped);
     QVERIFY(!result.isSuccess());
     QVERIFY(!result.isCancelled());
     QVERIFY(result.error.isEmpty());
 
-    const FfmpegMediaDecodeResult videoOnly = decodeMediaFrames(
-        requestFor(videoOnlyFixturePath(), 54),
-        stoppingVideoSink,
-        acceptingAudioSink);
+    FfmpegMediaDecodeResult const videoOnly =
+        decodeMediaFrames(requestFor(videoOnlyFixturePath(), 54), stoppingVideoSink, acceptingAudioSink);
     QVERIFY(videoOnly.isStopped());
     QVERIFY(videoOnly.video.stopped);
     QVERIFY(!videoOnly.isSuccess());
     QVERIFY(!videoOnly.isCancelled());
 }
 
-void FfmpegMediaDecoderTest::
-cancelsWhileAudioSubmissionIsBackpressured() {
+void FfmpegMediaDecoderTest::cancelsWhileAudioSubmissionIsBackpressured() {
     using namespace std::chrono_literals;
 
     ControlledAudioSink sink(4'096);
@@ -889,24 +690,17 @@ cancelsWhileAudioSubmissionIsBackpressured() {
     std::jthread decoder([&](std::stop_token stopToken) {
         result = decodeMediaFrames(
             requestFor(synchronizedFixturePath(), 52),
-            [](std::shared_ptr<const DecodedVideoFrame>,
-                    const FfmpegVideoStreamDiagnostics &) {
-                return true;
-            },
-            [&sink](PcmAudioBlock block,
-                    const FfmpegAudioStreamDiagnostics &,
-                    std::stop_token stopToken) {
+            [](std::shared_ptr<DecodedVideoFrame const>, FfmpegVideoStreamDiagnostics const&) { return true; },
+            [&sink](PcmAudioBlock block, FfmpegAudioStreamDiagnostics const&, std::stop_token stopToken) {
                 return sink.submit(std::move(block), stopToken);
             },
             stopToken);
         completedPromise.set_value();
     });
 
-    const auto deadline = std::chrono::steady_clock::now() + 10s;
-    while (sink.bufferedFrames() == 0
-            && completed.wait_for(0ms)
-                == std::future_status::timeout
-            && std::chrono::steady_clock::now() < deadline) {
+    auto const deadline = std::chrono::steady_clock::now() + 10s;
+    while (sink.bufferedFrames() == 0 && completed.wait_for(0ms) == std::future_status::timeout &&
+           std::chrono::steady_clock::now() < deadline) {
         std::this_thread::yield();
     }
     QVERIFY(sink.bufferedFrames() != 0);
@@ -919,49 +713,28 @@ cancelsWhileAudioSubmissionIsBackpressured() {
     QVERIFY(!result.isStopped());
     QVERIFY(!result.isSuccess());
     QVERIFY(result.error.isEmpty());
-    QVERIFY(result.maximumQueuedPacketCount
-        <= result.packetCountLimit);
-    QVERIFY(result.maximumQueuedPacketBytes
-        <= std::max(
-            result.packetByteLimit,
-            result.largestQueuedPacketBytes));
+    QVERIFY(result.maximumQueuedPacketCount <= result.packetCountLimit);
+    QVERIFY(result.maximumQueuedPacketBytes <= std::max(result.packetByteLimit, result.largestQueuedPacketBytes));
 }
 
-void FfmpegMediaDecoderTest::
-honorsCancellationBeforeOpeningMedia() {
+void FfmpegMediaDecoderTest::honorsCancellationBeforeOpeningMedia() {
     std::stop_source stop;
     stop.request_stop();
-    const FfmpegMediaDecodeResult result = decodeMediaFrames(
+    FfmpegMediaDecodeResult const result = decodeMediaFrames(
         requestFor(synchronizedFixturePath(), 53),
-        [](std::shared_ptr<const DecodedVideoFrame>,
-                const FfmpegVideoStreamDiagnostics &) {
-            return true;
-        },
-        [](PcmAudioBlock,
-                const FfmpegAudioStreamDiagnostics &,
-                std::stop_token) {
-            return true;
-        },
-        stop.get_token());
+        [](std::shared_ptr<DecodedVideoFrame const>, FfmpegVideoStreamDiagnostics const&) { return true; },
+        [](PcmAudioBlock, FfmpegAudioStreamDiagnostics const&, std::stop_token) { return true; }, stop.get_token());
     QVERIFY(result.isCancelled());
     QVERIFY(!result.isStopped());
     QVERIFY(!result.isSuccess());
     QVERIFY(result.error.isEmpty());
 }
 
-void FfmpegMediaDecoderTest::
-distinguishesAudioSinkStopFromCancellation() {
-    const FfmpegMediaDecodeResult result = decodeMediaFrames(
+void FfmpegMediaDecoderTest::distinguishesAudioSinkStopFromCancellation() {
+    FfmpegMediaDecodeResult const result = decodeMediaFrames(
         requestFor(synchronizedFixturePath(), 51),
-        [](std::shared_ptr<const DecodedVideoFrame>,
-                const FfmpegVideoStreamDiagnostics &) {
-            return true;
-        },
-        [](PcmAudioBlock,
-                const FfmpegAudioStreamDiagnostics &,
-                std::stop_token) {
-            return false;
-        });
+        [](std::shared_ptr<DecodedVideoFrame const>, FfmpegVideoStreamDiagnostics const&) { return true; },
+        [](PcmAudioBlock, FfmpegAudioStreamDiagnostics const&, std::stop_token) { return false; });
     QVERIFY(result.isStopped());
     QVERIFY(result.audioStopped);
     QVERIFY(!result.isSuccess());

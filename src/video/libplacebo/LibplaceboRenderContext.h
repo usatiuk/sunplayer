@@ -13,27 +13,19 @@ struct LibplaceboGraphicsContext;
 // output directly satisfies the active-reference-white surface contract.
 // Target allocation and synchronization remain in VideoTargetInterop.
 class LibplaceboRenderContext final {
-public:
-    explicit LibplaceboRenderContext(
-        const LibplaceboGraphicsContext &graphics);
+  public:
+    explicit LibplaceboRenderContext(LibplaceboGraphicsContext const& graphics);
     ~LibplaceboRenderContext();
 
-    LibplaceboRenderContext(
-        const LibplaceboRenderContext &) = delete;
-    LibplaceboRenderContext &operator=(
-        const LibplaceboRenderContext &) = delete;
+    LibplaceboRenderContext(LibplaceboRenderContext const&) = delete;
+    LibplaceboRenderContext& operator=(LibplaceboRenderContext const&) = delete;
 
-    static QString policyDescription(
-        bool toneMappingEnabled);
+    static QString policyDescription(bool toneMappingEnabled);
 
     bool isValid() const;
-    bool render(
-        const pl_frame &source,
-        pl_tex targetTexture,
-        const RenderedVideoSurfaceDescription &targetDescription,
-        bool toneMappingEnabled,
-        QString *error = nullptr);
+    bool render(pl_frame const& source, pl_tex targetTexture, RenderedVideoSurfaceDescription const& targetDescription,
+                bool toneMappingEnabled, QString* error = nullptr);
 
-private:
+  private:
     pl_renderer m_renderer = nullptr;
 };

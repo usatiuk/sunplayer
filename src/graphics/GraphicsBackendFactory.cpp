@@ -22,9 +22,7 @@ void GraphicsBackendFactory::configureQtQuick() {
 #elif defined(Q_OS_LINUX)
     QQuickWindow::setGraphicsApi(QSGRendererInterface::Vulkan);
 #else
-    qCFatal(
-        sunroomLogGraphics,
-        "Sunroom does not provide a graphics backend for this platform");
+    qCFatal(sunroomLogGraphics, "Sunroom does not provide a graphics backend for this platform");
 #endif
 }
 
@@ -36,15 +34,12 @@ QSurface::SurfaceType GraphicsBackendFactory::windowSurfaceType() {
 #elif defined(Q_OS_LINUX)
     return QSurface::VulkanSurface;
 #else
-    qCFatal(
-        sunroomLogGraphics,
-        "Sunroom does not provide a window surface for this platform");
+    qCFatal(sunroomLogGraphics, "Sunroom does not provide a window surface for this platform");
     return QSurface::RasterSurface;
 #endif
 }
 
-std::unique_ptr<GraphicsDeviceDomain>
-GraphicsBackendFactory::createDeviceDomain(QWindow &window) {
+std::unique_ptr<GraphicsDeviceDomain> GraphicsBackendFactory::createDeviceDomain(QWindow& window) {
 #ifdef Q_OS_WIN
     Q_UNUSED(window);
     return createDeviceDomain();
@@ -55,16 +50,13 @@ GraphicsBackendFactory::createDeviceDomain(QWindow &window) {
     return createVulkanGraphicsDeviceDomain(window);
 #else
     Q_UNUSED(window);
-    qCCritical(
-        sunroomLogGraphics,
-        "Sunroom does not provide a graphics device for this platform");
+    qCCritical(sunroomLogGraphics, "Sunroom does not provide a graphics device for this platform");
     return {};
 #endif
 }
 
 #if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
-std::unique_ptr<GraphicsDeviceDomain>
-GraphicsBackendFactory::createDeviceDomain() {
+std::unique_ptr<GraphicsDeviceDomain> GraphicsBackendFactory::createDeviceDomain() {
 #ifdef Q_OS_WIN
     return createD3D11GraphicsDeviceDomain();
 #else

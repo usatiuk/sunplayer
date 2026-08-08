@@ -9,7 +9,7 @@
 class SubtitleTrackModel final : public QAbstractListModel {
     Q_OBJECT
 
-public:
+  public:
     enum Role {
         LabelRole = Qt::UserRole + 1,
         StreamIndexRole,
@@ -17,22 +17,18 @@ public:
         EnabledRole,
     };
 
-    explicit SubtitleTrackModel(QObject *parent = nullptr);
+    explicit SubtitleTrackModel(QObject* parent = nullptr);
 
-    int rowCount(const QModelIndex &parent = {}) const override;
-    QVariant data(
-        const QModelIndex &index,
-        int role = Qt::DisplayRole) const override;
+    int rowCount(QModelIndex const& parent = {}) const override;
+    QVariant data(QModelIndex const& index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
 
-    void setTracks(
-        std::vector<SubtitleTrackDescriptor> tracks,
-        int selectedStreamIndex);
+    void setTracks(std::vector<SubtitleTrackDescriptor> tracks, int selectedStreamIndex);
     void setSelectedStreamIndex(int streamIndex);
     int selectedStreamIndex() const;
     bool canSelect(int streamIndex) const;
 
-private:
+  private:
     struct Entry {
         QString label;
         int streamIndex = -1;

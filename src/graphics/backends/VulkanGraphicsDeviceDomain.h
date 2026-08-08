@@ -5,5 +5,4 @@
 class GraphicsDeviceDomain;
 class QWindow;
 
-std::unique_ptr<GraphicsDeviceDomain>
-createVulkanGraphicsDeviceDomain(QWindow &window);
+std::unique_ptr<GraphicsDeviceDomain> createVulkanGraphicsDeviceDomain(QWindow& window);

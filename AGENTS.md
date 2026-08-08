@@ -128,3 +128,7 @@ to commit, push, deploy, or publish.
 * Optimize for meaningful reproducible behaviors, not test count or a prescribed unit/integration ratio.
 * Add a regression scenario for significant bug fixes when practical. Otherwise document why automation is not yet possible and what coverage remains missing.
 * Keep verification strategy and known coverage gaps current in subsystem documentation and `docs/TESTING.md`.
+
+## Conventions
+
+* `clang-format` is used for formatting

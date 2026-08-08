@@ -4,5 +4,4 @@
 
 class GraphicsDeviceDomain;
 
-std::unique_ptr<GraphicsDeviceDomain>
-createD3D11GraphicsDeviceDomain();
+std::unique_ptr<GraphicsDeviceDomain> createD3D11GraphicsDeviceDomain();

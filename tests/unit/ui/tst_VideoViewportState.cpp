@@ -9,17 +9,14 @@
 class VideoViewportStateTest final : public QObject {
     Q_OBJECT
 
-public:
+  public:
     static void initMain() {
 #ifdef Q_OS_WIN
-        SetErrorMode(
-            SEM_FAILCRITICALERRORS
-            | SEM_NOGPFAULTERRORBOX
-            | SEM_NOOPENFILEERRORBOX);
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 #endif
     }
 
-private slots:
+  private slots:
     void visibilityAndGeometryDefineRenderability();
     void unchangedValuesDoNotNotify();
 };
@@ -32,7 +29,7 @@ void VideoViewportStateTest::visibilityAndGeometryDefineRenderability() {
     QVERIFY(!viewport.visible());
     QVERIFY(!viewport.isRenderable());
 
-    const QRectF rect(24.0, 112.0, 800.0, 500.0);
+    QRectF const rect(24.0, 112.0, 800.0, 500.0);
     viewport.setRect(rect);
     QCOMPARE(viewport.rect(), rect);
     QVERIFY(!viewport.isRenderable());

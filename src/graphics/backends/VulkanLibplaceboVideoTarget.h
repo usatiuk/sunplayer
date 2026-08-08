@@ -3,8 +3,8 @@
 #include <cstdint>
 #include <memory>
 
-#include <vulkan/vulkan.h>
 #include <libplacebo/gpu.h>
+#include <vulkan/vulkan.h>
 
 #include "video/VideoTargetInterop.h"
 
@@ -16,48 +16,39 @@ class QVulkanDeviceFunctions;
 // dependency orders QRhi before the producer, and one barrier recorded into
 // QRhi's command buffer makes producer writes visible before sampling.
 class VulkanLibplaceboVideoTarget final : public VideoTargetInterop {
-public:
-    VulkanLibplaceboVideoTarget(
-        QRhi &rhi,
-        pl_gpu gpu,
-        QVulkanDeviceFunctions &deviceFunctions,
-        VkQueue graphicsQueue,
-        std::uint32_t graphicsQueueFamily,
-        VideoTargetReadback readback);
+  public:
+    VulkanLibplaceboVideoTarget(QRhi& rhi, pl_gpu gpu, QVulkanDeviceFunctions& deviceFunctions, VkQueue graphicsQueue,
+                                std::uint32_t graphicsQueueFamily, VideoTargetReadback readback);
     ~VulkanLibplaceboVideoTarget() override;
 
-    VideoTargetUpdate ensureTarget(
-        const RenderedVideoSurfaceDescription &description) override;
-    VideoOperationResult beginProducerAccess(
-        QRhiCommandBuffer &commandBuffer) override;
-    VideoOperationResult endProducerAccess(
-        QRhiCommandBuffer &commandBuffer) override;
-    VideoOperationResult prepareForComposition(
-        QRhiCommandBuffer &commandBuffer) override;
+    VideoTargetUpdate ensureTarget(RenderedVideoSurfaceDescription const& description) override;
+    VideoOperationResult beginProducerAccess(QRhiCommandBuffer& commandBuffer) override;
+    VideoOperationResult endProducerAccess(QRhiCommandBuffer& commandBuffer) override;
+    VideoOperationResult prepareForComposition(QRhiCommandBuffer& commandBuffer) override;
     void submissionAccepted() override;
     void submissionAborted() override;
-    QRhiTextureRenderTarget *qrhiRenderTarget() const override;
-    QRhiRenderPassDescriptor *qrhiRenderPassDescriptor() const override;
+    QRhiTextureRenderTarget* qrhiRenderTarget() const override;
+    QRhiRenderPassDescriptor* qrhiRenderPassDescriptor() const override;
     pl_tex libplaceboRenderTarget() const override;
-    QRhiTexture &textureForComposition() const override;
+    QRhiTexture& textureForComposition() const override;
     std::uint64_t compositionTextureRevision() const override;
-    const VideoTargetInteropDiagnostics &diagnostics() const override;
+    VideoTargetInteropDiagnostics const& diagnostics() const override;
 
-private:
-    VideoTargetUpdate createTarget(const QSize &pixelSize);
-    VideoTargetUpdate resizeTarget(const QSize &pixelSize);
+  private:
+    VideoTargetUpdate createTarget(QSize const& pixelSize);
+    VideoTargetUpdate resizeTarget(QSize const& pixelSize);
     bool wrapTexture();
     VideoOperationResult signalQrhiCompletion();
-    void recordCompositionBarrier(QRhiCommandBuffer &commandBuffer);
+    void recordCompositionBarrier(QRhiCommandBuffer& commandBuffer);
     bool deviceLost() const;
     void resetTarget();
     void setDirectDiagnostics();
-    void setUnavailableDiagnostics(const QString &reason);
+    void setUnavailableDiagnostics(QString const& reason);
     void advanceTextureRevision();
 
-    QRhi &m_rhi;
+    QRhi& m_rhi;
     pl_gpu m_gpu = nullptr;
-    QVulkanDeviceFunctions &m_deviceFunctions;
+    QVulkanDeviceFunctions& m_deviceFunctions;
     VkQueue m_graphicsQueue = VK_NULL_HANDLE;
     std::uint32_t m_graphicsQueueFamily = 0;
     VideoTargetReadback m_readback;

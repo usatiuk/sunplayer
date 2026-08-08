@@ -33,15 +33,13 @@ struct ApplicationLogOptions {
 // handler and optionally mirrors bounded, formatted records into a session
 // file. It does not replace QLoggingCategory filtering.
 class ApplicationLog final {
-public:
-    static std::unique_ptr<ApplicationLog> install(
-        const ApplicationLogOptions &options,
-        QString *error = nullptr);
+  public:
+    static std::unique_ptr<ApplicationLog> install(ApplicationLogOptions const& options, QString* error = nullptr);
 
     ~ApplicationLog();
 
-    ApplicationLog(const ApplicationLog &) = delete;
-    ApplicationLog &operator=(const ApplicationLog &) = delete;
+    ApplicationLog(ApplicationLog const&) = delete;
+    ApplicationLog& operator=(ApplicationLog const&) = delete;
 
     QString filePath() const;
     bool debugEnabled() const;
@@ -49,31 +47,18 @@ public:
 
     static QString defaultLogDirectory();
 
-private:
+  private:
     explicit ApplicationLog(ApplicationLogOptions options);
 
-    bool initialize(QString *error);
-    void enqueueMessage(
-        QtMsgType type,
-        const QMessageLogContext &context,
-        const QString &message);
-    void writerLoop(
-        std::stop_token stopToken,
-        std::promise<QString> initialized);
-    void writeRecord(
-        QFile &file,
-        const QByteArray &record);
-    void writeDroppedRecordMarker(
-        QFile &file,
-        std::uint64_t count);
-    void recordDropLocked(
-        std::uint64_t sequence);
+    bool initialize(QString* error);
+    void enqueueMessage(QtMsgType type, QMessageLogContext const& context, QString const& message);
+    void writerLoop(std::stop_token stopToken, std::promise<QString> initialized);
+    void writeRecord(QFile& file, QByteArray const& record);
+    void writeDroppedRecordMarker(QFile& file, std::uint64_t count);
+    void recordDropLocked(std::uint64_t sequence);
     void stopWriter();
     void pruneRetainedFiles();
-    static void messageHandler(
-        QtMsgType type,
-        const QMessageLogContext &context,
-        const QString &message);
+    static void messageHandler(QtMsgType type, QMessageLogContext const& context, QString const& message);
 
     struct PendingWrite {
         QByteArray record;
@@ -99,5 +84,5 @@ private:
     std::jthread m_writer;
 
     static QMutex s_handlerMutex;
-    static ApplicationLog *s_active;
+    static ApplicationLog* s_active;
 };

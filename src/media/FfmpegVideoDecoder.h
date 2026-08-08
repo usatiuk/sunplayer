@@ -12,7 +12,7 @@
 #include "media/FfmpegHardwareDevice.h"
 
 struct VideoTimelineOrigin {
-    bool operator==(const VideoTimelineOrigin &) const = default;
+    bool operator==(VideoTimelineOrigin const&) const = default;
 
     std::int64_t timestamp = 0;
     VideoFrameRational timeBase;
@@ -23,10 +23,9 @@ struct VideoTimelineOrigin {
 
 // Converts a normalized playback position into one absolute selected-stream
 // timestamp. This is a single 64-bit rescale, not an incremental clock update.
-std::optional<std::int64_t> videoStreamTimestampForPosition(
-    const VideoTimelineOrigin &origin,
-    const VideoFrameRational &streamTimeBase,
-    std::int64_t targetPositionMicroseconds);
+std::optional<std::int64_t> videoStreamTimestampForPosition(VideoTimelineOrigin const& origin,
+                                                            VideoFrameRational const& streamTimeBase,
+                                                            std::int64_t targetPositionMicroseconds);
 
 struct VideoDecodeStart {
     std::optional<std::int64_t> targetPositionMicroseconds;
@@ -75,15 +74,12 @@ struct FfmpegVideoDecodeResult {
     bool isCancelled() const;
 };
 
-using FfmpegVideoFrameSink = std::function<bool(
-    std::shared_ptr<const DecodedVideoFrame>,
-    const FfmpegVideoStreamDiagnostics &)>;
+using FfmpegVideoFrameSink =
+    std::function<bool(std::shared_ptr<DecodedVideoFrame const>, FfmpegVideoStreamDiagnostics const&)>;
 
 // Runs one complete demux/decode operation synchronously on the caller's
 // worker thread. Internally, the demuxer and decoder have separate owners and
 // communicate through a byte-bounded packet channel. The sink supplies
 // decoded-frame backpressure and must not retain frames without a bound.
-FfmpegVideoDecodeResult decodeVideoFrames(
-    const FfmpegVideoDecodeRequest &request,
-    const FfmpegVideoFrameSink &sink,
-    std::stop_token stopToken = {});
+FfmpegVideoDecodeResult decodeVideoFrames(FfmpegVideoDecodeRequest const& request, FfmpegVideoFrameSink const& sink,
+                                          std::stop_token stopToken = {});

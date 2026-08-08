@@ -6,7 +6,7 @@
 #include "platform/DisplayState.h"
 
 struct PresentationBackendState {
-    bool operator==(const PresentationBackendState &) const = default;
+    bool operator==(PresentationBackendState const&) const = default;
 
     QString graphicsApi = QStringLiteral("Unavailable");
     QString graphicsAdapter = QStringLiteral("Unavailable");
@@ -34,7 +34,7 @@ struct PresentationBackendState {
 };
 
 struct PresentationTarget {
-    bool operator==(const PresentationTarget &) const = default;
+    bool operator==(PresentationTarget const&) const = default;
 
     bool hdrPresentationActive = false;
     bool sceneReferred = false;
@@ -49,9 +49,7 @@ struct PresentationTarget {
     float sdrScale = 1.0f;
 };
 
-PresentationTarget calculatePresentationTarget(
-    const DisplayState &display,
-    const PresentationBackendState &backend);
+PresentationTarget calculatePresentationTarget(DisplayState const& display, PresentationBackendState const& backend);
 
 Q_DECLARE_METATYPE(PresentationBackendState)
 Q_DECLARE_METATYPE(PresentationTarget)

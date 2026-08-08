@@ -11,7 +11,7 @@
 struct AVFrame;
 
 struct VideoFrameRational {
-    bool operator==(const VideoFrameRational &) const = default;
+    bool operator==(VideoFrameRational const&) const = default;
 
     int numerator = 0;
     int denominator = 0;
@@ -20,7 +20,7 @@ struct VideoFrameRational {
 };
 
 struct VideoFrameIdentity {
-    bool operator==(const VideoFrameIdentity &) const = default;
+    bool operator==(VideoFrameIdentity const&) const = default;
 
     std::uint64_t playbackGeneration = 0;
     std::uint64_t decoderRevision = 0;
@@ -62,16 +62,14 @@ enum class VideoFrameStorageKind {
 };
 
 struct VideoFrameStorageDescription {
-    VideoFrameStorageKind kind =
-        VideoFrameStorageKind::SoftwarePlanes;
+    VideoFrameStorageKind kind = VideoFrameStorageKind::SoftwarePlanes;
     QString hardwareFormat;
     QString softwareFormat;
     std::optional<std::uint64_t> graphicsDeviceGeneration;
 
     bool isHardware() const;
     bool isValid() const;
-    bool isCompatibleWithGraphicsDevice(
-        std::uint64_t generation) const;
+    bool isCompatibleWithGraphicsDevice(std::uint64_t generation) const;
 };
 
 // Small diagnostic snapshot of the decoded signal. The retained AVFrame is
@@ -95,36 +93,29 @@ struct VideoSignalDescription {
 // buffers or hardware surface; Sunroom never copies a native pointer out of
 // it and pretends to own the underlying pixels.
 class DecodedVideoFrame final {
-public:
-    static std::shared_ptr<const DecodedVideoFrame> clone(
-        const AVFrame &frame,
-        const VideoFrameIdentity &identity,
-        const VideoFrameRational &timeBase,
-        std::optional<std::uint64_t> graphicsDeviceGeneration,
-        QString *error = nullptr);
+  public:
+    static std::shared_ptr<DecodedVideoFrame const> clone(AVFrame const& frame, VideoFrameIdentity const& identity,
+                                                          VideoFrameRational const& timeBase,
+                                                          std::optional<std::uint64_t> graphicsDeviceGeneration,
+                                                          QString* error = nullptr);
 
     ~DecodedVideoFrame();
 
-    DecodedVideoFrame(const DecodedVideoFrame &) = delete;
-    DecodedVideoFrame &operator=(const DecodedVideoFrame &) = delete;
+    DecodedVideoFrame(DecodedVideoFrame const&) = delete;
+    DecodedVideoFrame& operator=(DecodedVideoFrame const&) = delete;
 
-    const VideoFrameIdentity &identity() const;
-    const VideoFrameTiming &timing() const;
-    const VideoFrameGeometry &geometry() const;
-    const VideoFrameStorageDescription &storage() const;
-    const VideoSignalDescription &signal() const;
-    const AVFrame &ffmpegFrame() const;
+    VideoFrameIdentity const& identity() const;
+    VideoFrameTiming const& timing() const;
+    VideoFrameGeometry const& geometry() const;
+    VideoFrameStorageDescription const& storage() const;
+    VideoSignalDescription const& signal() const;
+    AVFrame const& ffmpegFrame() const;
 
-private:
-    DecodedVideoFrame(
-        AVFrame *frame,
-        VideoFrameIdentity identity,
-        VideoFrameTiming timing,
-        VideoFrameGeometry geometry,
-        VideoFrameStorageDescription storage,
-        VideoSignalDescription signal);
+  private:
+    DecodedVideoFrame(AVFrame* frame, VideoFrameIdentity identity, VideoFrameTiming timing, VideoFrameGeometry geometry,
+                      VideoFrameStorageDescription storage, VideoSignalDescription signal);
 
-    AVFrame *m_frame = nullptr;
+    AVFrame* m_frame = nullptr;
     VideoFrameIdentity m_identity;
     VideoFrameTiming m_timing;
     VideoFrameGeometry m_geometry;

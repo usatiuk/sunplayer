@@ -26,23 +26,16 @@ struct VideoFrameSelection {
 // media-clock observation. It owns selected-frame timing, not the clock or
 // frame storage.
 class VideoFrameScheduler final {
-public:
+  public:
     void reset();
-    VideoFrameSelection selectFirst(
-        VideoFrameQueue &queue,
-        std::uint64_t playbackGeneration);
-    VideoFrameSelection selectForPresentation(
-        VideoFrameQueue &queue,
-        std::uint64_t playbackGeneration,
-        MediaClockSnapshot clock,
-        bool decoderDrained,
-        std::optional<std::int64_t>
-            declaredDurationMicroseconds = std::nullopt);
+    VideoFrameSelection selectFirst(VideoFrameQueue& queue, std::uint64_t playbackGeneration);
+    VideoFrameSelection selectForPresentation(VideoFrameQueue& queue, std::uint64_t playbackGeneration,
+                                              MediaClockSnapshot clock, bool decoderDrained,
+                                              std::optional<std::int64_t> declaredDurationMicroseconds = std::nullopt);
 
-private:
-    void remember(const QueuedVideoFrame &frame);
+  private:
+    void remember(QueuedVideoFrame const& frame);
 
-    std::optional<std::int64_t>
-        m_currentFrameTimeMicroseconds;
+    std::optional<std::int64_t> m_currentFrameTimeMicroseconds;
     std::int64_t m_currentFrameDurationMicroseconds = 0;
 };

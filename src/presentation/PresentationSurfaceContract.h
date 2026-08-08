@@ -25,19 +25,14 @@ enum class PresentationSurfaceMode {
 struct PresentationSurfaceContract {
     static constexpr float pqReferenceWhiteNits = 203.0f;
     static constexpr float pqPeakNits = 10'000.0f;
-    static constexpr float pqMaximumHeadroom =
-        pqPeakNits / pqReferenceWhiteNits;
+    static constexpr float pqMaximumHeadroom = pqPeakNits / pqReferenceWhiteNits;
 
-    PresentationSurfaceMode mode =
-        PresentationSurfaceMode::AdaptiveExtendedLinear;
+    PresentationSurfaceMode mode = PresentationSurfaceMode::AdaptiveExtendedLinear;
 
-    PresentationOutputEncoding outputEncoding(
-            bool extendedLinearActive) const {
+    PresentationOutputEncoding outputEncoding(bool extendedLinearActive) const {
         switch (mode) {
         case PresentationSurfaceMode::AdaptiveExtendedLinear:
-            return extendedLinearActive
-                ? PresentationOutputEncoding::LinearSrgb
-                : PresentationOutputEncoding::Srgb;
+            return extendedLinearActive ? PresentationOutputEncoding::LinearSrgb : PresentationOutputEncoding::Srgb;
         case PresentationSurfaceMode::UnmanagedSrgb:
             return PresentationOutputEncoding::Srgb;
         case PresentationSurfaceMode::ManagedGamma22Sdr:
@@ -48,9 +43,7 @@ struct PresentationSurfaceContract {
         Q_UNREACHABLE_RETURN(PresentationOutputEncoding::Srgb);
     }
 
-    bool hdr10Required() const {
-        return mode == PresentationSurfaceMode::ManagedHdr10Pq;
-    }
+    bool hdr10Required() const { return mode == PresentationSurfaceMode::ManagedHdr10Pq; }
 
     float constrainTargetHeadroom(float requestedHeadroom) const {
         switch (mode) {
@@ -60,9 +53,7 @@ struct PresentationSurfaceContract {
         case PresentationSurfaceMode::ManagedGamma22Sdr:
             return 1.0f;
         case PresentationSurfaceMode::ManagedHdr10Pq:
-            return requestedHeadroom > pqMaximumHeadroom
-                ? pqMaximumHeadroom
-                : requestedHeadroom;
+            return requestedHeadroom > pqMaximumHeadroom ? pqMaximumHeadroom : requestedHeadroom;
         }
         Q_UNREACHABLE_RETURN(1.0f);
     }
@@ -72,15 +63,10 @@ struct PresentationSurfaceContract {
 // color declaration. The engine owns rendering-resource reconciliation; the
 // controller owns only platform selection and declaration changes.
 class PresentationSurfaceController {
-public:
+  public:
     virtual ~PresentationSurfaceController() = default;
 
-    virtual PresentationSurfaceMode desiredMode(
-        std::uint64_t graphicsDeviceGeneration) = 0;
-    virtual void applyMode(
-        QWindow &window,
-        PresentationSurfaceMode mode) = 0;
-    virtual void rejectHdrTarget(
-        std::uint64_t graphicsDeviceGeneration,
-        const char *reason) = 0;
+    virtual PresentationSurfaceMode desiredMode(std::uint64_t graphicsDeviceGeneration) = 0;
+    virtual void applyMode(QWindow& window, PresentationSurfaceMode mode) = 0;
+    virtual void rejectHdrTarget(std::uint64_t graphicsDeviceGeneration, char const* reason) = 0;
 };

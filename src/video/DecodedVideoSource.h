@@ -12,11 +12,10 @@ class DecodedVideoFrame;
 // It selects immutable decoded frames without exposing queues or clocks to
 // the renderer.
 class DecodedVideoFrameSelector {
-public:
+  public:
     virtual ~DecodedVideoFrameSelector() = default;
-    virtual std::shared_ptr<const DecodedVideoFrame>
-        selectFrameForPresentation(
-            std::chrono::steady_clock::time_point now) = 0;
+    virtual std::shared_ptr<DecodedVideoFrame const>
+    selectFrameForPresentation(std::chrono::steady_clock::time_point now) = 0;
     virtual bool wantsContinuousVideoFrames() const = 0;
 };
 
@@ -26,42 +25,34 @@ public:
 class DecodedVideoSource final : public RenderedVideoSource {
     Q_OBJECT
 
-public:
-    explicit DecodedVideoSource(
-        std::shared_ptr<const DecodedVideoFrame> frame,
-        VideoTargetReadback readback,
-        QObject *parent = nullptr);
+  public:
+    explicit DecodedVideoSource(std::shared_ptr<DecodedVideoFrame const> frame, VideoTargetReadback readback,
+                                QObject* parent = nullptr);
 
-    const std::shared_ptr<const DecodedVideoFrame> &
-        currentFrame() const;
-    void setFrameSelector(
-        DecodedVideoFrameSelector *selector);
+    std::shared_ptr<DecodedVideoFrame const> const& currentFrame() const;
+    void setFrameSelector(DecodedVideoFrameSelector* selector);
     void requestFrameSelection();
-    void setFrame(
-        std::shared_ptr<const DecodedVideoFrame> frame);
+    void setFrame(std::shared_ptr<DecodedVideoFrame const> frame);
     void clearFrame();
 
-    void prepareForPresentation(
-        std::chrono::steady_clock::time_point now) override;
+    void prepareForPresentation(std::chrono::steady_clock::time_point now) override;
     std::uint64_t contentRevision() const override;
     std::uint64_t producerConfigurationRevision() const override;
     std::optional<double> displayAspectRatio() const override;
     bool wantsContinuousFrames() const override;
-    std::unique_ptr<RenderedVideoProducer> createProducer(
-        GraphicsDeviceDomain &graphicsDevice) const override;
-    bool reportPresentationFailure(
-        const VideoFailure &failure) override;
+    std::unique_ptr<RenderedVideoProducer> createProducer(GraphicsDeviceDomain& graphicsDevice) const override;
+    bool reportPresentationFailure(VideoFailure const& failure) override;
 
-signals:
+  signals:
     void frameChanged();
-    void presentationFailed(const VideoFailure &failure);
+    void presentationFailed(VideoFailure const& failure);
 
-private:
+  private:
     void advanceContentRevision();
     void advanceProducerConfigurationRevision();
 
-    std::shared_ptr<const DecodedVideoFrame> m_frame;
-    DecodedVideoFrameSelector *m_selector = nullptr;
+    std::shared_ptr<DecodedVideoFrame const> m_frame;
+    DecodedVideoFrameSelector* m_selector = nullptr;
     VideoTargetReadback m_readback;
     std::uint64_t m_contentRevision = 1;
     std::uint64_t m_producerConfigurationRevision = 1;

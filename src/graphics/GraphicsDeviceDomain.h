@@ -41,24 +41,18 @@ struct LibplaceboGraphicsContext {
 // The shared state outlives the graphics domain when teardown occurs inside
 // a protected operation.
 class GraphicsDeviceExecutionScope final {
-public:
-    using UnlockOperation = void (*)(void *);
+  public:
+    using UnlockOperation = void (*)(void*);
 
-    GraphicsDeviceExecutionScope(
-        std::shared_ptr<void> state,
-        UnlockOperation unlock);
+    GraphicsDeviceExecutionScope(std::shared_ptr<void> state, UnlockOperation unlock);
     ~GraphicsDeviceExecutionScope();
 
-    GraphicsDeviceExecutionScope(
-        const GraphicsDeviceExecutionScope &) = delete;
-    GraphicsDeviceExecutionScope &operator=(
-        const GraphicsDeviceExecutionScope &) = delete;
-    GraphicsDeviceExecutionScope(
-        GraphicsDeviceExecutionScope &&other) noexcept;
-    GraphicsDeviceExecutionScope &operator=(
-        GraphicsDeviceExecutionScope &&) = delete;
+    GraphicsDeviceExecutionScope(GraphicsDeviceExecutionScope const&) = delete;
+    GraphicsDeviceExecutionScope& operator=(GraphicsDeviceExecutionScope const&) = delete;
+    GraphicsDeviceExecutionScope(GraphicsDeviceExecutionScope&& other) noexcept;
+    GraphicsDeviceExecutionScope& operator=(GraphicsDeviceExecutionScope&&) = delete;
 
-private:
+  private:
     std::shared_ptr<void> m_state;
     UnlockOperation m_unlock = nullptr;
 };
@@ -67,33 +61,28 @@ private:
 // contexts. Backend-native types remain in the factory-selected
 // implementation.
 class GraphicsDeviceDomain {
-public:
+  public:
     virtual ~GraphicsDeviceDomain();
 
-    GraphicsDeviceDomain(const GraphicsDeviceDomain &) = delete;
-    GraphicsDeviceDomain &operator=(const GraphicsDeviceDomain &) = delete;
+    GraphicsDeviceDomain(GraphicsDeviceDomain const&) = delete;
+    GraphicsDeviceDomain& operator=(GraphicsDeviceDomain const&) = delete;
 
-    virtual QRhi &rhi() const = 0;
-    virtual const GraphicsDeviceDiagnostics &diagnostics() const = 0;
-    virtual const LibplaceboGraphicsContext &
-        libplaceboContext() const = 0;
-    virtual const VideoHardwareDecodeCapability &
-        videoDecodeCapability() const = 0;
-    virtual GraphicsDeviceExecutionScope
-        acquireExecutionScope() = 0;
-    virtual std::unique_ptr<VideoTargetInterop> createVideoTarget(
-        const VideoTargetRequest &request) = 0;
-    virtual std::unique_ptr<LibplaceboHardwareFrameImporter>
-        createHardwareFrameImporter() = 0;
-    virtual bool supportsPresentation(QWindow &window) const;
-    virtual bool supportsHdr10Presentation(QWindow &window) const;
+    virtual QRhi& rhi() const = 0;
+    virtual GraphicsDeviceDiagnostics const& diagnostics() const = 0;
+    virtual LibplaceboGraphicsContext const& libplaceboContext() const = 0;
+    virtual VideoHardwareDecodeCapability const& videoDecodeCapability() const = 0;
+    virtual GraphicsDeviceExecutionScope acquireExecutionScope() = 0;
+    virtual std::unique_ptr<VideoTargetInterop> createVideoTarget(VideoTargetRequest const& request) = 0;
+    virtual std::unique_ptr<LibplaceboHardwareFrameImporter> createHardwareFrameImporter() = 0;
+    virtual bool supportsPresentation(QWindow& window) const;
+    virtual bool supportsHdr10Presentation(QWindow& window) const;
 
     GraphicsBackend backend() const;
     std::uint64_t generation() const;
 
-protected:
+  protected:
     GraphicsDeviceDomain();
 
-private:
+  private:
     std::uint64_t m_generation = 0;
 };

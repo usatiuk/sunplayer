@@ -7,7 +7,7 @@
 #include <vector>
 
 struct AudioStreamFormat {
-    bool operator==(const AudioStreamFormat &) const = default;
+    bool operator==(AudioStreamFormat const&) const = default;
 
     int sampleRate = 0;
     int channelCount = 0;
@@ -58,7 +58,7 @@ struct AudioPresentationSnapshot {
 // sampled outside the real-time callback; implementations publish callback
 // counters through atomics or their existing synchronized control boundary.
 struct AudioSinkDiagnostics {
-    bool operator==(const AudioSinkDiagnostics &) const = default;
+    bool operator==(AudioSinkDiagnostics const&) const = default;
 
     std::string backendName;
     std::string errorMessage;

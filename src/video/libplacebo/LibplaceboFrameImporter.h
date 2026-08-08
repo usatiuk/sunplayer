@@ -24,10 +24,8 @@ enum class VideoFrameImportFailure {
 };
 
 struct VideoFrameImportDiagnostics {
-    VideoFrameStorageKind storageKind =
-        VideoFrameStorageKind::SoftwarePlanes;
-    VideoFrameImportPath path =
-        VideoFrameImportPath::Unavailable;
+    VideoFrameStorageKind storageKind = VideoFrameStorageKind::SoftwarePlanes;
+    VideoFrameImportPath path = VideoFrameImportPath::Unavailable;
     QString hardwareFormat;
     QString softwareFormat;
     QString sourceDescription;
@@ -38,86 +36,67 @@ struct VideoFrameImportDiagnostics {
     std::uint32_t knownCpuUploadsPerFrame = 0;
     std::uint32_t knownGpuCopiesPerFrame = 0;
     QString fallbackReason;
-    VideoFrameImportFailure failure =
-        VideoFrameImportFailure::None;
+    VideoFrameImportFailure failure = VideoFrameImportFailure::None;
 
     bool isValid() const;
 };
 
-QString describeLibplaceboMetadataPath(
-    const DecodedVideoFrame &frame,
-    const pl_frame *mappedFrame);
+QString describeLibplaceboMetadataPath(DecodedVideoFrame const& frame, pl_frame const* mappedFrame);
 
 // Backend implementation for native decoded surfaces. It maps one retained
 // hardware AVFrame into libplacebo planes without defining fallback policy.
 class LibplaceboHardwareFrameImporter {
-public:
+  public:
     virtual ~LibplaceboHardwareFrameImporter() = default;
 
-    virtual bool map(
-        const DecodedVideoFrame &frame,
-        pl_frame &mappedFrame,
-        VideoFrameImportDiagnostics &diagnostics,
-        VideoFrameImportFailure &failure,
-        QString *error) = 0;
-    virtual void unmap(pl_frame &mappedFrame) = 0;
+    virtual bool map(DecodedVideoFrame const& frame, pl_frame& mappedFrame, VideoFrameImportDiagnostics& diagnostics,
+                     VideoFrameImportFailure& failure, QString* error) = 0;
+    virtual void unmap(pl_frame& mappedFrame) = 0;
 };
 
 // Maps one retained decoded frame into libplacebo input planes. The importer
 // owns reusable software-upload textures; a Mapping owns and releases the
 // transient pl_frame state through the matching software or native path.
 class LibplaceboFrameImporter final {
-public:
+  public:
     class Mapping final {
-    public:
+      public:
         ~Mapping();
 
-        Mapping(const Mapping &) = delete;
-        Mapping &operator=(const Mapping &) = delete;
-        Mapping(Mapping &&other) noexcept;
-        Mapping &operator=(Mapping &&other) = delete;
+        Mapping(Mapping const&) = delete;
+        Mapping& operator=(Mapping const&) = delete;
+        Mapping(Mapping&& other) noexcept;
+        Mapping& operator=(Mapping&& other) = delete;
 
-        const pl_frame &frame() const;
-        const VideoFrameImportDiagnostics &diagnostics() const;
+        pl_frame const& frame() const;
+        VideoFrameImportDiagnostics const& diagnostics() const;
 
-    private:
+      private:
         friend class LibplaceboFrameImporter;
-        explicit Mapping(LibplaceboFrameImporter &owner);
+        explicit Mapping(LibplaceboFrameImporter& owner);
 
-        LibplaceboFrameImporter *m_owner = nullptr;
+        LibplaceboFrameImporter* m_owner = nullptr;
     };
 
-    LibplaceboFrameImporter(
-        pl_gpu gpu,
-        std::uint64_t graphicsDeviceGeneration,
-        std::unique_ptr<LibplaceboHardwareFrameImporter>
-            hardwareImporter);
+    LibplaceboFrameImporter(pl_gpu gpu, std::uint64_t graphicsDeviceGeneration,
+                            std::unique_ptr<LibplaceboHardwareFrameImporter> hardwareImporter);
     ~LibplaceboFrameImporter();
 
-    LibplaceboFrameImporter(
-        const LibplaceboFrameImporter &) = delete;
-    LibplaceboFrameImporter &operator=(
-        const LibplaceboFrameImporter &) = delete;
+    LibplaceboFrameImporter(LibplaceboFrameImporter const&) = delete;
+    LibplaceboFrameImporter& operator=(LibplaceboFrameImporter const&) = delete;
 
-    std::unique_ptr<Mapping> map(
-        const DecodedVideoFrame &frame,
-        QString *error = nullptr);
-    const VideoFrameImportDiagnostics &
-        lastDiagnostics() const;
+    std::unique_ptr<Mapping> map(DecodedVideoFrame const& frame, QString* error = nullptr);
+    VideoFrameImportDiagnostics const& lastDiagnostics() const;
     std::uint64_t successfulImportCount() const;
 
-private:
+  private:
     void releaseMapping();
-    std::unique_ptr<Mapping> unavailable(
-        const DecodedVideoFrame &frame,
-        const QString &reason,
-        VideoFrameImportFailure failure,
-        QString *error);
+    std::unique_ptr<Mapping> unavailable(DecodedVideoFrame const& frame, QString const& reason,
+                                         VideoFrameImportFailure failure, QString* error);
 
     pl_gpu m_gpu = nullptr;
     std::uint64_t m_graphicsDeviceGeneration = 0;
-    std::unique_ptr<LibplaceboHardwareFrameImporter>
-        m_hardwareImporter;
+    std::unique_ptr<LibplaceboHardwareFrameImporter> m_hardwareImporter;
     std::array<pl_tex, 4> m_softwareTextures{};
     pl_frame m_mappedFrame{};
     bool m_hardwareMapping = false;

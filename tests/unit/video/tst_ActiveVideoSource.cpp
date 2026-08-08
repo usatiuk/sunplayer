@@ -9,14 +9,13 @@
 #include "video/RenderedVideoProducer.h"
 
 class TestVideoSource final : public RenderedVideoSource {
-public:
-    explicit TestVideoSource(double aspectRatio)
-        : m_aspectRatio(aspectRatio) {}
+  public:
+    explicit TestVideoSource(double aspectRatio) : m_aspectRatio(aspectRatio) {}
 
-    void prepareForPresentation(
-            std::chrono::steady_clock::time_point) override {
-        if (m_advanceOnPrepare)
+    void prepareForPresentation(std::chrono::steady_clock::time_point) override {
+        if (m_advanceOnPrepare) {
             advance(m_contentRevision);
+        }
         if (m_aspectRatioOnPrepare) {
             m_aspectRatio = *m_aspectRatioOnPrepare;
             m_aspectRatioOnPrepare.reset();
@@ -24,29 +23,17 @@ public:
         }
     }
 
-    std::uint64_t contentRevision() const override {
-        return m_contentRevision;
-    }
+    std::uint64_t contentRevision() const override { return m_contentRevision; }
 
-    std::uint64_t producerConfigurationRevision() const override {
-        return m_producerRevision;
-    }
+    std::uint64_t producerConfigurationRevision() const override { return m_producerRevision; }
 
-    std::optional<double> displayAspectRatio() const override {
-        return m_aspectRatio;
-    }
+    std::optional<double> displayAspectRatio() const override { return m_aspectRatio; }
 
-    bool wantsContinuousFrames() const override {
-        return m_continuous;
-    }
+    bool wantsContinuousFrames() const override { return m_continuous; }
 
-    std::unique_ptr<RenderedVideoProducer> createProducer(
-            GraphicsDeviceDomain &) const override {
-        return {};
-    }
+    std::unique_ptr<RenderedVideoProducer> createProducer(GraphicsDeviceDomain&) const override { return {}; }
 
-    bool reportPresentationFailure(
-            const VideoFailure &failure) override {
+    bool reportPresentationFailure(VideoFailure const& failure) override {
         m_lastFailure = failure.reason;
         return m_handlesFailures;
     }
@@ -61,31 +48,22 @@ public:
         emit updateRequested();
     }
 
-    void setAdvanceOnPrepare(bool value) {
-        m_advanceOnPrepare = value;
-    }
+    void setAdvanceOnPrepare(bool value) { m_advanceOnPrepare = value; }
 
-    void setAspectRatioOnPrepare(double value) {
-        m_aspectRatioOnPrepare = value;
-    }
+    void setAspectRatioOnPrepare(double value) { m_aspectRatioOnPrepare = value; }
 
-    void setContinuous(bool value) {
-        m_continuous = value;
-    }
+    void setContinuous(bool value) { m_continuous = value; }
 
-    void setHandlesFailures(bool value) {
-        m_handlesFailures = value;
-    }
+    void setHandlesFailures(bool value) { m_handlesFailures = value; }
 
-    QString lastFailure() const {
-        return m_lastFailure;
-    }
+    QString lastFailure() const { return m_lastFailure; }
 
-private:
-    static void advance(std::uint64_t &revision) {
+  private:
+    static void advance(std::uint64_t& revision) {
         ++revision;
-        if (revision == 0)
+        if (revision == 0) {
             ++revision;
+        }
     }
 
     double m_aspectRatio;
@@ -101,7 +79,7 @@ private:
 class ActiveVideoSourceTest final : public QObject {
     Q_OBJECT
 
-private slots:
+  private slots:
     void forwardsOnlyActiveUpdates();
     void switchesDelegatesAtOneProducerRevision();
     void diagnosticRouteProvidesDisplayGeometry();
@@ -112,11 +90,9 @@ void ActiveVideoSourceTest::forwardsOnlyActiveUpdates() {
     TestVideoSource player(16.0 / 9.0);
     TestVideoSource diagnostics(4.0 / 3.0);
     ActiveVideoSource source(player, diagnostics);
-    QSignalSpy updates(
-        &source, &RenderedVideoSource::updateRequested);
+    QSignalSpy updates(&source, &RenderedVideoSource::updateRequested);
 
-    const std::uint64_t initialContent =
-        source.contentRevision();
+    std::uint64_t const initialContent = source.contentRevision();
     diagnostics.publishContent();
     QCOMPARE(source.contentRevision(), initialContent);
     QCOMPARE(updates.count(), 0);
@@ -125,48 +101,33 @@ void ActiveVideoSourceTest::forwardsOnlyActiveUpdates() {
     QCOMPARE(source.contentRevision(), initialContent + 1);
     QCOMPARE(updates.count(), 1);
 
-    const std::uint64_t initialProducer =
-        source.producerConfigurationRevision();
+    std::uint64_t const initialProducer = source.producerConfigurationRevision();
     player.changeProducer();
-    QCOMPARE(
-        source.producerConfigurationRevision(),
-        initialProducer + 1);
+    QCOMPARE(source.producerConfigurationRevision(), initialProducer + 1);
     QCOMPARE(updates.count(), 2);
 }
 
-void ActiveVideoSourceTest::
-switchesDelegatesAtOneProducerRevision() {
+void ActiveVideoSourceTest::switchesDelegatesAtOneProducerRevision() {
     TestVideoSource player(16.0 / 9.0);
     TestVideoSource diagnostics(4.0 / 3.0);
     diagnostics.setContinuous(true);
     ActiveVideoSource source(player, diagnostics);
 
-    const std::uint64_t content =
-        source.contentRevision();
-    const std::uint64_t producer =
-        source.producerConfigurationRevision();
-    source.setRoute(
-        ActiveVideoSource::Route::Diagnostics);
+    std::uint64_t const content = source.contentRevision();
+    std::uint64_t const producer = source.producerConfigurationRevision();
+    source.setRoute(ActiveVideoSource::Route::Diagnostics);
 
-    QCOMPARE(
-        source.route(),
-        ActiveVideoSource::Route::Diagnostics);
+    QCOMPARE(source.route(), ActiveVideoSource::Route::Diagnostics);
     QCOMPARE(source.contentRevision(), content + 1);
-    QCOMPARE(
-        source.producerConfigurationRevision(),
-        producer + 1);
+    QCOMPARE(source.producerConfigurationRevision(), producer + 1);
     QVERIFY(source.displayAspectRatio());
     QCOMPARE(*source.displayAspectRatio(), 4.0 / 3.0);
     QVERIFY(source.wantsContinuousFrames());
 }
 
-void ActiveVideoSourceTest::
-diagnosticRouteProvidesDisplayGeometry() {
+void ActiveVideoSourceTest::diagnosticRouteProvidesDisplayGeometry() {
     TestVideoSource player(4.0 / 3.0);
-    DiagnosticVideoSource diagnostics(
-        VideoProducerApi::Qrhi,
-        VideoTargetReadback::Disabled,
-        QSize(640, 360));
+    DiagnosticVideoSource diagnostics(VideoProducerApi::Qrhi, VideoTargetReadback::Disabled, QSize(640, 360));
     ActiveVideoSource source(player, diagnostics);
 
     source.setRoute(ActiveVideoSource::Route::Diagnostics);
@@ -175,8 +136,7 @@ diagnosticRouteProvidesDisplayGeometry() {
     QCOMPARE(*source.displayAspectRatio(), 16.0 / 9.0);
 }
 
-void ActiveVideoSourceTest::
-observesPrepareAndFailurePolicy() {
+void ActiveVideoSourceTest::observesPrepareAndFailurePolicy() {
     TestVideoSource player(16.0 / 9.0);
     TestVideoSource diagnostics(4.0 / 3.0);
     player.setAdvanceOnPrepare(true);
@@ -184,27 +144,19 @@ observesPrepareAndFailurePolicy() {
     player.setHandlesFailures(true);
     ActiveVideoSource source(player, diagnostics);
 
-    const std::uint64_t revision =
-        source.contentRevision();
-    const std::uint64_t producerRevision =
-        source.producerConfigurationRevision();
-    source.prepareForPresentation(
-        std::chrono::steady_clock::now());
+    std::uint64_t const revision = source.contentRevision();
+    std::uint64_t const producerRevision = source.producerConfigurationRevision();
+    source.prepareForPresentation(std::chrono::steady_clock::now());
     QCOMPARE(source.contentRevision(), revision + 1);
-    QCOMPARE(
-        source.producerConfigurationRevision(),
-        producerRevision + 1);
+    QCOMPARE(source.producerConfigurationRevision(), producerRevision + 1);
     QVERIFY(source.displayAspectRatio());
     QCOMPARE(*source.displayAspectRatio(), 9.0 / 16.0);
 
-    QVERIFY(source.reportPresentationFailure(
-        {
-            .kind = VideoFailureKind::General,
-            .reason = QStringLiteral("cannot import frame"),
-        }));
-    QCOMPARE(
-        player.lastFailure(),
-        QStringLiteral("cannot import frame"));
+    QVERIFY(source.reportPresentationFailure({
+        .kind = VideoFailureKind::General,
+        .reason = QStringLiteral("cannot import frame"),
+    }));
+    QCOMPARE(player.lastFailure(), QStringLiteral("cannot import frame"));
     QVERIFY(diagnostics.lastFailure().isEmpty());
 }
 

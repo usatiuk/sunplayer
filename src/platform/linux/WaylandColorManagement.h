@@ -27,14 +27,14 @@ struct WaylandColorManagementCapabilities {
 };
 
 struct WaylandChromaticity {
-    bool operator==(const WaylandChromaticity &) const = default;
+    bool operator==(WaylandChromaticity const&) const = default;
 
     float x = 0.0f;
     float y = 0.0f;
 };
 
 struct WaylandColorPrimaries {
-    bool operator==(const WaylandColorPrimaries &) const = default;
+    bool operator==(WaylandColorPrimaries const&) const = default;
 
     WaylandChromaticity red;
     WaylandChromaticity green;
@@ -53,13 +53,12 @@ enum class WaylandTransferFunction {
 };
 
 struct WaylandPreferredDescription {
-    bool operator==(const WaylandPreferredDescription &) const = default;
+    bool operator==(WaylandPreferredDescription const&) const = default;
 
     bool parametric = false;
     bool primariesKnown = false;
     WaylandColorPrimaries primaries;
-    WaylandTransferFunction transferFunction =
-        WaylandTransferFunction::Unknown;
+    WaylandTransferFunction transferFunction = WaylandTransferFunction::Unknown;
     bool luminancesKnown = false;
     float minimumLuminanceNits = 0.0f;
     float maximumLuminanceNits = 0.0f;
@@ -73,8 +72,7 @@ struct WaylandPreferredDescription {
     bool isCompleteAndValid() const;
 };
 
-std::optional<DisplayState> displayStateFromWaylandDescription(
-    const WaylandPreferredDescription &description);
+std::optional<DisplayState> displayStateFromWaylandDescription(WaylandPreferredDescription const& description);
 
 enum class WaylandSdrSurfaceMode {
     UnmanagedSrgb,
@@ -89,17 +87,15 @@ struct WaylandSurfaceSelection {
     PresentationSurfaceContract presentationContract() const;
 };
 
-WaylandSurfaceSelection selectWaylandSurface(
-    const WaylandColorManagementCapabilities &capabilities);
+WaylandSurfaceSelection selectWaylandSurface(WaylandColorManagementCapabilities const& capabilities);
 
 struct WaylandHdrRejection {
     std::uint64_t graphicsDeviceGeneration = 0;
 };
 
-PresentationSurfaceMode selectWaylandPresentationMode(
-    WaylandSdrSurfaceMode startupMode,
-    const WaylandColorManagementCapabilities &capabilities,
-    std::uint64_t graphicsDeviceGeneration,
-    const std::optional<WaylandHdrRejection> &rejection);
+PresentationSurfaceMode selectWaylandPresentationMode(WaylandSdrSurfaceMode startupMode,
+                                                      WaylandColorManagementCapabilities const& capabilities,
+                                                      std::uint64_t graphicsDeviceGeneration,
+                                                      std::optional<WaylandHdrRejection> const& rejection);
 
 Q_DECLARE_METATYPE(WaylandColorManagementCapabilities)

@@ -17,41 +17,34 @@ class QRhiCommandBuffer;
 class QRhiTexture;
 
 class SubtitleRenderer final {
-public:
-    explicit SubtitleRenderer(QRhi &rhi);
+  public:
+    explicit SubtitleRenderer(QRhi& rhi);
     ~SubtitleRenderer();
 
-    SubtitleRenderer(const SubtitleRenderer &) = delete;
-    SubtitleRenderer &operator=(const SubtitleRenderer &) = delete;
+    SubtitleRenderer(SubtitleRenderer const&) = delete;
+    SubtitleRenderer& operator=(SubtitleRenderer const&) = delete;
 
-    bool prepare(
-        const SubtitlePresentationSnapshot &snapshot,
-        const QRect &videoRect,
-        const QSize &targetSize,
-        bool active);
-    void uploadIfNeeded(QRhiCommandBuffer &commandBuffer);
+    bool prepare(SubtitlePresentationSnapshot const& snapshot, QRect const& videoRect, QSize const& targetSize,
+                 bool active);
+    void uploadIfNeeded(QRhiCommandBuffer& commandBuffer);
 
-    QRhiTexture *texture() const;
+    QRhiTexture* texture() const;
     std::uint64_t textureRevision() const;
     QString error() const;
 
-private:
+  private:
     struct AssBundle;
 
-    bool ensureTexture(const QSize &size);
-    bool ensureAssBundle(
-        const SubtitleStreamConfiguration &configuration);
-    bool processNewEvents(const SubtitleStateSnapshot &state);
-    bool rasterize(
-        const SubtitlePresentationSnapshot &snapshot,
-        const QRect &videoRect,
-        const QSize &targetSize,
-        bool forceRaster);
+    bool ensureTexture(QSize const& size);
+    bool ensureAssBundle(SubtitleStreamConfiguration const& configuration);
+    bool processNewEvents(SubtitleStateSnapshot const& state);
+    bool rasterize(SubtitlePresentationSnapshot const& snapshot, QRect const& videoRect, QSize const& targetSize,
+                   bool forceRaster);
     void clearImage();
     void fail(QString error);
     void advanceTextureRevision();
 
-    QRhi &m_rhi;
+    QRhi& m_rhi;
     std::unique_ptr<QRhiTexture> m_texture;
     std::unique_ptr<AssBundle> m_ass;
     QImage m_image;
@@ -61,7 +54,7 @@ private:
     std::uint64_t m_sourceRevision = 0;
     std::uint64_t m_textureRevision = 0;
     std::size_t m_processedEventCount = 0;
-    std::shared_ptr<const SubtitleBitmapComposition> m_renderedBitmap;
+    std::shared_ptr<SubtitleBitmapComposition const> m_renderedBitmap;
     std::int64_t m_renderedTimeMicroseconds = -1;
     QRect m_renderedVideoRect;
     bool m_uploadPending = false;

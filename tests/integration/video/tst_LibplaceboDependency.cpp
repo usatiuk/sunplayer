@@ -39,8 +39,7 @@
 #error "The initial Linux libplacebo build must include Vulkan"
 #endif
 
-#if (!defined(PL_HAVE_GLSLANG) || !PL_HAVE_GLSLANG) \
-        && (!defined(PL_HAVE_SHADERC) || !PL_HAVE_SHADERC)
+#if (!defined(PL_HAVE_GLSLANG) || !PL_HAVE_GLSLANG) && (!defined(PL_HAVE_SHADERC) || !PL_HAVE_SHADERC)
 #error "The initial Linux libplacebo build needs glslang or Shaderc"
 #endif
 
@@ -81,17 +80,14 @@
 class LibplaceboDependencyTest final : public QObject {
     Q_OBJECT
 
-public:
+  public:
     static void initMain() {
 #ifdef Q_OS_WIN
-        SetErrorMode(
-            SEM_FAILCRITICALERRORS
-            | SEM_NOGPFAULTERRORBOX
-            | SEM_NOOPENFILEERRORBOX);
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 #endif
     }
 
-private slots:
+  private slots:
     void pinnedFeatureSetAndLogLifecycle();
 };
 
@@ -102,8 +98,7 @@ void LibplaceboDependencyTest::pinnedFeatureSetAndLogLifecycle() {
     QCOMPARE(PL_FIX_VER, 1);
     QCOMPARE(QString::fromLatin1(PL_VERSION), QStringLiteral("v7.360.1"));
 #else
-    QVERIFY(QString::fromLatin1(PL_VERSION).startsWith(
-        QStringLiteral("v7.360.")));
+    QVERIFY(QString::fromLatin1(PL_VERSION).startsWith(QStringLiteral("v7.360.")));
 #if defined(PL_HAVE_LCMS) && PL_HAVE_LCMS
     qInfo("System libplacebo LCMS support: enabled");
 #else

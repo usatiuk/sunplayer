@@ -57,10 +57,7 @@ struct FfmpegMediaDecodeResult {
     bool isStopped() const;
 };
 
-using FfmpegPcmAudioSink = std::function<bool(
-    PcmAudioBlock,
-    const FfmpegAudioStreamDiagnostics &,
-    std::stop_token)>;
+using FfmpegPcmAudioSink = std::function<bool(PcmAudioBlock, FfmpegAudioStreamDiagnostics const&, std::stop_token)>;
 
 // Complete decoded-audio lifecycle. endOfStream is published by the audio
 // worker immediately after its decoder and resampler have drained; it does
@@ -83,8 +80,7 @@ struct FfmpegMediaStreamSelection {
     std::optional<SubtitleStreamConfiguration> subtitleConfiguration;
 };
 
-using FfmpegMediaStreamSink = std::function<void(
-    const FfmpegMediaStreamSelection &)>;
+using FfmpegMediaStreamSink = std::function<void(FfmpegMediaStreamSelection const&)>;
 
 struct FfmpegSubtitleOutputSink {
     std::function<bool(SubtitleEvent, std::stop_token)> submit;
@@ -101,26 +97,18 @@ struct FfmpegSubtitleOutputSink {
 // Video and audio sinks run concurrently on their decoder workers. They must
 // provide their own synchronization for shared state, apply bounded
 // backpressure, and return promptly when their supplied stop token is set.
-FfmpegMediaDecodeResult decodeMediaFrames(
-    const FfmpegMediaDecodeRequest &request,
-    const FfmpegVideoFrameSink &videoSink,
-    const FfmpegPcmAudioSink &audioSink,
-    std::stop_token stopToken = {});
+FfmpegMediaDecodeResult decodeMediaFrames(FfmpegMediaDecodeRequest const& request,
+                                          FfmpegVideoFrameSink const& videoSink, FfmpegPcmAudioSink const& audioSink,
+                                          std::stop_token stopToken = {});
 
 // Production boundary with early stream discovery and an explicit decoded
 // audio end-of-stream event. Stream discovery is emitted exactly once after
 // probing and seek setup succeed, before either decoder worker starts.
-FfmpegMediaDecodeResult decodeMediaFrames(
-    const FfmpegMediaDecodeRequest &request,
-    const FfmpegVideoFrameSink &videoSink,
-    const FfmpegAudioOutputSink &audioSink,
-    const FfmpegMediaStreamSink &streamSink,
-    std::stop_token stopToken = {});
+FfmpegMediaDecodeResult decodeMediaFrames(FfmpegMediaDecodeRequest const& request,
+                                          FfmpegVideoFrameSink const& videoSink, FfmpegAudioOutputSink const& audioSink,
+                                          FfmpegMediaStreamSink const& streamSink, std::stop_token stopToken = {});
 
-FfmpegMediaDecodeResult decodeMediaFrames(
-    const FfmpegMediaDecodeRequest &request,
-    const FfmpegVideoFrameSink &videoSink,
-    const FfmpegAudioOutputSink &audioSink,
-    const FfmpegMediaStreamSink &streamSink,
-    const FfmpegSubtitleOutputSink &subtitleSink,
-    std::stop_token stopToken = {});
+FfmpegMediaDecodeResult decodeMediaFrames(FfmpegMediaDecodeRequest const& request,
+                                          FfmpegVideoFrameSink const& videoSink, FfmpegAudioOutputSink const& audioSink,
+                                          FfmpegMediaStreamSink const& streamSink,
+                                          FfmpegSubtitleOutputSink const& subtitleSink, std::stop_token stopToken = {});

@@ -24,55 +24,44 @@
 #include "video/ActiveVideoSource.h"
 #include "video/DiagnosticVideoSource.h"
 #include "video/RenderedVideoProducer.h"
-#include "video/RenderedVideoSurface.h"
 #include "video/RenderedVideoSource.h"
+#include "video/RenderedVideoSurface.h"
 #include "video/VideoTargetInterop.h"
 
 namespace {
 constexpr float scRgbReferenceWhiteNits = 80.0f;
 
-float positiveOrFallback(float value, float fallback, const char *name) {
-    if (std::isfinite(value) && value > 0.0f)
+float positiveOrFallback(float value, float fallback, char const* name) {
+    if (std::isfinite(value) && value > 0.0f) {
         return value;
-    qCWarning(
-        sunroomLogPresentation,
-        "QRhi reported invalid %s: %g; using %g",
-        name,
-        value,
-        fallback);
+    }
+    qCWarning(sunroomLogPresentation, "QRhi reported invalid %s: %g; using %g", name, value, fallback);
     return fallback;
 }
 
-float nonNegativeOrZero(float value, const char *name) {
-    if (std::isfinite(value) && value >= 0.0f)
+float nonNegativeOrZero(float value, char const* name) {
+    if (std::isfinite(value) && value >= 0.0f) {
         return value;
-    qCWarning(
-        sunroomLogPresentation,
-        "QRhi reported invalid %s: %g; using 0",
-        name,
-        value);
+    }
+    qCWarning(sunroomLogPresentation, "QRhi reported invalid %s: %g; using 0", name, value);
     return 0.0f;
 }
 
-void advanceRevision(std::uint64_t &revision) {
+void advanceRevision(std::uint64_t& revision) {
     ++revision;
-    if (revision == 0)
+    if (revision == 0) {
         ++revision;
+    }
 }
 
-QRhiSwapChain::Format desiredSwapChainFormat(
-        const PresentationSurfaceContract &surfaceContract,
-        QRhiSwapChain &swapChain,
-        bool displayHdrAvailable,
-        bool hdr10PlatformSupported) {
+QRhiSwapChain::Format desiredSwapChainFormat(PresentationSurfaceContract const& surfaceContract,
+                                             QRhiSwapChain& swapChain, bool displayHdrAvailable,
+                                             bool hdr10PlatformSupported) {
     if (surfaceContract.hdr10Required()) {
-        return hdr10PlatformSupported
-                && swapChain.isFormatSupported(QRhiSwapChain::HDR10)
-            ? QRhiSwapChain::HDR10
-            : QRhiSwapChain::SDR;
+        return hdr10PlatformSupported && swapChain.isFormatSupported(QRhiSwapChain::HDR10) ? QRhiSwapChain::HDR10
+                                                                                           : QRhiSwapChain::SDR;
     }
-    if (surfaceContract.mode
-            != PresentationSurfaceMode::AdaptiveExtendedLinear) {
+    if (surfaceContract.mode != PresentationSurfaceMode::AdaptiveExtendedLinear) {
         return QRhiSwapChain::SDR;
     }
 
@@ -82,52 +71,32 @@ QRhiSwapChain::Format desiredSwapChainFormat(
 #else
     Q_UNUSED(displayHdrAvailable);
 #endif
-    return extendedLinearAllowed
-            && swapChain.isFormatSupported(
-                QRhiSwapChain::HDRExtendedSrgbLinear)
-        ? QRhiSwapChain::HDRExtendedSrgbLinear
-        : QRhiSwapChain::SDR;
+    return extendedLinearAllowed && swapChain.isFormatSupported(QRhiSwapChain::HDRExtendedSrgbLinear)
+               ? QRhiSwapChain::HDRExtendedSrgbLinear
+               : QRhiSwapChain::SDR;
 }
-}
+} // namespace
 
-RhiPresentationEngine::RhiPresentationEngine(
-        QWindow &window,
-        PresentationOutputState &outputState,
-        PresentationSettings &settings,
-        ActiveVideoSource &videoSource,
-        DiagnosticVideoSource &diagnosticSource,
-        MediaSession &mediaSession,
-        VideoViewportState &videoViewport,
-        PresentationSurfaceContract surfaceContract,
-        PresentationSurfaceController *surfaceController,
-        QObject *parent)
-    : QObject(parent),
-      m_window(window),
-      m_outputState(outputState),
-      m_settings(settings),
-      m_videoSource(videoSource),
-      m_diagnosticSource(diagnosticSource),
-      m_mediaSession(mediaSession),
-      m_videoViewport(videoViewport),
-      m_surfaceContract(surfaceContract),
-      m_surfaceController(surfaceController) {
-    Q_ASSERT((m_surfaceController != nullptr)
-        == (m_surfaceContract.mode
-            != PresentationSurfaceMode::AdaptiveExtendedLinear));
+RhiPresentationEngine::RhiPresentationEngine(QWindow& window, PresentationOutputState& outputState,
+                                             PresentationSettings& settings, ActiveVideoSource& videoSource,
+                                             DiagnosticVideoSource& diagnosticSource, MediaSession& mediaSession,
+                                             VideoViewportState& videoViewport,
+                                             PresentationSurfaceContract surfaceContract,
+                                             PresentationSurfaceController* surfaceController, QObject* parent)
+    : QObject(parent), m_window(window), m_outputState(outputState), m_settings(settings), m_videoSource(videoSource),
+      m_diagnosticSource(diagnosticSource), m_mediaSession(mediaSession), m_videoViewport(videoViewport),
+      m_surfaceContract(surfaceContract), m_surfaceController(surfaceController) {
+    Q_ASSERT((m_surfaceController != nullptr) ==
+             (m_surfaceContract.mode != PresentationSurfaceMode::AdaptiveExtendedLinear));
     m_deviceRecoveryTimer.setSingleShot(true);
     m_swapChainRecoveryTimer.setSingleShot(true);
 
-    connect(&m_settings, &PresentationSettings::settingsChanged,
-            this, &RhiPresentationEngine::requestFrame);
-    connect(&m_videoSource, &RenderedVideoSource::updateRequested,
-            this, &RhiPresentationEngine::requestFrame);
-    connect(&m_videoViewport, &VideoViewportState::viewportChanged,
-            this, &RhiPresentationEngine::requestFrame);
-    connect(&m_outputState, &PresentationOutputState::stateChanged,
-            this, &RhiPresentationEngine::markPresentationDirty);
-    connect(&m_outputState,
-            &PresentationOutputState::outputCharacteristicsChanged,
-            this,
+    connect(&m_settings, &PresentationSettings::settingsChanged, this, &RhiPresentationEngine::requestFrame);
+    connect(&m_videoSource, &RenderedVideoSource::updateRequested, this, &RhiPresentationEngine::requestFrame);
+    connect(&m_videoViewport, &VideoViewportState::viewportChanged, this, &RhiPresentationEngine::requestFrame);
+    connect(&m_outputState, &PresentationOutputState::stateChanged, this,
+            &RhiPresentationEngine::markPresentationDirty);
+    connect(&m_outputState, &PresentationOutputState::outputCharacteristicsChanged, this,
             &RhiPresentationEngine::markOutputCharacteristicsDirty);
 #ifdef Q_OS_MACOS
     connect(&m_window, &QWindow::screenChanged, this, [this] {
@@ -135,22 +104,16 @@ RhiPresentationEngine::RhiPresentationEngine(
         markOutputCharacteristicsDirty();
     });
 #endif
-    connect(&m_deviceRecoveryTimer, &QTimer::timeout,
-            this, &RhiPresentationEngine::requestFrame);
-    connect(&m_swapChainRecoveryTimer, &QTimer::timeout,
-            this, &RhiPresentationEngine::requestFrame);
-    connect(&m_mediaSession, &MediaSession::subtitleChanged,
-            this, &RhiPresentationEngine::requestFrame);
+    connect(&m_deviceRecoveryTimer, &QTimer::timeout, this, &RhiPresentationEngine::requestFrame);
+    connect(&m_swapChainRecoveryTimer, &QTimer::timeout, this, &RhiPresentationEngine::requestFrame);
+    connect(&m_mediaSession, &MediaSession::subtitleChanged, this, &RhiPresentationEngine::requestFrame);
 
-    if (!initializeGraphicsDevice())
-        qCFatal(
-            sunroomLogPresentation,
-            "Could not create the QRhi backend");
+    if (!initializeGraphicsDevice()) {
+        qCFatal(sunroomLogPresentation, "Could not create the QRhi backend");
+    }
 }
 
-RhiPresentationEngine::~RhiPresentationEngine() {
-    releaseDevice();
-}
+RhiPresentationEngine::~RhiPresentationEngine() { releaseDevice(); }
 
 void RhiPresentationEngine::render() {
     Q_ASSERT(!m_rendering);
@@ -161,14 +124,13 @@ void RhiPresentationEngine::render() {
     renderFrame();
     m_rendering = false;
 
-    if (m_frameRequestedWhileRendering)
+    if (m_frameRequestedWhileRendering) {
         requestFrame();
+    }
 }
 
 void RhiPresentationEngine::renderFrame() {
-    if (m_surfaceTransitionPending
-            || !m_window.isExposed()
-            || m_window.size().isEmpty()) {
+    if (m_surfaceTransitionPending || !m_window.isExposed() || m_window.size().isEmpty()) {
         return;
     }
 
@@ -177,26 +139,26 @@ void RhiPresentationEngine::renderFrame() {
         return;
     }
     QSize pixelSize;
-    QuickUiLayer::RenderTargetUpdate targetUpdate =
-        QuickUiLayer::RenderTargetUpdate::Unchanged;
+    QuickUiLayer::RenderTargetUpdate targetUpdate = QuickUiLayer::RenderTargetUpdate::Unchanged;
     {
-        GraphicsDeviceExecutionScope execution =
-            m_graphicsDevice->acquireExecutionScope();
-        if (!m_quickUi && !initializeDevice())
+        GraphicsDeviceExecutionScope execution = m_graphicsDevice->acquireExecutionScope();
+        if (!m_quickUi && !initializeDevice()) {
             return;
-        if (!reconcileOutputCharacteristics())
+        }
+        if (!reconcileOutputCharacteristics()) {
             return;
-        if (!m_swapChain && !createSwapChain())
+        }
+        if (!m_swapChain && !createSwapChain()) {
             return;
-        if (!resizeSwapChain())
+        }
+        if (!resizeSwapChain()) {
             return;
+        }
 
         m_quickUi->setLogicalSize(m_window.size());
         pixelSize = m_swapChain->currentPixelSize();
-        targetUpdate = m_quickUi->ensureRenderTarget(
-            pixelSize, m_window.devicePixelRatio());
-        if (targetUpdate
-                == QuickUiLayer::RenderTargetUpdate::DeviceLost) {
+        targetUpdate = m_quickUi->ensureRenderTarget(pixelSize, m_window.devicePixelRatio());
+        if (targetUpdate == QuickUiLayer::RenderTargetUpdate::DeviceLost) {
             handleDeviceLoss("creating the Qt Quick render target");
             return;
         }
@@ -213,180 +175,122 @@ void RhiPresentationEngine::renderFrame() {
     // QML synchronization can switch the active page/source. Let a visible
     // source select its frame first because preparation may change producer
     // configuration, content, or display geometry.
-    const bool videoViewportActive =
-        m_videoViewport.isRenderable();
-    const auto presentationTime =
-        std::chrono::steady_clock::now();
+    bool const videoViewportActive = m_videoViewport.isRenderable();
+    auto const presentationTime = std::chrono::steady_clock::now();
     if (videoViewportActive) {
-        m_videoSource.prepareForPresentation(
-            presentationTime);
+        m_videoSource.prepareForPresentation(presentationTime);
     }
 
-    const float scaleX = static_cast<float>(pixelSize.width())
-        / static_cast<float>(m_window.width());
-    const float scaleY = static_cast<float>(pixelSize.height())
-        / static_cast<float>(m_window.height());
+    float const scaleX = static_cast<float>(pixelSize.width()) / static_cast<float>(m_window.width());
+    float const scaleY = static_cast<float>(pixelSize.height()) / static_cast<float>(m_window.height());
     Q_ASSERT(std::isfinite(scaleX) && scaleX > 0.0f);
     Q_ASSERT(std::isfinite(scaleY) && scaleY > 0.0f);
 
     QRect videoRect;
     std::optional<RenderedVideoSurfaceState> requestedSurface;
-    const std::optional<double> displayAspectRatio =
-        m_videoSource.displayAspectRatio();
+    std::optional<double> const displayAspectRatio = m_videoSource.displayAspectRatio();
     if (videoViewportActive && displayAspectRatio) {
-        const QRectF viewport = m_videoViewport.rect();
-        const QRectF scaledViewport(
-            viewport.x() * scaleX,
-            viewport.y() * scaleY,
-            viewport.width() * scaleX,
-            viewport.height() * scaleY);
-        videoRect = aspectFitVideoRect(
-            scaledViewport.toAlignedRect().intersected(
-                QRect(QPoint{}, pixelSize)),
-            displayAspectRatio);
+        QRectF const viewport = m_videoViewport.rect();
+        QRectF const scaledViewport(viewport.x() * scaleX, viewport.y() * scaleY, viewport.width() * scaleX,
+                                    viewport.height() * scaleY);
+        videoRect = aspectFitVideoRect(scaledViewport.toAlignedRect().intersected(QRect(QPoint{}, pixelSize)),
+                                       displayAspectRatio);
     }
 
     if (!videoRect.isEmpty()) {
-        const float requestedTargetPeak = m_settings.automaticTargetPeak()
-            ? m_outputState.effectiveTargetHeadroom()
-            : m_settings.manualTargetHeadroom();
-        const float targetPeak =
-            m_surfaceContract.constrainTargetHeadroom(
-                requestedTargetPeak);
+        float const requestedTargetPeak = m_settings.automaticTargetPeak() ? m_outputState.effectiveTargetHeadroom()
+                                                                           : m_settings.manualTargetHeadroom();
+        float const targetPeak = m_surfaceContract.constrainTargetHeadroom(requestedTargetPeak);
         Q_ASSERT(std::isfinite(targetPeak) && targetPeak >= 1.0f);
-        const float referenceWhiteNits = m_outputState.sdrWhiteKnown()
-            ? m_outputState.sdrWhiteNits()
-            : scRgbReferenceWhiteNits;
-        Q_ASSERT(
-            std::isfinite(referenceWhiteNits)
-            && referenceWhiteNits > 0.0f);
-        const bool targetMinimumLuminanceKnown =
-            m_outputState.luminanceKnown();
-        const float targetMinimumLuminanceNits =
+        float const referenceWhiteNits =
+            m_outputState.sdrWhiteKnown() ? m_outputState.sdrWhiteNits() : scRgbReferenceWhiteNits;
+        Q_ASSERT(std::isfinite(referenceWhiteNits) && referenceWhiteNits > 0.0f);
+        bool const targetMinimumLuminanceKnown = m_outputState.luminanceKnown();
+        float const targetMinimumLuminanceNits =
             targetMinimumLuminanceKnown
-            ? std::clamp(
-                m_outputState.minLuminanceNits(),
-                0.0f,
-                referenceWhiteNits * targetPeak)
-            : 0.0f;
+                ? std::clamp(m_outputState.minLuminanceNits(), 0.0f, referenceWhiteNits * targetPeak)
+                : 0.0f;
 
         requestedSurface.emplace();
         requestedSurface->description.pixelSize = videoRect.size();
-        requestedSurface->description.pixelFormat =
-            RenderedVideoPixelFormat::Rgba16Float;
-        requestedSurface->description.colorSpace =
-            RenderedVideoColorSpace::LinearSrgb;
-        requestedSurface->description.luminance =
-            RenderedVideoLuminance::DisplayTargetedSdrWhiteRelative;
-        requestedSurface->description.alphaMode =
-            RenderedVideoAlphaMode::Opaque;
-        requestedSurface->description.referenceWhiteNits =
-            referenceWhiteNits;
-        requestedSurface->description.targetMinimumLuminanceKnown =
-            targetMinimumLuminanceKnown;
-        requestedSurface->description.targetMinimumLuminanceNits =
-            targetMinimumLuminanceNits;
+        requestedSurface->description.pixelFormat = RenderedVideoPixelFormat::Rgba16Float;
+        requestedSurface->description.colorSpace = RenderedVideoColorSpace::LinearSrgb;
+        requestedSurface->description.luminance = RenderedVideoLuminance::DisplayTargetedSdrWhiteRelative;
+        requestedSurface->description.alphaMode = RenderedVideoAlphaMode::Opaque;
+        requestedSurface->description.referenceWhiteNits = referenceWhiteNits;
+        requestedSurface->description.targetMinimumLuminanceKnown = targetMinimumLuminanceKnown;
+        requestedSurface->description.targetMinimumLuminanceNits = targetMinimumLuminanceNits;
         requestedSurface->description.targetPeakHeadroom = targetPeak;
-        requestedSurface->graphicsDeviceGeneration =
-            m_graphicsDevice->generation();
-        requestedSurface->contentRevision =
-            m_videoSource.contentRevision();
+        requestedSurface->graphicsDeviceGeneration = m_graphicsDevice->generation();
+        requestedSurface->contentRevision = m_videoSource.contentRevision();
         Q_ASSERT(requestedSurface->isValid());
     }
 
-    GraphicsDeviceExecutionScope execution =
-        m_graphicsDevice->acquireExecutionScope();
+    GraphicsDeviceExecutionScope execution = m_graphicsDevice->acquireExecutionScope();
     // Rebind only after the page route and prepared source state are coherent.
     // Hidden route changes still replace the producer promptly.
-    const bool videoProducerChanged = refreshVideoProducer();
+    bool const videoProducerChanged = refreshVideoProducer();
     Q_ASSERT(m_videoProducer);
 
     if (requestedSurface) {
-        const VideoOperationResult ensureResult =
-            m_videoProducer->ensureSurface(*requestedSurface);
-        if (!handleVideoOperationResult(
-                "creating the rendered-video surface",
-                ensureResult)) {
+        VideoOperationResult const ensureResult = m_videoProducer->ensureSurface(*requestedSurface);
+        if (!handleVideoOperationResult("creating the rendered-video surface", ensureResult)) {
             return;
         }
         // Target provisioning can select a direct, copy, or fallback path.
         updateBackendState();
     }
 
-    QRhiTexture *const compositionVideoTexture = requestedSurface
-        ? &m_videoProducer->textureForComposition()
-        : nullptr;
-    const std::uint64_t compositionTextureRevision = requestedSurface
-        ? m_videoProducer->compositionTextureRevision()
-        : 0;
+    QRhiTexture* const compositionVideoTexture = requestedSurface ? &m_videoProducer->textureForComposition() : nullptr;
+    std::uint64_t const compositionTextureRevision =
+        requestedSurface ? m_videoProducer->compositionTextureRevision() : 0;
     Q_ASSERT(m_subtitleRenderer);
-    const bool subtitleActive = videoViewportActive
-        && m_videoSource.route()
-            == ActiveVideoSource::Route::Player;
-    const bool subtitlePrepared = m_subtitleRenderer->prepare(
-        m_mediaSession.subtitlePresentationSnapshot(
-            presentationTime),
-        videoRect,
-        pixelSize,
-        subtitleActive);
-    const QString subtitleError = m_subtitleRenderer->error();
+    bool const subtitleActive = videoViewportActive && m_videoSource.route() == ActiveVideoSource::Route::Player;
+    bool const subtitlePrepared = m_subtitleRenderer->prepare(
+        m_mediaSession.subtitlePresentationSnapshot(presentationTime), videoRect, pixelSize, subtitleActive);
+    QString const subtitleError = m_subtitleRenderer->error();
     if (!subtitlePrepared && subtitleError != m_reportedSubtitleError) {
         m_reportedSubtitleError = subtitleError;
-        qCWarning(sunroomLogPresentation).noquote()
-            << "event=subtitle.presentation_failed"
-            << "error=" + subtitleError;
+        qCWarning(sunroomLogPresentation).noquote() << "event=subtitle.presentation_failed"
+                                                    << "error=" + subtitleError;
     } else if (subtitlePrepared) {
         m_reportedSubtitleError.clear();
     }
-    const std::uint64_t subtitleTextureRevision =
-        m_subtitleRenderer->textureRevision();
+    std::uint64_t const subtitleTextureRevision = m_subtitleRenderer->textureRevision();
 
     if (!m_compositor) {
         m_compositor = std::make_unique<HdrCompositor>(*m_rhi);
-        if (m_compositor->initialize(
-                *m_renderPassDescriptor,
-                compositionVideoTexture,
-                m_subtitleRenderer->texture(),
-                m_quickUi->texture())
-                == HdrCompositor::ResourceResult::DeviceLost) {
+        if (m_compositor->initialize(*m_renderPassDescriptor, compositionVideoTexture, m_subtitleRenderer->texture(),
+                                     m_quickUi->texture()) == HdrCompositor::ResourceResult::DeviceLost) {
             handleDeviceLoss("creating the HDR compositor");
             return;
         }
-        m_boundVideoTextureRevision =
-            compositionTextureRevision;
-        m_boundSubtitleTextureRevision =
-            subtitleTextureRevision;
-    } else if (videoProducerChanged
-               || targetUpdate
-                   == QuickUiLayer::RenderTargetUpdate::Recreated
-               || m_boundVideoTextureRevision
-                   != compositionTextureRevision
-               || m_boundSubtitleTextureRevision
-                   != subtitleTextureRevision) {
-        if (m_compositor->setTextures(
-                compositionVideoTexture,
-                m_subtitleRenderer->texture(),
-                m_quickUi->texture())
-                == HdrCompositor::ResourceResult::DeviceLost) {
+        m_boundVideoTextureRevision = compositionTextureRevision;
+        m_boundSubtitleTextureRevision = subtitleTextureRevision;
+    } else if (videoProducerChanged || targetUpdate == QuickUiLayer::RenderTargetUpdate::Recreated ||
+               m_boundVideoTextureRevision != compositionTextureRevision ||
+               m_boundSubtitleTextureRevision != subtitleTextureRevision) {
+        if (m_compositor->setTextures(compositionVideoTexture, m_subtitleRenderer->texture(), m_quickUi->texture()) ==
+            HdrCompositor::ResourceResult::DeviceLost) {
             handleDeviceLoss("rebinding compositor layer textures");
             return;
         }
-        m_boundVideoTextureRevision =
-            compositionTextureRevision;
-        m_boundSubtitleTextureRevision =
-            subtitleTextureRevision;
+        m_boundVideoTextureRevision = compositionTextureRevision;
+        m_boundSubtitleTextureRevision = subtitleTextureRevision;
     }
 
     QRhi::FrameOpResult result = m_rhi->beginFrame(m_swapChain.get());
     if (result == QRhi::FrameOpSwapChainOutOfDate) {
         // QRhi requires createOrResize() even when the pixel size is unchanged.
-        if (!resizeSwapChain(true))
+        if (!resizeSwapChain(true)) {
             return;
+        }
         result = m_rhi->beginFrame(m_swapChain.get());
     }
     if (result == QRhi::FrameOpSwapChainOutOfDate) {
-        if (resizeSwapChain(true))
+        if (resizeSwapChain(true)) {
             requestFrame();
+        }
         return;
     }
     if (result == QRhi::FrameOpDeviceLost) {
@@ -398,77 +302,58 @@ void RhiPresentationEngine::renderFrame() {
         return;
     }
 
-    QRhiCommandBuffer &commandBuffer =
-        *m_swapChain->currentFrameCommandBuffer();
+    QRhiCommandBuffer& commandBuffer = *m_swapChain->currentFrameCommandBuffer();
     bool frameFinished = false;
-    const auto finishFrame =
-        [this, &frameFinished](
-                QRhi::EndFrameFlags flags,
-                bool acceptPendingRender) {
-            Q_ASSERT(!frameFinished);
-            const QRhi::FrameOpResult finishResult =
-                m_rhi->endFrame(m_swapChain.get(), flags);
-            frameFinished = true;
-            if (finishResult == QRhi::FrameOpSuccess)
-                m_videoProducer->submissionAccepted();
-            else
-                m_videoProducer->submissionAborted();
-            if (finishResult == QRhi::FrameOpSuccess
-                    && acceptPendingRender) {
-                m_videoProducer->commitPendingRender();
-            } else {
-                m_videoProducer->discardPendingRender();
-            }
-            return finishResult;
-        };
-    const auto unfinishedFrameGuard = qScopeGuard(
-        [this, &finishFrame, &frameFinished] {
-            if (frameFinished)
-                return;
-            const QRhi::FrameOpResult abandonedResult =
-                finishFrame(QRhi::SkipPresent, false);
-            if (abandonedResult != QRhi::FrameOpSuccess
-                    && abandonedResult != QRhi::FrameOpDeviceLost) {
-                qCWarning(
-                    sunroomLogPresentation,
-                    "QRhi returned %d while abandoning an unfinished frame",
-                    static_cast<int>(abandonedResult));
-            }
-        });
+    auto const finishFrame = [this, &frameFinished](QRhi::EndFrameFlags flags, bool acceptPendingRender) {
+        Q_ASSERT(!frameFinished);
+        QRhi::FrameOpResult const finishResult = m_rhi->endFrame(m_swapChain.get(), flags);
+        frameFinished = true;
+        if (finishResult == QRhi::FrameOpSuccess) {
+            m_videoProducer->submissionAccepted();
+        } else {
+            m_videoProducer->submissionAborted();
+        }
+        if (finishResult == QRhi::FrameOpSuccess && acceptPendingRender) {
+            m_videoProducer->commitPendingRender();
+        } else {
+            m_videoProducer->discardPendingRender();
+        }
+        return finishResult;
+    };
+    auto const unfinishedFrameGuard = qScopeGuard([this, &finishFrame, &frameFinished] {
+        if (frameFinished) {
+            return;
+        }
+        QRhi::FrameOpResult const abandonedResult = finishFrame(QRhi::SkipPresent, false);
+        if (abandonedResult != QRhi::FrameOpSuccess && abandonedResult != QRhi::FrameOpDeviceLost) {
+            qCWarning(sunroomLogPresentation, "QRhi returned %d while abandoning an unfinished frame",
+                      static_cast<int>(abandonedResult));
+        }
+    });
 
-    if (requestedSurface
-            && m_videoProducer->needsRender(*requestedSurface)) {
-        const VideoOperationResult renderResult =
-            m_videoProducer->render(
-                commandBuffer, *requestedSurface);
+    if (requestedSurface && m_videoProducer->needsRender(*requestedSurface)) {
+        VideoOperationResult const renderResult = m_videoProducer->render(commandBuffer, *requestedSurface);
         if (renderResult != VideoOperationResult::Ready) {
-            const QRhi::FrameOpResult abandonedResult =
-                finishFrame(QRhi::SkipPresent, false);
-            handleVideoOperationResult(
-                "rendering the video surface",
-                abandonedResult == QRhi::FrameOpDeviceLost
-                    ? VideoOperationResult::DeviceLost
-                    : renderResult);
+            QRhi::FrameOpResult const abandonedResult = finishFrame(QRhi::SkipPresent, false);
+            handleVideoOperationResult("rendering the video surface", abandonedResult == QRhi::FrameOpDeviceLost
+                                                                          ? VideoOperationResult::DeviceLost
+                                                                          : renderResult);
             return;
         }
     }
     if (requestedSurface) {
-        const VideoOperationResult compositionResult =
-            m_videoProducer->prepareForComposition(commandBuffer);
+        VideoOperationResult const compositionResult = m_videoProducer->prepareForComposition(commandBuffer);
         if (compositionResult != VideoOperationResult::Ready) {
-            const QRhi::FrameOpResult abandonedResult =
-                finishFrame(QRhi::SkipPresent, false);
-            handleVideoOperationResult(
-                "preparing video for composition",
-                abandonedResult == QRhi::FrameOpDeviceLost
-                    ? VideoOperationResult::DeviceLost
-                    : compositionResult);
+            QRhi::FrameOpResult const abandonedResult = finishFrame(QRhi::SkipPresent, false);
+            handleVideoOperationResult("preparing video for composition", abandonedResult == QRhi::FrameOpDeviceLost
+                                                                              ? VideoOperationResult::DeviceLost
+                                                                              : compositionResult);
             return;
         }
     }
     m_subtitleRenderer->uploadIfNeeded(commandBuffer);
 
-    const float sdrScale = m_outputState.sdrScale();
+    float const sdrScale = m_outputState.sdrScale();
     Q_ASSERT(std::isfinite(sdrScale) && sdrScale > 0.0f);
     HdrCompositorParameters parameters;
     parameters.viewportSize = {
@@ -487,27 +372,19 @@ void RhiPresentationEngine::renderFrame() {
     parameters.ndcYUp = m_rhi->isYUpInNDC() ? 1.0f : 0.0f;
     // Final encoding follows the successfully created presentation path, not
     // asynchronous OS HDR metadata that may already describe another output.
-    const bool extendedLinearActive =
-        m_swapChain->format()
-            == QRhiSwapChain::HDRExtendedSrgbLinear;
-    const PresentationOutputEncoding outputEncoding =
-        m_surfaceContract.outputEncoding(extendedLinearActive);
+    bool const extendedLinearActive = m_swapChain->format() == QRhiSwapChain::HDRExtendedSrgbLinear;
+    PresentationOutputEncoding const outputEncoding = m_surfaceContract.outputEncoding(extendedLinearActive);
     parameters.outputEncoding = static_cast<float>(outputEncoding);
 
     Q_ASSERT(m_compositor);
-    m_compositor->render(
-        commandBuffer,
-        *m_swapChain->currentFrameRenderTarget(),
-        pixelSize,
-        parameters);
+    m_compositor->render(commandBuffer, *m_swapChain->currentFrameRenderTarget(), pixelSize, parameters);
 
     if (m_surfaceDeclarationPending) {
         Q_ASSERT(m_surfaceController);
         // Queue the double-buffered declaration immediately before Vulkan WSI
         // presents the matching buffer. No Qt event processing can insert an
         // unrelated wl_surface commit between these two operations.
-        m_surfaceController->applyMode(
-            m_window, m_surfaceContract.mode);
+        m_surfaceController->applyMode(m_window, m_surfaceContract.mode);
     }
     result = finishFrame({}, true);
     if (result == QRhi::FrameOpDeviceLost) {
@@ -515,8 +392,9 @@ void RhiPresentationEngine::renderFrame() {
         return;
     }
     if (result == QRhi::FrameOpSwapChainOutOfDate) {
-        if (resizeSwapChain(true))
+        if (resizeSwapChain(true)) {
             requestFrame();
+        }
         return;
     }
     if (result != QRhi::FrameOpSuccess) {
@@ -527,21 +405,22 @@ void RhiPresentationEngine::renderFrame() {
     m_surfaceDeclarationPending = false;
     m_retriedFrameError = false;
     if (requestedSurface) {
-        emit videoFramePresented(
-            requestedSurface->contentRevision);
+        emit videoFramePresented(requestedSurface->contentRevision);
     }
     scheduleNextFrame(videoViewportActive);
 }
 
 void RhiPresentationEngine::requestFrame() {
-    if (!m_window.isExposed())
+    if (!m_window.isExposed()) {
         return;
+    }
     if (m_rendering) {
         m_frameRequestedWhileRendering = true;
         return;
     }
-    if (m_framePending)
+    if (m_framePending) {
         return;
+    }
     m_framePending = true;
     m_window.requestUpdate();
 }
@@ -566,25 +445,24 @@ void RhiPresentationEngine::handleExposure() {
     // The first presentation must happen before requestUpdate() can switch to
     // DXGI's vsync service. Scheduling before the swapchain exists can leave
     // both Qt's timer path and its DXGI path trying to deliver one request.
-    if (!m_framePending)
+    if (!m_framePending) {
         render();
+    }
 }
 
 void RhiPresentationEngine::markUiDirty() {
-    if (m_quickUi)
+    if (m_quickUi) {
         m_quickUi->markDirty();
+    }
     requestFrame();
 }
 
-void RhiPresentationEngine::markPresentationDirty() {
-    requestFrame();
-}
+void RhiPresentationEngine::markPresentationDirty() { requestFrame(); }
 
 void RhiPresentationEngine::releaseSwapChain() {
     std::optional<GraphicsDeviceExecutionScope> execution;
     if (m_graphicsDevice) {
-        execution.emplace(
-            m_graphicsDevice->acquireExecutionScope());
+        execution.emplace(m_graphicsDevice->acquireExecutionScope());
     }
     m_swapChainRecoveryTimer.stop();
     m_swapChainRecoveryAttempts = 0;
@@ -598,34 +476,24 @@ void RhiPresentationEngine::releaseSwapChainResources() {
     m_compositor.reset();
     m_boundVideoTextureRevision = 0;
     m_boundSubtitleTextureRevision = 0;
-    if (m_swapChain)
+    if (m_swapChain) {
         m_swapChain->destroy();
+    }
     m_swapChain.reset();
     m_renderPassDescriptor.reset();
 }
 
-QQuickWindow *RhiPresentationEngine::quickWindow() const {
-    return m_quickUi ? m_quickUi->quickWindow() : nullptr;
-}
+QQuickWindow* RhiPresentationEngine::quickWindow() const { return m_quickUi ? m_quickUi->quickWindow() : nullptr; }
 
 bool RhiPresentationEngine::initializeDevice() {
     Q_ASSERT(!m_quickUi);
     Q_ASSERT(m_graphicsDevice);
     Q_ASSERT(m_rhi);
 
-    m_quickUi = std::make_unique<QuickUiLayer>(
-        m_window,
-        *m_rhi,
-        m_outputState,
-        m_settings,
-        m_diagnosticSource,
-        m_mediaSession,
-        m_videoSource,
-        m_videoViewport);
-    connect(m_quickUi.get(), &QuickUiLayer::updateRequested,
-            this, &RhiPresentationEngine::requestFrame);
-    if (m_quickUi->initialize()
-            == QuickUiLayer::InitializationResult::DeviceLost) {
+    m_quickUi = std::make_unique<QuickUiLayer>(m_window, *m_rhi, m_outputState, m_settings, m_diagnosticSource,
+                                               m_mediaSession, m_videoSource, m_videoViewport);
+    connect(m_quickUi.get(), &QuickUiLayer::updateRequested, this, &RhiPresentationEngine::requestFrame);
+    if (m_quickUi->initialize() == QuickUiLayer::InitializationResult::DeviceLost) {
         handleDeviceLoss("initializing Qt Quick");
         return false;
     }
@@ -637,38 +505,32 @@ bool RhiPresentationEngine::initializeDevice() {
 bool RhiPresentationEngine::initializeGraphicsDevice() {
     Q_ASSERT(!m_graphicsDevice);
     Q_ASSERT(!m_rhi);
-    m_graphicsDevice =
-        GraphicsBackendFactory::createDeviceDomain(m_window);
-    if (!m_graphicsDevice)
+    m_graphicsDevice = GraphicsBackendFactory::createDeviceDomain(m_window);
+    if (!m_graphicsDevice) {
         return false;
+    }
     m_rhi = &m_graphicsDevice->rhi();
-    m_mediaSession.setVideoDecodeCapability(
-        m_graphicsDevice->videoDecodeCapability());
-    if (m_surfaceController)
+    m_mediaSession.setVideoDecodeCapability(m_graphicsDevice->videoDecodeCapability());
+    if (m_surfaceController) {
         m_outputCharacteristicsDirty = true;
+    }
     return true;
 }
 
 bool RhiPresentationEngine::refreshVideoProducer() {
     Q_ASSERT(m_graphicsDevice);
-    const std::uint64_t requestedRevision =
-        m_videoSource.producerConfigurationRevision();
+    std::uint64_t const requestedRevision = m_videoSource.producerConfigurationRevision();
     Q_ASSERT(requestedRevision != 0);
-    if (m_videoProducer
-            && m_videoProducerConfigurationRevision
-                == requestedRevision) {
+    if (m_videoProducer && m_videoProducerConfigurationRevision == requestedRevision) {
         return false;
     }
 
-    std::unique_ptr<RenderedVideoProducer> producer =
-        m_videoSource.createProducer(*m_graphicsDevice);
-    if (!producer)
-        qCFatal(
-            sunroomLogPresentation,
-            "The video source did not create a producer");
+    std::unique_ptr<RenderedVideoProducer> producer = m_videoSource.createProducer(*m_graphicsDevice);
+    if (!producer) {
+        qCFatal(sunroomLogPresentation, "The video source did not create a producer");
+    }
     m_videoProducer = std::move(producer);
-    m_videoProducerConfigurationRevision =
-        requestedRevision;
+    m_videoProducerConfigurationRevision = requestedRevision;
     return true;
 }
 
@@ -681,37 +543,25 @@ bool RhiPresentationEngine::createSwapChain() {
     m_swapChain.reset(m_rhi->newSwapChain());
     m_swapChain->setWindow(&m_window);
 
-    const bool hdr10PlatformSupported =
-        !m_surfaceContract.hdr10Required()
-        || m_graphicsDevice->supportsHdr10Presentation(m_window);
-    const QRhiSwapChain::Format desiredFormat =
-        desiredSwapChainFormat(
-            m_surfaceContract,
-            *m_swapChain,
-            m_outputState.displayHdrEnabled(),
-            hdr10PlatformSupported);
-    if (m_surfaceContract.hdr10Required()
-            && desiredFormat != QRhiSwapChain::HDR10) {
+    bool const hdr10PlatformSupported =
+        !m_surfaceContract.hdr10Required() || m_graphicsDevice->supportsHdr10Presentation(m_window);
+    QRhiSwapChain::Format const desiredFormat = desiredSwapChainFormat(
+        m_surfaceContract, *m_swapChain, m_outputState.displayHdrEnabled(), hdr10PlatformSupported);
+    if (m_surfaceContract.hdr10Required() && desiredFormat != QRhiSwapChain::HDR10) {
         m_swapChain.reset();
-        rejectRequiredHdrSurface(
-            "the current Wayland Vulkan surface does not expose "
-            "10-bit BT.2020/PQ plus pass-through");
+        rejectRequiredHdrSurface("the current Wayland Vulkan surface does not expose "
+                                 "10-bit BT.2020/PQ plus pass-through");
         return false;
     }
     m_swapChain->setFormat(desiredFormat);
-    m_renderPassDescriptor.reset(
-        m_swapChain->newCompatibleRenderPassDescriptor());
+    m_renderPassDescriptor.reset(m_swapChain->newCompatibleRenderPassDescriptor());
     if (!m_renderPassDescriptor) {
-        handleSwapChainFailure(
-            "describing the swapchain render pass",
-            "QRhi could not describe the HDR10 render pass");
+        handleSwapChainFailure("describing the swapchain render pass", "QRhi could not describe the HDR10 render pass");
         return false;
     }
     m_swapChain->setRenderPassDescriptor(m_renderPassDescriptor.get());
     if (!m_swapChain->createOrResize()) {
-        handleSwapChainFailure(
-            "creating the swapchain",
-            "QRhi could not create the HDR10 swapchain");
+        handleSwapChainFailure("creating the swapchain", "QRhi could not create the HDR10 swapchain");
         return false;
     }
     completePresentationRecovery();
@@ -722,16 +572,18 @@ bool RhiPresentationEngine::createSwapChain() {
 bool RhiPresentationEngine::resizeSwapChain(bool force) {
     Q_ASSERT(m_swapChain);
     Q_ASSERT(m_renderPassDescriptor);
-    const QSize surfaceSize = m_swapChain->surfacePixelSize();
-    if (surfaceSize.isEmpty())
+    QSize const surfaceSize = m_swapChain->surfacePixelSize();
+    if (surfaceSize.isEmpty()) {
         return false;
-    if (!force && m_swapChain->currentPixelSize() == surfaceSize)
+    }
+    if (!force && m_swapChain->currentPixelSize() == surfaceSize) {
         return true;
+    }
 
     return createOrResizeSwapChain("resize");
 }
 
-bool RhiPresentationEngine::createOrResizeSwapChain(const char *operation) {
+bool RhiPresentationEngine::createOrResizeSwapChain(char const* operation) {
     Q_ASSERT(m_swapChain);
     if (m_swapChain->createOrResize()) {
         completePresentationRecovery();
@@ -739,17 +591,13 @@ bool RhiPresentationEngine::createOrResizeSwapChain(const char *operation) {
         return true;
     }
 
-    handleSwapChainFailure(
-        operation,
-        "QRhi could not resize the HDR10 swapchain");
+    handleSwapChainFailure(operation, "QRhi could not resize the HDR10 swapchain");
     return false;
 }
 
-void RhiPresentationEngine::handleSwapChainFailure(
-        const char *operation,
-        const char *hdrRejectionReason) {
+void RhiPresentationEngine::handleSwapChainFailure(char const* operation, char const* hdrRejectionReason) {
     Q_ASSERT(m_graphicsDevice);
-    const bool deviceLost = m_rhi->isDeviceLost();
+    bool const deviceLost = m_rhi->isDeviceLost();
     releaseSwapChainResources();
     if (deviceLost) {
         handleDeviceLoss(operation);
@@ -762,26 +610,18 @@ void RhiPresentationEngine::handleSwapChainFailure(
     }
 }
 
-void RhiPresentationEngine::scheduleSwapChainRecovery(
-        const char *operation) {
+void RhiPresentationEngine::scheduleSwapChainRecovery(char const* operation) {
     constexpr int maximumAttempts = 8;
     constexpr auto retryDelay = std::chrono::milliseconds(250);
 
     if (m_swapChainRecoveryAttempts >= maximumAttempts) {
-        qCFatal(
-            sunroomLogPresentation,
-            "QRhi swapchain recovery failed after %d attempts while %s",
-            maximumAttempts,
-            operation);
+        qCFatal(sunroomLogPresentation, "QRhi swapchain recovery failed after %d attempts while %s", maximumAttempts,
+                operation);
     }
 
     ++m_swapChainRecoveryAttempts;
-    qCWarning(
-        sunroomLogPresentation,
-        "Retrying QRhi swapchain creation after failure while %s (%d/%d)",
-        operation,
-        m_swapChainRecoveryAttempts,
-        maximumAttempts);
+    qCWarning(sunroomLogPresentation, "Retrying QRhi swapchain creation after failure while %s (%d/%d)", operation,
+              m_swapChainRecoveryAttempts, maximumAttempts);
     m_swapChainRecoveryTimer.start(retryDelay);
 }
 
@@ -796,26 +636,23 @@ void RhiPresentationEngine::completePresentationRecovery() {
 void RhiPresentationEngine::releaseDevice() {
     std::optional<GraphicsDeviceExecutionScope> execution;
     if (m_graphicsDevice) {
-        execution.emplace(
-            m_graphicsDevice->acquireExecutionScope());
+        execution.emplace(m_graphicsDevice->acquireExecutionScope());
     }
     // Every child resource must be gone before destroying the QRhi.
     Q_ASSERT(!m_rhi || !m_rhi->isRecordingFrame());
     if (m_rhi && !m_rhi->isDeviceLost()) {
-        const QRhi::FrameOpResult finishResult = m_rhi->finish();
-        if (finishResult != QRhi::FrameOpSuccess
-                && finishResult != QRhi::FrameOpDeviceLost) {
-            qCFatal(
-                sunroomLogGraphics,
-                "Could not finish GPU work before releasing device resources");
+        QRhi::FrameOpResult const finishResult = m_rhi->finish();
+        if (finishResult != QRhi::FrameOpSuccess && finishResult != QRhi::FrameOpDeviceLost) {
+            qCFatal(sunroomLogGraphics, "Could not finish GPU work before releasing device resources");
         }
     }
     releaseSwapChainResources();
     m_videoProducer.reset();
     m_videoProducerConfigurationRevision = 0;
     // Quick invalidation may emit updateRequested while it tears down.
-    if (m_quickUi)
+    if (m_quickUi) {
         disconnect(m_quickUi.get(), nullptr, this, nullptr);
+    }
     m_quickUi.reset();
     m_subtitleRenderer.reset();
     m_reportedSubtitleError.clear();
@@ -829,33 +666,22 @@ void RhiPresentationEngine::releaseDevice() {
 #endif
 }
 
-void RhiPresentationEngine::handleDeviceLoss(const char *operation) {
-    qCWarning(
-        sunroomLogPresentation,
-        "QRhi device was lost while %s; retrying",
-        operation);
-    if (!m_recoveringDevice)
+void RhiPresentationEngine::handleDeviceLoss(char const* operation) {
+    qCWarning(sunroomLogPresentation, "QRhi device was lost while %s; retrying", operation);
+    if (!m_recoveringDevice) {
         m_deviceRecoveryAttempts = 0;
+    }
     m_recoveringDevice = true;
     m_mediaSession.invalidateGraphicsDevice();
     releaseDevice();
     scheduleDeviceRecovery();
 }
 
-void RhiPresentationEngine::handleFrameError(
-        const char *operation, int result) {
+void RhiPresentationEngine::handleFrameError(char const* operation, int result) {
     if (m_retriedFrameError) {
-        qCFatal(
-            sunroomLogPresentation,
-            "QRhi failed twice while %s: %d",
-            operation,
-            result);
+        qCFatal(sunroomLogPresentation, "QRhi failed twice while %s: %d", operation, result);
     }
-    qCWarning(
-        sunroomLogPresentation,
-        "QRhi failed while %s: %d; rebuilding once",
-        operation,
-        result);
+    qCWarning(sunroomLogPresentation, "QRhi failed while %s: %d; rebuilding once", operation, result);
     m_retriedFrameError = true;
     m_recoveringDevice = true;
     m_deviceRecoveryAttempts = 0;
@@ -864,44 +690,30 @@ void RhiPresentationEngine::handleFrameError(
     scheduleDeviceRecovery();
 }
 
-bool RhiPresentationEngine::handleVideoOperationResult(
-        const char *operation, VideoOperationResult result) {
-    if (result == VideoOperationResult::Ready)
+bool RhiPresentationEngine::handleVideoOperationResult(char const* operation, VideoOperationResult result) {
+    if (result == VideoOperationResult::Ready) {
         return true;
+    }
     if (result == VideoOperationResult::DeviceLost) {
         handleDeviceLoss(operation);
         return false;
     }
 
     updateBackendState();
-    const RenderedVideoProducerDiagnostics diagnostics =
-        m_videoProducer->diagnostics();
-    const QString reason =
-        diagnostics.target.fallbackReason;
-    const QString effectiveReason = reason.isEmpty()
-        ? QStringLiteral("No supported video path is available")
-        : reason;
-    if (m_videoSource.reportPresentationFailure(
-            {
-                .kind = diagnostics.failureKind
-                    == VideoFailureKind::None
-                    ? VideoFailureKind::General
-                    : diagnostics.failureKind,
-                .reason = effectiveReason,
-            })) {
-        qCWarning(
-            sunroomLogPresentation,
-            "Video path unavailable while %s: %s",
-            operation,
-            qPrintable(effectiveReason));
+    RenderedVideoProducerDiagnostics const diagnostics = m_videoProducer->diagnostics();
+    QString const reason = diagnostics.target.fallbackReason;
+    QString const effectiveReason = reason.isEmpty() ? QStringLiteral("No supported video path is available") : reason;
+    if (m_videoSource.reportPresentationFailure({
+            .kind =
+                diagnostics.failureKind == VideoFailureKind::None ? VideoFailureKind::General : diagnostics.failureKind,
+            .reason = effectiveReason,
+        })) {
+        qCWarning(sunroomLogPresentation, "Video path unavailable while %s: %s", operation,
+                  qPrintable(effectiveReason));
         requestFrame();
         return false;
     }
-    qCFatal(
-        sunroomLogPresentation,
-        "Video path unavailable while %s: %s",
-        operation,
-        qPrintable(effectiveReason));
+    qCFatal(sunroomLogPresentation, "Video path unavailable while %s: %s", operation, qPrintable(effectiveReason));
     return false;
 }
 
@@ -910,32 +722,24 @@ void RhiPresentationEngine::scheduleDeviceRecovery() {
     constexpr auto retryDelay = std::chrono::milliseconds(250);
 
     if (m_deviceRecoveryAttempts >= maximumAttempts) {
-        qCFatal(
-            sunroomLogPresentation,
-            "QRhi device recovery failed after %d attempts",
-            maximumAttempts);
+        qCFatal(sunroomLogPresentation, "QRhi device recovery failed after %d attempts", maximumAttempts);
     }
 
     ++m_deviceRecoveryAttempts;
-    qCWarning(
-        sunroomLogPresentation,
-        "Retrying QRhi device recovery (%d/%d)",
-        m_deviceRecoveryAttempts,
-        maximumAttempts);
+    qCWarning(sunroomLogPresentation, "Retrying QRhi device recovery (%d/%d)", m_deviceRecoveryAttempts,
+              maximumAttempts);
     m_deviceRecoveryTimer.start(retryDelay);
 }
 
 void RhiPresentationEngine::updateBackendState() {
     PresentationBackendState state;
-    const GraphicsDeviceDiagnostics &graphicsDiagnostics =
-        m_graphicsDevice->diagnostics();
+    GraphicsDeviceDiagnostics const& graphicsDiagnostics = m_graphicsDevice->diagnostics();
     state.graphicsApi = graphicsDiagnostics.backendName;
     state.graphicsAdapter = graphicsDiagnostics.adapterName;
     switch (m_swapChain->format()) {
     case QRhiSwapChain::HDRExtendedSrgbLinear:
         state.hdrPresentationActive = true;
-        state.swapChainFormat =
-            QStringLiteral("scRGB / extended linear sRGB");
+        state.swapChainFormat = QStringLiteral("scRGB / extended linear sRGB");
         break;
     case QRhiSwapChain::HDR10:
         state.hdrPresentationActive = true;
@@ -945,44 +749,28 @@ void RhiPresentationEngine::updateBackendState() {
         state.swapChainFormat = QStringLiteral("SDR / sRGB");
         break;
     }
-    state.videoSurfaceFormat =
-        QStringLiteral("RGBA16F · linear sRGB · SDR-white-relative");
-    const RenderedVideoProducerDiagnostics videoDiagnostics =
-        m_videoProducer->diagnostics();
+    state.videoSurfaceFormat = QStringLiteral("RGBA16F · linear sRGB · SDR-white-relative");
+    RenderedVideoProducerDiagnostics const videoDiagnostics = m_videoProducer->diagnostics();
     state.videoSurfaceProducer = videoDiagnostics.producerName;
     state.videoInputPath = videoDiagnostics.inputPath;
     state.videoColorPolicy = videoDiagnostics.colorPolicy;
-    state.videoOutputPath =
-        videoOutputPathName(videoDiagnostics.target.outputPath);
-    state.videoSynchronization =
-        videoDiagnostics.target.synchronizationMode;
-    state.videoCopySummary =
-        QStringLiteral(
-            "%1 input CPU transfers per input frame · "
-            "%2 input GPU copies per input frame · "
-            "%3 output GPU copies · "
-            "%4 output CPU transfers per render")
-            .arg(
-                videoDiagnostics
-                    .knownInputCpuTransfersPerInputFrame)
-            .arg(
-                videoDiagnostics
-                    .knownInputGpuCopiesPerInputFrame)
-            .arg(
-                videoDiagnostics.target
-                    .knownOutputGpuCopiesPerRender)
-            .arg(
-                videoDiagnostics.target
-                    .knownOutputCpuTransfersPerRender);
-    state.videoFallbackReason =
-        videoDiagnostics.target.fallbackReason;
+    state.videoOutputPath = videoOutputPathName(videoDiagnostics.target.outputPath);
+    state.videoSynchronization = videoDiagnostics.target.synchronizationMode;
+    state.videoCopySummary = QStringLiteral("%1 input CPU transfers per input frame · "
+                                            "%2 input GPU copies per input frame · "
+                                            "%3 output GPU copies · "
+                                            "%4 output CPU transfers per render")
+                                 .arg(videoDiagnostics.knownInputCpuTransfersPerInputFrame)
+                                 .arg(videoDiagnostics.knownInputGpuCopiesPerInputFrame)
+                                 .arg(videoDiagnostics.target.knownOutputGpuCopiesPerRender)
+                                 .arg(videoDiagnostics.target.knownOutputCpuTransfersPerRender);
+    state.videoFallbackReason = videoDiagnostics.target.fallbackReason;
 
-    const QRhiSwapChainHdrInfo info = m_swapChain->hdrInfo();
+    QRhiSwapChainHdrInfo const info = m_swapChain->hdrInfo();
 #if defined(Q_OS_MACOS) || defined(Q_OS_LINUX)
     state.sceneReferred = false;
 #else
-    state.sceneReferred =
-        info.luminanceBehavior == QRhiSwapChainHdrInfo::SceneReferred;
+    state.sceneReferred = info.luminanceBehavior == QRhiSwapChainHdrInfo::SceneReferred;
 #endif
 #ifdef Q_OS_LINUX
     state.useSdrDisplayTargetForHdrPresentation = true;
@@ -995,39 +783,29 @@ void RhiPresentationEngine::updateBackendState() {
     state.sdrWhiteKnown = false;
     state.sdrWhiteNits = 80.0f;
 #else
-    state.sdrWhiteKnown =
-        std::isfinite(info.sdrWhiteLevel) && info.sdrWhiteLevel > 0.0f;
-    state.sdrWhiteNits = positiveOrFallback(
-        info.sdrWhiteLevel, 80.0f, "SDR white level");
+    state.sdrWhiteKnown = std::isfinite(info.sdrWhiteLevel) && info.sdrWhiteLevel > 0.0f;
+    state.sdrWhiteNits = positiveOrFallback(info.sdrWhiteLevel, 80.0f, "SDR white level");
 #endif
     if (info.limitsType == QRhiSwapChainHdrInfo::LuminanceInNits) {
 #if defined(Q_OS_MACOS) || defined(Q_OS_LINUX)
         state.luminanceKnown = false;
 #else
         state.luminanceKnown =
-            std::isfinite(info.limits.luminanceInNits.maxLuminance)
-            && info.limits.luminanceInNits.maxLuminance > 0.0f;
-        state.minLuminanceNits = nonNegativeOrZero(
-            info.limits.luminanceInNits.minLuminance,
-            "minimum luminance");
-        state.maxLuminanceNits = nonNegativeOrZero(
-            info.limits.luminanceInNits.maxLuminance,
-            "maximum luminance");
+            std::isfinite(info.limits.luminanceInNits.maxLuminance) && info.limits.luminanceInNits.maxLuminance > 0.0f;
+        state.minLuminanceNits = nonNegativeOrZero(info.limits.luminanceInNits.minLuminance, "minimum luminance");
+        state.maxLuminanceNits = nonNegativeOrZero(info.limits.luminanceInNits.maxLuminance, "maximum luminance");
 #endif
     } else {
-        state.currentHeadroom = positiveOrFallback(
-            info.limits.colorComponentValue.maxColorComponentValue,
-            1.0f, "current headroom");
-        state.potentialHeadroom = positiveOrFallback(
-            info.limits.colorComponentValue.maxPotentialColorComponentValue,
-            state.currentHeadroom, "potential headroom");
+        state.currentHeadroom =
+            positiveOrFallback(info.limits.colorComponentValue.maxColorComponentValue, 1.0f, "current headroom");
+        state.potentialHeadroom = positiveOrFallback(info.limits.colorComponentValue.maxPotentialColorComponentValue,
+                                                     state.currentHeadroom, "potential headroom");
     }
     m_outputState.setBackendState(state);
 }
 
 void RhiPresentationEngine::scheduleNextFrame(bool videoViewportActive) {
-    if ((videoViewportActive && m_videoSource.wantsContinuousFrames())
-        || m_quickUi->isDirty()) {
+    if ((videoViewportActive && m_videoSource.wantsContinuousFrames()) || m_quickUi->isDirty()) {
         requestFrame();
     }
 }
@@ -1039,39 +817,35 @@ void RhiPresentationEngine::markOutputCharacteristicsDirty() {
 
 bool RhiPresentationEngine::reconcileOutputCharacteristics() {
 #ifdef Q_OS_MACOS
-    if (!m_outputCharacteristicsDirty && !m_swapChainSurfaceDirty)
+    if (!m_outputCharacteristicsDirty && !m_swapChainSurfaceDirty) {
         return true;
-    const bool refreshSwapChainSurface = m_swapChainSurfaceDirty;
+    }
+    bool const refreshSwapChainSurface = m_swapChainSurfaceDirty;
     m_swapChainSurfaceDirty = false;
 #else
-    if (!m_outputCharacteristicsDirty)
+    if (!m_outputCharacteristicsDirty) {
         return true;
+    }
 #endif
     m_outputCharacteristicsDirty = false;
 
     if (m_surfaceController) {
         Q_ASSERT(m_graphicsDevice);
-        const PresentationSurfaceMode desiredMode =
-            m_surfaceController->desiredMode(
-                m_graphicsDevice->generation());
+        PresentationSurfaceMode const desiredMode = m_surfaceController->desiredMode(m_graphicsDevice->generation());
         if (desiredMode != m_surfaceContract.mode) {
             queueSurfaceTransition();
             return false;
         }
     }
 
-    if (!m_swapChain)
+    if (!m_swapChain) {
         return true;
+    }
 
-    const bool hdr10PlatformSupported =
-        !m_surfaceContract.hdr10Required()
-        || m_graphicsDevice->supportsHdr10Presentation(m_window);
-    const QRhiSwapChain::Format desiredFormat =
-        desiredSwapChainFormat(
-            m_surfaceContract,
-            *m_swapChain,
-            m_outputState.displayHdrEnabled(),
-            hdr10PlatformSupported);
+    bool const hdr10PlatformSupported =
+        !m_surfaceContract.hdr10Required() || m_graphicsDevice->supportsHdr10Presentation(m_window);
+    QRhiSwapChain::Format const desiredFormat = desiredSwapChainFormat(
+        m_surfaceContract, *m_swapChain, m_outputState.displayHdrEnabled(), hdr10PlatformSupported);
     if (m_swapChain->format() != desiredFormat) {
         releaseSwapChainResources();
         return true;
@@ -1079,9 +853,7 @@ bool RhiPresentationEngine::reconcileOutputCharacteristics() {
 
 #ifdef Q_OS_MACOS
     if (refreshSwapChainSurface) {
-        qCInfo(
-            sunroomLogPresentation,
-            "Reapplying the Metal presentation surface after a screen change");
+        qCInfo(sunroomLogPresentation, "Reapplying the Metal presentation surface after a screen change");
         return createOrResizeSwapChain("reconfiguring the presentation surface");
     }
 #endif
@@ -1094,8 +866,9 @@ bool RhiPresentationEngine::reconcileOutputCharacteristics() {
 
 void RhiPresentationEngine::queueSurfaceTransition() {
     Q_ASSERT(m_surfaceController);
-    if (m_surfaceTransitionPending)
+    if (m_surfaceTransitionPending) {
         return;
+    }
 
     releaseSwapChainResources();
     m_surfaceTransitionPending = true;
@@ -1109,9 +882,7 @@ void RhiPresentationEngine::queueSurfaceTransition() {
                 return;
             }
 
-            const PresentationSurfaceMode latestMode =
-                m_surfaceController->desiredMode(
-                    m_graphicsDevice->generation());
+            PresentationSurfaceMode const latestMode = m_surfaceController->desiredMode(m_graphicsDevice->generation());
             if (latestMode != m_surfaceContract.mode) {
                 m_surfaceContract.mode = latestMode;
                 m_surfaceDeclarationPending = true;
@@ -1124,27 +895,23 @@ void RhiPresentationEngine::queueSurfaceTransition() {
         Qt::QueuedConnection);
 }
 
-void RhiPresentationEngine::rejectRequiredHdrSurface(
-        const char *reason) {
+void RhiPresentationEngine::rejectRequiredHdrSurface(char const* reason) {
     Q_ASSERT(m_surfaceController);
     Q_ASSERT(m_graphicsDevice);
     Q_ASSERT(m_surfaceContract.hdr10Required());
-    m_surfaceController->rejectHdrTarget(
-        m_graphicsDevice->generation(),
-        reason);
+    m_surfaceController->rejectHdrTarget(m_graphicsDevice->generation(), reason);
     m_outputCharacteristicsDirty = true;
     queueSurfaceTransition();
 }
 
 void RhiPresentationEngine::rebuildForPresentIncompatibleSurface() {
     Q_ASSERT(m_graphicsDevice);
-    qCWarning(
-        sunroomLogPresentation,
-        "The Vulkan device cannot present to the current Wayland "
-        "surface; rebuilding the graphics domain");
+    qCWarning(sunroomLogPresentation, "The Vulkan device cannot present to the current Wayland "
+                                      "surface; rebuilding the graphics domain");
     m_mediaSession.invalidateGraphicsDevice();
-    if (!m_recoveringDevice)
+    if (!m_recoveringDevice) {
         m_deviceRecoveryAttempts = 0;
+    }
     m_recoveringDevice = true;
     releaseDevice();
     scheduleDeviceRecovery();

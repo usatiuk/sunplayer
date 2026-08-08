@@ -6,8 +6,8 @@
 #include <utility>
 #include <vector>
 
-#include <QVulkanInstance>
 #include <QVulkanFunctions>
+#include <QVulkanInstance>
 #include <QWindow>
 #include <libplacebo/vulkan.h>
 #include <rhi/qrhi.h>
@@ -26,40 +26,29 @@ struct VulkanExecutionState {
     std::recursive_mutex mutex;
 };
 
-void lockQueue(void *opaque, std::uint32_t, std::uint32_t) {
-    static_cast<VulkanExecutionState *>(opaque)->mutex.lock();
+void lockQueue(void* opaque, std::uint32_t, std::uint32_t) { static_cast<VulkanExecutionState*>(opaque)->mutex.lock(); }
+
+void unlockQueue(void* opaque, std::uint32_t, std::uint32_t) {
+    static_cast<VulkanExecutionState*>(opaque)->mutex.unlock();
 }
 
-void unlockQueue(void *opaque, std::uint32_t, std::uint32_t) {
-    static_cast<VulkanExecutionState *>(opaque)->mutex.unlock();
-}
+void unlockGraphicsExecution(void* opaque) { static_cast<VulkanExecutionState*>(opaque)->mutex.unlock(); }
 
-void unlockGraphicsExecution(void *opaque) {
-    static_cast<VulkanExecutionState *>(opaque)->mutex.unlock();
-}
-
-void logLibplacebo(
-        void *,
-        enum pl_log_level level,
-        const char *message) {
+void logLibplacebo(void*, enum pl_log_level level, char const* message) {
     switch (level) {
     case PL_LOG_FATAL:
     case PL_LOG_ERR:
-        qCCritical(sunroomLogGraphics).noquote()
-            << "libplacebo:" << message;
+        qCCritical(sunroomLogGraphics).noquote() << "libplacebo:" << message;
         break;
     case PL_LOG_WARN:
-        qCWarning(sunroomLogGraphics).noquote()
-            << "libplacebo:" << message;
+        qCWarning(sunroomLogGraphics).noquote() << "libplacebo:" << message;
         break;
     case PL_LOG_INFO:
-        qCInfo(sunroomLogGraphics).noquote()
-            << "libplacebo:" << message;
+        qCInfo(sunroomLogGraphics).noquote() << "libplacebo:" << message;
         break;
     case PL_LOG_DEBUG:
     case PL_LOG_TRACE:
-        qCDebug(sunroomLogGraphics).noquote()
-            << "libplacebo:" << message;
+        qCDebug(sunroomLogGraphics).noquote() << "libplacebo:" << message;
         break;
     case PL_LOG_NONE:
         break;
@@ -67,13 +56,11 @@ void logLibplacebo(
 }
 
 class VulkanGraphicsDeviceDomain final : public GraphicsDeviceDomain {
-public:
-    explicit VulkanGraphicsDeviceDomain(QWindow &window) {
-        QVulkanInstance *const instance = window.vulkanInstance();
+  public:
+    explicit VulkanGraphicsDeviceDomain(QWindow& window) {
+        QVulkanInstance* const instance = window.vulkanInstance();
         if (!instance || !instance->isValid()) {
-            qCCritical(
-                sunroomLogGraphics,
-                "The presentation window has no valid Vulkan instance");
+            qCCritical(sunroomLogGraphics, "The presentation window has no valid Vulkan instance");
             return;
         }
         m_instance = instance;
@@ -86,99 +73,69 @@ public:
         // Request external-memory/modifier extensions with the future
         // VAAPI/DRM-PRIME importer that actually consumes them.
         m_rhi.reset(QRhi::create(QRhi::Vulkan, &parameters));
-        if (!m_rhi)
+        if (!m_rhi) {
             return;
+        }
 
-        const auto *const native =
-            static_cast<const QRhiVulkanNativeHandles *>(
-                m_rhi->nativeHandles());
-        if (!native || !native->inst
-                || native->inst != instance
-                || native->physDev == VK_NULL_HANDLE
-                || native->dev == VK_NULL_HANDLE
-                || native->gfxQueue == VK_NULL_HANDLE) {
-            qCCritical(
-                sunroomLogGraphics,
-                "QRhi did not expose one complete Vulkan device domain");
+        auto const* const native = static_cast<QRhiVulkanNativeHandles const*>(m_rhi->nativeHandles());
+        if (!native || !native->inst || native->inst != instance || native->physDev == VK_NULL_HANDLE ||
+            native->dev == VK_NULL_HANDLE || native->gfxQueue == VK_NULL_HANDLE) {
+            qCCritical(sunroomLogGraphics, "QRhi did not expose one complete Vulkan device domain");
             return;
         }
         if (native->gfxQueueIdx != 0) {
-            qCCritical(
-                sunroomLogGraphics,
-                "QRhi selected unsupported Vulkan queue index %u",
-                native->gfxQueueIdx);
+            qCCritical(sunroomLogGraphics, "QRhi selected unsupported Vulkan queue index %u", native->gfxQueueIdx);
             return;
         }
 
-        QVulkanFunctions *const vulkanFunctions = instance->functions();
-        QVulkanDeviceFunctions *const deviceFunctions =
-            instance->deviceFunctions(native->dev);
+        QVulkanFunctions* const vulkanFunctions = instance->functions();
+        QVulkanDeviceFunctions* const deviceFunctions = instance->deviceFunctions(native->dev);
         if (!vulkanFunctions || !deviceFunctions) {
-            qCCritical(
-                sunroomLogGraphics,
-                "Qt did not expose Vulkan instance/device functions");
+            qCCritical(sunroomLogGraphics, "Qt did not expose Vulkan instance/device functions");
             return;
         }
         m_deviceFunctions = deviceFunctions;
         VkPhysicalDeviceProperties physicalDeviceProperties{};
-        vulkanFunctions->vkGetPhysicalDeviceProperties(
-            native->physDev, &physicalDeviceProperties);
+        vulkanFunctions->vkGetPhysicalDeviceProperties(native->physDev, &physicalDeviceProperties);
         if (physicalDeviceProperties.apiVersion < VK_API_VERSION_1_3) {
-            qCCritical(
-                sunroomLogGraphics,
-                "QRhi selected a physical device below Vulkan 1.3");
+            qCCritical(sunroomLogGraphics, "QRhi selected a physical device below Vulkan 1.3");
             return;
         }
 
         std::uint32_t queueFamilyCount = 0;
-        vulkanFunctions->vkGetPhysicalDeviceQueueFamilyProperties(
-            native->physDev, &queueFamilyCount, nullptr);
+        vulkanFunctions->vkGetPhysicalDeviceQueueFamilyProperties(native->physDev, &queueFamilyCount, nullptr);
         if (native->gfxQueueFamilyIdx >= queueFamilyCount) {
-            qCCritical(
-                sunroomLogGraphics,
-                "QRhi selected invalid Vulkan queue family %u",
-                native->gfxQueueFamilyIdx);
+            qCCritical(sunroomLogGraphics, "QRhi selected invalid Vulkan queue family %u", native->gfxQueueFamilyIdx);
             return;
         }
         std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-        vulkanFunctions->vkGetPhysicalDeviceQueueFamilyProperties(
-            native->physDev, &queueFamilyCount, queueFamilies.data());
-        const VkQueueFlags requiredQueueFlags =
-            VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT;
-        if ((queueFamilies[native->gfxQueueFamilyIdx].queueFlags
-                & requiredQueueFlags) != requiredQueueFlags) {
-            qCCritical(
-                sunroomLogGraphics,
-                "QRhi selected a Vulkan graphics queue without compute support");
+        vulkanFunctions->vkGetPhysicalDeviceQueueFamilyProperties(native->physDev, &queueFamilyCount,
+                                                                  queueFamilies.data());
+        VkQueueFlags const requiredQueueFlags = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT;
+        if ((queueFamilies[native->gfxQueueFamilyIdx].queueFlags & requiredQueueFlags) != requiredQueueFlags) {
+            qCCritical(sunroomLogGraphics, "QRhi selected a Vulkan graphics queue without compute support");
             return;
         }
 
         VkPhysicalDeviceVulkan13Features enabledFeatures13{
-            .sType =
-                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
         };
         VkPhysicalDeviceVulkan12Features enabledFeatures12{
-            .sType =
-                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
             .pNext = &enabledFeatures13,
         };
         VkPhysicalDeviceVulkan11Features enabledFeatures11{
-            .sType =
-                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
             .pNext = &enabledFeatures12,
         };
         VkPhysicalDeviceFeatures2 enabledFeatures{
             .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
             .pNext = &enabledFeatures11,
         };
-        vulkanFunctions->vkGetPhysicalDeviceFeatures2(
-            native->physDev, &enabledFeatures);
-        if (!enabledFeatures12.hostQueryReset
-                || !enabledFeatures12.timelineSemaphore
-                || !enabledFeatures13.synchronization2) {
-            qCCritical(
-                sunroomLogGraphics,
-                "The selected Vulkan device lacks QRhi/libplacebo features");
+        vulkanFunctions->vkGetPhysicalDeviceFeatures2(native->physDev, &enabledFeatures);
+        if (!enabledFeatures12.hostQueryReset || !enabledFeatures12.timelineSemaphore ||
+            !enabledFeatures13.synchronization2) {
+            qCCritical(sunroomLogGraphics, "The selected Vulkan device lacks QRhi/libplacebo features");
             return;
         }
         // Qt 6.10 enables every reported core 1.0-1.3 feature except these
@@ -193,8 +150,9 @@ public:
         logParameters.log_cb = logLibplacebo;
         logParameters.log_level = PL_LOG_WARN;
         m_log = pl_log_create(PL_API_VER, &logParameters);
-        if (!m_log)
+        if (!m_log) {
             return;
+        }
 
         pl_vulkan_import_params import{};
         import.instance = instance->vkInstance();
@@ -211,8 +169,9 @@ public:
         import.queue_ctx = m_executionState.get();
         import.max_api_version = VK_API_VERSION_1_3;
         m_vulkan = pl_vulkan_import(m_log, &import);
-        if (!m_vulkan)
+        if (!m_vulkan) {
             return;
+        }
 
         m_libplacebo = {
             .log = m_log,
@@ -220,17 +179,15 @@ public:
         };
         m_videoDecode = {
             .device = {},
-            .unavailableReason = QStringLiteral(
-                "VAAPI/DRM PRIME import is not implemented yet"),
+            .unavailableReason = QStringLiteral("VAAPI/DRM PRIME import is not implemented yet"),
         };
         m_diagnostics.backend = GraphicsBackend::Vulkan;
-        m_diagnostics.backendName =
-            QString::fromLatin1(m_rhi->backendName());
+        m_diagnostics.backendName = QString::fromLatin1(m_rhi->backendName());
         m_diagnostics.nativeApi = QStringLiteral("Vulkan 1.3");
-        m_diagnostics.adapterName =
-            QString::fromUtf8(m_rhi->driverInfo().deviceName);
-        if (m_diagnostics.adapterName.isEmpty())
+        m_diagnostics.adapterName = QString::fromUtf8(m_rhi->driverInfo().deviceName);
+        if (m_diagnostics.adapterName.isEmpty()) {
             m_diagnostics.adapterName = QStringLiteral("Unknown adapter");
+        }
         Q_ASSERT(m_diagnostics.isValid());
     }
 
@@ -239,143 +196,105 @@ public:
         pl_log_destroy(&m_log);
     }
 
-    QRhi &rhi() const override {
+    QRhi& rhi() const override {
         Q_ASSERT(m_rhi);
         return *m_rhi;
     }
 
-    const GraphicsDeviceDiagnostics &diagnostics() const override {
+    GraphicsDeviceDiagnostics const& diagnostics() const override {
         Q_ASSERT(m_diagnostics.isValid());
         return m_diagnostics;
     }
 
-    const LibplaceboGraphicsContext &
-    libplaceboContext() const override {
+    LibplaceboGraphicsContext const& libplaceboContext() const override {
         Q_ASSERT(m_libplacebo.isValid());
         return m_libplacebo;
     }
 
-    const VideoHardwareDecodeCapability &
-    videoDecodeCapability() const override {
-        return m_videoDecode;
-    }
+    VideoHardwareDecodeCapability const& videoDecodeCapability() const override { return m_videoDecode; }
 
     GraphicsDeviceExecutionScope acquireExecutionScope() override {
         m_executionState->mutex.lock();
-        return GraphicsDeviceExecutionScope(
-            m_executionState, unlockGraphicsExecution);
+        return GraphicsDeviceExecutionScope(m_executionState, unlockGraphicsExecution);
     }
 
-    std::unique_ptr<VideoTargetInterop> createVideoTarget(
-            const VideoTargetRequest &request) override {
+    std::unique_ptr<VideoTargetInterop> createVideoTarget(VideoTargetRequest const& request) override {
         switch (request.producerApi) {
         case VideoProducerApi::Qrhi:
-            return std::make_unique<QrhiVideoTarget>(
-                *m_rhi, request.readback);
+            return std::make_unique<QrhiVideoTarget>(*m_rhi, request.readback);
         case VideoProducerApi::Libplacebo:
             return std::make_unique<VulkanLibplaceboVideoTarget>(
-                *m_rhi,
-                m_libplacebo.gpu,
-                *m_deviceFunctions,
-                m_graphicsQueue,
-                m_graphicsQueueFamily,
-                request.readback);
+                *m_rhi, m_libplacebo.gpu, *m_deviceFunctions, m_graphicsQueue, m_graphicsQueueFamily, request.readback);
         }
         return {};
     }
 
-    std::unique_ptr<LibplaceboHardwareFrameImporter>
-    createHardwareFrameImporter() override {
-        return {};
-    }
+    std::unique_ptr<LibplaceboHardwareFrameImporter> createHardwareFrameImporter() override { return {}; }
 
-    bool supportsPresentation(QWindow &window) const override {
+    bool supportsPresentation(QWindow& window) const override {
         Q_ASSERT(m_instance);
         Q_ASSERT(m_physicalDevice != VK_NULL_HANDLE);
-        return m_instance->supportsPresent(
-            m_physicalDevice,
-            m_graphicsQueueFamily,
-            &window);
+        return m_instance->supportsPresent(m_physicalDevice, m_graphicsQueueFamily, &window);
     }
 
-    bool supportsHdr10Presentation(QWindow &window) const override {
+    bool supportsHdr10Presentation(QWindow& window) const override {
         Q_ASSERT(m_instance);
         Q_ASSERT(m_physicalDevice != VK_NULL_HANDLE);
-        const VkSurfaceKHR surface =
-            QVulkanInstance::surfaceForWindow(&window);
-        if (surface == VK_NULL_HANDLE)
+        VkSurfaceKHR const surface = QVulkanInstance::surfaceForWindow(&window);
+        if (surface == VK_NULL_HANDLE) {
             return false;
+        }
 
-        const auto getSurfaceFormats =
-            reinterpret_cast<PFN_vkGetPhysicalDeviceSurfaceFormatsKHR>(
-                m_instance->getInstanceProcAddr(
-                    "vkGetPhysicalDeviceSurfaceFormatsKHR"));
-        if (!getSurfaceFormats)
+        auto const getSurfaceFormats = reinterpret_cast<PFN_vkGetPhysicalDeviceSurfaceFormatsKHR>(
+            m_instance->getInstanceProcAddr("vkGetPhysicalDeviceSurfaceFormatsKHR"));
+        if (!getSurfaceFormats) {
             return false;
+        }
 
         std::uint32_t formatCount = 0;
-        if (getSurfaceFormats(
-                m_physicalDevice,
-                surface,
-                &formatCount,
-                nullptr) != VK_SUCCESS) {
+        if (getSurfaceFormats(m_physicalDevice, surface, &formatCount, nullptr) != VK_SUCCESS) {
             return false;
         }
         std::vector<VkSurfaceFormatKHR> formats(formatCount);
-        if (formatCount != 0
-                && getSurfaceFormats(
-                    m_physicalDevice,
-                    surface,
-                    &formatCount,
-                    formats.data()) != VK_SUCCESS) {
+        if (formatCount != 0 &&
+            getSurfaceFormats(m_physicalDevice, surface, &formatCount, formats.data()) != VK_SUCCESS) {
             return false;
         }
 
         bool hdr10 = false;
         bool passThrough = false;
-        for (const VkSurfaceFormatKHR &format : formats) {
-            if (format.format
-                    != VK_FORMAT_A2B10G10R10_UNORM_PACK32) {
+        for (VkSurfaceFormatKHR const& format : formats) {
+            if (format.format != VK_FORMAT_A2B10G10R10_UNORM_PACK32) {
                 continue;
             }
-            hdr10 = hdr10
-                || format.colorSpace
-                    == VK_COLOR_SPACE_HDR10_ST2084_EXT;
-            passThrough = passThrough
-                || format.colorSpace
-                    == VK_COLOR_SPACE_PASS_THROUGH_EXT;
+            hdr10 = hdr10 || format.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT;
+            passThrough = passThrough || format.colorSpace == VK_COLOR_SPACE_PASS_THROUGH_EXT;
         }
         return hdr10 && passThrough;
     }
 
-    bool isValid() const {
-        return m_rhi
-            && m_vulkan
-            && m_diagnostics.isValid()
-            && m_libplacebo.isValid();
-    }
+    bool isValid() const { return m_rhi && m_vulkan && m_diagnostics.isValid() && m_libplacebo.isValid(); }
 
-private:
-    std::shared_ptr<VulkanExecutionState> m_executionState =
-        std::make_shared<VulkanExecutionState>();
+  private:
+    std::shared_ptr<VulkanExecutionState> m_executionState = std::make_shared<VulkanExecutionState>();
     std::unique_ptr<QRhi> m_rhi;
-    QVulkanInstance *m_instance = nullptr;
+    QVulkanInstance* m_instance = nullptr;
     VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
     pl_log m_log = nullptr;
     pl_vulkan m_vulkan = nullptr;
-    QVulkanDeviceFunctions *m_deviceFunctions = nullptr;
+    QVulkanDeviceFunctions* m_deviceFunctions = nullptr;
     VkQueue m_graphicsQueue = VK_NULL_HANDLE;
     LibplaceboGraphicsContext m_libplacebo;
     VideoHardwareDecodeCapability m_videoDecode;
     GraphicsDeviceDiagnostics m_diagnostics;
     std::uint32_t m_graphicsQueueFamily = 0;
 };
-}
+} // namespace
 
-std::unique_ptr<GraphicsDeviceDomain>
-createVulkanGraphicsDeviceDomain(QWindow &window) {
+std::unique_ptr<GraphicsDeviceDomain> createVulkanGraphicsDeviceDomain(QWindow& window) {
     auto domain = std::make_unique<VulkanGraphicsDeviceDomain>(window);
-    if (!domain->isValid())
+    if (!domain->isValid()) {
         return {};
+    }
     return domain;
 }

@@ -27,27 +27,19 @@
 #endif
 
 #ifdef Q_OS_LINUX
-PresentationWindow::PresentationWindow(
-        LinuxWaylandWindowContext &windowContext)
-    : m_windowChrome(
-          *this,
-          windowContext.requiresClientSideDecorations()),
-      m_windowContext(windowContext) {
-    initialize(
-        windowContext.surfaceSelection().presentationContract(),
-        windowContext.takeDisplayStateProvider(nullptr),
-        &windowContext);
+PresentationWindow::PresentationWindow(LinuxWaylandWindowContext& windowContext)
+    : m_windowChrome(*this, windowContext.requiresClientSideDecorations()), m_windowContext(windowContext) {
+    initialize(windowContext.surfaceSelection().presentationContract(), windowContext.takeDisplayStateProvider(nullptr),
+               &windowContext);
 #else
-PresentationWindow::PresentationWindow()
-    : m_windowChrome(*this, false) {
+PresentationWindow::PresentationWindow() : m_windowChrome(*this, false) {
     initialize(PresentationSurfaceContract{}, {}, nullptr);
 #endif
 }
 
-void PresentationWindow::initialize(
-        PresentationSurfaceContract surfaceContract,
-        std::unique_ptr<DisplayStateProvider> displayStateProvider,
-        PresentationSurfaceController *surfaceController) {
+void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
+                                    std::unique_ptr<DisplayStateProvider> displayStateProvider,
+                                    PresentationSurfaceController* surfaceController) {
     setSurfaceType(GraphicsBackendFactory::windowSurfaceType());
 #ifdef Q_OS_LINUX
     m_windowContext.configureWindow(*this);
@@ -55,49 +47,25 @@ void PresentationWindow::initialize(
     setTitle(tr("Sunroom"));
 
     m_outputState = displayStateProvider
-        ? std::make_unique<PresentationOutputState>(
-            std::move(displayStateProvider), nullptr)
-        : std::make_unique<PresentationOutputState>(nullptr);
+                        ? std::make_unique<PresentationOutputState>(std::move(displayStateProvider), nullptr)
+                        : std::make_unique<PresentationOutputState>(nullptr);
     m_settings = std::make_unique<PresentationSettings>(nullptr);
-    m_diagnosticVideoSource =
-        std::make_unique<DiagnosticVideoSource>(
-            VideoTargetReadback::Disabled);
-    m_mediaSession = std::make_unique<MediaSession>(
-        VideoTargetReadback::Disabled);
-    m_activeVideoSource = std::make_unique<ActiveVideoSource>(
-        m_mediaSession->videoSource(),
-        *m_diagnosticVideoSource);
+    m_diagnosticVideoSource = std::make_unique<DiagnosticVideoSource>(VideoTargetReadback::Disabled);
+    m_mediaSession = std::make_unique<MediaSession>(VideoTargetReadback::Disabled);
+    m_activeVideoSource = std::make_unique<ActiveVideoSource>(m_mediaSession->videoSource(), *m_diagnosticVideoSource);
     m_videoViewport = std::make_unique<VideoViewportState>(nullptr);
-    m_engine = std::make_unique<RhiPresentationEngine>(
-        *this,
-        *m_outputState,
-        *m_settings,
-        *m_activeVideoSource,
-        *m_diagnosticVideoSource,
-        *m_mediaSession,
-        *m_videoViewport,
-        surfaceContract,
-        surfaceController);
-    connect(
-        m_engine.get(),
-        &RhiPresentationEngine::videoFramePresented,
-        this,
-        &PresentationWindow::videoFramePresented);
+    m_engine = std::make_unique<RhiPresentationEngine>(*this, *m_outputState, *m_settings, *m_activeVideoSource,
+                                                       *m_diagnosticVideoSource, *m_mediaSession, *m_videoViewport,
+                                                       surfaceContract, surfaceController);
+    connect(m_engine.get(), &RhiPresentationEngine::videoFramePresented, this,
+            &PresentationWindow::videoFramePresented);
     m_presentationLifecycle = PresentationLifecycle::Active;
-    connect(
-        this,
-        &QWindow::windowStateChanged,
-        this,
-        [this](Qt::WindowState state) {
-            if (state != Qt::WindowFullScreen) {
-                m_restoreMaximizedAfterFullscreen =
-                    state == Qt::WindowMaximized;
-            }
-            QTimer::singleShot(
-                0,
-                this,
-                [this] { applyCursorVisibility(); });
-        });
+    connect(this, &QWindow::windowStateChanged, this, [this](Qt::WindowState state) {
+        if (state != Qt::WindowFullScreen) {
+            m_restoreMaximizedAfterFullscreen = state == Qt::WindowMaximized;
+        }
+        QTimer::singleShot(0, this, [this] { applyCursorVisibility(); });
+    });
 
     setMinimumSize({760, 560});
     resize(1100, 760);
@@ -118,13 +86,9 @@ PresentationWindow::~PresentationWindow() {
 #endif
 }
 
-void PresentationWindow::openMedia(const QUrl &url) {
-    m_mediaSession->openMedia(url);
-}
+void PresentationWindow::openMedia(QUrl const& url) { m_mediaSession->openMedia(url); }
 
-const MediaSession &PresentationWindow::mediaSession() const {
-    return *m_mediaSession;
-}
+MediaSession const& PresentationWindow::mediaSession() const { return *m_mediaSession; }
 
 void PresentationWindow::toggleFullscreen() {
     if (windowState() == Qt::WindowFullScreen) {
@@ -132,159 +96,140 @@ void PresentationWindow::toggleFullscreen() {
         return;
     }
 
-    m_restoreMaximizedAfterFullscreen =
-        windowState() == Qt::WindowMaximized;
+    m_restoreMaximizedAfterFullscreen = windowState() == Qt::WindowMaximized;
     showFullScreen();
 }
 
 void PresentationWindow::exitFullscreen() {
-    if (windowState() != Qt::WindowFullScreen)
+    if (windowState() != Qt::WindowFullScreen) {
         return;
+    }
 
-    if (m_restoreMaximizedAfterFullscreen)
+    if (m_restoreMaximizedAfterFullscreen) {
         showMaximized();
-    else
+    } else {
         showNormal();
+    }
 }
 
-bool PresentationWindow::cursorHidden() const {
-    return m_cursorHidden;
-}
+bool PresentationWindow::cursorHidden() const { return m_cursorHidden; }
 
 void PresentationWindow::setCursorHidden(bool hidden) {
-    if (hidden == m_cursorHidden)
+    if (hidden == m_cursorHidden) {
         return;
+    }
     m_cursorHidden = hidden;
     applyCursorVisibility();
 }
 
-bool PresentationWindow::windowShortcutsBlocked() const {
-    return m_windowShortcutsBlocked;
-}
+bool PresentationWindow::windowShortcutsBlocked() const { return m_windowShortcutsBlocked; }
 
-void PresentationWindow::setWindowShortcutsBlocked(bool blocked) {
-    m_windowShortcutsBlocked = blocked;
-}
+void PresentationWindow::setWindowShortcutsBlocked(bool blocked) { m_windowShortcutsBlocked = blocked; }
 
-WindowChromeController *PresentationWindow::windowChrome() {
-    return &m_windowChrome;
-}
+WindowChromeController* PresentationWindow::windowChrome() { return &m_windowChrome; }
 
 void PresentationWindow::applyCursorVisibility() {
-    if (m_cursorHidden)
+    if (m_cursorHidden) {
         setCursor(QCursor(Qt::BlankCursor));
-    else
+    } else {
         unsetCursor();
+    }
 }
 
-void PresentationWindow::exposeEvent(QExposeEvent *) {
-    if (m_presentationLifecycle != PresentationLifecycle::Active)
+void PresentationWindow::exposeEvent(QExposeEvent*) {
+    if (m_presentationLifecycle != PresentationLifecycle::Active) {
         return;
+    }
     Q_ASSERT(m_engine);
     m_engine->handleExposure();
 }
 
-void PresentationWindow::resizeEvent(QResizeEvent *) {
-    if (m_presentationLifecycle != PresentationLifecycle::Active)
+void PresentationWindow::resizeEvent(QResizeEvent*) {
+    if (m_presentationLifecycle != PresentationLifecycle::Active) {
         return;
+    }
     Q_ASSERT(m_engine);
     m_engine->markUiDirty();
 }
 
-void PresentationWindow::mousePressEvent(QMouseEvent *event) {
-    forwardMouseEvent(*event);
-}
+void PresentationWindow::mousePressEvent(QMouseEvent* event) { forwardMouseEvent(*event); }
 
-void PresentationWindow::mouseReleaseEvent(QMouseEvent *event) {
-    forwardMouseEvent(*event);
-}
+void PresentationWindow::mouseReleaseEvent(QMouseEvent* event) { forwardMouseEvent(*event); }
 
-void PresentationWindow::mouseDoubleClickEvent(QMouseEvent *event) {
-    forwardMouseEvent(*event);
-}
+void PresentationWindow::mouseDoubleClickEvent(QMouseEvent* event) { forwardMouseEvent(*event); }
 
-void PresentationWindow::mouseMoveEvent(QMouseEvent *event) {
-    forwardMouseEvent(*event);
-}
+void PresentationWindow::mouseMoveEvent(QMouseEvent* event) { forwardMouseEvent(*event); }
 
-void PresentationWindow::forwardMouseEvent(QMouseEvent &event) {
-    if (QQuickWindow *quickWindow = m_engine->quickWindow()) {
-        QMouseEvent mapped(
-            event.type(),
-            event.position(),
-            event.scenePosition(),
-            event.globalPosition(),
-            event.button(),
-            event.buttons(),
-            event.modifiers(),
-            event.source(),
-            event.pointingDevice());
+void PresentationWindow::forwardMouseEvent(QMouseEvent& event) {
+    if (QQuickWindow* quickWindow = m_engine->quickWindow()) {
+        QMouseEvent mapped(event.type(), event.position(), event.scenePosition(), event.globalPosition(),
+                           event.button(), event.buttons(), event.modifiers(), event.source(), event.pointingDevice());
         mapped.setTimestamp(event.timestamp());
         QCoreApplication::sendEvent(quickWindow, &mapped);
     }
 }
 
 bool PresentationWindow::playbackShortcutEnabled() const {
-    return !m_windowShortcutsBlocked
-        && m_activeVideoSource->route()
-            == ActiveVideoSource::Route::Player
-        && m_mediaSession->state() == MediaSession::State::Ready
-        && !m_mediaSession->seeking();
+    return !m_windowShortcutsBlocked && m_activeVideoSource->route() == ActiveVideoSource::Route::Player &&
+           m_mediaSession->state() == MediaSession::State::Ready && !m_mediaSession->seeking();
 }
 
 void PresentationWindow::togglePlayback() {
-    if (m_mediaSession->playRequested())
+    if (m_mediaSession->playRequested()) {
         m_mediaSession->pause();
-    else
+    } else {
         m_mediaSession->play();
+    }
 }
 
-void PresentationWindow::wheelEvent(QWheelEvent *event) {
-    if (QQuickWindow *quickWindow = m_engine->quickWindow())
+void PresentationWindow::wheelEvent(QWheelEvent* event) {
+    if (QQuickWindow* quickWindow = m_engine->quickWindow()) {
         QCoreApplication::sendEvent(quickWindow, event);
+    }
 }
 
-void PresentationWindow::keyPressEvent(QKeyEvent *event) {
+void PresentationWindow::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_F11) {
-        if (!event->isAutoRepeat())
+        if (!event->isAutoRepeat()) {
             toggleFullscreen();
+        }
         event->accept();
         return;
     }
-    if (event->key() == Qt::Key_Escape
-            && !m_windowShortcutsBlocked) {
-        if (!event->isAutoRepeat())
+    if (event->key() == Qt::Key_Escape && !m_windowShortcutsBlocked) {
+        if (!event->isAutoRepeat()) {
             exitFullscreen();
+        }
         event->accept();
         return;
     }
-    if (event->key() == Qt::Key_Space
-            && playbackShortcutEnabled()) {
-        if (!event->isAutoRepeat())
+    if (event->key() == Qt::Key_Space && playbackShortcutEnabled()) {
+        if (!event->isAutoRepeat()) {
             togglePlayback();
+        }
         event->accept();
         return;
     }
-    if (QQuickWindow *quickWindow = m_engine->quickWindow())
+    if (QQuickWindow* quickWindow = m_engine->quickWindow()) {
         QCoreApplication::sendEvent(quickWindow, event);
+    }
 }
 
-void PresentationWindow::keyReleaseEvent(QKeyEvent *event) {
-    if (event->key() == Qt::Key_F11
-            || (event->key() == Qt::Key_Escape
-                && !m_windowShortcutsBlocked)
-            || (event->key() == Qt::Key_Space
-                && playbackShortcutEnabled())) {
+void PresentationWindow::keyReleaseEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_F11 || (event->key() == Qt::Key_Escape && !m_windowShortcutsBlocked) ||
+        (event->key() == Qt::Key_Space && playbackShortcutEnabled())) {
         event->accept();
         return;
     }
-    if (QQuickWindow *quickWindow = m_engine->quickWindow())
+    if (QQuickWindow* quickWindow = m_engine->quickWindow()) {
         QCoreApplication::sendEvent(quickWindow, event);
+    }
 }
 
-bool PresentationWindow::event(QEvent *event) {
-    if (m_presentationLifecycle != PresentationLifecycle::Active)
+bool PresentationWindow::event(QEvent* event) {
+    if (m_presentationLifecycle != PresentationLifecycle::Active) {
         return QWindow::event(event);
+    }
     Q_ASSERT(m_engine);
     switch (event->type()) {
     case QEvent::UpdateRequest:
@@ -294,8 +239,8 @@ bool PresentationWindow::event(QEvent *event) {
         m_engine->markUiDirty();
         break;
     case QEvent::PlatformSurface:
-        if (static_cast<QPlatformSurfaceEvent *>(event)->surfaceEventType()
-                == QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed) {
+        if (static_cast<QPlatformSurfaceEvent*>(event)->surfaceEventType() ==
+            QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed) {
             m_engine->releaseSwapChain();
         }
         break;

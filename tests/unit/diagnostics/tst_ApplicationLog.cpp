@@ -18,31 +18,22 @@
 #include "diagnostics/LogCategories.h"
 
 namespace {
-void discardMessage(
-        QtMsgType,
-        const QMessageLogContext &,
-        const QString &) {}
-}
+void discardMessage(QtMsgType, QMessageLogContext const&, QString const&) {}
+} // namespace
 
-Q_LOGGING_CATEGORY(
-    sunroomTestLog,
-    "sunroom.test",
-    QtInfoMsg)
+Q_LOGGING_CATEGORY(sunroomTestLog, "sunroom.test", QtInfoMsg)
 
 class ApplicationLogTest final : public QObject {
     Q_OBJECT
 
-public:
+  public:
     static void initMain() {
 #ifdef Q_OS_WIN
-        SetErrorMode(
-            SEM_FAILCRITICALERRORS
-            | SEM_NOGPFAULTERRORBOX
-            | SEM_NOOPENFILEERRORBOX);
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 #endif
     }
 
-private slots:
+  private slots:
     void writesCategorizedInfoRecord();
     void publishesRecordsWhileTheApplicationIsRunning();
     void boundsSessionFile();
@@ -59,62 +50,50 @@ private slots:
 void ApplicationLogTest::writesCategorizedInfoRecord() {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
-    const QString path =
-        directory.filePath(QStringLiteral("session.log"));
+    QString const path = directory.filePath(QStringLiteral("session.log"));
     QString error;
-    std::unique_ptr<ApplicationLog> logging =
-        ApplicationLog::install(
-            {
-                .filePath = path,
-                .maximumFileBytes = 4096,
-                .retainedFileCount = 2,
-            },
-            &error);
+    std::unique_ptr<ApplicationLog> logging = ApplicationLog::install(
+        {
+            .filePath = path,
+            .maximumFileBytes = 4096,
+            .retainedFileCount = 2,
+        },
+        &error);
     QVERIFY2(logging, qPrintable(error));
 
-    qCInfo(sunroomLogApplication).noquote()
-        << "event=test.record value=42";
+    qCInfo(sunroomLogApplication).noquote() << "event=test.record value=42";
     logging->flush();
     logging.reset();
 
     QFile file(path);
     QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
-    const QByteArray contents = file.readAll();
+    QByteArray const contents = file.readAll();
     QVERIFY(contents.contains("level=info"));
-    QVERIFY(contents.contains(
-        "category=sunroom.application"));
-    QVERIFY(contents.contains(
-        "event=test.record value=42"));
+    QVERIFY(contents.contains("category=sunroom.application"));
+    QVERIFY(contents.contains("event=test.record value=42"));
 }
 
-void ApplicationLogTest::
-publishesRecordsWhileTheApplicationIsRunning() {
+void ApplicationLogTest::publishesRecordsWhileTheApplicationIsRunning() {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
-    const QString path =
-        directory.filePath(QStringLiteral("live.log"));
+    QString const path = directory.filePath(QStringLiteral("live.log"));
     QString error;
-    std::unique_ptr<ApplicationLog> logging =
-        ApplicationLog::install(
-            {
-                .filePath = path,
-                .maximumFileBytes = 4096,
-                .retainedFileCount = 2,
-            },
-            &error);
+    std::unique_ptr<ApplicationLog> logging = ApplicationLog::install(
+        {
+            .filePath = path,
+            .maximumFileBytes = 4096,
+            .retainedFileCount = 2,
+        },
+        &error);
     QVERIFY2(logging, qPrintable(error));
 
-    qCInfo(sunroomLogApplication).noquote()
-        << "event=test.live_record";
+    qCInfo(sunroomLogApplication).noquote() << "event=test.live_record";
 
     QTRY_VERIFY_WITH_TIMEOUT(
         [&] {
             QFile file(path);
-            return file.open(
-                       QIODevice::ReadOnly
-                       | QIODevice::Text)
-                && file.readAll().contains(
-                    "event=test.live_record");
+            return file.open(QIODevice::ReadOnly | QIODevice::Text) &&
+                   file.readAll().contains("event=test.live_record");
         }(),
         2'000);
 }
@@ -122,28 +101,24 @@ publishesRecordsWhileTheApplicationIsRunning() {
 void ApplicationLogTest::boundsSessionFile() {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
-    const QString path =
-        directory.filePath(QStringLiteral("bounded.log"));
+    QString const path = directory.filePath(QStringLiteral("bounded.log"));
     QString error;
-    std::unique_ptr<ApplicationLog> logging =
-        ApplicationLog::install(
-            {
-                .filePath = path,
-                .maximumFileBytes = 256,
-                .retainedFileCount = 2,
-            },
-            &error);
+    std::unique_ptr<ApplicationLog> logging = ApplicationLog::install(
+        {
+            .filePath = path,
+            .maximumFileBytes = 256,
+            .retainedFileCount = 2,
+        },
+        &error);
     QVERIFY2(logging, qPrintable(error));
 
-    qCInfo(sunroomLogApplication).noquote()
-        << "event=test.oversized"
-        << QString(1024, u'x');
+    qCInfo(sunroomLogApplication).noquote() << "event=test.oversized" << QString(1024, u'x');
     logging->flush();
     logging.reset();
 
     QFile file(path);
     QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
-    const QByteArray contents = file.readAll();
+    QByteArray const contents = file.readAll();
     QVERIFY(contents.size() <= 256);
     QVERIFY(contents.contains("event=log.truncated"));
 }
@@ -151,207 +126,150 @@ void ApplicationLogTest::boundsSessionFile() {
 void ApplicationLogTest::boundsProducerQueue() {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
-    const QString path =
-        directory.filePath(QStringLiteral("queue.log"));
+    QString const path = directory.filePath(QStringLiteral("queue.log"));
     QString error;
-    std::unique_ptr<ApplicationLog> logging =
-        ApplicationLog::install(
-            {
-                .filePath = path,
-                .maximumFileBytes = 4096,
-                .retainedFileCount = 2,
-                .maximumQueuedBytes = 256,
-                .maximumQueuedRecords = 1,
-            },
-            &error);
+    std::unique_ptr<ApplicationLog> logging = ApplicationLog::install(
+        {
+            .filePath = path,
+            .maximumFileBytes = 4096,
+            .retainedFileCount = 2,
+            .maximumQueuedBytes = 256,
+            .maximumQueuedRecords = 1,
+        },
+        &error);
     QVERIFY2(logging, qPrintable(error));
 
-    qCInfo(sunroomLogApplication).noquote()
-        << "event=test.oversized_queue_record"
-        << QString(1024, u'x');
+    qCInfo(sunroomLogApplication).noquote() << "event=test.oversized_queue_record" << QString(1024, u'x');
     logging->flush();
     logging.reset();
 
     QFile file(path);
     QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
-    const QByteArray contents = file.readAll();
-    QVERIFY(contents.contains(
-        "event=log.records_dropped"));
+    QByteArray const contents = file.readAll();
+    QVERIFY(contents.contains("event=log.records_dropped"));
     QVERIFY(contents.contains("count=1"));
 }
 
-void ApplicationLogTest::
-concurrentFlushesShareOneWatermark() {
+void ApplicationLogTest::concurrentFlushesShareOneWatermark() {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
-    const QString path =
-        directory.filePath(QStringLiteral("flush.log"));
+    QString const path = directory.filePath(QStringLiteral("flush.log"));
     QString error;
-    std::unique_ptr<ApplicationLog> logging =
-        ApplicationLog::install(
-            {
-                .filePath = path,
-                .maximumFileBytes = 4096,
-                .retainedFileCount = 2,
-                .maximumQueuedRecords = 1,
-            },
-            &error);
+    std::unique_ptr<ApplicationLog> logging = ApplicationLog::install(
+        {
+            .filePath = path,
+            .maximumFileBytes = 4096,
+            .retainedFileCount = 2,
+            .maximumQueuedRecords = 1,
+        },
+        &error);
     QVERIFY2(logging, qPrintable(error));
 
-    qCInfo(sunroomLogApplication).noquote()
-        << "event=test.concurrent_flush";
+    qCInfo(sunroomLogApplication).noquote() << "event=test.concurrent_flush";
     std::vector<std::jthread> flushers;
     for (int index = 0; index < 32; ++index) {
-        flushers.emplace_back(
-            [log = logging.get()] {
-                for (int pass = 0;
-                        pass < 8;
-                        ++pass) {
-                    log->flush();
-                }
-            });
+        flushers.emplace_back([log = logging.get()] {
+            for (int pass = 0; pass < 8; ++pass) {
+                log->flush();
+            }
+        });
     }
     flushers.clear();
     logging.reset();
 
     QFile file(path);
     QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
-    const QByteArray contents = file.readAll();
-    QVERIFY(contents.contains(
-        "event=test.concurrent_flush"));
+    QByteArray const contents = file.readAll();
+    QVERIFY(contents.contains("event=test.concurrent_flush"));
 }
 
-void ApplicationLogTest::
-preservesFatalRecordUnderQueuePressure() {
+void ApplicationLogTest::preservesFatalRecordUnderQueuePressure() {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
-    const QString path =
-        directory.filePath(QStringLiteral("fatal.log"));
+    QString const path = directory.filePath(QStringLiteral("fatal.log"));
 
-    const QtMessageHandler originalHandler =
-        qInstallMessageHandler(discardMessage);
-    const auto restoreHandler = qScopeGuard(
-        [originalHandler] {
-            qInstallMessageHandler(originalHandler);
-        });
+    QtMessageHandler const originalHandler = qInstallMessageHandler(discardMessage);
+    auto const restoreHandler = qScopeGuard([originalHandler] { qInstallMessageHandler(originalHandler); });
     QString error;
-    std::unique_ptr<ApplicationLog> logging =
-        ApplicationLog::install(
-            {
-                .filePath = path,
-                .maximumFileBytes = 4096,
-                .retainedFileCount = 2,
-                .maximumQueuedBytes = 256,
-                .maximumQueuedRecords = 1,
-            },
-            &error);
+    std::unique_ptr<ApplicationLog> logging = ApplicationLog::install(
+        {
+            .filePath = path,
+            .maximumFileBytes = 4096,
+            .retainedFileCount = 2,
+            .maximumQueuedBytes = 256,
+            .maximumQueuedRecords = 1,
+        },
+        &error);
     QVERIFY2(logging, qPrintable(error));
 
-    qCInfo(sunroomLogApplication).noquote()
-        << "event=test.queue_pressure"
-        << QString(1024, u'x');
-    const QtMessageHandler applicationHandler =
-        qInstallMessageHandler(discardMessage);
+    qCInfo(sunroomLogApplication).noquote() << "event=test.queue_pressure" << QString(1024, u'x');
+    QtMessageHandler const applicationHandler = qInstallMessageHandler(discardMessage);
     QVERIFY(applicationHandler);
     qInstallMessageHandler(applicationHandler);
-    const QString fatalMessage =
-        QStringLiteral(
-            "event=test.fatal_preserved ")
-        + QString(1024, u'y');
-    applicationHandler(
-        QtFatalMsg,
-        QMessageLogContext(
-            __FILE__,
-            __LINE__,
-            Q_FUNC_INFO,
-            "sunroom.test"),
-        fatalMessage);
+    QString const fatalMessage = QStringLiteral("event=test.fatal_preserved ") + QString(1024, u'y');
+    applicationHandler(QtFatalMsg, QMessageLogContext(__FILE__, __LINE__, Q_FUNC_INFO, "sunroom.test"), fatalMessage);
     logging->flush();
     logging.reset();
 
     QFile file(path);
     QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
-    const QByteArray contents = file.readAll();
+    QByteArray const contents = file.readAll();
     QVERIFY(contents.contains("level=fatal"));
-    QVERIFY(contents.contains(
-        "event=test.fatal_preserved"));
-    QVERIFY(contents.contains(
-        "event=log.fatal_record_truncated"));
+    QVERIFY(contents.contains("event=test.fatal_preserved"));
+    QVERIFY(contents.contains("event=log.fatal_record_truncated"));
 }
 
-void ApplicationLogTest::
-customFileDoesNotPruneSiblingLogs() {
+void ApplicationLogTest::customFileDoesNotPruneSiblingLogs() {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
-    const QString siblingPath =
-        directory.filePath(
-            QStringLiteral("sunroom-unrelated.log"));
+    QString const siblingPath = directory.filePath(QStringLiteral("sunroom-unrelated.log"));
     QFile sibling(siblingPath);
-    QVERIFY(sibling.open(
-        QIODevice::WriteOnly | QIODevice::Text));
+    QVERIFY(sibling.open(QIODevice::WriteOnly | QIODevice::Text));
     QCOMPARE(sibling.write("keep"), 4);
     sibling.close();
 
-    const QString selectedPath =
-        directory.filePath(QStringLiteral("selected.log"));
+    QString const selectedPath = directory.filePath(QStringLiteral("selected.log"));
     QString error;
-    std::unique_ptr<ApplicationLog> logging =
-        ApplicationLog::install(
-            {
-                .filePath = selectedPath,
-                .maximumFileBytes = 4096,
-                .retainedFileCount = 1,
-            },
-            &error);
+    std::unique_ptr<ApplicationLog> logging = ApplicationLog::install(
+        {
+            .filePath = selectedPath,
+            .maximumFileBytes = 4096,
+            .retainedFileCount = 1,
+        },
+        &error);
     QVERIFY2(logging, qPrintable(error));
-    qCInfo(sunroomLogApplication)
-        << "event=test.custom_file";
+    qCInfo(sunroomLogApplication) << "event=test.custom_file";
     logging.reset();
 
     QVERIFY(QFileInfo::exists(siblingPath));
 }
 
-void ApplicationLogTest::
-rejectsWindowsRemoteCustomFile() {
+void ApplicationLogTest::rejectsWindowsRemoteCustomFile() {
 #ifdef Q_OS_WIN
     QString error;
-    std::unique_ptr<ApplicationLog> logging =
-        ApplicationLog::install(
-            {
-                .filePath = QStringLiteral(
-                    R"(\\sunroom.invalid\share\session.log)"),
-            },
-            &error);
+    std::unique_ptr<ApplicationLog> logging = ApplicationLog::install(
+        {
+            .filePath = QStringLiteral(R"(\\sunroom.invalid\share\session.log)"),
+        },
+        &error);
     QVERIFY(!logging);
-    QVERIFY(error.contains(
-        QStringLiteral("local file path")));
+    QVERIFY(error.contains(QStringLiteral("local file path")));
 #else
-    QSKIP(
-        "Remote custom log paths are currently "
-        "classified by the Windows adapter");
+    QSKIP("Remote custom log paths are currently "
+          "classified by the Windows adapter");
 #endif
 }
 
-void ApplicationLogTest::
-acceptsWindowsExtendedLocalPath() {
+void ApplicationLogTest::acceptsWindowsExtendedLocalPath() {
 #ifdef Q_OS_WIN
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
-    const QString ordinaryPath =
-        directory.filePath(
-            QStringLiteral("extended.log"));
-    const QString extendedPath =
-        QStringLiteral("\\\\?\\")
-        + QDir::toNativeSeparators(
-            ordinaryPath);
+    QString const ordinaryPath = directory.filePath(QStringLiteral("extended.log"));
+    QString const extendedPath = QStringLiteral("\\\\?\\") + QDir::toNativeSeparators(ordinaryPath);
     QString error;
-    std::unique_ptr<ApplicationLog> logging =
-        ApplicationLog::install(
-            {.filePath = extendedPath},
-            &error);
+    std::unique_ptr<ApplicationLog> logging = ApplicationLog::install({.filePath = extendedPath}, &error);
     QVERIFY2(logging, qPrintable(error));
-    qCInfo(sunroomLogApplication)
-        << "event=test.extended_local_path";
+    qCInfo(sunroomLogApplication) << "event=test.extended_local_path";
     logging->flush();
     logging.reset();
     QVERIFY(QFileInfo::exists(ordinaryPath));
@@ -360,32 +278,21 @@ acceptsWindowsExtendedLocalPath() {
 #endif
 }
 
-void ApplicationLogTest::
-rejectsWindowsMappedRemoteCustomFile() {
+void ApplicationLogTest::rejectsWindowsMappedRemoteCustomFile() {
 #ifdef Q_OS_WIN
-    for (wchar_t drive = L'A';
-            drive <= L'Z';
-            ++drive) {
-        const std::wstring root{
-            drive, L':', L'\\'};
-        if (GetDriveTypeW(root.c_str())
-                != DRIVE_REMOTE) {
+    for (wchar_t drive = L'A'; drive <= L'Z'; ++drive) {
+        std::wstring const root{drive, L':', L'\\'};
+        if (GetDriveTypeW(root.c_str()) != DRIVE_REMOTE) {
             continue;
         }
         QString error;
-        std::unique_ptr<ApplicationLog> logging =
-            ApplicationLog::install(
-                {
-                    .filePath =
-                        QString::fromWCharArray(
-                            root.c_str())
-                        + QStringLiteral(
-                            "sunroom-log-policy-test.log"),
-                },
-                &error);
+        std::unique_ptr<ApplicationLog> logging = ApplicationLog::install(
+            {
+                .filePath = QString::fromWCharArray(root.c_str()) + QStringLiteral("sunroom-log-policy-test.log"),
+            },
+            &error);
         QVERIFY(!logging);
-        QVERIFY(error.contains(
-            QStringLiteral("local file path")));
+        QVERIFY(error.contains(QStringLiteral("local file path")));
         return;
     }
     QSKIP("No mapped remote drive is present");
@@ -394,36 +301,30 @@ rejectsWindowsMappedRemoteCustomFile() {
 #endif
 }
 
-void ApplicationLogTest::
-honorsQtDebugCategoryRules() {
-    QLoggingCategory::setFilterRules(
-        QStringLiteral("sunroom.test.debug=true"));
+void ApplicationLogTest::honorsQtDebugCategoryRules() {
+    QLoggingCategory::setFilterRules(QStringLiteral("sunroom.test.debug=true"));
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
-    const QString path =
-        directory.filePath(QStringLiteral("debug.log"));
+    QString const path = directory.filePath(QStringLiteral("debug.log"));
     QString error;
-    std::unique_ptr<ApplicationLog> logging =
-        ApplicationLog::install(
-            {
-                .filePath = path,
-                .maximumFileBytes = 4096,
-                .retainedFileCount = 2,
-            },
-            &error);
+    std::unique_ptr<ApplicationLog> logging = ApplicationLog::install(
+        {
+            .filePath = path,
+            .maximumFileBytes = 4096,
+            .retainedFileCount = 2,
+        },
+        &error);
     QVERIFY2(logging, qPrintable(error));
 
-    qCDebug(sunroomTestLog).noquote()
-        << "event=test.qt_debug_rule";
+    qCDebug(sunroomTestLog).noquote() << "event=test.qt_debug_rule";
     logging->flush();
     logging.reset();
 
     QFile file(path);
     QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
-    const QByteArray contents = file.readAll();
+    QByteArray const contents = file.readAll();
     QVERIFY(contents.contains("level=debug"));
-    QVERIFY(contents.contains(
-        "event=test.qt_debug_rule"));
+    QVERIFY(contents.contains("event=test.qt_debug_rule"));
 }
 
 QTEST_GUILESS_MAIN(ApplicationLogTest)

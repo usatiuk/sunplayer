@@ -26,16 +26,11 @@ struct ControlledAudioAdvance {
 // bounded decode-to-device queue and keeps submitted and presented cursors
 // separate. It intentionally uses locks and is not a physical callback.
 class ControlledAudioSink final : public AudioSink {
-public:
-    explicit ControlledAudioSink(
-        std::size_t maximumBufferedFrames);
+  public:
+    explicit ControlledAudioSink(std::size_t maximumBufferedFrames);
 
-    void reset(
-        std::uint64_t playbackGeneration,
-        AudioStreamFormat format) override;
-    bool submit(
-        PcmAudioBlock block,
-        std::stop_token stopToken = {}) override;
+    void reset(std::uint64_t playbackGeneration, AudioStreamFormat format) override;
+    bool submit(PcmAudioBlock block, std::stop_token stopToken = {}) override;
     void cancel(std::uint64_t playbackGeneration) override;
     void finish(std::uint64_t playbackGeneration) override;
     void start() override;
@@ -47,9 +42,7 @@ public:
 
     // Deterministic device-failure injection for session and recovery tests.
     // A stale generation cannot fail its replacement.
-    void fail(
-        std::uint64_t playbackGeneration,
-        std::string reason);
+    void fail(std::uint64_t playbackGeneration, std::string reason);
     void setPositionAvailable(bool available);
 
     ControlledAudioRender render(std::size_t requestedFrames);
@@ -65,7 +58,7 @@ public:
     std::uint64_t submittedFrames() const;
     std::uint64_t presentedFrames() const;
 
-private:
+  private:
     struct QueuedBlock {
         PcmAudioBlock block;
         std::size_t consumedFrames = 0;
@@ -77,13 +70,12 @@ private:
         std::int64_t mediaStartMicroseconds = 0;
     };
 
-    std::int64_t mediaPositionForPresentedFrameLocked(
-        std::uint64_t presentedFrame) const;
+    std::int64_t mediaPositionForPresentedFrameLocked(std::uint64_t presentedFrame) const;
     std::uint64_t outstandingFramesLocked() const;
     ControlledAudioRender renderLocked(std::size_t requestedFrames);
     void prunePresentedMappingsLocked();
 
-    const std::size_t m_maximumBufferedFrames;
+    std::size_t const m_maximumBufferedFrames;
     mutable std::mutex m_mutex;
     std::condition_variable_any m_wake;
     std::deque<QueuedBlock> m_blocks;

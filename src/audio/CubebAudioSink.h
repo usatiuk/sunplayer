@@ -16,17 +16,12 @@
 // lifecycle, device queries, and error formatting remain on control/decode
 // threads.
 class CubebAudioSink final : public AudioSink {
-public:
-    explicit CubebAudioSink(
-        std::size_t queueCapacityFrames = 30U * 48'000U);
+  public:
+    explicit CubebAudioSink(std::size_t queueCapacityFrames = 30U * 48'000U);
     ~CubebAudioSink() override;
 
-    void reset(
-        std::uint64_t playbackGeneration,
-        AudioStreamFormat format) override;
-    bool submit(
-        PcmAudioBlock block,
-        std::stop_token stopToken = {}) override;
+    void reset(std::uint64_t playbackGeneration, AudioStreamFormat format) override;
+    bool submit(PcmAudioBlock block, std::stop_token stopToken = {}) override;
     void cancel(std::uint64_t playbackGeneration) override;
     void finish(std::uint64_t playbackGeneration) override;
     void start() override;
@@ -37,7 +32,7 @@ public:
 
     AudioSinkDiagnostics diagnostics() const override;
 
-private:
+  private:
     enum class Error {
         None,
         ComInitialization,
@@ -53,16 +48,14 @@ private:
     static std::string errorMessage(Error error);
     void destroyStream();
     void failEpoch(Error error);
-    void failAndDestroyEpoch(
-        Error error,
-        std::uint64_t playbackGeneration);
+    void failAndDestroyEpoch(Error error, std::uint64_t playbackGeneration);
     void maybeStart();
-    long render(float *output, long requestedFrames);
+    long render(float* output, long requestedFrames);
     void handleState(int state);
 
     struct Impl;
 
-    const std::size_t m_queueCapacityFrames;
+    std::size_t const m_queueCapacityFrames;
     RealtimePcmQueue m_queue;
     AudioOutputLedger m_outputLedger;
     std::string m_backendName;

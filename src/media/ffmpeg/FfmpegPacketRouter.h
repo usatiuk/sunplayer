@@ -25,8 +25,7 @@ enum class FfmpegPacketRouterTerminal {
 
 struct FfmpegRoutedPacket {
     FfmpegAvPacketPtr packet;
-    FfmpegPacketRouterTerminal terminal =
-        FfmpegPacketRouterTerminal::Open;
+    FfmpegPacketRouterTerminal terminal = FfmpegPacketRouterTerminal::Open;
     QString error;
 };
 
@@ -50,35 +49,24 @@ struct FfmpegPacketRouterStatistics {
 // is empty, so unusual valid packets cannot deadlock demuxing while memory
 // remains bounded by max(limit, largest packet).
 class FfmpegPacketRouter final {
-public:
-    explicit FfmpegPacketRouter(
-        FfmpegPacketRouterLimits limits = {});
+  public:
+    explicit FfmpegPacketRouter(FfmpegPacketRouterLimits limits = {});
 
-    bool push(
-        FfmpegPacketStream stream,
-        FfmpegAvPacketPtr packet,
-        std::stop_token stopToken = {});
-    FfmpegRoutedPacket pop(
-        FfmpegPacketStream stream,
-        std::stop_token stopToken = {});
-    void finish(
-        FfmpegPacketRouterTerminal terminal,
-        QString error = {});
+    bool push(FfmpegPacketStream stream, FfmpegAvPacketPtr packet, std::stop_token stopToken = {});
+    FfmpegRoutedPacket pop(FfmpegPacketStream stream, std::stop_token stopToken = {});
+    void finish(FfmpegPacketRouterTerminal terminal, QString error = {});
 
     FfmpegPacketRouterStatistics statistics() const;
 
-private:
+  private:
     struct Entry {
         FfmpegAvPacketPtr packet;
         std::size_t bytes = 0;
     };
 
-    std::deque<Entry> &queue(FfmpegPacketStream stream);
+    std::deque<Entry>& queue(FfmpegPacketStream stream);
     bool canAccept(std::size_t bytes) const;
-    void enqueue(
-        FfmpegPacketStream stream,
-        FfmpegAvPacketPtr packet,
-        std::size_t bytes);
+    void enqueue(FfmpegPacketStream stream, FfmpegAvPacketPtr packet, std::size_t bytes);
 
     FfmpegPacketRouterLimits m_limits;
     mutable std::mutex m_mutex;
@@ -93,7 +81,6 @@ private:
     std::size_t m_largestQueuedPacketBytes = 0;
     std::size_t m_waitingProducerCount = 0;
     std::size_t m_waitingConsumerCount = 0;
-    FfmpegPacketRouterTerminal m_terminal =
-        FfmpegPacketRouterTerminal::Open;
+    FfmpegPacketRouterTerminal m_terminal = FfmpegPacketRouterTerminal::Open;
     QString m_error;
 };

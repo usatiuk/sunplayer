@@ -19,23 +19,19 @@ class LinuxWaylandWindowContext;
 class PresentationWindow : public QWindow {
     Q_OBJECT
     Q_PROPERTY(bool cursorHidden READ cursorHidden WRITE setCursorHidden)
-    Q_PROPERTY(bool windowShortcutsBlocked
-                   READ windowShortcutsBlocked
-                   WRITE setWindowShortcutsBlocked)
-    Q_PROPERTY(WindowChromeController *windowChrome
-                   READ windowChrome
-                   CONSTANT)
+    Q_PROPERTY(bool windowShortcutsBlocked READ windowShortcutsBlocked WRITE setWindowShortcutsBlocked)
+    Q_PROPERTY(WindowChromeController* windowChrome READ windowChrome CONSTANT)
 
-public:
+  public:
 #ifdef Q_OS_LINUX
-    explicit PresentationWindow(LinuxWaylandWindowContext &windowContext);
+    explicit PresentationWindow(LinuxWaylandWindowContext& windowContext);
 #else
     PresentationWindow();
 #endif
     ~PresentationWindow() override;
 
-    void openMedia(const QUrl &url);
-    const class MediaSession &mediaSession() const;
+    void openMedia(QUrl const& url);
+    const class MediaSession& mediaSession() const;
 
     Q_INVOKABLE void toggleFullscreen();
     Q_INVOKABLE void exitFullscreen();
@@ -44,36 +40,35 @@ public:
     void setCursorHidden(bool hidden);
     bool windowShortcutsBlocked() const;
     void setWindowShortcutsBlocked(bool blocked);
-    WindowChromeController *windowChrome();
+    WindowChromeController* windowChrome();
 
-signals:
+  signals:
     void videoFramePresented(qulonglong contentRevision);
 
-protected:
-    void exposeEvent(QExposeEvent *event) override;
-    void resizeEvent(QResizeEvent *event) override;
-    void mousePressEvent(QMouseEvent *event) override;
-    void mouseReleaseEvent(QMouseEvent *event) override;
-    void mouseDoubleClickEvent(QMouseEvent *event) override;
-    void mouseMoveEvent(QMouseEvent *event) override;
-    void wheelEvent(QWheelEvent *event) override;
-    void keyPressEvent(QKeyEvent *event) override;
-    void keyReleaseEvent(QKeyEvent *event) override;
-    bool event(QEvent *event) override;
+  protected:
+    void exposeEvent(QExposeEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+    void mouseDoubleClickEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void wheelEvent(QWheelEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
+    void keyReleaseEvent(QKeyEvent* event) override;
+    bool event(QEvent* event) override;
 
-private:
+  private:
     enum class PresentationLifecycle {
         Initializing,
         Active,
         Releasing,
     };
 
-    void initialize(
-        PresentationSurfaceContract surfaceContract,
-        std::unique_ptr<DisplayStateProvider> displayStateProvider,
-        PresentationSurfaceController *surfaceController);
+    void initialize(PresentationSurfaceContract surfaceContract,
+                    std::unique_ptr<DisplayStateProvider> displayStateProvider,
+                    PresentationSurfaceController* surfaceController);
     void applyCursorVisibility();
-    void forwardMouseEvent(QMouseEvent &event);
+    void forwardMouseEvent(QMouseEvent& event);
     bool playbackShortcutEnabled() const;
     void togglePlayback();
 
@@ -86,13 +81,12 @@ private:
     std::unique_ptr<class RhiPresentationEngine> m_engine;
     WindowChromeController m_windowChrome;
 #ifdef Q_OS_LINUX
-    LinuxWaylandWindowContext &m_windowContext;
+    LinuxWaylandWindowContext& m_windowContext;
 #endif
     bool m_restoreMaximizedAfterFullscreen = false;
     bool m_cursorHidden = false;
     bool m_windowShortcutsBlocked = false;
-    PresentationLifecycle m_presentationLifecycle =
-        PresentationLifecycle::Initializing;
+    PresentationLifecycle m_presentationLifecycle = PresentationLifecycle::Initializing;
 };
 
 struct PresentationWindowQmlForeign {

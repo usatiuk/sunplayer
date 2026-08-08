@@ -4,5 +4,4 @@
 
 class GraphicsDeviceDomain;
 
-std::unique_ptr<GraphicsDeviceDomain>
-createMetalGraphicsDeviceDomain();
+std::unique_ptr<GraphicsDeviceDomain> createMetalGraphicsDeviceDomain();

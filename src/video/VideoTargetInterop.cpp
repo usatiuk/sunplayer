@@ -7,20 +7,13 @@ bool VideoTargetInteropDiagnostics::isValid() const {
 
     switch (outputPath) {
     case VideoOutputPath::DirectRenderTarget:
-        return knownOutputGpuCopiesPerRender == 0
-            && knownOutputCpuTransfersPerRender == 0
-            && fallbackReason.isEmpty();
+        return knownOutputGpuCopiesPerRender == 0 && knownOutputCpuTransfersPerRender == 0 && fallbackReason.isEmpty();
     case VideoOutputPath::SameDeviceGpuCopy:
-        return knownOutputGpuCopiesPerRender > 0
-            && knownOutputCpuTransfersPerRender == 0
-            && !fallbackReason.isEmpty();
+        return knownOutputGpuCopiesPerRender > 0 && knownOutputCpuTransfersPerRender == 0 && !fallbackReason.isEmpty();
     case VideoOutputPath::CpuRoundTrip:
-        return knownOutputCpuTransfersPerRender >= 2
-            && !fallbackReason.isEmpty();
+        return knownOutputCpuTransfersPerRender >= 2 && !fallbackReason.isEmpty();
     case VideoOutputPath::Unavailable:
-        return knownOutputGpuCopiesPerRender == 0
-            && knownOutputCpuTransfersPerRender == 0
-            && !fallbackReason.isEmpty();
+        return knownOutputGpuCopiesPerRender == 0 && knownOutputCpuTransfersPerRender == 0 && !fallbackReason.isEmpty();
     }
     return false;
 }

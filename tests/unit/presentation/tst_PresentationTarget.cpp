@@ -9,17 +9,14 @@
 class PresentationTargetTest final : public QObject {
     Q_OBJECT
 
-public:
+  public:
     static void initMain() {
 #ifdef Q_OS_WIN
-        SetErrorMode(
-            SEM_FAILCRITICALERRORS
-            | SEM_NOGPFAULTERRORBOX
-            | SEM_NOOPENFILEERRORBOX);
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 #endif
     }
 
-private slots:
+  private slots:
     void calculation_data();
     void calculation();
 };
@@ -44,8 +41,7 @@ void PresentationTargetTest::calculation_data() {
         backend.currentHeadroom = 12.5f;
         backend.potentialHeadroom = 15.0f;
 
-        QTest::newRow("sdr-output-ignores-hdr-telemetry")
-            << display << backend << PresentationTarget{};
+        QTest::newRow("sdr-output-ignores-hdr-telemetry") << display << backend << PresentationTarget{};
     }
 
     {
@@ -73,8 +69,7 @@ void PresentationTargetTest::calculation_data() {
         expected.effectiveTargetHeadroom = 5.0f;
         expected.sdrScale = 2.5f;
 
-        QTest::newRow("scene-referred-backend-luminance")
-            << DisplayState{} << backend << expected;
+        QTest::newRow("scene-referred-backend-luminance") << DisplayState{} << backend << expected;
     }
 
     {
@@ -109,8 +104,7 @@ void PresentationTargetTest::calculation_data() {
         expected.effectiveTargetHeadroom = 6.0f;
         expected.sdrScale = 2.5f;
 
-        QTest::newRow("active-windows-hdr-takes-precedence")
-            << display << backend << expected;
+        QTest::newRow("active-windows-hdr-takes-precedence") << display << backend << expected;
     }
 
     {
@@ -143,8 +137,7 @@ void PresentationTargetTest::calculation_data() {
         expected.potentialHeadroom = 6.0f;
         expected.effectiveTargetHeadroom = 5.0f;
 
-        QTest::newRow("inactive-windows-hdr-uses-backend")
-            << display << backend << expected;
+        QTest::newRow("inactive-windows-hdr-uses-backend") << display << backend << expected;
     }
 
     {
@@ -161,8 +154,7 @@ void PresentationTargetTest::calculation_data() {
         expected.potentialHeadroom = 8.0f;
         expected.effectiveTargetHeadroom = 4.0f;
 
-        QTest::newRow("unknown-luminance-uses-component-headroom")
-            << DisplayState{} << backend << expected;
+        QTest::newRow("unknown-luminance-uses-component-headroom") << DisplayState{} << backend << expected;
     }
 
     {
@@ -193,8 +185,7 @@ void PresentationTargetTest::calculation_data() {
         expected.effectiveTargetHeadroom = 4.0f;
         expected.sdrScale = 2.0f;
 
-        QTest::newRow("display-white-and-backend-luminance-combine")
-            << display << backend << expected;
+        QTest::newRow("display-white-and-backend-luminance-combine") << display << backend << expected;
     }
 
     {
@@ -206,8 +197,7 @@ void PresentationTargetTest::calculation_data() {
         PresentationTarget expected;
         expected.hdrPresentationActive = true;
 
-        QTest::newRow("headroom-never-falls-below-one")
-            << DisplayState{} << backend << expected;
+        QTest::newRow("headroom-never-falls-below-one") << DisplayState{} << backend << expected;
     }
 
     {
@@ -229,8 +219,7 @@ void PresentationTargetTest::calculation_data() {
         expected.potentialHeadroom = 5.0f;
         expected.effectiveTargetHeadroom = 3.5f;
 
-        QTest::newRow("display-referred-edr-with-unknown-sdr-white")
-            << display << backend << expected;
+        QTest::newRow("display-referred-edr-with-unknown-sdr-white") << display << backend << expected;
     }
 
     {
@@ -259,8 +248,7 @@ void PresentationTargetTest::calculation_data() {
         expected.effectiveTargetHeadroom = 5.0f;
         expected.sdrScale = 1.0f;
 
-        QTest::newRow("display-referred-reference-white-needs-no-scale")
-            << display << backend << expected;
+        QTest::newRow("display-referred-reference-white-needs-no-scale") << display << backend << expected;
     }
 
     {
@@ -290,8 +278,7 @@ void PresentationTargetTest::calculation_data() {
         expected.effectiveTargetHeadroom = 1.0f;
         expected.sdrScale = 1.0f;
 
-        QTest::newRow("stable-hdr-surface-on-sdr-output")
-            << display << backend << expected;
+        QTest::newRow("stable-hdr-surface-on-sdr-output") << display << backend << expected;
     }
 }
 
@@ -300,12 +287,9 @@ void PresentationTargetTest::calculation() {
     QFETCH(PresentationBackendState, backend);
     QFETCH(PresentationTarget, expected);
 
-    const PresentationTarget actual =
-        calculatePresentationTarget(display, backend);
+    PresentationTarget const actual = calculatePresentationTarget(display, backend);
 
-    QCOMPARE(
-        actual.hdrPresentationActive,
-        expected.hdrPresentationActive);
+    QCOMPARE(actual.hdrPresentationActive, expected.hdrPresentationActive);
     QCOMPARE(actual.sceneReferred, expected.sceneReferred);
     QCOMPARE(actual.sdrWhiteKnown, expected.sdrWhiteKnown);
     QCOMPARE(actual.luminanceKnown, expected.luminanceKnown);
@@ -314,9 +298,7 @@ void PresentationTargetTest::calculation() {
     QCOMPARE(actual.maxLuminanceNits, expected.maxLuminanceNits);
     QCOMPARE(actual.currentHeadroom, expected.currentHeadroom);
     QCOMPARE(actual.potentialHeadroom, expected.potentialHeadroom);
-    QCOMPARE(
-        actual.effectiveTargetHeadroom,
-        expected.effectiveTargetHeadroom);
+    QCOMPARE(actual.effectiveTargetHeadroom, expected.effectiveTargetHeadroom);
     QCOMPARE(actual.sdrScale, expected.sdrScale);
 }
 

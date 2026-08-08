@@ -15,8 +15,7 @@ RenderedVideoSurfaceDescription canonicalDescription() {
     description.pixelSize = {1920, 1080};
     description.pixelFormat = RenderedVideoPixelFormat::Rgba16Float;
     description.colorSpace = RenderedVideoColorSpace::LinearSrgb;
-    description.luminance =
-        RenderedVideoLuminance::DisplayTargetedSdrWhiteRelative;
+    description.luminance = RenderedVideoLuminance::DisplayTargetedSdrWhiteRelative;
     description.alphaMode = RenderedVideoAlphaMode::Opaque;
     description.referenceWhiteNits = 203.0f;
     description.targetMinimumLuminanceKnown = true;
@@ -32,22 +31,19 @@ RenderedVideoSurfaceState canonicalState() {
     state.contentRevision = 13;
     return state;
 }
-}
+} // namespace
 
 class RenderedVideoSurfaceTest final : public QObject {
     Q_OBJECT
 
-public:
+  public:
     static void initMain() {
 #ifdef Q_OS_WIN
-        SetErrorMode(
-            SEM_FAILCRITICALERRORS
-            | SEM_NOGPFAULTERRORBOX
-            | SEM_NOOPENFILEERRORBOX);
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 #endif
     }
 
-private slots:
+  private slots:
     void canonicalDescriptionIsValid();
     void descriptionRequiresCompleteSemantics();
     void descriptionRequiresFiniteLuminance();
@@ -99,7 +95,7 @@ void RenderedVideoSurfaceTest::descriptionRequiresCompleteSemantics() {
 }
 
 void RenderedVideoSurfaceTest::descriptionRequiresFiniteLuminance() {
-    for (const float invalid : {
+    for (float const invalid : {
              -1.0f,
              0.0f,
              std::numeric_limits<float>::infinity(),
@@ -110,7 +106,7 @@ void RenderedVideoSurfaceTest::descriptionRequiresFiniteLuminance() {
         QVERIFY(!description.isValid());
     }
 
-    for (const float invalid : {
+    for (float const invalid : {
              -1.0f,
              std::numeric_limits<float>::infinity(),
              std::numeric_limits<float>::quiet_NaN(),
@@ -137,13 +133,11 @@ void RenderedVideoSurfaceTest::descriptionRequiresFiniteLuminance() {
     }
     {
         auto description = canonicalDescription();
-        description.targetMinimumLuminanceNits =
-            description.referenceWhiteNits
-            * description.targetPeakHeadroom + 1.0f;
+        description.targetMinimumLuminanceNits = description.referenceWhiteNits * description.targetPeakHeadroom + 1.0f;
         QVERIFY(!description.isValid());
     }
 
-    for (const float invalid : {
+    for (float const invalid : {
              -1.0f,
              0.0f,
              0.99f,
@@ -169,19 +163,17 @@ void RenderedVideoSurfaceTest::stateRequiresNonzeroIdentities() {
     }
 }
 
-void RenderedVideoSurfaceTest::
-equalSemanticStateIsReusableAcrossNativeChanges() {
-    const auto beforeNativeOutputChange = canonicalState();
-    const auto afterNativeOutputChange = canonicalState();
+void RenderedVideoSurfaceTest::equalSemanticStateIsReusableAcrossNativeChanges() {
+    auto const beforeNativeOutputChange = canonicalState();
+    auto const afterNativeOutputChange = canonicalState();
 
     // Native output and swapchain identities are deliberately absent. Equal
     // semantic targets reuse the device-owned video surface.
-    QVERIFY(beforeNativeOutputChange.isReusableFor(
-        afterNativeOutputChange));
+    QVERIFY(beforeNativeOutputChange.isReusableFor(afterNativeOutputChange));
 }
 
 void RenderedVideoSurfaceTest::lifecycleAndContentChangesInvalidate() {
-    const auto completed = canonicalState();
+    auto const completed = canonicalState();
 
     {
         auto requested = canonicalState();
@@ -196,7 +188,7 @@ void RenderedVideoSurfaceTest::lifecycleAndContentChangesInvalidate() {
 }
 
 void RenderedVideoSurfaceTest::semanticChangesInvalidate() {
-    const auto completed = canonicalState();
+    auto const completed = canonicalState();
 
     {
         auto requested = canonicalState();
@@ -210,8 +202,7 @@ void RenderedVideoSurfaceTest::semanticChangesInvalidate() {
     }
     {
         auto completedAtKnownZero = canonicalState();
-        completedAtKnownZero.description
-            .targetMinimumLuminanceNits = 0.0f;
+        completedAtKnownZero.description.targetMinimumLuminanceNits = 0.0f;
         auto requested = completedAtKnownZero;
         requested.description.targetMinimumLuminanceKnown = false;
         QVERIFY(completedAtKnownZero.isValid());
@@ -230,28 +221,21 @@ void RenderedVideoSurfaceTest::semanticChangesInvalidate() {
     }
 }
 
-void RenderedVideoSurfaceTest::
-unavailableTargetDiagnosticsRequireReason() {
+void RenderedVideoSurfaceTest::unavailableTargetDiagnosticsRequireReason() {
     VideoTargetInteropDiagnostics diagnostics;
     diagnostics.synchronizationMode = QStringLiteral("Not active");
     QVERIFY(!diagnostics.isValid());
-    diagnostics.fallbackReason =
-        QStringLiteral("Target not provisioned");
+    diagnostics.fallbackReason = QStringLiteral("Target not provisioned");
     QVERIFY(diagnostics.isValid());
-    QCOMPARE(
-        videoOutputPathName(diagnostics.outputPath),
-        QStringLiteral("Unavailable"));
+    QCOMPARE(videoOutputPathName(diagnostics.outputPath), QStringLiteral("Unavailable"));
 }
 
 void RenderedVideoSurfaceTest::directTargetDiagnosticsRequireNoCopies() {
     VideoTargetInteropDiagnostics diagnostics;
     diagnostics.outputPath = VideoOutputPath::DirectRenderTarget;
-    diagnostics.synchronizationMode =
-        QStringLiteral("QRhi command-buffer ordering");
+    diagnostics.synchronizationMode = QStringLiteral("QRhi command-buffer ordering");
     QVERIFY(diagnostics.isValid());
-    QCOMPARE(
-        videoOutputPathName(diagnostics.outputPath),
-        QStringLiteral("Direct render target"));
+    QCOMPARE(videoOutputPathName(diagnostics.outputPath), QStringLiteral("Direct render target"));
 
     diagnostics.knownOutputGpuCopiesPerRender = 1;
     QVERIFY(!diagnostics.isValid());
@@ -260,17 +244,14 @@ void RenderedVideoSurfaceTest::directTargetDiagnosticsRequireNoCopies() {
     QVERIFY(!diagnostics.isValid());
 }
 
-void RenderedVideoSurfaceTest::
-fallbackDiagnosticsRequireObservableCostsAndReason() {
+void RenderedVideoSurfaceTest::fallbackDiagnosticsRequireObservableCostsAndReason() {
     VideoTargetInteropDiagnostics diagnostics;
     diagnostics.outputPath = VideoOutputPath::SameDeviceGpuCopy;
-    diagnostics.synchronizationMode =
-        QStringLiteral("Backend fence");
+    diagnostics.synchronizationMode = QStringLiteral("Backend fence");
     QVERIFY(!diagnostics.isValid());
     diagnostics.knownOutputGpuCopiesPerRender = 1;
     QVERIFY(!diagnostics.isValid());
-    diagnostics.fallbackReason =
-        QStringLiteral("Direct target format unavailable");
+    diagnostics.fallbackReason = QStringLiteral("Direct target format unavailable");
     QVERIFY(diagnostics.isValid());
 
     diagnostics.outputPath = VideoOutputPath::CpuRoundTrip;
@@ -279,9 +260,7 @@ fallbackDiagnosticsRequireObservableCostsAndReason() {
     QVERIFY(!diagnostics.isValid());
     diagnostics.knownOutputCpuTransfersPerRender = 2;
     QVERIFY(diagnostics.isValid());
-    QCOMPARE(
-        videoOutputPathName(diagnostics.outputPath),
-        QStringLiteral("CPU round trip"));
+    QCOMPARE(videoOutputPathName(diagnostics.outputPath), QStringLiteral("CPU round trip"));
 }
 
 QTEST_APPLESS_MAIN(RenderedVideoSurfaceTest)

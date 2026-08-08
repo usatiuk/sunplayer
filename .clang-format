@@ -1,0 +1,9 @@
+BasedOnStyle: LLVM
+AlignTrailingComments: true
+AllowShortBlocksOnASingleLine: true
+ColumnLimit: 120
+DerivePointerAlignment: false
+IndentWidth: 4
+InsertBraces: true
+PointerAlignment: Left
+QualifierAlignment: Right

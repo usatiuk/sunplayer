@@ -28,16 +28,12 @@
 #include "wayland-color-management-v1-client-protocol.h"
 
 namespace {
-static_assert(
-    WP_COLOR_MANAGEMENT_SURFACE_FEEDBACK_V1_PREFERRED_CHANGED2_SINCE_VERSION
-        == WaylandColorManagementCapabilities::requiredProtocolVersion);
-static_assert(
-    WP_IMAGE_DESCRIPTION_V1_READY2_SINCE_VERSION
-        == WaylandColorManagementCapabilities::requiredProtocolVersion);
+static_assert(WP_COLOR_MANAGEMENT_SURFACE_FEEDBACK_V1_PREFERRED_CHANGED2_SINCE_VERSION ==
+              WaylandColorManagementCapabilities::requiredProtocolVersion);
+static_assert(WP_IMAGE_DESCRIPTION_V1_READY2_SINCE_VERSION ==
+              WaylandColorManagementCapabilities::requiredProtocolVersion);
 
-std::uint64_t imageDescriptionIdentity(
-        std::uint32_t high,
-        std::uint32_t low) {
+std::uint64_t imageDescriptionIdentity(std::uint32_t high, std::uint32_t low) {
     return (static_cast<std::uint64_t>(high) << 32U) | low;
 }
 
@@ -55,176 +51,148 @@ QString presentationModeName(PresentationSurfaceMode mode) {
     Q_UNREACHABLE_RETURN(QString{});
 }
 
-WaylandColorPrimaries colorPrimaries(
-        std::int32_t redX,
-        std::int32_t redY,
-        std::int32_t greenX,
-        std::int32_t greenY,
-        std::int32_t blueX,
-        std::int32_t blueY,
-        std::int32_t whiteX,
-        std::int32_t whiteY) {
+WaylandColorPrimaries colorPrimaries(std::int32_t redX, std::int32_t redY, std::int32_t greenX, std::int32_t greenY,
+                                     std::int32_t blueX, std::int32_t blueY, std::int32_t whiteX, std::int32_t whiteY) {
     constexpr float protocolScale = 1'000'000.0f;
     return {
-        .red = {
-            static_cast<float>(redX) / protocolScale,
-            static_cast<float>(redY) / protocolScale,
-        },
-        .green = {
-            static_cast<float>(greenX) / protocolScale,
-            static_cast<float>(greenY) / protocolScale,
-        },
-        .blue = {
-            static_cast<float>(blueX) / protocolScale,
-            static_cast<float>(blueY) / protocolScale,
-        },
-        .white = {
-            static_cast<float>(whiteX) / protocolScale,
-            static_cast<float>(whiteY) / protocolScale,
-        },
+        .red =
+            {
+                static_cast<float>(redX) / protocolScale,
+                static_cast<float>(redY) / protocolScale,
+            },
+        .green =
+            {
+                static_cast<float>(greenX) / protocolScale,
+                static_cast<float>(greenY) / protocolScale,
+            },
+        .blue =
+            {
+                static_cast<float>(blueX) / protocolScale,
+                static_cast<float>(blueY) / protocolScale,
+            },
+        .white =
+            {
+                static_cast<float>(whiteX) / protocolScale,
+                static_cast<float>(whiteY) / protocolScale,
+            },
     };
 }
 
 class ColorManagerBinding final : public QtWayland::wp_color_manager_v1 {
-public:
-    ColorManagerBinding(
-            wl_registry *registry,
-            std::uint32_t name,
-            std::uint32_t advertisedVersion)
+  public:
+    ColorManagerBinding(wl_registry* registry, std::uint32_t name, std::uint32_t advertisedVersion)
         : QtWayland::wp_color_manager_v1(
-              registry,
-              name,
-              static_cast<int>(
-                  WaylandColorManagementCapabilities::
-                      requiredProtocolVersion)) {
-        Q_ASSERT(advertisedVersion
-            >= WaylandColorManagementCapabilities::
-                requiredProtocolVersion);
+              registry, name, static_cast<int>(WaylandColorManagementCapabilities::requiredProtocolVersion)) {
+        Q_ASSERT(advertisedVersion >= WaylandColorManagementCapabilities::requiredProtocolVersion);
         m_capabilities.protocolAdvertised = true;
         m_capabilities.protocolVersion = advertisedVersion;
     }
 
     ~ColorManagerBinding() override {
-        if (isInitialized())
+        if (isInitialized()) {
             destroy();
+        }
     }
 
-    const WaylandColorManagementCapabilities &capabilities() const {
-        return m_capabilities;
-    }
+    WaylandColorManagementCapabilities const& capabilities() const { return m_capabilities; }
 
-protected:
-    void wp_color_manager_v1_supported_intent(
-            std::uint32_t renderIntent) override {
-        if (renderIntent == render_intent_perceptual)
+  protected:
+    void wp_color_manager_v1_supported_intent(std::uint32_t renderIntent) override {
+        if (renderIntent == render_intent_perceptual) {
             m_capabilities.perceptualIntent = true;
+        }
     }
 
-    void wp_color_manager_v1_supported_feature(
-            std::uint32_t feature) override {
-        if (feature == feature_parametric)
+    void wp_color_manager_v1_supported_feature(std::uint32_t feature) override {
+        if (feature == feature_parametric) {
             m_capabilities.parametricDescriptions = true;
+        }
     }
 
-    void wp_color_manager_v1_supported_tf_named(
-            std::uint32_t transferFunction) override {
-        if (transferFunction == transfer_function_gamma22)
+    void wp_color_manager_v1_supported_tf_named(std::uint32_t transferFunction) override {
+        if (transferFunction == transfer_function_gamma22) {
             m_capabilities.gamma22Transfer = true;
-        if (transferFunction == transfer_function_st2084_pq)
+        }
+        if (transferFunction == transfer_function_st2084_pq) {
             m_capabilities.pqTransfer = true;
+        }
     }
 
-    void wp_color_manager_v1_supported_primaries_named(
-            std::uint32_t primaries) override {
-        if (primaries == primaries_srgb)
+    void wp_color_manager_v1_supported_primaries_named(std::uint32_t primaries) override {
+        if (primaries == primaries_srgb) {
             m_capabilities.namedSrgbPrimaries = true;
-        if (primaries == primaries_bt2020)
+        }
+        if (primaries == primaries_bt2020) {
             m_capabilities.namedBt2020Primaries = true;
+        }
     }
 
-    void wp_color_manager_v1_done() override {
-        m_capabilities.inventoryComplete = true;
-    }
+    void wp_color_manager_v1_done() override { m_capabilities.inventoryComplete = true; }
 
-private:
+  private:
     WaylandColorManagementCapabilities m_capabilities;
 };
 
-class ManagedImageDescription final
-    : public QtWayland::wp_image_description_v1 {
-public:
+class ManagedImageDescription final : public QtWayland::wp_image_description_v1 {
+  public:
     enum class Result {
         Pending,
         Ready,
         Failed,
     };
 
-    explicit ManagedImageDescription(
-            struct ::wp_image_description_v1 *description)
+    explicit ManagedImageDescription(struct ::wp_image_description_v1* description)
         : QtWayland::wp_image_description_v1(description) {}
 
     ~ManagedImageDescription() override {
-        if (isInitialized())
+        if (isInitialized()) {
             destroy();
+        }
     }
 
     bool complete() const { return m_result != Result::Pending; }
     bool ready() const { return m_result == Result::Ready; }
 
-protected:
-    void wp_image_description_v1_failed(
-            std::uint32_t cause,
-            const QString &message) override {
+  protected:
+    void wp_image_description_v1_failed(std::uint32_t cause, QString const& message) override {
         Q_ASSERT(m_result == Result::Pending);
         m_result = Result::Failed;
-        qCWarning(sunroomLogPlatform).noquote()
-            << "event=wayland.surface_description_failed"
-            << "cause=" + QString::number(cause)
-            << "detail=" + message;
+        qCWarning(sunroomLogPlatform).noquote() << "event=wayland.surface_description_failed"
+                                                << "cause=" + QString::number(cause) << "detail=" + message;
     }
 
-    void wp_image_description_v1_ready2(
-            std::uint32_t,
-            std::uint32_t) override {
+    void wp_image_description_v1_ready2(std::uint32_t, std::uint32_t) override {
         Q_ASSERT(m_result == Result::Pending);
         m_result = Result::Ready;
     }
 
-private:
+  private:
     Result m_result = Result::Pending;
 };
 
-std::unique_ptr<ManagedImageDescription> createManagedDescription(
-        ColorManagerBinding &colorManager,
-        std::uint32_t primaries,
-        std::uint32_t transferFunction) {
-    auto *const creator = colorManager.create_parametric_creator();
+std::unique_ptr<ManagedImageDescription>
+createManagedDescription(ColorManagerBinding& colorManager, std::uint32_t primaries, std::uint32_t transferFunction) {
+    auto* const creator = colorManager.create_parametric_creator();
     Q_ASSERT(creator);
-    wp_image_description_creator_params_v1_set_primaries_named(
-        creator, primaries);
-    wp_image_description_creator_params_v1_set_tf_named(
-        creator, transferFunction);
-    return std::make_unique<ManagedImageDescription>(
-        wp_image_description_creator_params_v1_create(creator));
+    wp_image_description_creator_params_v1_set_primaries_named(creator, primaries);
+    wp_image_description_creator_params_v1_set_tf_named(creator, transferFunction);
+    return std::make_unique<ManagedImageDescription>(wp_image_description_creator_params_v1_create(creator));
 }
 
-class ManagedSurface final
-    : public QtWayland::wp_color_management_surface_v1 {
-public:
-    explicit ManagedSurface(
-            struct ::wp_color_management_surface_v1 *surface)
+class ManagedSurface final : public QtWayland::wp_color_management_surface_v1 {
+  public:
+    explicit ManagedSurface(struct ::wp_color_management_surface_v1* surface)
         : QtWayland::wp_color_management_surface_v1(surface) {}
 
     ~ManagedSurface() override {
-        if (isInitialized())
+        if (isInitialized()) {
             destroy();
+        }
     }
 
-    void apply(ManagedImageDescription &description) {
+    void apply(ManagedImageDescription& description) {
         Q_ASSERT(description.ready());
-        set_image_description(
-            description.object(),
-            QtWayland::wp_color_manager_v1::render_intent_perceptual);
+        set_image_description(description.object(), QtWayland::wp_color_manager_v1::render_intent_perceptual);
     }
 };
 
@@ -234,284 +202,199 @@ struct RegistryInventory {
     bool decorationManagerAdvertised = false;
 };
 
-void handleGlobal(
-        void *data,
-        wl_registry *,
-        std::uint32_t name,
-        const char *interface,
-        std::uint32_t version) {
-    auto &inventory = *static_cast<RegistryInventory *>(data);
+void handleGlobal(void* data, wl_registry*, std::uint32_t name, char const* interface, std::uint32_t version) {
+    auto& inventory = *static_cast<RegistryInventory*>(data);
     if (std::strcmp(interface, "zxdg_decoration_manager_v1") == 0) {
         inventory.decorationManagerAdvertised = true;
         return;
     }
-    if (std::strcmp(interface, wp_color_manager_v1_interface.name) == 0
-            && inventory.colorManagerName == 0) {
+    if (std::strcmp(interface, wp_color_manager_v1_interface.name) == 0 && inventory.colorManagerName == 0) {
         inventory.colorManagerName = name;
         inventory.colorManagerVersion = version;
     }
 }
 
-void handleGlobalRemove(void *, wl_registry *, std::uint32_t) {
-}
+void handleGlobalRemove(void*, wl_registry*, std::uint32_t) {}
 
 constexpr wl_registry_listener registryListener{
     .global = handleGlobal,
     .global_remove = handleGlobalRemove,
 };
 
-void roundtripOrFail(wl_display &display, const char *operation) {
-    if (wl_display_roundtrip(&display) >= 0)
+void roundtripOrFail(wl_display& display, char const* operation) {
+    if (wl_display_roundtrip(&display) >= 0) {
         return;
-    qCFatal(
-        sunroomLogPlatform,
-        "Wayland connection failed while %s (error %d)",
-        operation,
-        wl_display_get_error(&display));
+    }
+    qCFatal(sunroomLogPlatform, "Wayland connection failed while %s (error %d)", operation,
+            wl_display_get_error(&display));
 }
 
-void waitForManagedDescriptions(
-        wl_display &display,
-        ManagedImageDescription &sdrDescription,
-        ManagedImageDescription *hdrDescription) {
+void waitForManagedDescriptions(wl_display& display, ManagedImageDescription& sdrDescription,
+                                ManagedImageDescription* hdrDescription) {
     // Creation completion is explicitly eventual. The first roundtrip flushes
     // both requests; later dispatches wait for each terminal ready2/failed
     // event instead of mistaking an in-flight description for rejection.
     roundtripOrFail(display, "creating managed surface descriptions");
-    while (!sdrDescription.complete()
-            || (hdrDescription && !hdrDescription->complete())) {
-        if (wl_display_dispatch(&display) >= 0)
+    while (!sdrDescription.complete() || (hdrDescription && !hdrDescription->complete())) {
+        if (wl_display_dispatch(&display) >= 0) {
             continue;
-        qCFatal(
-            sunroomLogPlatform,
-            "Wayland connection failed while waiting for managed surface "
-            "descriptions (error %d)",
-            wl_display_get_error(&display));
+        }
+        qCFatal(sunroomLogPlatform,
+                "Wayland connection failed while waiting for managed surface "
+                "descriptions (error %d)",
+                wl_display_get_error(&display));
     }
 }
 
-class PreferredDescriptionInfo final
-    : public QtWayland::wp_image_description_info_v1 {
-public:
-    using Completion =
-        std::function<void(const WaylandPreferredDescription &)>;
+class PreferredDescriptionInfo final : public QtWayland::wp_image_description_info_v1 {
+  public:
+    using Completion = std::function<void(WaylandPreferredDescription const&)>;
 
-    PreferredDescriptionInfo(
-            struct ::wp_image_description_info_v1 *information,
-            Completion completion)
-        : QtWayland::wp_image_description_info_v1(information),
-          m_completion(std::move(completion)) {}
+    PreferredDescriptionInfo(struct ::wp_image_description_info_v1* information, Completion completion)
+        : QtWayland::wp_image_description_info_v1(information), m_completion(std::move(completion)) {}
 
     ~PreferredDescriptionInfo() override {
-        if (isInitialized())
+        if (isInitialized()) {
             wp_image_description_info_v1_destroy(object());
+        }
     }
 
-protected:
+  protected:
     void wp_image_description_info_v1_done() override {
         m_description.parametric = true;
-        if (!m_description.targetPrimariesKnown
-                && m_description.primariesKnown) {
-            m_description.targetPrimaries =
-                m_description.primaries;
+        if (!m_description.targetPrimariesKnown && m_description.primariesKnown) {
+            m_description.targetPrimaries = m_description.primaries;
         }
         m_completion(m_description);
     }
 
-    void wp_image_description_info_v1_icc_file(
-            std::int32_t file,
-            std::uint32_t) override {
+    void wp_image_description_info_v1_icc_file(std::int32_t file, std::uint32_t) override {
         // This cannot occur for get_preferred_parametric(), but an unexpected
         // descriptor still belongs to the client and must be closed.
         close(file);
     }
 
-    void wp_image_description_info_v1_primaries(
-            std::int32_t redX,
-            std::int32_t redY,
-            std::int32_t greenX,
-            std::int32_t greenY,
-            std::int32_t blueX,
-            std::int32_t blueY,
-            std::int32_t whiteX,
-            std::int32_t whiteY) override {
-        m_description.primaries = colorPrimaries(
-            redX,
-            redY,
-            greenX,
-            greenY,
-            blueX,
-            blueY,
-            whiteX,
-            whiteY);
+    void wp_image_description_info_v1_primaries(std::int32_t redX, std::int32_t redY, std::int32_t greenX,
+                                                std::int32_t greenY, std::int32_t blueX, std::int32_t blueY,
+                                                std::int32_t whiteX, std::int32_t whiteY) override {
+        m_description.primaries = colorPrimaries(redX, redY, greenX, greenY, blueX, blueY, whiteX, whiteY);
         m_description.primariesKnown = true;
     }
 
-    void wp_image_description_info_v1_tf_power(
-            std::uint32_t) override {
-        m_description.transferFunction =
-            WaylandTransferFunction::Other;
+    void wp_image_description_info_v1_tf_power(std::uint32_t) override {
+        m_description.transferFunction = WaylandTransferFunction::Other;
     }
 
-    void wp_image_description_info_v1_tf_named(
-            std::uint32_t transferFunction) override {
+    void wp_image_description_info_v1_tf_named(std::uint32_t transferFunction) override {
         switch (transferFunction) {
         case QtWayland::wp_color_manager_v1::transfer_function_gamma22:
-            m_description.transferFunction =
-                WaylandTransferFunction::Gamma22;
+            m_description.transferFunction = WaylandTransferFunction::Gamma22;
             break;
         case QtWayland::wp_color_manager_v1::transfer_function_ext_linear:
-            m_description.transferFunction =
-                WaylandTransferFunction::ExtendedLinear;
+            m_description.transferFunction = WaylandTransferFunction::ExtendedLinear;
             break;
         case QtWayland::wp_color_manager_v1::transfer_function_st2084_pq:
-            m_description.transferFunction =
-                WaylandTransferFunction::Pq;
+            m_description.transferFunction = WaylandTransferFunction::Pq;
             break;
         default:
-            m_description.transferFunction =
-                WaylandTransferFunction::Other;
+            m_description.transferFunction = WaylandTransferFunction::Other;
             break;
         }
     }
 
-    void wp_image_description_info_v1_luminances(
-            std::uint32_t minimumLuminance,
-            std::uint32_t maximumLuminance,
-            std::uint32_t referenceLuminance) override {
-        m_description.minimumLuminanceNits =
-            static_cast<float>(minimumLuminance) / 10'000.0f;
-        m_description.maximumLuminanceNits =
-            static_cast<float>(maximumLuminance);
-        m_description.referenceWhiteNits =
-            static_cast<float>(referenceLuminance);
+    void wp_image_description_info_v1_luminances(std::uint32_t minimumLuminance, std::uint32_t maximumLuminance,
+                                                 std::uint32_t referenceLuminance) override {
+        m_description.minimumLuminanceNits = static_cast<float>(minimumLuminance) / 10'000.0f;
+        m_description.maximumLuminanceNits = static_cast<float>(maximumLuminance);
+        m_description.referenceWhiteNits = static_cast<float>(referenceLuminance);
         m_description.luminancesKnown = true;
     }
 
-    void wp_image_description_info_v1_target_primaries(
-            std::int32_t redX,
-            std::int32_t redY,
-            std::int32_t greenX,
-            std::int32_t greenY,
-            std::int32_t blueX,
-            std::int32_t blueY,
-            std::int32_t whiteX,
-            std::int32_t whiteY) override {
-        m_description.targetPrimaries = colorPrimaries(
-            redX,
-            redY,
-            greenX,
-            greenY,
-            blueX,
-            blueY,
-            whiteX,
-            whiteY);
+    void wp_image_description_info_v1_target_primaries(std::int32_t redX, std::int32_t redY, std::int32_t greenX,
+                                                       std::int32_t greenY, std::int32_t blueX, std::int32_t blueY,
+                                                       std::int32_t whiteX, std::int32_t whiteY) override {
+        m_description.targetPrimaries = colorPrimaries(redX, redY, greenX, greenY, blueX, blueY, whiteX, whiteY);
         m_description.targetPrimariesKnown = true;
     }
 
-    void wp_image_description_info_v1_target_luminance(
-            std::uint32_t minimumLuminance,
-            std::uint32_t maximumLuminance) override {
-        m_description.targetMinimumLuminanceNits =
-            static_cast<float>(minimumLuminance) / 10'000.0f;
-        m_description.targetMaximumLuminanceNits =
-            static_cast<float>(maximumLuminance);
+    void wp_image_description_info_v1_target_luminance(std::uint32_t minimumLuminance,
+                                                       std::uint32_t maximumLuminance) override {
+        m_description.targetMinimumLuminanceNits = static_cast<float>(minimumLuminance) / 10'000.0f;
+        m_description.targetMaximumLuminanceNits = static_cast<float>(maximumLuminance);
         m_description.targetLuminanceKnown = true;
     }
 
-private:
+  private:
     Completion m_completion;
     WaylandPreferredDescription m_description;
 };
 
-class PreferredDescriptionRequest final
-    : public QtWayland::wp_image_description_v1 {
-public:
-    using Completion = std::function<void(
-        std::uint64_t,
-        std::optional<WaylandPreferredDescription>)>;
+class PreferredDescriptionRequest final : public QtWayland::wp_image_description_v1 {
+  public:
+    using Completion = std::function<void(std::uint64_t, std::optional<WaylandPreferredDescription>)>;
 
-    PreferredDescriptionRequest(
-            struct ::wp_image_description_v1 *description,
-            Completion completion)
-        : QtWayland::wp_image_description_v1(description),
-          m_completion(std::move(completion)) {}
+    PreferredDescriptionRequest(struct ::wp_image_description_v1* description, Completion completion)
+        : QtWayland::wp_image_description_v1(description), m_completion(std::move(completion)) {}
 
     ~PreferredDescriptionRequest() override {
         m_information.reset();
-        if (isInitialized())
+        if (isInitialized()) {
             destroy();
+        }
     }
 
-protected:
-    void wp_image_description_v1_failed(
-            std::uint32_t cause,
-            const QString &message) override {
-        qCWarning(sunroomLogPlatform).noquote()
-            << "event=wayland.preferred_description_failed"
-            << "cause=" + QString::number(cause)
-            << "detail=" + message;
+  protected:
+    void wp_image_description_v1_failed(std::uint32_t cause, QString const& message) override {
+        qCWarning(sunroomLogPlatform).noquote() << "event=wayland.preferred_description_failed"
+                                                << "cause=" + QString::number(cause) << "detail=" + message;
         m_completion(0, std::nullopt);
     }
 
-    void wp_image_description_v1_ready2(
-            std::uint32_t identityHigh,
-            std::uint32_t identityLow) override {
-        const std::uint64_t identity = imageDescriptionIdentity(
-            identityHigh, identityLow);
+    void wp_image_description_v1_ready2(std::uint32_t identityHigh, std::uint32_t identityLow) override {
+        std::uint64_t const identity = imageDescriptionIdentity(identityHigh, identityLow);
         m_information = std::make_unique<PreferredDescriptionInfo>(
             get_information(),
-            [this, identity](
-                    const WaylandPreferredDescription &description) {
-                m_completion(identity, description);
-            });
+            [this, identity](WaylandPreferredDescription const& description) { m_completion(identity, description); });
     }
 
-private:
+  private:
     Completion m_completion;
     std::unique_ptr<PreferredDescriptionInfo> m_information;
 };
 
-class SurfaceFeedback final
-    : public QtWayland::wp_color_management_surface_feedback_v1 {
-public:
+class SurfaceFeedback final : public QtWayland::wp_color_management_surface_feedback_v1 {
+  public:
     using Change = std::function<void(std::uint64_t)>;
 
-    SurfaceFeedback(
-            struct ::wp_color_management_surface_feedback_v1 *feedback,
-            Change change)
-        : QtWayland::wp_color_management_surface_feedback_v1(feedback),
-          m_change(std::move(change)) {}
+    SurfaceFeedback(struct ::wp_color_management_surface_feedback_v1* feedback, Change change)
+        : QtWayland::wp_color_management_surface_feedback_v1(feedback), m_change(std::move(change)) {}
 
     ~SurfaceFeedback() override {
-        if (isInitialized())
+        if (isInitialized()) {
             destroy();
+        }
     }
 
-protected:
-    void wp_color_management_surface_feedback_v1_preferred_changed2(
-            std::uint32_t identityHigh,
-            std::uint32_t identityLow) override {
+  protected:
+    void wp_color_management_surface_feedback_v1_preferred_changed2(std::uint32_t identityHigh,
+                                                                    std::uint32_t identityLow) override {
         m_change(imageDescriptionIdentity(identityHigh, identityLow));
     }
 
-private:
+  private:
     Change m_change;
 };
-}
+} // namespace
 
 struct LinuxWaylandWindowContext::NativeState final {
     class Provider final : public DisplayStateProvider {
-    public:
-        Provider(NativeState &nativeState, QObject *parent)
-            : DisplayStateProvider(parent),
-              m_nativeState(nativeState) {}
+      public:
+        Provider(NativeState& nativeState, QObject* parent)
+            : DisplayStateProvider(parent), m_nativeState(nativeState) {}
 
-        ~Provider() override {
-            detach();
-        }
+        ~Provider() override { detach(); }
 
-        void attach(QWindow &window) override {
+        void attach(QWindow& window) override {
             Q_ASSERT(!m_window);
             Q_ASSERT(!m_nativeState.managedSurface);
             m_window = &window;
@@ -526,8 +409,9 @@ struct LinuxWaylandWindowContext::NativeState final {
         void detach() override {
             clearSurface();
             clearNativeWindow();
-            if (m_window)
+            if (m_window) {
                 m_window->removeEventFilter(this);
+            }
             m_window = nullptr;
         }
 
@@ -539,17 +423,14 @@ struct LinuxWaylandWindowContext::NativeState final {
             requestPreferredDescription();
         }
 
-    protected:
-        bool eventFilter(QObject *watched, QEvent *event) override {
-            if (watched != m_window
-                    || event->type() != QEvent::PlatformSurface) {
+      protected:
+        bool eventFilter(QObject* watched, QEvent* event) override {
+            if (watched != m_window || event->type() != QEvent::PlatformSurface) {
                 return DisplayStateProvider::eventFilter(watched, event);
             }
 
-            const auto *const surfaceEvent =
-                static_cast<QPlatformSurfaceEvent *>(event);
-            if (surfaceEvent->surfaceEventType()
-                    == QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed) {
+            auto const* const surfaceEvent = static_cast<QPlatformSurfaceEvent*>(event);
+            if (surfaceEvent->surfaceEventType() == QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed) {
                 clearSurface();
                 clearNativeWindow();
             } else {
@@ -558,28 +439,21 @@ struct LinuxWaylandWindowContext::NativeState final {
             return DisplayStateProvider::eventFilter(watched, event);
         }
 
-    private:
+      private:
         void attachNativeWindow() {
             Q_ASSERT(m_window);
             clearSurface();
             clearNativeWindow();
-            m_nativeWindow = m_window->nativeInterface<
-                QNativeInterface::Private::QWaylandWindow>();
+            m_nativeWindow = m_window->nativeInterface<QNativeInterface::Private::QWaylandWindow>();
             if (!m_nativeWindow) {
-                qCFatal(
-                    sunroomLogPlatform,
-                    "The Wayland QPA did not expose the native window interface");
+                qCFatal(sunroomLogPlatform, "The Wayland QPA did not expose the native window interface");
             }
-            m_surfaceCreatedConnection = connect(
-                m_nativeWindow,
-                &QNativeInterface::Private::QWaylandWindow::surfaceCreated,
-                this,
-                [this] { attachSurface(); });
-            m_surfaceDestroyedConnection = connect(
-                m_nativeWindow,
-                &QNativeInterface::Private::QWaylandWindow::surfaceDestroyed,
-                this,
-                [this] { clearSurface(); });
+            m_surfaceCreatedConnection =
+                connect(m_nativeWindow, &QNativeInterface::Private::QWaylandWindow::surfaceCreated, this,
+                        [this] { attachSurface(); });
+            m_surfaceDestroyedConnection =
+                connect(m_nativeWindow, &QNativeInterface::Private::QWaylandWindow::surfaceDestroyed, this,
+                        [this] { clearSurface(); });
             attachSurface();
         }
 
@@ -594,15 +468,14 @@ struct LinuxWaylandWindowContext::NativeState final {
         void attachSurface() {
             Q_ASSERT(m_nativeWindow);
             clearSurface();
-            wl_surface *const surface = m_nativeWindow->surface();
-            if (!surface)
+            wl_surface* const surface = m_nativeWindow->surface();
+            if (!surface) {
                 return;
+            }
             m_nativeState.attachManagedSurface(surface);
             m_feedback = std::make_unique<SurfaceFeedback>(
-                m_nativeState.colorManager->get_surface_feedback(surface),
-                [this](std::uint64_t identity) {
-                    if (m_preferredIdentity
-                            && *m_preferredIdentity == identity) {
+                m_nativeState.colorManager->get_surface_feedback(surface), [this](std::uint64_t identity) {
+                    if (m_preferredIdentity && *m_preferredIdentity == identity) {
                         return;
                     }
                     requestPreferredDescription();
@@ -619,28 +492,25 @@ struct LinuxWaylandWindowContext::NativeState final {
         }
 
         void requestPreferredDescription() {
-            if (!m_feedback)
+            if (!m_feedback) {
                 return;
+            }
             ++m_requestSerial;
-            const std::uint64_t requestSerial = m_requestSerial;
+            std::uint64_t const requestSerial = m_requestSerial;
             m_request.reset();
             m_request = std::make_unique<PreferredDescriptionRequest>(
                 m_feedback->get_preferred_parametric(),
-                [this, requestSerial](
-                        std::uint64_t identity,
-                        std::optional<WaylandPreferredDescription>
-                            description) {
-                    if (requestSerial != m_requestSerial)
+                [this, requestSerial](std::uint64_t identity, std::optional<WaylandPreferredDescription> description) {
+                    if (requestSerial != m_requestSerial) {
                         return;
+                    }
                     if (!description) {
                         publish(DisplayState{});
                         return;
                     }
-                    const std::optional<DisplayState> state =
-                        displayStateFromWaylandDescription(*description);
+                    std::optional<DisplayState> const state = displayStateFromWaylandDescription(*description);
                     if (!state) {
-                        qCWarning(sunroomLogPlatform).noquote()
-                            << "event=wayland.preferred_description_invalid";
+                        qCWarning(sunroomLogPlatform).noquote() << "event=wayland.preferred_description_invalid";
                         publish(DisplayState{});
                         return;
                     }
@@ -649,27 +519,24 @@ struct LinuxWaylandWindowContext::NativeState final {
                 });
         }
 
-        void publish(const DisplayState &state) {
-            if (m_hasPublished && m_published == state)
+        void publish(DisplayState const& state) {
+            if (m_hasPublished && m_published == state) {
                 return;
+            }
             m_hasPublished = true;
             m_published = state;
             if (state.valid) {
                 qCInfo(sunroomLogPlatform).noquote()
                     << "event=wayland.preferred_description"
-                    << "referenceWhiteNits="
-                        + QString::number(state.sdrWhiteNits)
-                    << "minimumNits="
-                        + QString::number(state.minLuminanceNits)
-                    << "maximumNits="
-                        + QString::number(state.maxLuminanceNits)
-                    << "preferredTargetHeadroom="
-                        + QString::number(state.currentHeadroom);
+                    << "referenceWhiteNits=" + QString::number(state.sdrWhiteNits)
+                    << "minimumNits=" + QString::number(state.minLuminanceNits)
+                    << "maximumNits=" + QString::number(state.maxLuminanceNits)
+                    << "preferredTargetHeadroom=" + QString::number(state.currentHeadroom);
             }
             emit stateChanged(state);
         }
 
-        NativeState &m_nativeState;
+        NativeState& m_nativeState;
         QPointer<QWindow> m_window;
         QPointer<QNativeInterface::Private::QWaylandWindow> m_nativeWindow;
         QMetaObject::Connection m_surfaceCreatedConnection;
@@ -682,49 +549,33 @@ struct LinuxWaylandWindowContext::NativeState final {
         bool m_hasPublished = false;
     };
 
-    explicit NativeState(QGuiApplication &application) {
-        auto *const native = application.nativeInterface<
-            QNativeInterface::QWaylandApplication>();
+    explicit NativeState(QGuiApplication& application) {
+        auto* const native = application.nativeInterface<QNativeInterface::QWaylandApplication>();
         if (!native || !native->display()) {
-            qCFatal(
-                sunroomLogPlatform,
-                "The Wayland QPA did not expose its wl_display");
+            qCFatal(sunroomLogPlatform, "The Wayland QPA did not expose its wl_display");
         }
 
-        wl_display *const display = native->display();
-        wl_registry *const registry = wl_display_get_registry(display);
+        wl_display* const display = native->display();
+        wl_registry* const registry = wl_display_get_registry(display);
         if (!registry) {
-            qCFatal(
-                sunroomLogPlatform,
-                "Could not create the Wayland capability registry");
+            qCFatal(sunroomLogPlatform, "Could not create the Wayland capability registry");
         }
 
         RegistryInventory inventory;
-        if (wl_registry_add_listener(
-                registry, &registryListener, &inventory) < 0) {
+        if (wl_registry_add_listener(registry, &registryListener, &inventory) < 0) {
             wl_registry_destroy(registry);
-            qCFatal(
-                sunroomLogPlatform,
-                "Could not observe Wayland globals");
+            qCFatal(sunroomLogPlatform, "Could not observe Wayland globals");
         }
         roundtripOrFail(*display, "discovering color-management-v1");
 
-        decorationManagerAdvertised =
-            inventory.decorationManagerAdvertised;
+        decorationManagerAdvertised = inventory.decorationManagerAdvertised;
         if (inventory.colorManagerName != 0) {
             capabilities.protocolAdvertised = true;
-            capabilities.protocolVersion =
-                inventory.colorManagerVersion;
-            if (inventory.colorManagerVersion
-                    >= WaylandColorManagementCapabilities::
-                        requiredProtocolVersion) {
-                colorManager = std::make_unique<ColorManagerBinding>(
-                    registry,
-                    inventory.colorManagerName,
-                    inventory.colorManagerVersion);
-                roundtripOrFail(
-                    *display,
-                    "reading color-management-v1 capabilities");
+            capabilities.protocolVersion = inventory.colorManagerVersion;
+            if (inventory.colorManagerVersion >= WaylandColorManagementCapabilities::requiredProtocolVersion) {
+                colorManager = std::make_unique<ColorManagerBinding>(registry, inventory.colorManagerName,
+                                                                     inventory.colorManagerVersion);
+                roundtripOrFail(*display, "reading color-management-v1 capabilities");
                 capabilities = colorManager->capabilities();
                 prepareManagedDescriptions(*display);
             }
@@ -732,63 +583,50 @@ struct LinuxWaylandWindowContext::NativeState final {
         wl_registry_destroy(registry);
     }
 
-    void attachManagedSurface(wl_surface *surface) {
+    void attachManagedSurface(wl_surface* surface) {
         managedSurface.reset();
-        if (!capabilities.supportsManagedSdr())
+        if (!capabilities.supportsManagedSdr()) {
             return;
-        managedSurface = std::make_unique<ManagedSurface>(
-            colorManager->get_surface(surface));
+        }
+        managedSurface = std::make_unique<ManagedSurface>(colorManager->get_surface(surface));
         applyDeclaredMode();
     }
 
-    void detachManagedSurface() {
-        managedSurface.reset();
-    }
+    void detachManagedSurface() { managedSurface.reset(); }
 
     void setDeclaredMode(PresentationSurfaceMode mode) {
-        Q_ASSERT(mode == PresentationSurfaceMode::ManagedGamma22Sdr
-            || mode == PresentationSurfaceMode::ManagedHdr10Pq);
+        Q_ASSERT(mode == PresentationSurfaceMode::ManagedGamma22Sdr || mode == PresentationSurfaceMode::ManagedHdr10Pq);
         declaredMode = mode;
-        if (managedSurface)
+        if (managedSurface) {
             applyDeclaredMode();
+        }
     }
 
-private:
-    void prepareManagedDescriptions(wl_display &display) {
-        if (!capabilities.supportsManagedSdr())
+  private:
+    void prepareManagedDescriptions(wl_display& display) {
+        if (!capabilities.supportsManagedSdr()) {
             return;
-
-        sdrDescription = createManagedDescription(
-            *colorManager,
-            QtWayland::wp_color_manager_v1::primaries_srgb,
-            QtWayland::wp_color_manager_v1::transfer_function_gamma22);
-        if (capabilities.supportsManagedHdr10()) {
-            hdrDescription = createManagedDescription(
-                *colorManager,
-                QtWayland::wp_color_manager_v1::primaries_bt2020,
-                QtWayland::wp_color_manager_v1::
-                    transfer_function_st2084_pq);
         }
-        waitForManagedDescriptions(
-            display,
-            *sdrDescription,
-            hdrDescription.get());
+
+        sdrDescription = createManagedDescription(*colorManager, QtWayland::wp_color_manager_v1::primaries_srgb,
+                                                  QtWayland::wp_color_manager_v1::transfer_function_gamma22);
+        if (capabilities.supportsManagedHdr10()) {
+            hdrDescription = createManagedDescription(*colorManager, QtWayland::wp_color_manager_v1::primaries_bt2020,
+                                                      QtWayland::wp_color_manager_v1::transfer_function_st2084_pq);
+        }
+        waitForManagedDescriptions(display, *sdrDescription, hdrDescription.get());
 
         if (!sdrDescription->ready()) {
-            qCWarning(
-                sunroomLogPlatform,
-                "The compositor rejected the advertised managed-sRGB "
-                "description; using unmanaged SDR");
+            qCWarning(sunroomLogPlatform, "The compositor rejected the advertised managed-sRGB "
+                                          "description; using unmanaged SDR");
             capabilities.parametricDescriptions = false;
             sdrDescription.reset();
             hdrDescription.reset();
             return;
         }
         if (hdrDescription && !hdrDescription->ready()) {
-            qCWarning(
-                sunroomLogPlatform,
-                "The compositor rejected the advertised BT.2020/PQ "
-                "description; disabling managed HDR");
+            qCWarning(sunroomLogPlatform, "The compositor rejected the advertised BT.2020/PQ "
+                                          "description; disabling managed HDR");
             capabilities.pqTransfer = false;
             hdrDescription.reset();
         }
@@ -800,89 +638,64 @@ private:
             Q_ASSERT(hdrDescription);
             managedSurface->apply(*hdrDescription);
         } else {
-            Q_ASSERT(declaredMode
-                == PresentationSurfaceMode::ManagedGamma22Sdr);
+            Q_ASSERT(declaredMode == PresentationSurfaceMode::ManagedGamma22Sdr);
             Q_ASSERT(sdrDescription);
             managedSurface->apply(*sdrDescription);
         }
     }
 
-public:
+  public:
     WaylandColorManagementCapabilities capabilities;
     bool decorationManagerAdvertised = false;
     std::unique_ptr<ColorManagerBinding> colorManager;
     std::unique_ptr<ManagedImageDescription> sdrDescription;
     std::unique_ptr<ManagedImageDescription> hdrDescription;
     std::unique_ptr<ManagedSurface> managedSurface;
-    PresentationSurfaceMode declaredMode =
-        PresentationSurfaceMode::ManagedGamma22Sdr;
+    PresentationSurfaceMode declaredMode = PresentationSurfaceMode::ManagedGamma22Sdr;
     bool displayProviderTaken = false;
 };
 
-void prepareLinuxWaylandPlatform() {
-    qputenv("QT_QPA_PLATFORM", QByteArrayLiteral("wayland"));
-}
+void prepareLinuxWaylandPlatform() { qputenv("QT_QPA_PLATFORM", QByteArrayLiteral("wayland")); }
 
-LinuxWaylandWindowContext::LinuxWaylandWindowContext(
-        QGuiApplication &application) {
+LinuxWaylandWindowContext::LinuxWaylandWindowContext(QGuiApplication& application) {
     if (QGuiApplication::platformName() != QStringLiteral("wayland")) {
-        qCFatal(
-            sunroomLogPlatform,
-            "Sunroom requires native Wayland; Qt selected QPA '%s'",
-            qPrintable(QGuiApplication::platformName()));
+        qCFatal(sunroomLogPlatform, "Sunroom requires native Wayland; Qt selected QPA '%s'",
+                qPrintable(QGuiApplication::platformName()));
     }
 
     m_nativeState = std::make_unique<NativeState>(application);
     m_colorCapabilities = m_nativeState->capabilities;
-    m_requiresClientSideDecorations =
-        !m_nativeState->decorationManagerAdvertised;
-    m_surfaceSelection = selectWaylandSurface(
-        m_colorCapabilities);
-    if (m_surfaceSelection.mode
-            == WaylandSdrSurfaceMode::ManagedGamma22) {
-        m_nativeState->setDeclaredMode(
-            m_surfaceSelection.presentationContract().mode);
+    m_requiresClientSideDecorations = !m_nativeState->decorationManagerAdvertised;
+    m_surfaceSelection = selectWaylandSurface(m_colorCapabilities);
+    if (m_surfaceSelection.mode == WaylandSdrSurfaceMode::ManagedGamma22) {
+        m_nativeState->setDeclaredMode(m_surfaceSelection.presentationContract().mode);
     }
 
-    const QVersionNumber supportedApi =
-        m_vulkanInstance.supportedApiVersion();
+    QVersionNumber const supportedApi = m_vulkanInstance.supportedApiVersion();
     if (supportedApi < QVersionNumber(1, 3)) {
-        qCFatal(
-            sunroomLogGraphics,
-            "Sunroom requires Vulkan 1.3; the loader reports %s",
-            qPrintable(supportedApi.toString()));
+        qCFatal(sunroomLogGraphics, "Sunroom requires Vulkan 1.3; the loader reports %s",
+                qPrintable(supportedApi.toString()));
     }
     m_vulkanInstance.setApiVersion(QVersionNumber(1, 3));
-    m_vulkanInstance.setExtensions(
-        QRhiVulkanInitParams::preferredInstanceExtensions());
+    m_vulkanInstance.setExtensions(QRhiVulkanInitParams::preferredInstanceExtensions());
     if (!m_vulkanInstance.create()) {
-        qCFatal(
-            sunroomLogGraphics,
-            "Could not create the Vulkan 1.3 instance");
+        qCFatal(sunroomLogGraphics, "Could not create the Vulkan 1.3 instance");
     }
 
     qCInfo(sunroomLogPlatform).noquote()
         << "event=wayland.surface_contract"
-        << "protocolVersion="
-            + QString::number(m_colorCapabilities.protocolVersion)
-        << "mode=" + presentationModeName(
-            m_surfaceSelection.presentationContract().mode)
-        << "managedHdrDeclarationAvailable=" + QString(
-            m_colorCapabilities.supportsManagedHdr10()
-            ? QStringLiteral("true")
-            : QStringLiteral("false"))
-        << "windowChrome=" + QString(
-            m_requiresClientSideDecorations
-            ? QStringLiteral("application")
-            : QStringLiteral("server-decoration-assumed"))
+        << "protocolVersion=" + QString::number(m_colorCapabilities.protocolVersion)
+        << "mode=" + presentationModeName(m_surfaceSelection.presentationContract().mode)
+        << "managedHdrDeclarationAvailable=" +
+               QString(m_colorCapabilities.supportsManagedHdr10() ? QStringLiteral("true") : QStringLiteral("false"))
+        << "windowChrome=" + QString(m_requiresClientSideDecorations ? QStringLiteral("application")
+                                                                     : QStringLiteral("server-decoration-assumed"))
         << "detail=" + m_surfaceSelection.diagnostic;
 }
 
-LinuxWaylandWindowContext::~LinuxWaylandWindowContext() {
-    Q_ASSERT(!m_window);
-}
+LinuxWaylandWindowContext::~LinuxWaylandWindowContext() { Q_ASSERT(!m_window); }
 
-void LinuxWaylandWindowContext::configureWindow(QWindow &window) {
+void LinuxWaylandWindowContext::configureWindow(QWindow& window) {
     Q_ASSERT(!m_window);
     Q_ASSERT(!window.handle());
     Q_ASSERT(window.surfaceType() == QSurface::VulkanSurface);
@@ -895,14 +708,12 @@ void LinuxWaylandWindowContext::configureWindow(QWindow &window) {
     window.setVulkanInstance(&m_vulkanInstance);
     window.create();
     if (!window.handle()) {
-        qCFatal(
-            sunroomLogPlatform,
-            "Qt could not create the native Wayland window surface");
+        qCFatal(sunroomLogPlatform, "Qt could not create the native Wayland window surface");
     }
     m_window = &window;
 }
 
-void LinuxWaylandWindowContext::releaseWindow(QWindow &window) {
+void LinuxWaylandWindowContext::releaseWindow(QWindow& window) {
     Q_ASSERT(m_window == &window);
     // The one full-window-lifetime provider owns the color-surface follower
     // and must be released after the engine but before the native window.
@@ -912,63 +723,42 @@ void LinuxWaylandWindowContext::releaseWindow(QWindow &window) {
     m_window = nullptr;
 }
 
-std::unique_ptr<DisplayStateProvider>
-LinuxWaylandWindowContext::takeDisplayStateProvider(QObject *parent) {
+std::unique_ptr<DisplayStateProvider> LinuxWaylandWindowContext::takeDisplayStateProvider(QObject* parent) {
     Q_ASSERT(!m_nativeState->displayProviderTaken);
     m_nativeState->displayProviderTaken = true;
-    return std::make_unique<NativeState::Provider>(
-        *m_nativeState, parent);
+    return std::make_unique<NativeState::Provider>(*m_nativeState, parent);
 }
 
-const WaylandSurfaceSelection &
-LinuxWaylandWindowContext::surfaceSelection() const {
-    return m_surfaceSelection;
-}
+WaylandSurfaceSelection const& LinuxWaylandWindowContext::surfaceSelection() const { return m_surfaceSelection; }
 
-bool LinuxWaylandWindowContext::requiresClientSideDecorations() const {
-    return m_requiresClientSideDecorations;
-}
+bool LinuxWaylandWindowContext::requiresClientSideDecorations() const { return m_requiresClientSideDecorations; }
 
-QVulkanInstance &LinuxWaylandWindowContext::vulkanInstance() {
+QVulkanInstance& LinuxWaylandWindowContext::vulkanInstance() {
     Q_ASSERT(m_vulkanInstance.isValid());
     return m_vulkanInstance;
 }
 
-PresentationSurfaceMode LinuxWaylandWindowContext::desiredMode(
-        std::uint64_t graphicsDeviceGeneration) {
-    return selectWaylandPresentationMode(
-        m_surfaceSelection.mode,
-        m_colorCapabilities,
-        graphicsDeviceGeneration,
-        m_hdrRejection);
+PresentationSurfaceMode LinuxWaylandWindowContext::desiredMode(std::uint64_t graphicsDeviceGeneration) {
+    return selectWaylandPresentationMode(m_surfaceSelection.mode, m_colorCapabilities, graphicsDeviceGeneration,
+                                         m_hdrRejection);
 }
 
-void LinuxWaylandWindowContext::applyMode(
-        QWindow &window,
-        PresentationSurfaceMode mode) {
+void LinuxWaylandWindowContext::applyMode(QWindow& window, PresentationSurfaceMode mode) {
     Q_ASSERT(m_window == &window);
-    Q_ASSERT(m_surfaceSelection.mode
-        == WaylandSdrSurfaceMode::ManagedGamma22);
-    Q_ASSERT(mode == PresentationSurfaceMode::ManagedGamma22Sdr
-        || mode == PresentationSurfaceMode::ManagedHdr10Pq);
+    Q_ASSERT(m_surfaceSelection.mode == WaylandSdrSurfaceMode::ManagedGamma22);
+    Q_ASSERT(mode == PresentationSurfaceMode::ManagedGamma22Sdr || mode == PresentationSurfaceMode::ManagedHdr10Pq);
     m_nativeState->setDeclaredMode(mode);
 
-    qCInfo(sunroomLogPlatform).noquote()
-        << "event=wayland.surface_transition"
-        << "mode=" + presentationModeName(mode)
-        << "nativeSurface=preserved";
+    qCInfo(sunroomLogPlatform).noquote() << "event=wayland.surface_transition"
+                                         << "mode=" + presentationModeName(mode) << "nativeSurface=preserved";
 }
 
-void LinuxWaylandWindowContext::rejectHdrTarget(
-        std::uint64_t graphicsDeviceGeneration,
-        const char *reason) {
+void LinuxWaylandWindowContext::rejectHdrTarget(std::uint64_t graphicsDeviceGeneration, char const* reason) {
     Q_ASSERT(graphicsDeviceGeneration != 0);
     m_hdrRejection = WaylandHdrRejection{
         .graphicsDeviceGeneration = graphicsDeviceGeneration,
     };
     qCWarning(sunroomLogPlatform).noquote()
         << "event=wayland.hdr_surface_rejected"
-        << "deviceGeneration="
-            + QString::number(graphicsDeviceGeneration)
-        << "reason=" + QString::fromUtf8(reason);
+        << "deviceGeneration=" + QString::number(graphicsDeviceGeneration) << "reason=" + QString::fromUtf8(reason);
 }

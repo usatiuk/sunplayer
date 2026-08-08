@@ -31,17 +31,12 @@ enum class VideoOperationResult;
 class RhiPresentationEngine final : public QObject {
     Q_OBJECT
 
-public:
-    RhiPresentationEngine(QWindow &window,
-                          PresentationOutputState &outputState,
-                          PresentationSettings &settings,
-                          ActiveVideoSource &videoSource,
-                          DiagnosticVideoSource &diagnosticSource,
-                          MediaSession &mediaSession,
-                          VideoViewportState &videoViewport,
-                          PresentationSurfaceContract surfaceContract,
-                          PresentationSurfaceController *surfaceController,
-                          QObject *parent = nullptr);
+  public:
+    RhiPresentationEngine(QWindow& window, PresentationOutputState& outputState, PresentationSettings& settings,
+                          ActiveVideoSource& videoSource, DiagnosticVideoSource& diagnosticSource,
+                          MediaSession& mediaSession, VideoViewportState& videoViewport,
+                          PresentationSurfaceContract surfaceContract, PresentationSurfaceController* surfaceController,
+                          QObject* parent = nullptr);
     ~RhiPresentationEngine() override;
 
     void render();
@@ -51,53 +46,50 @@ public:
     void markPresentationDirty();
     void releaseSwapChain();
 
-    QQuickWindow *quickWindow() const;
+    QQuickWindow* quickWindow() const;
 
-signals:
+  signals:
     // Emitted only after the swapchain accepts a frame containing the active
     // video surface. Application scenarios can observe real presentation
     // progress without reaching into renderer internals or using screenshots.
     void videoFramePresented(qulonglong contentRevision);
 
-private:
+  private:
     void renderFrame();
     bool initializeDevice();
     bool initializeGraphicsDevice();
     bool refreshVideoProducer();
     bool createSwapChain();
     bool resizeSwapChain(bool force = false);
-    bool createOrResizeSwapChain(const char *operation);
-    void handleSwapChainFailure(
-        const char *operation,
-        const char *hdrRejectionReason);
-    void scheduleSwapChainRecovery(const char *operation);
+    bool createOrResizeSwapChain(char const* operation);
+    void handleSwapChainFailure(char const* operation, char const* hdrRejectionReason);
+    void scheduleSwapChainRecovery(char const* operation);
     void completePresentationRecovery();
     void releaseSwapChainResources();
     void releaseDevice();
-    void handleDeviceLoss(const char *operation);
-    void handleFrameError(const char *operation, int result);
-    bool handleVideoOperationResult(
-        const char *operation, VideoOperationResult result);
+    void handleDeviceLoss(char const* operation);
+    void handleFrameError(char const* operation, int result);
+    bool handleVideoOperationResult(char const* operation, VideoOperationResult result);
     void scheduleDeviceRecovery();
     void updateBackendState();
     void scheduleNextFrame(bool videoViewportActive);
     void markOutputCharacteristicsDirty();
     bool reconcileOutputCharacteristics();
     void queueSurfaceTransition();
-    void rejectRequiredHdrSurface(const char *reason);
+    void rejectRequiredHdrSurface(char const* reason);
     void rebuildForPresentIncompatibleSurface();
 
-    QWindow &m_window;
-    PresentationOutputState &m_outputState;
-    PresentationSettings &m_settings;
-    ActiveVideoSource &m_videoSource;
-    DiagnosticVideoSource &m_diagnosticSource;
-    MediaSession &m_mediaSession;
-    VideoViewportState &m_videoViewport;
+    QWindow& m_window;
+    PresentationOutputState& m_outputState;
+    PresentationSettings& m_settings;
+    ActiveVideoSource& m_videoSource;
+    DiagnosticVideoSource& m_diagnosticSource;
+    MediaSession& m_mediaSession;
+    VideoViewportState& m_videoViewport;
     PresentationSurfaceContract m_surfaceContract;
-    PresentationSurfaceController *m_surfaceController = nullptr;
+    PresentationSurfaceController* m_surfaceController = nullptr;
     std::unique_ptr<GraphicsDeviceDomain> m_graphicsDevice;
-    QRhi *m_rhi = nullptr;
+    QRhi* m_rhi = nullptr;
     std::unique_ptr<QRhiSwapChain> m_swapChain;
     std::unique_ptr<QRhiRenderPassDescriptor> m_renderPassDescriptor;
     std::unique_ptr<QuickUiLayer> m_quickUi;

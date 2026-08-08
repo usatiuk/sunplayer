@@ -26,7 +26,7 @@ class VideoViewportState;
 class QuickUiLayer final : public QObject {
     Q_OBJECT
 
-public:
+  public:
     enum class InitializationResult {
         Ready,
         DeviceLost,
@@ -38,43 +38,36 @@ public:
         DeviceLost,
     };
 
-    QuickUiLayer(QWindow &renderWindow,
-                 QRhi &rhi,
-                 PresentationOutputState &outputState,
-                 PresentationSettings &settings,
-                 DiagnosticVideoSource &diagnosticSource,
-                 MediaSession &mediaSession,
-                 ActiveVideoSource &activeVideoSource,
-                 VideoViewportState &videoViewport,
-                 QObject *parent = nullptr);
+    QuickUiLayer(QWindow& renderWindow, QRhi& rhi, PresentationOutputState& outputState, PresentationSettings& settings,
+                 DiagnosticVideoSource& diagnosticSource, MediaSession& mediaSession,
+                 ActiveVideoSource& activeVideoSource, VideoViewportState& videoViewport, QObject* parent = nullptr);
     ~QuickUiLayer() override;
 
     InitializationResult initialize();
-    void setLogicalSize(const QSize &size);
-    RenderTargetUpdate ensureRenderTarget(
-        const QSize &pixelSize, qreal devicePixelRatio);
+    void setLogicalSize(QSize const& size);
+    RenderTargetUpdate ensureRenderTarget(QSize const& pixelSize, qreal devicePixelRatio);
     void renderIfDirty();
     void markDirty();
 
     bool isDirty() const;
-    QRhiTexture &texture() const;
-    QQuickWindow *quickWindow() const;
+    QRhiTexture& texture() const;
+    QQuickWindow* quickWindow() const;
 
-signals:
+  signals:
     void updateRequested();
 
-private:
+  private:
     void configureRenderTarget();
     void releaseRenderTarget();
 
-    QWindow &m_renderWindow;
-    QRhi &m_rhi;
-    PresentationOutputState &m_outputState;
-    PresentationSettings &m_settings;
-    DiagnosticVideoSource &m_diagnosticSource;
-    MediaSession &m_mediaSession;
-    ActiveVideoSource &m_activeVideoSource;
-    VideoViewportState &m_videoViewport;
+    QWindow& m_renderWindow;
+    QRhi& m_rhi;
+    PresentationOutputState& m_outputState;
+    PresentationSettings& m_settings;
+    DiagnosticVideoSource& m_diagnosticSource;
+    MediaSession& m_mediaSession;
+    ActiveVideoSource& m_activeVideoSource;
+    VideoViewportState& m_videoViewport;
     std::unique_ptr<QQuickRenderControl> m_renderControl;
     std::unique_ptr<QQuickWindow> m_quickWindow;
     std::unique_ptr<QQmlEngine> m_qmlEngine;

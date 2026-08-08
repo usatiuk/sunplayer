@@ -12,12 +12,8 @@
 #include "audio/ControlledAudioSink.h"
 
 namespace {
-PcmAudioBlock block(
-        std::uint64_t generation,
-        std::uint64_t streamFrame,
-        std::int64_t mediaStart,
-        std::size_t frames,
-        float value) {
+PcmAudioBlock block(std::uint64_t generation, std::uint64_t streamFrame, std::int64_t mediaStart, std::size_t frames,
+                    float value) {
     return {
         .playbackGeneration = generation,
         .streamFrameIndex = streamFrame,
@@ -26,22 +22,19 @@ PcmAudioBlock block(
         .samples = std::vector<float>(frames * 2, value),
     };
 }
-}
+} // namespace
 
 class ControlledAudioSinkTest final : public QObject {
     Q_OBJECT
 
-public:
+  public:
     static void initMain() {
 #ifdef Q_OS_WIN
-        SetErrorMode(
-            SEM_FAILCRITICALERRORS
-            | SEM_NOGPFAULTERRORBOX
-            | SEM_NOOPENFILEERRORBOX);
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 #endif
     }
 
-private slots:
+  private slots:
     void separatesSubmittedAndPresentedMediaTime();
     void underrunSilenceHoldsMediaTime();
     void gainChangesSamplesWithoutChangingPresentation();
@@ -49,8 +42,7 @@ private slots:
     void reportsGenerationScopedFailure();
 };
 
-void ControlledAudioSinkTest::
-separatesSubmittedAndPresentedMediaTime() {
+void ControlledAudioSinkTest::separatesSubmittedAndPresentedMediaTime() {
     ControlledAudioSink sink(960);
     sink.reset(7, {48'000, 2});
     QVERIFY(sink.submit(block(7, 0, 500'000, 480, 0.25F)));
@@ -58,13 +50,13 @@ separatesSubmittedAndPresentedMediaTime() {
     QCOMPARE(sink.bufferedFrames(), 960U);
 
     sink.start();
-    const ControlledAudioRender first = sink.render(600);
+    ControlledAudioRender const first = sink.render(600);
     QCOMPARE(first.frames, 600U);
     QCOMPARE(first.samples.size(), 1'200U);
     QCOMPARE(sink.submittedFrames(), 600U);
     QCOMPARE(sink.presentedFrames(), 0U);
 
-    const ControlledAudioRender boundedInFlight = sink.render(600);
+    ControlledAudioRender const boundedInFlight = sink.render(600);
     QCOMPARE(boundedInFlight.frames, 360U);
     QCOMPARE(sink.submittedFrames(), 960U);
     QCOMPARE(sink.render(1).frames, 0U);
@@ -111,21 +103,20 @@ void ControlledAudioSinkTest::underrunSilenceHoldsMediaTime() {
     sink.reset(9, {48'000, 2});
     QVERIFY(sink.submit(block(9, 0, 400'000, 24, 0.25F)));
     sink.start();
-    const ControlledAudioAdvance first = sink.advanceOutput(16);
+    ControlledAudioAdvance const first = sink.advanceOutput(16);
     QCOMPARE(first.mediaFrames, 16U);
     QCOMPARE(first.holdFrames, 0U);
 
-    const AudioPresentationSnapshot before = sink.snapshot();
+    AudioPresentationSnapshot const before = sink.snapshot();
     QVERIFY(before.valid);
     QVERIFY(before.audioOutputEpoch != 0);
     QVERIFY(!before.advancing);
     QCOMPARE(before.mediaPositionMicroseconds, 400'333);
 
-    const ControlledAudioAdvance underrun =
-        sink.advanceOutput(488);
+    ControlledAudioAdvance const underrun = sink.advanceOutput(488);
     QCOMPARE(underrun.mediaFrames, 8U);
     QCOMPARE(underrun.holdFrames, 480U);
-    const AudioPresentationSnapshot held = sink.snapshot();
+    AudioPresentationSnapshot const held = sink.snapshot();
     QVERIFY(held.valid);
     QVERIFY(held.holding);
     QVERIFY(!held.advancing);
@@ -133,31 +124,27 @@ void ControlledAudioSinkTest::underrunSilenceHoldsMediaTime() {
     QCOMPARE(held.presentedFrames, 24U);
     QCOMPARE(held.mediaPositionMicroseconds, 400'500);
 
-    const AudioSinkDiagnostics diagnostics = sink.diagnostics();
+    AudioSinkDiagnostics const diagnostics = sink.diagnostics();
     QCOMPARE(diagnostics.deviceFramesWritten, 504U);
     QVERIFY(diagnostics.deviceFramesPresented.has_value());
     QCOMPARE(*diagnostics.deviceFramesPresented, 504U);
     QCOMPARE(diagnostics.underrunFrames, 480U);
 
     QVERIFY(sink.submit(block(9, 24, 400'500, 8, 0.5F)));
-    const ControlledAudioAdvance resumedOutput =
-        sink.advanceOutput(4);
+    ControlledAudioAdvance const resumedOutput = sink.advanceOutput(4);
     QCOMPARE(resumedOutput.mediaFrames, 4U);
     QCOMPARE(resumedOutput.holdFrames, 0U);
-    const AudioPresentationSnapshot resumed = sink.snapshot();
+    AudioPresentationSnapshot const resumed = sink.snapshot();
     QVERIFY(!resumed.holding);
     QVERIFY(!resumed.advancing);
-    QVERIFY(
-        resumed.mediaPositionMicroseconds
-        > held.mediaPositionMicroseconds);
+    QVERIFY(resumed.mediaPositionMicroseconds > held.mediaPositionMicroseconds);
 
-    const std::uint64_t firstEpoch = resumed.audioOutputEpoch;
+    std::uint64_t const firstEpoch = resumed.audioOutputEpoch;
     sink.reset(9, {48'000, 2});
     QVERIFY(sink.snapshot().audioOutputEpoch > firstEpoch);
 }
 
-void ControlledAudioSinkTest::
-gainChangesSamplesWithoutChangingPresentation() {
+void ControlledAudioSinkTest::gainChangesSamplesWithoutChangingPresentation() {
     ControlledAudioSink sink(16);
     sink.setGain(0.5F);
     sink.reset(8, {48'000, 2});
@@ -165,34 +152,26 @@ gainChangesSamplesWithoutChangingPresentation() {
     QVERIFY(sink.submit(block(8, 4, 250'083, 4, 0.6F)));
     sink.start();
 
-    const ControlledAudioRender attenuated = sink.render(4);
+    ControlledAudioRender const attenuated = sink.render(4);
     QCOMPARE(attenuated.frames, 4U);
-    QVERIFY(std::all_of(
-        attenuated.samples.cbegin(),
-        attenuated.samples.cend(),
-        [](float sample) {
-            return qFuzzyCompare(sample, 0.4F);
-        }));
+    QVERIFY(std::all_of(attenuated.samples.cbegin(), attenuated.samples.cend(),
+                        [](float sample) { return qFuzzyCompare(sample, 0.4F); }));
     sink.advancePresentedFrames(attenuated.frames);
-    const std::int64_t afterAudible =
-        sink.snapshot().mediaPositionMicroseconds;
+    std::int64_t const afterAudible = sink.snapshot().mediaPositionMicroseconds;
 
     sink.setGain(0.0F);
-    const ControlledAudioRender muted = sink.render(4);
+    ControlledAudioRender const muted = sink.render(4);
     QCOMPARE(muted.frames, 4U);
-    QVERIFY(std::all_of(
-        muted.samples.cbegin(),
-        muted.samples.cend(),
-        [](float sample) { return sample == 0.0F; }));
+    QVERIFY(std::all_of(muted.samples.cbegin(), muted.samples.cend(), [](float sample) { return sample == 0.0F; }));
     sink.advancePresentedFrames(muted.frames);
 
-    const AudioPresentationSnapshot presentation = sink.snapshot();
+    AudioPresentationSnapshot const presentation = sink.snapshot();
     QCOMPARE(presentation.submittedFrames, 8U);
     QCOMPARE(presentation.presentedFrames, 8U);
     QVERIFY(presentation.mediaPositionMicroseconds > afterAudible);
     QVERIFY(!presentation.advancing);
 
-    const AudioSinkDiagnostics diagnostics = sink.diagnostics();
+    AudioSinkDiagnostics const diagnostics = sink.diagnostics();
     QCOMPARE(diagnostics.backendName, std::string("controlled"));
     QCOMPARE(diagnostics.queuedFrames, 0U);
     QCOMPARE(diagnostics.mediaFramesSubmitted, 8U);
@@ -200,8 +179,7 @@ gainChangesSamplesWithoutChangingPresentation() {
     QVERIFY(diagnostics.clockReliable);
 }
 
-void ControlledAudioSinkTest::
-boundsPcmAndWakesBlockedGeneration() {
+void ControlledAudioSinkTest::boundsPcmAndWakesBlockedGeneration() {
     using namespace std::chrono_literals;
 
     ControlledAudioSink sink(8);
@@ -219,9 +197,7 @@ boundsPcmAndWakesBlockedGeneration() {
     std::atomic_bool accepted = true;
     std::jthread producer([&](std::stop_token stopToken) {
         producerStarted.set_value();
-        accepted = sink.submit(
-            block(11, 8, 166, 1, 0.0F),
-            stopToken);
+        accepted = sink.submit(block(11, 8, 166, 1, 0.0F), stopToken);
         producerCompleted.set_value();
     });
     started.wait();
@@ -236,53 +212,38 @@ boundsPcmAndWakesBlockedGeneration() {
     sink.start();
     QCOMPARE(sink.render(8).frames, 8U);
     std::promise<void> cancelledStarted;
-    std::future<void> cancellationReady =
-        cancelledStarted.get_future();
+    std::future<void> cancellationReady = cancelledStarted.get_future();
     std::promise<void> cancelledCompleted;
-    std::future<void> cancellationCompleted =
-        cancelledCompleted.get_future();
+    std::future<void> cancellationCompleted = cancelledCompleted.get_future();
     std::atomic_bool cancellationAccepted = true;
-    std::jthread cancelledProducer(
-        [&](std::stop_token stopToken) {
-            cancelledStarted.set_value();
-            cancellationAccepted = sink.submit(
-                block(12, 8, 166, 1, 0.0F),
-                stopToken);
-            cancelledCompleted.set_value();
-        });
+    std::jthread cancelledProducer([&](std::stop_token stopToken) {
+        cancelledStarted.set_value();
+        cancellationAccepted = sink.submit(block(12, 8, 166, 1, 0.0F), stopToken);
+        cancelledCompleted.set_value();
+    });
     cancellationReady.wait();
-    QVERIFY(cancellationCompleted.wait_for(0ms)
-        == std::future_status::timeout);
+    QVERIFY(cancellationCompleted.wait_for(0ms) == std::future_status::timeout);
     cancelledProducer.request_stop();
-    QVERIFY(cancellationCompleted.wait_for(2s)
-        == std::future_status::ready);
+    QVERIFY(cancellationCompleted.wait_for(2s) == std::future_status::ready);
     QVERIFY(!cancellationAccepted.load());
     cancelledProducer.join();
 
     std::promise<void> invalidatedStarted;
-    std::future<void> invalidatedReady =
-        invalidatedStarted.get_future();
+    std::future<void> invalidatedReady = invalidatedStarted.get_future();
     std::promise<void> invalidatedCompleted;
-    std::future<void> invalidationCompleted =
-        invalidatedCompleted.get_future();
+    std::future<void> invalidationCompleted = invalidatedCompleted.get_future();
     std::atomic_bool invalidatedAccepted = true;
-    std::jthread invalidatedProducer(
-        [&](std::stop_token stopToken) {
-            invalidatedStarted.set_value();
-            invalidatedAccepted = sink.submit(
-                block(12, 8, 166, 1, 0.0F),
-                stopToken);
-            invalidatedCompleted.set_value();
-        });
+    std::jthread invalidatedProducer([&](std::stop_token stopToken) {
+        invalidatedStarted.set_value();
+        invalidatedAccepted = sink.submit(block(12, 8, 166, 1, 0.0F), stopToken);
+        invalidatedCompleted.set_value();
+    });
     invalidatedReady.wait();
-    QVERIFY(invalidationCompleted.wait_for(0ms)
-        == std::future_status::timeout);
+    QVERIFY(invalidationCompleted.wait_for(0ms) == std::future_status::timeout);
     sink.cancel(11);
-    QVERIFY(invalidationCompleted.wait_for(0ms)
-        == std::future_status::timeout);
+    QVERIFY(invalidationCompleted.wait_for(0ms) == std::future_status::timeout);
     sink.cancel(12);
-    QVERIFY(invalidationCompleted.wait_for(2s)
-        == std::future_status::ready);
+    QVERIFY(invalidationCompleted.wait_for(2s) == std::future_status::ready);
     QVERIFY(!invalidatedAccepted.load());
     QVERIFY(!sink.snapshot().valid);
     invalidatedProducer.join();
@@ -301,13 +262,11 @@ void ControlledAudioSinkTest::reportsGenerationScopedFailure() {
     QVERIFY(sink.failureReason().empty());
 
     sink.fail(21, "device disappeared");
-    const AudioPresentationSnapshot failed = sink.snapshot();
+    AudioPresentationSnapshot const failed = sink.snapshot();
     QVERIFY(failed.failed);
     QVERIFY(!failed.valid);
     QVERIFY(!failed.advancing);
-    QCOMPARE(
-        QString::fromStdString(sink.failureReason()),
-        QStringLiteral("device disappeared"));
+    QCOMPARE(QString::fromStdString(sink.failureReason()), QStringLiteral("device disappeared"));
     QCOMPARE(sink.render(8).frames, 0U);
     QVERIFY(!sink.submit(block(21, 8, 166, 1, 0.25F)));
 

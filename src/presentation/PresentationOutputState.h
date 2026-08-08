@@ -20,30 +20,20 @@ class PresentationOutputState final : public QObject {
 
     Q_PROPERTY(QString screenName READ screenName NOTIFY stateChanged)
     Q_PROPERTY(QString graphicsApi READ graphicsApi NOTIFY stateChanged)
-    Q_PROPERTY(QString graphicsAdapter READ graphicsAdapter
-               NOTIFY stateChanged)
+    Q_PROPERTY(QString graphicsAdapter READ graphicsAdapter NOTIFY stateChanged)
     Q_PROPERTY(QString swapChainFormat READ swapChainFormat NOTIFY stateChanged)
-    Q_PROPERTY(QString videoSurfaceFormat READ videoSurfaceFormat
-               NOTIFY stateChanged)
-    Q_PROPERTY(QString videoSurfaceProducer READ videoSurfaceProducer
-               NOTIFY stateChanged)
-    Q_PROPERTY(QString videoInputPath READ videoInputPath
-               NOTIFY stateChanged)
-    Q_PROPERTY(QString videoColorPolicy READ videoColorPolicy
-               NOTIFY stateChanged)
-    Q_PROPERTY(QString videoOutputPath READ videoOutputPath
-               NOTIFY stateChanged)
-    Q_PROPERTY(QString videoSynchronization READ videoSynchronization
-               NOTIFY stateChanged)
-    Q_PROPERTY(QString videoCopySummary READ videoCopySummary
-               NOTIFY stateChanged)
-    Q_PROPERTY(QString videoFallbackReason READ videoFallbackReason
-               NOTIFY stateChanged)
+    Q_PROPERTY(QString videoSurfaceFormat READ videoSurfaceFormat NOTIFY stateChanged)
+    Q_PROPERTY(QString videoSurfaceProducer READ videoSurfaceProducer NOTIFY stateChanged)
+    Q_PROPERTY(QString videoInputPath READ videoInputPath NOTIFY stateChanged)
+    Q_PROPERTY(QString videoColorPolicy READ videoColorPolicy NOTIFY stateChanged)
+    Q_PROPERTY(QString videoOutputPath READ videoOutputPath NOTIFY stateChanged)
+    Q_PROPERTY(QString videoSynchronization READ videoSynchronization NOTIFY stateChanged)
+    Q_PROPERTY(QString videoCopySummary READ videoCopySummary NOTIFY stateChanged)
+    Q_PROPERTY(QString videoFallbackReason READ videoFallbackReason NOTIFY stateChanged)
     Q_PROPERTY(qreal devicePixelRatio READ devicePixelRatio NOTIFY stateChanged)
     Q_PROPERTY(qreal refreshRate READ refreshRate NOTIFY stateChanged)
     Q_PROPERTY(bool displayHdrEnabled READ displayHdrEnabled NOTIFY stateChanged)
-    Q_PROPERTY(bool hdrPresentationActive READ hdrPresentationActive
-               NOTIFY stateChanged)
+    Q_PROPERTY(bool hdrPresentationActive READ hdrPresentationActive NOTIFY stateChanged)
     Q_PROPERTY(bool sceneReferred READ sceneReferred NOTIFY stateChanged)
     Q_PROPERTY(bool sdrWhiteKnown READ sdrWhiteKnown NOTIFY stateChanged)
     Q_PROPERTY(bool luminanceKnown READ luminanceKnown NOTIFY stateChanged)
@@ -52,18 +42,15 @@ class PresentationOutputState final : public QObject {
     Q_PROPERTY(float maxLuminanceNits READ maxLuminanceNits NOTIFY stateChanged)
     Q_PROPERTY(float currentHeadroom READ currentHeadroom NOTIFY stateChanged)
     Q_PROPERTY(float potentialHeadroom READ potentialHeadroom NOTIFY stateChanged)
-    Q_PROPERTY(float effectiveTargetHeadroom READ effectiveTargetHeadroom
-               NOTIFY stateChanged)
+    Q_PROPERTY(float effectiveTargetHeadroom READ effectiveTargetHeadroom NOTIFY stateChanged)
     Q_PROPERTY(float sdrScale READ sdrScale NOTIFY stateChanged)
 
-public:
-    explicit PresentationOutputState(QObject *parent);
-    PresentationOutputState(
-        std::unique_ptr<DisplayStateProvider> provider,
-        QObject *parent);
+  public:
+    explicit PresentationOutputState(QObject* parent);
+    PresentationOutputState(std::unique_ptr<DisplayStateProvider> provider, QObject* parent);
     ~PresentationOutputState() override;
 
-    void attach(QWindow &window);
+    void attach(QWindow& window);
 
     QString screenName() const;
     QString graphicsApi() const;
@@ -93,16 +80,16 @@ public:
     float sdrScale() const;
 
     Q_INVOKABLE void reprobePresentation();
-    void setBackendState(const PresentationBackendState &state);
+    void setBackendState(PresentationBackendState const& state);
 
-signals:
+  signals:
     void stateChanged();
     void outputCharacteristicsChanged();
 
-private:
-    void attachScreen(QScreen *screen);
+  private:
+    void attachScreen(QScreen* screen);
     void updateMetrics();
-    void applyDisplayState(const DisplayState &state);
+    void applyDisplayState(DisplayState const& state);
     PresentationTarget presentationTarget() const;
 
     QPointer<QWindow> m_window;

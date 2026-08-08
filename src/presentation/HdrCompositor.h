@@ -37,36 +37,28 @@ static_assert(offsetof(HdrCompositorParameters, outputEncoding) == 32);
 
 // Final presentation pass; source color processing belongs to video producers.
 class HdrCompositor final {
-public:
+  public:
     enum class ResourceResult {
         Ready,
         DeviceLost,
     };
 
-    explicit HdrCompositor(QRhi &rhi);
+    explicit HdrCompositor(QRhi& rhi);
     ~HdrCompositor();
 
-    HdrCompositor(const HdrCompositor &) = delete;
-    HdrCompositor &operator=(const HdrCompositor &) = delete;
+    HdrCompositor(HdrCompositor const&) = delete;
+    HdrCompositor& operator=(HdrCompositor const&) = delete;
 
-    ResourceResult initialize(QRhiRenderPassDescriptor &renderPassDescriptor,
-                              QRhiTexture *videoTexture,
-                              QRhiTexture *subtitleTexture,
-                              QRhiTexture &uiTexture);
-    ResourceResult setTextures(QRhiTexture *videoTexture,
-                               QRhiTexture *subtitleTexture,
-                               QRhiTexture &uiTexture);
-    void render(QRhiCommandBuffer &commandBuffer,
-                QRhiRenderTarget &renderTarget,
-                const QSize &pixelSize,
-                const HdrCompositorParameters &parameters);
+    ResourceResult initialize(QRhiRenderPassDescriptor& renderPassDescriptor, QRhiTexture* videoTexture,
+                              QRhiTexture* subtitleTexture, QRhiTexture& uiTexture);
+    ResourceResult setTextures(QRhiTexture* videoTexture, QRhiTexture* subtitleTexture, QRhiTexture& uiTexture);
+    void render(QRhiCommandBuffer& commandBuffer, QRhiRenderTarget& renderTarget, QSize const& pixelSize,
+                HdrCompositorParameters const& parameters);
 
-private:
-    ResourceResult createBindings(QRhiTexture *videoTexture,
-                                  QRhiTexture *subtitleTexture,
-                                  QRhiTexture &uiTexture);
+  private:
+    ResourceResult createBindings(QRhiTexture* videoTexture, QRhiTexture* subtitleTexture, QRhiTexture& uiTexture);
 
-    QRhi &m_rhi;
+    QRhi& m_rhi;
     std::unique_ptr<QRhiBuffer> m_uniformBuffer;
     std::unique_ptr<QRhiSampler> m_sampler;
     std::unique_ptr<QRhiTexture> m_emptyLayerTexture;

@@ -10,15 +10,11 @@
 // separate callback-safe ring behind this boundary; submit() is never called
 // by the physical real-time callback.
 class AudioSink {
-public:
+  public:
     virtual ~AudioSink() = default;
 
-    virtual void reset(
-        std::uint64_t playbackGeneration,
-        AudioStreamFormat format) = 0;
-    virtual bool submit(
-        PcmAudioBlock block,
-        std::stop_token stopToken = {}) = 0;
+    virtual void reset(std::uint64_t playbackGeneration, AudioStreamFormat format) = 0;
+    virtual bool submit(PcmAudioBlock block, std::stop_token stopToken = {}) = 0;
     // Invalidates one output epoch and promptly releases any blocked
     // producer. A stale generation must not affect its replacement.
     virtual void cancel(std::uint64_t playbackGeneration) = 0;

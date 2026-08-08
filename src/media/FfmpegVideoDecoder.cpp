@@ -28,85 +28,58 @@ extern "C" {
 
 namespace {
 constexpr std::size_t maximumQueuedPackets = 64;
-constexpr std::size_t maximumQueuedPacketBytes =
-    4U * 1024U * 1024U;
+constexpr std::size_t maximumQueuedPacketBytes = 4U * 1024U * 1024U;
 
 struct FormatContextDeleter {
-    void operator()(AVFormatContext *context) const {
-        avformat_close_input(&context);
-    }
+    void operator()(AVFormatContext* context) const { avformat_close_input(&context); }
 };
 
 struct CodecParametersDeleter {
-    void operator()(AVCodecParameters *parameters) const {
-        avcodec_parameters_free(&parameters);
-    }
+    void operator()(AVCodecParameters* parameters) const { avcodec_parameters_free(&parameters); }
 };
 
-using FormatContextPtr =
-    std::unique_ptr<AVFormatContext, FormatContextDeleter>;
-using CodecParametersPtr =
-    std::unique_ptr<AVCodecParameters, CodecParametersDeleter>;
+using FormatContextPtr = std::unique_ptr<AVFormatContext, FormatContextDeleter>;
+using CodecParametersPtr = std::unique_ptr<AVCodecParameters, CodecParametersDeleter>;
 
 QString ffmpegError(int code) {
     char buffer[AV_ERROR_MAX_STRING_SIZE]{};
-    if (av_strerror(code, buffer, sizeof(buffer)) < 0)
+    if (av_strerror(code, buffer, sizeof(buffer)) < 0) {
         return QStringLiteral("FFmpeg error %1").arg(code);
+    }
     return QString::fromUtf8(buffer);
 }
 
-qint64 ioBytesRead(const AVFormatContext &context) {
-    return context.pb ? context.pb->bytes_read : -1;
-}
+qint64 ioBytesRead(AVFormatContext const& context) { return context.pb ? context.pb->bytes_read : -1; }
 
-qint64 ioPosition(AVFormatContext &context) {
-    return context.pb ? avio_tell(context.pb) : -1;
-}
+qint64 ioPosition(AVFormatContext& context) { return context.pb ? avio_tell(context.pb) : -1; }
 
 struct InterruptState {
     std::stop_token operationStopToken;
     std::stop_token demuxStopToken;
 };
 
-int interruptFfmpeg(void *opaque) {
-    const auto &state =
-        *static_cast<const InterruptState *>(opaque);
-    return state.operationStopToken.stop_requested()
-            || state.demuxStopToken.stop_requested()
-        ? 1
-        : 0;
+int interruptFfmpeg(void* opaque) {
+    auto const& state = *static_cast<InterruptState const*>(opaque);
+    return state.operationStopToken.stop_requested() || state.demuxStopToken.stop_requested() ? 1 : 0;
 }
 
 class BoundedPacketChannel final {
-public:
-    bool push(
-            FfmpegAvPacketPtr packet,
-            std::stop_token stopToken) {
+  public:
+    bool push(FfmpegAvPacketPtr packet, std::stop_token stopToken) {
         Q_ASSERT(packet);
-        const std::size_t bytes = packet->size > 0
-            ? static_cast<std::size_t>(packet->size)
-            : 0;
+        std::size_t const bytes = packet->size > 0 ? static_cast<std::size_t>(packet->size) : 0;
         std::unique_lock lock(m_mutex);
-        const bool ready = m_wake.wait(
-            lock,
-            stopToken,
-            [this, bytes] {
-                if (m_terminal
-                        != FfmpegVideoPacketTerminal::Packet) {
-                    return true;
-                }
-                const bool countAvailable =
-                    m_packets.size() < maximumQueuedPackets;
-                const bool bytesAvailable = m_packets.empty()
-                    || bytes <= maximumQueuedPacketBytes
-                        - std::min(
-                            m_queuedBytes,
-                            maximumQueuedPacketBytes);
-                return countAvailable && bytesAvailable;
-            });
-        if (!ready
-                || m_terminal
-                    != FfmpegVideoPacketTerminal::Packet) {
+        bool const ready = m_wake.wait(lock, stopToken, [this, bytes] {
+            if (m_terminal != FfmpegVideoPacketTerminal::Packet) {
+                return true;
+            }
+            bool const countAvailable = m_packets.size() < maximumQueuedPackets;
+            bool const bytesAvailable =
+                m_packets.empty() ||
+                bytes <= maximumQueuedPacketBytes - std::min(m_queuedBytes, maximumQueuedPacketBytes);
+            return countAvailable && bytesAvailable;
+        });
+        if (!ready || m_terminal != FfmpegVideoPacketTerminal::Packet) {
             return false;
         }
         m_queuedBytes += bytes;
@@ -121,18 +94,11 @@ public:
 
     FfmpegVideoPacketRead pop(std::stop_token stopToken) {
         std::unique_lock lock(m_mutex);
-        const bool ready = m_wake.wait(
-            lock,
-            stopToken,
-            [this] {
-                return !m_packets.empty()
-                    || m_terminal
-                        != FfmpegVideoPacketTerminal::Packet;
-            });
+        bool const ready = m_wake.wait(
+            lock, stopToken, [this] { return !m_packets.empty() || m_terminal != FfmpegVideoPacketTerminal::Packet; });
         if (!ready) {
             return {
-                .terminal =
-                    FfmpegVideoPacketTerminal::Cancelled,
+                .terminal = FfmpegVideoPacketTerminal::Cancelled,
             };
         }
         if (!m_packets.empty()) {
@@ -149,15 +115,11 @@ public:
         };
     }
 
-    void finish(
-            FfmpegVideoPacketTerminal terminal,
-            QString error = {}) {
-        Q_ASSERT(terminal
-            != FfmpegVideoPacketTerminal::Packet);
+    void finish(FfmpegVideoPacketTerminal terminal, QString error = {}) {
+        Q_ASSERT(terminal != FfmpegVideoPacketTerminal::Packet);
         {
             std::lock_guard lock(m_mutex);
-            if (m_terminal
-                    != FfmpegVideoPacketTerminal::Packet) {
+            if (m_terminal != FfmpegVideoPacketTerminal::Packet) {
                 return;
             }
             m_terminal = terminal;
@@ -166,7 +128,7 @@ public:
         m_wake.notify_all();
     }
 
-private:
+  private:
     struct Entry {
         FfmpegAvPacketPtr packet;
         std::size_t bytes = 0;
@@ -176,124 +138,92 @@ private:
     std::condition_variable_any m_wake;
     std::deque<Entry> m_packets;
     std::size_t m_queuedBytes = 0;
-    FfmpegVideoPacketTerminal m_terminal =
-        FfmpegVideoPacketTerminal::Packet;
+    FfmpegVideoPacketTerminal m_terminal = FfmpegVideoPacketTerminal::Packet;
     QString m_error;
 };
 
-std::optional<std::int64_t> positiveDurationMicroseconds(
-        std::int64_t value,
-        AVRational timeBase) {
-    if (value <= 0 || value == AV_NOPTS_VALUE)
+std::optional<std::int64_t> positiveDurationMicroseconds(std::int64_t value, AVRational timeBase) {
+    if (value <= 0 || value == AV_NOPTS_VALUE) {
         return std::nullopt;
-    const std::int64_t converted =
-        av_rescale_q(value, timeBase, AV_TIME_BASE_Q);
-    return converted > 0
-        ? std::optional<std::int64_t>(converted)
-        : std::nullopt;
+    }
+    std::int64_t const converted = av_rescale_q(value, timeBase, AV_TIME_BASE_Q);
+    return converted > 0 ? std::optional<std::int64_t>(converted) : std::nullopt;
 }
 
-VideoTimelineOrigin timelineOrigin(
-        std::int64_t timestamp,
-        AVRational timeBase) {
+VideoTimelineOrigin timelineOrigin(std::int64_t timestamp, AVRational timeBase) {
     return {
         .timestamp = timestamp,
         .timeBase = {timeBase.num, timeBase.den},
     };
 }
 
-FfmpegVideoStreamDiagnostics streamDiagnostics(
-        const AVFormatContext &formatContext,
-        const AVStream &stream,
-        const AVCodec &decoder,
-        int streamIndex,
-        const FfmpegVideoDecodeRequest &request) {
+FfmpegVideoStreamDiagnostics streamDiagnostics(AVFormatContext const& formatContext, AVStream const& stream,
+                                               AVCodec const& decoder, int streamIndex,
+                                               FfmpegVideoDecodeRequest const& request) {
     FfmpegVideoStreamDiagnostics diagnostics{
-        .containerFormat =
-            formatContext.iformat && formatContext.iformat->name
-            ? QString::fromLatin1(formatContext.iformat->name)
-            : QStringLiteral("unknown"),
-        .decoderName = decoder.name
-            ? QString::fromLatin1(decoder.name)
-            : QStringLiteral("unknown"),
+        .containerFormat = formatContext.iformat && formatContext.iformat->name
+                               ? QString::fromLatin1(formatContext.iformat->name)
+                               : QStringLiteral("unknown"),
+        .decoderName = decoder.name ? QString::fromLatin1(decoder.name) : QStringLiteral("unknown"),
         .decodePath = QStringLiteral("Software"),
-        .hardwareFallbackReason =
-            request.hardwareDecode.unavailableReason,
+        .hardwareFallbackReason = request.hardwareDecode.unavailableReason,
         .videoStreamIndex = streamIndex,
         .hardwareAccelerated = false,
-        .seekable = formatContext.pb
-            && (formatContext.pb->seekable
-                & AVIO_SEEKABLE_NORMAL),
+        .seekable = formatContext.pb && (formatContext.pb->seekable & AVIO_SEEKABLE_NORMAL),
     };
-    diagnostics.durationMicroseconds =
-        ffmpegProvisionalDurationMicroseconds(
-            formatContext, stream);
+    diagnostics.durationMicroseconds = ffmpegProvisionalDurationMicroseconds(formatContext, stream);
     if (formatContext.start_time != AV_NOPTS_VALUE) {
-        diagnostics.timelineOrigin = timelineOrigin(
-            formatContext.start_time, AV_TIME_BASE_Q);
+        diagnostics.timelineOrigin = timelineOrigin(formatContext.start_time, AV_TIME_BASE_Q);
     } else if (stream.start_time != AV_NOPTS_VALUE) {
-        diagnostics.timelineOrigin = timelineOrigin(
-            stream.start_time, stream.time_base);
+        diagnostics.timelineOrigin = timelineOrigin(stream.start_time, stream.time_base);
     }
-    const AVRational frameRate = av_guess_frame_rate(
-        const_cast<AVFormatContext *>(&formatContext),
-        const_cast<AVStream *>(&stream),
-        nullptr);
+    AVRational const frameRate =
+        av_guess_frame_rate(const_cast<AVFormatContext*>(&formatContext), const_cast<AVStream*>(&stream), nullptr);
     if (frameRate.num > 0 && frameRate.den > 0) {
-        diagnostics.nominalFrameDurationMicroseconds =
-            positiveDurationMicroseconds(
-                1, av_inv_q(frameRate));
+        diagnostics.nominalFrameDurationMicroseconds = positiveDurationMicroseconds(1, av_inv_q(frameRate));
     }
     return diagnostics;
 }
 
-FfmpegVideoDecodeResult decodeVideoFramesAttempt(
-        const FfmpegVideoDecodeRequest &request,
-        const FfmpegVideoFrameSink &sink,
-        std::stop_token stopToken,
-        bool *hardwareSelected) {
+FfmpegVideoDecodeResult decodeVideoFramesAttempt(FfmpegVideoDecodeRequest const& request,
+                                                 FfmpegVideoFrameSink const& sink, std::stop_token stopToken,
+                                                 bool* hardwareSelected) {
     Q_ASSERT(hardwareSelected);
     Q_ASSERT(sink);
     *hardwareSelected = false;
-    const std::uint64_t generation =
-        request.firstFrameIdentity.playbackGeneration;
+    std::uint64_t const generation = request.firstFrameIdentity.playbackGeneration;
     QElapsedTimer operationTimer;
     operationTimer.start();
 
     FfmpegVideoDecodeResult result;
-    const auto fail = [&result](QString message) {
+    auto const fail = [&result](QString message) {
         result.error = std::move(message);
         return result;
     };
-    const auto cancel = [&result] {
+    auto const cancel = [&result] {
         result.error.clear();
         result.cancelled = true;
         return result;
     };
-    if (stopToken.stop_requested())
+    if (stopToken.stop_requested()) {
         return cancel();
-    if (!request.isValid())
+    }
+    if (!request.isValid()) {
         return fail(QStringLiteral("Video decode request is invalid"));
+    }
 
     qCDebug(sunroomLogMediaDecode).noquote()
         << "event=decode.attempt_start"
         << "generation=" + QString::number(generation)
-        << "targetUs=" + (
-            request.start.targetPositionMicroseconds
-            ? QString::number(
-                *request.start.targetPositionMicroseconds)
-            : QStringLiteral("none"))
-        << "demuxSeek=" + QString(
-            request.start.performDemuxSeek
-            ? QStringLiteral("true")
-            : QStringLiteral("false"))
+        << "targetUs=" + (request.start.targetPositionMicroseconds
+                              ? QString::number(*request.start.targetPositionMicroseconds)
+                              : QStringLiteral("none"))
+        << "demuxSeek=" + QString(request.start.performDemuxSeek ? QStringLiteral("true") : QStringLiteral("false"))
         << "path=" + request.path;
 
-    AVFormatContext *rawFormatContext =
-        avformat_alloc_context();
+    AVFormatContext* rawFormatContext = avformat_alloc_context();
     if (!rawFormatContext) {
-        return fail(QStringLiteral(
-            "Could not allocate the media container context"));
+        return fail(QStringLiteral("Could not allocate the media container context"));
     }
     InterruptState interruptState{
         .operationStopToken = stopToken,
@@ -302,347 +232,220 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(
         interruptFfmpeg,
         &interruptState,
     };
-    const QByteArray encodedPath = request.path.toUtf8();
-    int status = avformat_open_input(
-        &rawFormatContext,
-        encodedPath.constData(),
-        nullptr,
-        nullptr);
+    QByteArray const encodedPath = request.path.toUtf8();
+    int status = avformat_open_input(&rawFormatContext, encodedPath.constData(), nullptr, nullptr);
     if (status < 0) {
-        if (rawFormatContext)
+        if (rawFormatContext) {
             avformat_close_input(&rawFormatContext);
-        if (stopToken.stop_requested())
+        }
+        if (stopToken.stop_requested()) {
             return cancel();
-        return fail(QStringLiteral("Could not open media: %1")
-            .arg(ffmpegError(status)));
+        }
+        return fail(QStringLiteral("Could not open media: %1").arg(ffmpegError(status)));
     }
     FormatContextPtr formatContext(rawFormatContext);
-    qCDebug(sunroomLogMediaIo).noquote()
-        << "event=media.open_complete"
-        << "generation=" + QString::number(generation)
-        << "elapsedMs=" + QString::number(
-            operationTimer.elapsed())
-        << "bytesRead=" + QString::number(
-            ioBytesRead(*formatContext));
+    qCDebug(sunroomLogMediaIo).noquote() << "event=media.open_complete"
+                                         << "generation=" + QString::number(generation)
+                                         << "elapsedMs=" + QString::number(operationTimer.elapsed())
+                                         << "bytesRead=" + QString::number(ioBytesRead(*formatContext));
 
-    status = avformat_find_stream_info(
-        formatContext.get(), nullptr);
+    status = avformat_find_stream_info(formatContext.get(), nullptr);
     if (status < 0) {
-        if (stopToken.stop_requested())
+        if (stopToken.stop_requested()) {
             return cancel();
-        return fail(QStringLiteral(
-            "Could not discover media streams: %1")
-            .arg(ffmpegError(status)));
+        }
+        return fail(QStringLiteral("Could not discover media streams: %1").arg(ffmpegError(status)));
     }
-    qCDebug(sunroomLogMediaIo).noquote()
-        << "event=media.probe_complete"
-        << "generation=" + QString::number(generation)
-        << "elapsedMs=" + QString::number(
-            operationTimer.elapsed())
-        << "bytesRead=" + QString::number(
-            ioBytesRead(*formatContext));
+    qCDebug(sunroomLogMediaIo).noquote() << "event=media.probe_complete"
+                                         << "generation=" + QString::number(generation)
+                                         << "elapsedMs=" + QString::number(operationTimer.elapsed())
+                                         << "bytesRead=" + QString::number(ioBytesRead(*formatContext));
 
-    const AVCodec *decoder = nullptr;
-    const int streamIndex = av_find_best_stream(
-        formatContext.get(),
-        AVMEDIA_TYPE_VIDEO,
-        -1,
-        -1,
-        &decoder,
-        0);
-    if (stopToken.stop_requested())
+    AVCodec const* decoder = nullptr;
+    int const streamIndex = av_find_best_stream(formatContext.get(), AVMEDIA_TYPE_VIDEO, -1, -1, &decoder, 0);
+    if (stopToken.stop_requested()) {
         return cancel();
-    if (streamIndex < 0 || !decoder) {
-        return fail(QStringLiteral(
-            "Could not select a video stream: %1")
-            .arg(ffmpegError(streamIndex)));
     }
-    const AVStream &stream =
-        *formatContext->streams[streamIndex];
-    const AVRational streamTimeBase = stream.time_base;
+    if (streamIndex < 0 || !decoder) {
+        return fail(QStringLiteral("Could not select a video stream: %1").arg(ffmpegError(streamIndex)));
+    }
+    AVStream const& stream = *formatContext->streams[streamIndex];
+    AVRational const streamTimeBase = stream.time_base;
     AVRational streamAspectRatio = stream.sample_aspect_ratio;
-    if ((streamAspectRatio.num <= 0
-            || streamAspectRatio.den <= 0)
-            && stream.codecpar->sample_aspect_ratio.num > 0
-            && stream.codecpar->sample_aspect_ratio.den > 0) {
-        streamAspectRatio =
-            stream.codecpar->sample_aspect_ratio;
+    if ((streamAspectRatio.num <= 0 || streamAspectRatio.den <= 0) && stream.codecpar->sample_aspect_ratio.num > 0 &&
+        stream.codecpar->sample_aspect_ratio.den > 0) {
+        streamAspectRatio = stream.codecpar->sample_aspect_ratio;
     }
 
     if (request.start.performDemuxSeek) {
-        if (!formatContext->pb
-                || !(formatContext->pb->seekable
-                    & AVIO_SEEKABLE_NORMAL)) {
-            return fail(QStringLiteral(
-                "The selected media source is not seekable"));
+        if (!formatContext->pb || !(formatContext->pb->seekable & AVIO_SEEKABLE_NORMAL)) {
+            return fail(QStringLiteral("The selected media source is not seekable"));
         }
-        const VideoTimelineOrigin &origin =
-            *request.start.timelineOrigin;
-        const auto targetTimestamp =
-            videoStreamTimestampForPosition(
-                origin,
-                {streamTimeBase.num, streamTimeBase.den},
-                *request.start.targetPositionMicroseconds);
+        VideoTimelineOrigin const& origin = *request.start.timelineOrigin;
+        auto const targetTimestamp = videoStreamTimestampForPosition(origin, {streamTimeBase.num, streamTimeBase.den},
+                                                                     *request.start.targetPositionMicroseconds);
         if (!targetTimestamp) {
-            return fail(QStringLiteral(
-                "The requested video seek timestamp "
-                "cannot be represented"));
+            return fail(QStringLiteral("The requested video seek timestamp "
+                                       "cannot be represented"));
         }
         qCDebug(sunroomLogMediaIo).noquote()
             << "event=media.seek_request"
-            << "generation=" + QString::number(generation)
-            << "stream=" + QString::number(streamIndex)
-            << "targetUs=" + QString::number(
-                *request.start.targetPositionMicroseconds)
+            << "generation=" + QString::number(generation) << "stream=" + QString::number(streamIndex)
+            << "targetUs=" + QString::number(*request.start.targetPositionMicroseconds)
             << "targetTs=" + QString::number(*targetTimestamp);
-        status = avformat_seek_file(
-            formatContext.get(),
-            streamIndex,
-            std::numeric_limits<std::int64_t>::min(),
-            *targetTimestamp,
-            *targetTimestamp,
-            0);
+        status = avformat_seek_file(formatContext.get(), streamIndex, std::numeric_limits<std::int64_t>::min(),
+                                    *targetTimestamp, *targetTimestamp, 0);
         if (status < 0) {
-            if (stopToken.stop_requested())
+            if (stopToken.stop_requested()) {
                 return cancel();
-            return fail(QStringLiteral(
-                "Could not seek video to %1 ms: %2")
-                .arg(
-                    *request.start.targetPositionMicroseconds
-                        / 1'000)
-                .arg(ffmpegError(status)));
+            }
+            return fail(QStringLiteral("Could not seek video to %1 ms: %2")
+                            .arg(*request.start.targetPositionMicroseconds / 1'000)
+                            .arg(ffmpegError(status)));
         }
         qCDebug(sunroomLogMediaIo).noquote()
             << "event=media.seek_complete"
-            << "generation=" + QString::number(generation)
-            << "elapsedMs=" + QString::number(
-                operationTimer.elapsed())
-            << "bytesRead=" + QString::number(
-                ioBytesRead(*formatContext))
-            << "bytePosition=" + QString::number(
-                ioPosition(*formatContext));
+            << "generation=" + QString::number(generation) << "elapsedMs=" + QString::number(operationTimer.elapsed())
+            << "bytesRead=" + QString::number(ioBytesRead(*formatContext))
+            << "bytePosition=" + QString::number(ioPosition(*formatContext));
     }
 
-    for (unsigned int index = 0;
-            index < formatContext->nb_streams;
-            ++index) {
+    for (unsigned int index = 0; index < formatContext->nb_streams; ++index) {
         formatContext->streams[index]->discard =
-            static_cast<int>(index) == streamIndex
-            ? AVDISCARD_DEFAULT
-            : AVDISCARD_ALL;
+            static_cast<int>(index) == streamIndex ? AVDISCARD_DEFAULT : AVDISCARD_ALL;
     }
 
-    CodecParametersPtr streamParameters(
-        avcodec_parameters_alloc());
-    if (!streamParameters
-            || avcodec_parameters_copy(
-                streamParameters.get(), stream.codecpar) < 0) {
-        return fail(QStringLiteral(
-            "Could not retain video stream parameters"));
+    CodecParametersPtr streamParameters(avcodec_parameters_alloc());
+    if (!streamParameters || avcodec_parameters_copy(streamParameters.get(), stream.codecpar) < 0) {
+        return fail(QStringLiteral("Could not retain video stream parameters"));
     }
-    const FfmpegVideoStreamDiagnostics diagnostics =
-        streamDiagnostics(
-            *formatContext,
-            stream,
-            *decoder,
-            streamIndex,
-            request);
+    FfmpegVideoStreamDiagnostics const diagnostics =
+        streamDiagnostics(*formatContext, stream, *decoder, streamIndex, request);
 
     BoundedPacketChannel packets;
     std::atomic_bool firstSelectedPacket = true;
-    std::jthread demuxWorker(
-        [&](std::stop_token demuxStopToken) {
-            interruptState.demuxStopToken = demuxStopToken;
-            while (!stopToken.stop_requested()
-                    && !demuxStopToken.stop_requested()) {
-                FfmpegAvPacketPtr packet(av_packet_alloc());
-                if (!packet) {
-                    packets.finish(
-                        FfmpegVideoPacketTerminal::Failed,
-                        QStringLiteral(
-                            "Could not allocate FFmpeg packet storage"));
-                    return;
-                }
-                const int readStatus = av_read_frame(
-                    formatContext.get(), packet.get());
-                if (readStatus < 0) {
-                    if (stopToken.stop_requested()
-                            || demuxStopToken.stop_requested()) {
-                        packets.finish(
-                            FfmpegVideoPacketTerminal::Cancelled);
-                    } else if (readStatus == AVERROR_EOF) {
-                        packets.finish(
-                            FfmpegVideoPacketTerminal::EndOfStream);
-                    } else {
-                        packets.finish(
-                            FfmpegVideoPacketTerminal::Failed,
-                            QStringLiteral("Media read failed: %1")
-                                .arg(ffmpegError(readStatus)));
-                    }
-                    return;
-                }
-                if (packet->stream_index != streamIndex)
-                    continue;
-                if (firstSelectedPacket.exchange(
-                        false,
-                        std::memory_order_relaxed)) {
-                    qCDebug(sunroomLogMediaIo).noquote()
-                        << "event=demux.first_video_packet"
-                        << "generation=" + QString::number(
-                            generation)
-                        << "pts=" + QString::number(packet->pts)
-                        << "dts=" + QString::number(packet->dts)
-                        << "duration=" + QString::number(
-                            packet->duration)
-                        << "position=" + QString::number(
-                            packet->pos)
-                        << "key=" + QString(
-                            packet->flags & AV_PKT_FLAG_KEY
-                            ? QStringLiteral("true")
-                            : QStringLiteral("false"))
-                        << "bytesRead=" + QString::number(
-                            ioBytesRead(*formatContext));
-                }
-                if (!packets.push(
-                        std::move(packet), demuxStopToken)) {
-                    packets.finish(
-                        FfmpegVideoPacketTerminal::Cancelled);
-                    return;
-                }
+    std::jthread demuxWorker([&](std::stop_token demuxStopToken) {
+        interruptState.demuxStopToken = demuxStopToken;
+        while (!stopToken.stop_requested() && !demuxStopToken.stop_requested()) {
+            FfmpegAvPacketPtr packet(av_packet_alloc());
+            if (!packet) {
+                packets.finish(FfmpegVideoPacketTerminal::Failed,
+                               QStringLiteral("Could not allocate FFmpeg packet storage"));
+                return;
             }
-            packets.finish(
-                FfmpegVideoPacketTerminal::Cancelled);
-        });
+            int const readStatus = av_read_frame(formatContext.get(), packet.get());
+            if (readStatus < 0) {
+                if (stopToken.stop_requested() || demuxStopToken.stop_requested()) {
+                    packets.finish(FfmpegVideoPacketTerminal::Cancelled);
+                } else if (readStatus == AVERROR_EOF) {
+                    packets.finish(FfmpegVideoPacketTerminal::EndOfStream);
+                } else {
+                    packets.finish(FfmpegVideoPacketTerminal::Failed,
+                                   QStringLiteral("Media read failed: %1").arg(ffmpegError(readStatus)));
+                }
+                return;
+            }
+            if (packet->stream_index != streamIndex) {
+                continue;
+            }
+            if (firstSelectedPacket.exchange(false, std::memory_order_relaxed)) {
+                qCDebug(sunroomLogMediaIo).noquote()
+                    << "event=demux.first_video_packet"
+                    << "generation=" + QString::number(generation) << "pts=" + QString::number(packet->pts)
+                    << "dts=" + QString::number(packet->dts) << "duration=" + QString::number(packet->duration)
+                    << "position=" + QString::number(packet->pos)
+                    << "key=" +
+                           QString(packet->flags & AV_PKT_FLAG_KEY ? QStringLiteral("true") : QStringLiteral("false"))
+                    << "bytesRead=" + QString::number(ioBytesRead(*formatContext));
+            }
+            if (!packets.push(std::move(packet), demuxStopToken)) {
+                packets.finish(FfmpegVideoPacketTerminal::Cancelled);
+                return;
+            }
+        }
+        packets.finish(FfmpegVideoPacketTerminal::Cancelled);
+    });
 
     result = decodeFfmpegVideoPackets(
-        request,
-        *decoder,
-        *streamParameters,
-        {streamTimeBase.num, streamTimeBase.den},
-        {streamAspectRatio.num, streamAspectRatio.den},
-        diagnostics,
-        [&packets](std::stop_token packetStopToken) {
-            return packets.pop(packetStopToken);
-        },
-        sink,
-        stopToken,
+        request, *decoder, *streamParameters, {streamTimeBase.num, streamTimeBase.den},
+        {streamAspectRatio.num, streamAspectRatio.den}, diagnostics,
+        [&packets](std::stop_token packetStopToken) { return packets.pop(packetStopToken); }, sink, stopToken,
         hardwareSelected);
     demuxWorker.request_stop();
     packets.finish(FfmpegVideoPacketTerminal::Cancelled);
     demuxWorker.join();
     return result;
 }
-}
+} // namespace
 
-bool VideoTimelineOrigin::isValid() const {
-    return timeBase.isValid();
-}
+bool VideoTimelineOrigin::isValid() const { return timeBase.isValid(); }
 
-std::optional<std::int64_t>
-VideoTimelineOrigin::microseconds() const {
-    if (!isValid())
+std::optional<std::int64_t> VideoTimelineOrigin::microseconds() const {
+    if (!isValid()) {
         return std::nullopt;
+    }
     return VideoFrameTiming{
         .pts = timestamp,
         .timeBase = timeBase,
-    }.ptsMicroseconds();
+    }
+        .ptsMicroseconds();
 }
 
-std::optional<std::int64_t>
-videoStreamTimestampForPosition(
-        const VideoTimelineOrigin &origin,
-        const VideoFrameRational &streamTimeBase,
-        std::int64_t targetPositionMicroseconds) {
-    if (!origin.isValid()
-            || !streamTimeBase.isValid()
-            || targetPositionMicroseconds < 0
-            || origin.timestamp == AV_NOPTS_VALUE) {
+std::optional<std::int64_t> videoStreamTimestampForPosition(VideoTimelineOrigin const& origin,
+                                                            VideoFrameRational const& streamTimeBase,
+                                                            std::int64_t targetPositionMicroseconds) {
+    if (!origin.isValid() || !streamTimeBase.isValid() || targetPositionMicroseconds < 0 ||
+        origin.timestamp == AV_NOPTS_VALUE) {
         return std::nullopt;
     }
-    const AVRational originTimeBase{
+    AVRational const originTimeBase{
         origin.timeBase.numerator,
         origin.timeBase.denominator,
     };
-    const AVRational targetTimeBase{
+    AVRational const targetTimeBase{
         streamTimeBase.numerator,
         streamTimeBase.denominator,
     };
-    const std::int64_t originTimestamp = av_rescale_q(
-        origin.timestamp, originTimeBase, targetTimeBase);
-    const std::int64_t offsetTimestamp = av_rescale_q(
-        targetPositionMicroseconds,
-        AV_TIME_BASE_Q,
-        targetTimeBase);
-    if (originTimestamp == AV_NOPTS_VALUE
-            || offsetTimestamp < 0
-            || originTimestamp
-                > std::numeric_limits<std::int64_t>::max()
-                    - offsetTimestamp) {
+    std::int64_t const originTimestamp = av_rescale_q(origin.timestamp, originTimeBase, targetTimeBase);
+    std::int64_t const offsetTimestamp = av_rescale_q(targetPositionMicroseconds, AV_TIME_BASE_Q, targetTimeBase);
+    if (originTimestamp == AV_NOPTS_VALUE || offsetTimestamp < 0 ||
+        originTimestamp > std::numeric_limits<std::int64_t>::max() - offsetTimestamp) {
         return std::nullopt;
     }
     return originTimestamp + offsetTimestamp;
 }
 
 bool VideoDecodeStart::isValid() const {
-    return (!targetPositionMicroseconds
-            || *targetPositionMicroseconds >= 0)
-        && (!timelineOrigin || timelineOrigin->isValid())
-        && (!targetPositionMicroseconds || timelineOrigin)
-        && (!performDemuxSeek || targetPositionMicroseconds);
+    return (!targetPositionMicroseconds || *targetPositionMicroseconds >= 0) &&
+           (!timelineOrigin || timelineOrigin->isValid()) && (!targetPositionMicroseconds || timelineOrigin) &&
+           (!performDemuxSeek || targetPositionMicroseconds);
 }
 
 bool FfmpegVideoDecodeRequest::isValid() const {
-    return !path.isEmpty()
-        && firstFrameIdentity.isValid()
-        && extraHardwareFrames >= 0
-        && start.isValid();
+    return !path.isEmpty() && firstFrameIdentity.isValid() && extraHardwareFrames >= 0 && start.isValid();
 }
 
 bool FfmpegVideoStreamDiagnostics::isValid() const {
-    return !containerFormat.isEmpty()
-        && !decoderName.isEmpty()
-        && !decodePath.isEmpty()
-        && (hardwareAccelerated
-            ? decodePath != QStringLiteral("Software")
-                && hardwareFallbackReason.isEmpty()
-            : decodePath == QStringLiteral("Software"))
-        && videoStreamIndex >= 0
-        && (!timelineOrigin || timelineOrigin->isValid())
-        && (!durationMicroseconds
-            || *durationMicroseconds > 0)
-        && (!nominalFrameDurationMicroseconds
-            || *nominalFrameDurationMicroseconds > 0);
+    return !containerFormat.isEmpty() && !decoderName.isEmpty() && !decodePath.isEmpty() &&
+           (hardwareAccelerated ? decodePath != QStringLiteral("Software") && hardwareFallbackReason.isEmpty()
+                                : decodePath == QStringLiteral("Software")) &&
+           videoStreamIndex >= 0 && (!timelineOrigin || timelineOrigin->isValid()) &&
+           (!durationMicroseconds || *durationMicroseconds > 0) &&
+           (!nominalFrameDurationMicroseconds || *nominalFrameDurationMicroseconds > 0);
 }
 
 bool FfmpegVideoDecodeResult::isSuccess() const {
-    return diagnostics.isValid()
-        && framesDecoded != 0
-        && error.isEmpty()
-        && !cancelled
-        && (endOfStream || stopped);
+    return diagnostics.isValid() && framesDecoded != 0 && error.isEmpty() && !cancelled && (endOfStream || stopped);
 }
 
-bool FfmpegVideoDecodeResult::isCancelled() const {
-    return cancelled
-        && error.isEmpty()
-        && !endOfStream
-        && !stopped;
-}
+bool FfmpegVideoDecodeResult::isCancelled() const { return cancelled && error.isEmpty() && !endOfStream && !stopped; }
 
-FfmpegVideoDecodeResult decodeVideoFrames(
-        const FfmpegVideoDecodeRequest &request,
-        const FfmpegVideoFrameSink &sink,
-        std::stop_token stopToken) {
+FfmpegVideoDecodeResult decodeVideoFrames(FfmpegVideoDecodeRequest const& request, FfmpegVideoFrameSink const& sink,
+                                          std::stop_token stopToken) {
     return decodeVideoFramesWithFallback(
-        request.hardwareDecode,
-        [&](const VideoHardwareDecodeCapability &capability,
-            bool &hardwareSelected) {
+        request.hardwareDecode, [&](VideoHardwareDecodeCapability const& capability, bool& hardwareSelected) {
             FfmpegVideoDecodeRequest attemptRequest = request;
             attemptRequest.hardwareDecode = capability;
-            return decodeVideoFramesAttempt(
-                attemptRequest,
-                sink,
-                stopToken,
-                &hardwareSelected);
+            return decodeVideoFramesAttempt(attemptRequest, sink, stopToken, &hardwareSelected);
         });
 }

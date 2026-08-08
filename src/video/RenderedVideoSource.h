@@ -21,28 +21,21 @@ class RenderedVideoSource : public QObject {
     Q_OBJECT
     QML_ANONYMOUS
 
-public:
+  public:
     using QObject::QObject;
     ~RenderedVideoSource() override = default;
 
-    virtual void prepareForPresentation(
-        std::chrono::steady_clock::time_point now) = 0;
+    virtual void prepareForPresentation(std::chrono::steady_clock::time_point now) = 0;
     virtual std::uint64_t contentRevision() const = 0;
-    virtual std::uint64_t producerConfigurationRevision() const {
-        return 1;
-    }
-    virtual std::optional<double> displayAspectRatio() const {
-        return std::nullopt;
-    }
+    virtual std::uint64_t producerConfigurationRevision() const { return 1; }
+    virtual std::optional<double> displayAspectRatio() const { return std::nullopt; }
     virtual bool wantsContinuousFrames() const = 0;
-    virtual std::unique_ptr<RenderedVideoProducer> createProducer(
-        GraphicsDeviceDomain &graphicsDevice) const = 0;
-    virtual bool reportPresentationFailure(
-            const VideoFailure &failure) {
+    virtual std::unique_ptr<RenderedVideoProducer> createProducer(GraphicsDeviceDomain& graphicsDevice) const = 0;
+    virtual bool reportPresentationFailure(VideoFailure const& failure) {
         Q_UNUSED(failure);
         return false;
     }
 
-signals:
+  signals:
     void updateRequested();
 };

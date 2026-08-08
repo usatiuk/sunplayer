@@ -14,40 +14,33 @@ class QRhiGraphicsPipeline;
 class QRhiShaderResourceBindings;
 
 class DiagnosticVideoProducer final : public RenderedVideoProducer {
-public:
-    explicit DiagnosticVideoProducer(
-        GraphicsDeviceDomain &graphicsDevice,
-        const DiagnosticVideoSource &source,
-        VideoTargetReadback readback = VideoTargetReadback::Disabled);
+  public:
+    explicit DiagnosticVideoProducer(GraphicsDeviceDomain& graphicsDevice, DiagnosticVideoSource const& source,
+                                     VideoTargetReadback readback = VideoTargetReadback::Disabled);
     ~DiagnosticVideoProducer() override;
 
-    DiagnosticVideoProducer(const DiagnosticVideoProducer &) = delete;
-    DiagnosticVideoProducer &operator=(const DiagnosticVideoProducer &) =
-        delete;
+    DiagnosticVideoProducer(DiagnosticVideoProducer const&) = delete;
+    DiagnosticVideoProducer& operator=(DiagnosticVideoProducer const&) = delete;
 
-    VideoOperationResult ensureSurface(
-        const RenderedVideoSurfaceState &requestedState) override;
-    bool needsRender(
-        const RenderedVideoSurfaceState &requestedState) const override;
-    VideoOperationResult render(
-        QRhiCommandBuffer &commandBuffer,
-        const RenderedVideoSurfaceState &requestedState) override;
-    VideoOperationResult prepareForComposition(
-        QRhiCommandBuffer &commandBuffer) override;
+    VideoOperationResult ensureSurface(RenderedVideoSurfaceState const& requestedState) override;
+    bool needsRender(RenderedVideoSurfaceState const& requestedState) const override;
+    VideoOperationResult render(QRhiCommandBuffer& commandBuffer,
+                                RenderedVideoSurfaceState const& requestedState) override;
+    VideoOperationResult prepareForComposition(QRhiCommandBuffer& commandBuffer) override;
     void submissionAccepted() override;
     void submissionAborted() override;
     void commitPendingRender() override;
     void discardPendingRender() override;
 
-    QRhiTexture &textureForComposition() const override;
+    QRhiTexture& textureForComposition() const override;
     std::uint64_t compositionTextureRevision() const override;
     RenderedVideoProducerDiagnostics diagnostics() const override;
 
-private:
+  private:
     VideoOperationResult createResources();
 
-    QRhi &m_rhi;
-    const DiagnosticVideoSource &m_source;
+    QRhi& m_rhi;
+    DiagnosticVideoSource const& m_source;
     std::unique_ptr<VideoTargetInterop> m_target;
     std::unique_ptr<QRhiBuffer> m_uniformBuffer;
     std::unique_ptr<QRhiShaderResourceBindings> m_bindings;

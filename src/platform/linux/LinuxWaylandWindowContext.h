@@ -17,35 +17,27 @@ void prepareLinuxWaylandPlatform();
 
 // Owns native state whose lifetime must exceed the QWindow surface and every
 // recoverable logical-device generation created for that surface.
-class LinuxWaylandWindowContext final
-    : public PresentationSurfaceController {
-public:
-    explicit LinuxWaylandWindowContext(QGuiApplication &application);
+class LinuxWaylandWindowContext final : public PresentationSurfaceController {
+  public:
+    explicit LinuxWaylandWindowContext(QGuiApplication& application);
     ~LinuxWaylandWindowContext();
 
-    LinuxWaylandWindowContext(const LinuxWaylandWindowContext &) = delete;
-    LinuxWaylandWindowContext &operator=(
-        const LinuxWaylandWindowContext &) = delete;
+    LinuxWaylandWindowContext(LinuxWaylandWindowContext const&) = delete;
+    LinuxWaylandWindowContext& operator=(LinuxWaylandWindowContext const&) = delete;
 
-    void configureWindow(QWindow &window);
-    void releaseWindow(QWindow &window);
-    std::unique_ptr<DisplayStateProvider> takeDisplayStateProvider(
-        QObject *parent);
+    void configureWindow(QWindow& window);
+    void releaseWindow(QWindow& window);
+    std::unique_ptr<DisplayStateProvider> takeDisplayStateProvider(QObject* parent);
 
-    const WaylandSurfaceSelection &surfaceSelection() const;
+    WaylandSurfaceSelection const& surfaceSelection() const;
     bool requiresClientSideDecorations() const;
-    QVulkanInstance &vulkanInstance();
+    QVulkanInstance& vulkanInstance();
 
-    PresentationSurfaceMode desiredMode(
-        std::uint64_t graphicsDeviceGeneration) override;
-    void applyMode(
-        QWindow &window,
-        PresentationSurfaceMode mode) override;
-    void rejectHdrTarget(
-        std::uint64_t graphicsDeviceGeneration,
-        const char *reason) override;
+    PresentationSurfaceMode desiredMode(std::uint64_t graphicsDeviceGeneration) override;
+    void applyMode(QWindow& window, PresentationSurfaceMode mode) override;
+    void rejectHdrTarget(std::uint64_t graphicsDeviceGeneration, char const* reason) override;
 
-private:
+  private:
     struct NativeState;
 
     std::unique_ptr<NativeState> m_nativeState;
@@ -54,5 +46,5 @@ private:
     std::optional<WaylandHdrRejection> m_hdrRejection;
     bool m_requiresClientSideDecorations = false;
     QVulkanInstance m_vulkanInstance;
-    QWindow *m_window = nullptr;
+    QWindow* m_window = nullptr;
 };

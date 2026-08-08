@@ -23,39 +23,28 @@
 
 namespace {
 class RenderControl final : public QQuickRenderControl {
-public:
-    explicit RenderControl(QWindow &window) : m_window(window) {}
+  public:
+    explicit RenderControl(QWindow& window) : m_window(window) {}
 
-    QWindow *renderWindow(QPoint *offset) override {
-        if (offset)
+    QWindow* renderWindow(QPoint* offset) override {
+        if (offset) {
             *offset = {};
+        }
         return &m_window;
     }
 
-private:
-    QWindow &m_window;
+  private:
+    QWindow& m_window;
 };
-}
+} // namespace
 
-QuickUiLayer::QuickUiLayer(QWindow &renderWindow,
-                           QRhi &rhi,
-                           PresentationOutputState &outputState,
-                           PresentationSettings &settings,
-                           DiagnosticVideoSource &diagnosticSource,
-                           MediaSession &mediaSession,
-                           ActiveVideoSource &activeVideoSource,
-                           VideoViewportState &videoViewport,
-                           QObject *parent)
-    : QObject(parent),
-      m_renderWindow(renderWindow),
-      m_rhi(rhi),
-      m_outputState(outputState),
-      m_settings(settings),
-      m_diagnosticSource(diagnosticSource),
-      m_mediaSession(mediaSession),
-      m_activeVideoSource(activeVideoSource),
-      m_videoViewport(videoViewport) {
-}
+QuickUiLayer::QuickUiLayer(QWindow& renderWindow, QRhi& rhi, PresentationOutputState& outputState,
+                           PresentationSettings& settings, DiagnosticVideoSource& diagnosticSource,
+                           MediaSession& mediaSession, ActiveVideoSource& activeVideoSource,
+                           VideoViewportState& videoViewport, QObject* parent)
+    : QObject(parent), m_renderWindow(renderWindow), m_rhi(rhi), m_outputState(outputState), m_settings(settings),
+      m_diagnosticSource(diagnosticSource), m_mediaSession(mediaSession), m_activeVideoSource(activeVideoSource),
+      m_videoViewport(videoViewport) {}
 
 QuickUiLayer::~QuickUiLayer() {
     Q_ASSERT(m_renderControl);
@@ -77,18 +66,15 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
     Q_ASSERT(!m_rootItem);
 
     m_renderControl = std::make_unique<RenderControl>(m_renderWindow);
-    connect(m_renderControl.get(), &QQuickRenderControl::renderRequested,
-            this, &QuickUiLayer::markDirty);
-    connect(m_renderControl.get(), &QQuickRenderControl::sceneChanged,
-            this, &QuickUiLayer::markDirty);
+    connect(m_renderControl.get(), &QQuickRenderControl::renderRequested, this, &QuickUiLayer::markDirty);
+    connect(m_renderControl.get(), &QQuickRenderControl::sceneChanged, this, &QuickUiLayer::markDirty);
 
     m_quickWindow = std::make_unique<QQuickWindow>(m_renderControl.get());
     m_quickWindow->setColor(Qt::transparent);
 #if QT_CONFIG(vulkan)
     if (m_renderWindow.surfaceType() == QSurface::VulkanSurface) {
         Q_ASSERT(m_renderWindow.vulkanInstance());
-        m_quickWindow->setVulkanInstance(
-            m_renderWindow.vulkanInstance());
+        m_quickWindow->setVulkanInstance(m_renderWindow.vulkanInstance());
     }
 #endif
     m_quickWindow->setGraphicsDevice(QQuickGraphicsDevice::fromRhi(&m_rhi));
@@ -98,13 +84,11 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
     QQmlComponent component(m_qmlEngine.get());
     component.loadFromModule(QStringLiteral("Sunroom"), QStringLiteral("Main"));
     if (component.isError()) {
-        qCFatal(
-            sunroomLogPresentation,
-            "Could not load the packaged Sunroom QML component:\n%s",
-            qPrintable(component.errorString()));
+        qCFatal(sunroomLogPresentation, "Could not load the packaged Sunroom QML component:\n%s",
+                qPrintable(component.errorString()));
     }
 
-    const QVariantMap initialProperties{
+    QVariantMap const initialProperties{
         {
             QStringLiteral("renderDevicePixelRatio"),
             m_renderWindow.devicePixelRatio(),
@@ -138,35 +122,32 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
             QVariant::fromValue(&m_videoViewport),
         },
     };
-    QObject *object = component.createWithInitialProperties(
-        initialProperties);
-    m_rootItem.reset(qobject_cast<QQuickItem *>(object));
+    QObject* object = component.createWithInitialProperties(initialProperties);
+    m_rootItem.reset(qobject_cast<QQuickItem*>(object));
     if (!m_rootItem) {
         delete object;
-        qCFatal(
-            sunroomLogPresentation,
-            "Sunroom Main.qml must create a QQuickItem root:\n%s",
-            qPrintable(component.errorString()));
+        qCFatal(sunroomLogPresentation, "Sunroom Main.qml must create a QQuickItem root:\n%s",
+                qPrintable(component.errorString()));
     }
 
     m_rootItem->setParentItem(m_quickWindow->contentItem());
     m_rootItem->forceActiveFocus();
     if (!m_renderControl->initialize()) {
-        if (m_rhi.isDeviceLost())
+        if (m_rhi.isDeviceLost()) {
             return InitializationResult::DeviceLost;
-        qCFatal(
-            sunroomLogPresentation,
-            "Could not initialize redirected Qt Quick rendering");
+        }
+        qCFatal(sunroomLogPresentation, "Could not initialize redirected Qt Quick rendering");
     }
     return InitializationResult::Ready;
 }
 
-void QuickUiLayer::setLogicalSize(const QSize &size) {
+void QuickUiLayer::setLogicalSize(QSize const& size) {
     Q_ASSERT(m_quickWindow);
     Q_ASSERT(m_rootItem);
     Q_ASSERT(!size.isEmpty());
-    if (m_logicalSize == size)
+    if (m_logicalSize == size) {
         return;
+    }
     m_logicalSize = size;
     m_quickWindow->setGeometry(0, 0, size.width(), size.height());
     m_quickWindow->contentItem()->setSize(size);
@@ -174,8 +155,7 @@ void QuickUiLayer::setLogicalSize(const QSize &size) {
     markDirty();
 }
 
-QuickUiLayer::RenderTargetUpdate QuickUiLayer::ensureRenderTarget(
-        const QSize &pixelSize, qreal devicePixelRatio) {
+QuickUiLayer::RenderTargetUpdate QuickUiLayer::ensureRenderTarget(QSize const& pixelSize, qreal devicePixelRatio) {
     Q_ASSERT(!pixelSize.isEmpty());
     Q_ASSERT(std::isfinite(devicePixelRatio) && devicePixelRatio > 0.0);
 
@@ -185,11 +165,8 @@ QuickUiLayer::RenderTargetUpdate QuickUiLayer::ensureRenderTarget(
         Q_ASSERT(m_renderPassDescriptor);
         if (!qFuzzyCompare(m_devicePixelRatio, devicePixelRatio)) {
             m_devicePixelRatio = devicePixelRatio;
-            if (!m_rootItem->setProperty(
-                    "renderDevicePixelRatio", devicePixelRatio)) {
-                qCFatal(
-                    sunroomLogPresentation,
-                    "Sunroom Main.qml must expose renderDevicePixelRatio");
+            if (!m_rootItem->setProperty("renderDevicePixelRatio", devicePixelRatio)) {
+                qCFatal(sunroomLogPresentation, "Sunroom Main.qml must expose renderDevicePixelRatio");
             }
             markDirty();
         }
@@ -197,56 +174,43 @@ QuickUiLayer::RenderTargetUpdate QuickUiLayer::ensureRenderTarget(
     }
 
     releaseRenderTarget();
-    m_texture.reset(m_rhi.newTexture(
-        QRhiTexture::RGBA16F, pixelSize, 1, QRhiTexture::RenderTarget));
+    m_texture.reset(m_rhi.newTexture(QRhiTexture::RGBA16F, pixelSize, 1, QRhiTexture::RenderTarget));
     if (!m_texture->create()) {
         if (m_rhi.isDeviceLost()) {
             releaseRenderTarget();
             return RenderTargetUpdate::DeviceLost;
         }
-        qCFatal(
-            sunroomLogPresentation,
-            "Could not create the Qt Quick FP16 texture");
+        qCFatal(sunroomLogPresentation, "Could not create the Qt Quick FP16 texture");
     }
 
     // fromRhiRenderTarget() adopts this target as-is. Qt Quick's default 2D
     // renderer uses depth to preserve front-to-back opaque scene ordering.
-    m_depthStencilBuffer.reset(m_rhi.newRenderBuffer(
-        QRhiRenderBuffer::DepthStencil, pixelSize, 1));
+    m_depthStencilBuffer.reset(m_rhi.newRenderBuffer(QRhiRenderBuffer::DepthStencil, pixelSize, 1));
     if (!m_depthStencilBuffer->create()) {
         if (m_rhi.isDeviceLost()) {
             releaseRenderTarget();
             return RenderTargetUpdate::DeviceLost;
         }
-        qCFatal(
-            sunroomLogPresentation,
-            "Could not create the Qt Quick depth/stencil buffer");
+        qCFatal(sunroomLogPresentation, "Could not create the Qt Quick depth/stencil buffer");
     }
 
-    QRhiTextureRenderTargetDescription description(
-        QRhiColorAttachment(m_texture.get()));
+    QRhiTextureRenderTargetDescription description(QRhiColorAttachment(m_texture.get()));
     description.setDepthStencilBuffer(m_depthStencilBuffer.get());
     m_renderTarget.reset(m_rhi.newTextureRenderTarget(description));
-    m_renderPassDescriptor.reset(
-        m_renderTarget->newCompatibleRenderPassDescriptor());
+    m_renderPassDescriptor.reset(m_renderTarget->newCompatibleRenderPassDescriptor());
     m_renderTarget->setRenderPassDescriptor(m_renderPassDescriptor.get());
     if (!m_renderTarget->create()) {
         if (m_rhi.isDeviceLost()) {
             releaseRenderTarget();
             return RenderTargetUpdate::DeviceLost;
         }
-        qCFatal(
-            sunroomLogPresentation,
-            "Could not create the Qt Quick FP16 render target");
+        qCFatal(sunroomLogPresentation, "Could not create the Qt Quick FP16 render target");
     }
 
     m_pixelSize = pixelSize;
     m_devicePixelRatio = devicePixelRatio;
-    if (!m_rootItem->setProperty(
-            "renderDevicePixelRatio", devicePixelRatio)) {
-        qCFatal(
-            sunroomLogPresentation,
-            "Sunroom Main.qml must expose renderDevicePixelRatio");
+    if (!m_rootItem->setProperty("renderDevicePixelRatio", devicePixelRatio)) {
+        qCFatal(sunroomLogPresentation, "Sunroom Main.qml must expose renderDevicePixelRatio");
     }
     configureRenderTarget();
     markDirty();
@@ -254,8 +218,9 @@ QuickUiLayer::RenderTargetUpdate QuickUiLayer::ensureRenderTarget(
 }
 
 void QuickUiLayer::renderIfDirty() {
-    if (!m_dirty)
+    if (!m_dirty) {
         return;
+    }
     Q_ASSERT(m_renderControl);
     Q_ASSERT(m_quickWindow);
     Q_ASSERT(m_rootItem);
@@ -271,25 +236,25 @@ void QuickUiLayer::renderIfDirty() {
 }
 
 void QuickUiLayer::markDirty() {
-    if (m_dirty)
+    if (m_dirty) {
         return;
+    }
     m_dirty = true;
     emit updateRequested();
 }
 
 bool QuickUiLayer::isDirty() const { return m_dirty; }
-QRhiTexture &QuickUiLayer::texture() const {
+QRhiTexture& QuickUiLayer::texture() const {
     Q_ASSERT(m_texture);
     return *m_texture;
 }
-QQuickWindow *QuickUiLayer::quickWindow() const { return m_quickWindow.get(); }
+QQuickWindow* QuickUiLayer::quickWindow() const { return m_quickWindow.get(); }
 
 void QuickUiLayer::configureRenderTarget() {
     Q_ASSERT(m_renderTarget);
     Q_ASSERT(m_quickWindow);
 
-    QQuickRenderTarget quickTarget =
-        QQuickRenderTarget::fromRhiRenderTarget(m_renderTarget.get());
+    QQuickRenderTarget quickTarget = QQuickRenderTarget::fromRhiRenderTarget(m_renderTarget.get());
     // renderWindow() supplies DPR. Setting it on the target would be ignored.
     // This normalizes Quick's texture origin; the final pass separately maps
     // the backend's NDC orientation.

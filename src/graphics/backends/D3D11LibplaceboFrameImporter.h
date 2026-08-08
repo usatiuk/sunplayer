@@ -6,5 +6,4 @@
 
 class LibplaceboHardwareFrameImporter;
 
-std::unique_ptr<LibplaceboHardwareFrameImporter>
-createD3D11LibplaceboFrameImporter(pl_gpu gpu);
+std::unique_ptr<LibplaceboHardwareFrameImporter> createD3D11LibplaceboFrameImporter(pl_gpu gpu);

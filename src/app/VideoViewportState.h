@@ -12,23 +12,22 @@ class VideoViewportState final : public QObject {
     QML_UNCREATABLE("VideoViewportState is owned by the application")
 
     Q_PROPERTY(QRectF rect READ rect WRITE setRect NOTIFY viewportChanged)
-    Q_PROPERTY(bool visible READ visible WRITE setVisible
-               NOTIFY viewportChanged)
+    Q_PROPERTY(bool visible READ visible WRITE setVisible NOTIFY viewportChanged)
 
-public:
-    explicit VideoViewportState(QObject *parent);
+  public:
+    explicit VideoViewportState(QObject* parent);
 
     QRectF rect() const;
     bool visible() const;
     bool isRenderable() const;
 
-    void setRect(const QRectF &value);
+    void setRect(QRectF const& value);
     void setVisible(bool value);
 
-signals:
+  signals:
     void viewportChanged();
 
-private:
+  private:
     QRectF m_rect{0.0, 0.0, 0.0, 0.0};
     bool m_visible = false;
 };

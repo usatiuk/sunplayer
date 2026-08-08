@@ -7,10 +7,7 @@
 struct VideoHardwareDecodeCapability;
 
 using FfmpegVideoDecodeAttempt =
-    std::function<FfmpegVideoDecodeResult(
-        const VideoHardwareDecodeCapability &,
-        bool &hardwareSelected)>;
+    std::function<FfmpegVideoDecodeResult(VideoHardwareDecodeCapability const&, bool& hardwareSelected)>;
 
-FfmpegVideoDecodeResult decodeVideoFramesWithFallback(
-    const VideoHardwareDecodeCapability &hardwareDecode,
-    const FfmpegVideoDecodeAttempt &attempt);
+FfmpegVideoDecodeResult decodeVideoFramesWithFallback(VideoHardwareDecodeCapability const& hardwareDecode,
+                                                      FfmpegVideoDecodeAttempt const& attempt);

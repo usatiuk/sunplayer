@@ -8,13 +8,12 @@ class GraphicsDeviceDomain;
 class QWindow;
 
 class GraphicsBackendFactory final {
-public:
+  public:
     GraphicsBackendFactory() = delete;
 
     static void configureQtQuick();
     static QSurface::SurfaceType windowSurfaceType();
-    static std::unique_ptr<GraphicsDeviceDomain> createDeviceDomain(
-        QWindow &window);
+    static std::unique_ptr<GraphicsDeviceDomain> createDeviceDomain(QWindow& window);
 #if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     static std::unique_ptr<GraphicsDeviceDomain> createDeviceDomain();
 #endif

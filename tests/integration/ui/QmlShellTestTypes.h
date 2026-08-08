@@ -10,7 +10,7 @@
 class ShellTestSubtitleTrackModel final : public QAbstractListModel {
     Q_OBJECT
 
-public:
+  public:
     enum Role {
         LabelRole = Qt::UserRole + 1,
         StreamIndexRole,
@@ -18,18 +18,16 @@ public:
         AvailableRole,
     };
 
-    explicit ShellTestSubtitleTrackModel(QObject *parent = nullptr)
-        : QAbstractListModel(parent) {}
+    explicit ShellTestSubtitleTrackModel(QObject* parent = nullptr) : QAbstractListModel(parent) {}
 
-    int rowCount(const QModelIndex &parent = {}) const override {
-        return parent.isValid() ? 0 : 3;
-    }
+    int rowCount(QModelIndex const& parent = {}) const override { return parent.isValid() ? 0 : 3; }
 
-    QVariant data(const QModelIndex &index, int role) const override {
-        if (!index.isValid() || index.row() < 0 || index.row() >= 3)
+    QVariant data(QModelIndex const& index, int role) const override {
+        if (!index.isValid() || index.row() < 0 || index.row() >= 3) {
             return {};
+        }
         static constexpr int streamIndexes[] = {-1, 2, 3};
-        static const QString labels[] = {
+        static QString const labels[] = {
             QStringLiteral("Off"),
             QStringLiteral("English — Styled Ahem"),
             QStringLiteral("Czech — Plain Czech (SDH)"),
@@ -59,14 +57,14 @@ public:
     }
 
     void select(int streamIndex) {
-        if (streamIndex == m_selectedStreamIndex)
+        if (streamIndex == m_selectedStreamIndex) {
             return;
+        }
         m_selectedStreamIndex = streamIndex;
-        emit dataChanged(
-            index(0), index(rowCount() - 1), {SelectedRole});
+        emit dataChanged(index(0), index(rowCount() - 1), {SelectedRole});
     }
 
-private:
+  private:
     int m_selectedStreamIndex = -1;
 };
 
@@ -76,18 +74,15 @@ class ShellTestWindowChromeController final : public QObject {
     Q_PROPERTY(bool fullscreen READ fullscreen NOTIFY stateChanged)
     Q_PROPERTY(bool maximized READ maximized NOTIFY stateChanged)
 
-public:
-    explicit ShellTestWindowChromeController(QObject *parent)
-        : QObject(parent) {}
+  public:
+    explicit ShellTestWindowChromeController(QObject* parent) : QObject(parent) {}
 
     bool enabled() const { return m_enabled; }
     bool fullscreen() const { return m_fullscreen; }
     bool maximized() const { return m_maximized; }
 
     void setState(bool enabled, bool fullscreen, bool maximized) {
-        if (enabled == m_enabled
-                && fullscreen == m_fullscreen
-                && maximized == m_maximized) {
+        if (enabled == m_enabled && fullscreen == m_fullscreen && maximized == m_maximized) {
             return;
         }
         m_enabled = enabled;
@@ -102,10 +97,10 @@ public:
     Q_INVOKABLE bool beginSystemMove() { return false; }
     Q_INVOKABLE bool beginSystemResize(int) { return false; }
 
-signals:
+  signals:
     void stateChanged();
 
-private:
+  private:
     bool m_enabled = false;
     bool m_fullscreen = false;
     bool m_maximized = false;
@@ -116,38 +111,26 @@ class ShellTestWindowCommands final : public QWindow {
     QML_NAMED_ELEMENT(WindowCommands)
     QML_UNCREATABLE("Test commands are supplied by the component harness")
     Q_PROPERTY(bool cursorHidden READ cursorHidden WRITE setCursorHidden)
-    Q_PROPERTY(bool windowShortcutsBlocked
-                   READ windowShortcutsBlocked
-                   WRITE setWindowShortcutsBlocked)
-    Q_PROPERTY(QObject *windowChrome READ windowChrome CONSTANT)
+    Q_PROPERTY(bool windowShortcutsBlocked READ windowShortcutsBlocked WRITE setWindowShortcutsBlocked)
+    Q_PROPERTY(QObject* windowChrome READ windowChrome CONSTANT)
 
-public:
-    explicit ShellTestWindowCommands(QWindow *parent)
-        : QWindow(parent),
-          m_windowChrome(this) {}
+  public:
+    explicit ShellTestWindowCommands(QWindow* parent) : QWindow(parent), m_windowChrome(this) {}
 
     int toggleCount() const { return m_toggleCount; }
     bool cursorHidden() const { return m_cursorHidden; }
     void setCursorHidden(bool hidden) { m_cursorHidden = hidden; }
-    bool windowShortcutsBlocked() const {
-        return m_windowShortcutsBlocked;
-    }
-    void setWindowShortcutsBlocked(bool blocked) {
-        m_windowShortcutsBlocked = blocked;
-    }
+    bool windowShortcutsBlocked() const { return m_windowShortcutsBlocked; }
+    void setWindowShortcutsBlocked(bool blocked) { m_windowShortcutsBlocked = blocked; }
 
-    void reset() {
-        m_toggleCount = 0;
-    }
+    void reset() { m_toggleCount = 0; }
 
-    ShellTestWindowChromeController &windowChromeController() {
-        return m_windowChrome;
-    }
+    ShellTestWindowChromeController& windowChromeController() { return m_windowChrome; }
 
     Q_INVOKABLE void toggleFullscreen() { ++m_toggleCount; }
-    QObject *windowChrome() { return &m_windowChrome; }
+    QObject* windowChrome() { return &m_windowChrome; }
 
-private:
+  private:
     ShellTestWindowChromeController m_windowChrome;
     int m_toggleCount = 0;
     bool m_cursorHidden = false;
@@ -186,13 +169,12 @@ class ShellTestPresentationOutputState final : public QObject {
     Q_PROPERTY(float effectiveTargetHeadroom MEMBER m_effectiveTargetHeadroom CONSTANT)
     Q_PROPERTY(float sdrScale MEMBER m_sdrScale CONSTANT)
 
-public:
-    explicit ShellTestPresentationOutputState(QObject *parent)
-        : QObject(parent) {}
+  public:
+    explicit ShellTestPresentationOutputState(QObject* parent) : QObject(parent) {}
 
     Q_INVOKABLE void reprobePresentation() {}
 
-private:
+  private:
     QString m_screenName = QStringLiteral("Test display");
     QString m_graphicsApi = QStringLiteral("Test RHI");
     QString m_graphicsAdapter = QStringLiteral("Test adapter");
@@ -226,19 +208,16 @@ class ShellTestPresentationSettings final : public QObject {
     QML_NAMED_ELEMENT(PresentationSettings)
     QML_UNCREATABLE("Test settings are supplied by the component harness")
 
-    Q_PROPERTY(bool automaticTargetPeak MEMBER m_automaticTargetPeak
-               NOTIFY settingsChanged)
-    Q_PROPERTY(float manualTargetHeadroom MEMBER m_manualTargetHeadroom
-               NOTIFY settingsChanged)
+    Q_PROPERTY(bool automaticTargetPeak MEMBER m_automaticTargetPeak NOTIFY settingsChanged)
+    Q_PROPERTY(float manualTargetHeadroom MEMBER m_manualTargetHeadroom NOTIFY settingsChanged)
 
-public:
-    explicit ShellTestPresentationSettings(QObject *parent)
-        : QObject(parent) {}
+  public:
+    explicit ShellTestPresentationSettings(QObject* parent) : QObject(parent) {}
 
-signals:
+  signals:
     void settingsChanged();
 
-private:
+  private:
     bool m_automaticTargetPeak = true;
     float m_manualTargetHeadroom = 1.0f;
 };
@@ -248,35 +227,29 @@ class ShellTestDiagnosticVideoSource final : public QObject {
     QML_NAMED_ELEMENT(DiagnosticVideoSource)
     QML_UNCREATABLE("Test source is supplied by the component harness")
 
-    Q_PROPERTY(float sourcePeakHeadroom MEMBER m_sourcePeakHeadroom
-               NOTIFY settingsChanged)
-    Q_PROPERTY(bool toneMappingEnabled MEMBER m_toneMappingEnabled
-               NOTIFY settingsChanged)
-    Q_PROPERTY(bool animatePattern MEMBER m_animatePattern
-               NOTIFY settingsChanged)
-    Q_PROPERTY(bool useLibplacebo READ useLibplacebo
-               WRITE setUseLibplacebo NOTIFY rendererChanged)
+    Q_PROPERTY(float sourcePeakHeadroom MEMBER m_sourcePeakHeadroom NOTIFY settingsChanged)
+    Q_PROPERTY(bool toneMappingEnabled MEMBER m_toneMappingEnabled NOTIFY settingsChanged)
+    Q_PROPERTY(bool animatePattern MEMBER m_animatePattern NOTIFY settingsChanged)
+    Q_PROPERTY(bool useLibplacebo READ useLibplacebo WRITE setUseLibplacebo NOTIFY rendererChanged)
 
-public:
-    explicit ShellTestDiagnosticVideoSource(QObject *parent)
-        : QObject(parent) {}
+  public:
+    explicit ShellTestDiagnosticVideoSource(QObject* parent) : QObject(parent) {}
 
-    bool useLibplacebo() const {
-        return m_useLibplacebo;
-    }
+    bool useLibplacebo() const { return m_useLibplacebo; }
 
     void setUseLibplacebo(bool value) {
-        if (value == m_useLibplacebo)
+        if (value == m_useLibplacebo) {
             return;
+        }
         m_useLibplacebo = value;
         emit rendererChanged();
     }
 
-signals:
+  signals:
     void settingsChanged();
     void rendererChanged();
 
-private:
+  private:
     float m_sourcePeakHeadroom = 1.0f;
     bool m_toneMappingEnabled = true;
     bool m_animatePattern = false;
@@ -292,12 +265,10 @@ class ShellTestMediaSession final : public QObject {
     Q_PROPERTY(QUrl mediaUrl MEMBER m_mediaUrl NOTIFY sessionChanged)
     Q_PROPERTY(QString displayName MEMBER m_displayName NOTIFY sessionChanged)
     Q_PROPERTY(QString errorMessage MEMBER m_errorMessage NOTIFY sessionChanged)
-    Q_PROPERTY(QString containerFormat MEMBER m_containerFormat
-               NOTIFY sessionChanged)
+    Q_PROPERTY(QString containerFormat MEMBER m_containerFormat NOTIFY sessionChanged)
     Q_PROPERTY(QString decoderName MEMBER m_decoderName NOTIFY sessionChanged)
     Q_PROPERTY(QString decodePath MEMBER m_decodePath NOTIFY sessionChanged)
-    Q_PROPERTY(QString hardwareFallbackReason MEMBER m_hardwareFallbackReason
-               NOTIFY sessionChanged)
+    Q_PROPERTY(QString hardwareFallbackReason MEMBER m_hardwareFallbackReason NOTIFY sessionChanged)
     Q_PROPERTY(QString videoSummary MEMBER m_videoSummary NOTIFY sessionChanged)
     Q_PROPERTY(bool hasFrame READ hasFrame NOTIFY sessionChanged)
     Q_PROPERTY(bool playing READ playing NOTIFY sessionChanged)
@@ -305,45 +276,28 @@ class ShellTestMediaSession final : public QObject {
     Q_PROPERTY(bool ended READ ended NOTIFY sessionChanged)
     Q_PROPERTY(bool seekable READ seekable NOTIFY timelineChanged)
     Q_PROPERTY(bool seeking READ seeking NOTIFY timelineChanged)
-    Q_PROPERTY(qlonglong positionMilliseconds
-               READ positionMilliseconds NOTIFY timelineChanged)
-    Q_PROPERTY(qlonglong durationMilliseconds
-               READ durationMilliseconds NOTIFY timelineChanged)
-    Q_PROPERTY(qulonglong decodedVideoFrames MEMBER m_decodedVideoFrames
-               NOTIFY playbackMetricsChanged)
-    Q_PROPERTY(qulonglong selectedVideoFrames MEMBER m_selectedVideoFrames
-               NOTIFY playbackMetricsChanged)
-    Q_PROPERTY(qulonglong droppedVideoFrames MEMBER m_droppedVideoFrames
-               NOTIFY playbackMetricsChanged)
-    Q_PROPERTY(int queuedVideoFrames MEMBER m_queuedVideoFrames
-               NOTIFY playbackMetricsChanged)
+    Q_PROPERTY(qlonglong positionMilliseconds READ positionMilliseconds NOTIFY timelineChanged)
+    Q_PROPERTY(qlonglong durationMilliseconds READ durationMilliseconds NOTIFY timelineChanged)
+    Q_PROPERTY(qulonglong decodedVideoFrames MEMBER m_decodedVideoFrames NOTIFY playbackMetricsChanged)
+    Q_PROPERTY(qulonglong selectedVideoFrames MEMBER m_selectedVideoFrames NOTIFY playbackMetricsChanged)
+    Q_PROPERTY(qulonglong droppedVideoFrames MEMBER m_droppedVideoFrames NOTIFY playbackMetricsChanged)
+    Q_PROPERTY(int queuedVideoFrames MEMBER m_queuedVideoFrames NOTIFY playbackMetricsChanged)
     Q_PROPERTY(qreal volume READ volume WRITE setVolume NOTIFY volumeChanged)
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)
-    Q_PROPERTY(PlaybackInterruption playbackInterruption
-               MEMBER m_playbackInterruption NOTIFY sessionChanged)
-    Q_PROPERTY(bool hasAudioOutput MEMBER m_hasAudioOutput
-               NOTIFY audioDiagnosticsChanged)
-    Q_PROPERTY(QString audioBackend MEMBER m_audioBackend
-               NOTIFY audioDiagnosticsChanged)
-    Q_PROPERTY(MediaClockSource mediaClockSource MEMBER m_mediaClockSource
-               NOTIFY audioDiagnosticsChanged)
-    Q_PROPERTY(bool audioClockReliable MEMBER m_audioClockReliable
-               NOTIFY audioDiagnosticsChanged)
-    Q_PROPERTY(int audioQueuedMilliseconds MEMBER m_audioQueuedMilliseconds
-               NOTIFY audioDiagnosticsChanged)
-    Q_PROPERTY(qulonglong audioSubmittedFrames MEMBER m_audioSubmittedFrames
-               NOTIFY audioDiagnosticsChanged)
-    Q_PROPERTY(qulonglong audioPresentedFrames MEMBER m_audioPresentedFrames
-               NOTIFY audioDiagnosticsChanged)
-    Q_PROPERTY(qulonglong audioUnderrunFrames MEMBER m_audioUnderrunFrames
-               NOTIFY audioDiagnosticsChanged)
-    Q_PROPERTY(QAbstractItemModel *subtitleTracks READ subtitleTracks CONSTANT)
-    Q_PROPERTY(int selectedSubtitleStreamIndex
-               READ selectedSubtitleStreamIndex NOTIFY subtitleChanged)
-    Q_PROPERTY(QString subtitleError MEMBER m_subtitleError
-               NOTIFY subtitleChanged)
+    Q_PROPERTY(PlaybackInterruption playbackInterruption MEMBER m_playbackInterruption NOTIFY sessionChanged)
+    Q_PROPERTY(bool hasAudioOutput MEMBER m_hasAudioOutput NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(QString audioBackend MEMBER m_audioBackend NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(MediaClockSource mediaClockSource MEMBER m_mediaClockSource NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(bool audioClockReliable MEMBER m_audioClockReliable NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(int audioQueuedMilliseconds MEMBER m_audioQueuedMilliseconds NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(qulonglong audioSubmittedFrames MEMBER m_audioSubmittedFrames NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(qulonglong audioPresentedFrames MEMBER m_audioPresentedFrames NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(qulonglong audioUnderrunFrames MEMBER m_audioUnderrunFrames NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(QAbstractItemModel* subtitleTracks READ subtitleTracks CONSTANT)
+    Q_PROPERTY(int selectedSubtitleStreamIndex READ selectedSubtitleStreamIndex NOTIFY subtitleChanged)
+    Q_PROPERTY(QString subtitleError MEMBER m_subtitleError NOTIFY subtitleChanged)
 
-public:
+  public:
     enum class State {
         Empty,
         Opening,
@@ -367,43 +321,29 @@ public:
     };
     Q_ENUM(PlaybackInterruption)
 
-    explicit ShellTestMediaSession(QObject *parent)
-        : QObject(parent) {}
+    explicit ShellTestMediaSession(QObject* parent) : QObject(parent) {}
 
     State state() const { return m_state; }
     bool hasFrame() const { return m_hasFrame; }
     bool playing() const {
-        return m_state == State::Ready
-            && m_playRequested
-            && m_playbackInterruption
-                == PlaybackInterruption::None
-            && !m_ended;
+        return m_state == State::Ready && m_playRequested && m_playbackInterruption == PlaybackInterruption::None &&
+               !m_ended;
     }
-    bool playRequested() const {
-        return m_playRequested && !m_ended;
-    }
+    bool playRequested() const { return m_playRequested && !m_ended; }
     bool ended() const { return m_ended; }
     bool seekable() const { return m_seekable; }
     bool seeking() const { return m_seeking; }
-    qlonglong positionMilliseconds() const {
-        return m_positionMilliseconds;
-    }
-    qlonglong durationMilliseconds() const {
-        return m_durationMilliseconds;
-    }
+    qlonglong positionMilliseconds() const { return m_positionMilliseconds; }
+    qlonglong durationMilliseconds() const { return m_durationMilliseconds; }
     qreal volume() const { return m_volume; }
     bool muted() const { return m_muted; }
-    QAbstractItemModel *subtitleTracks() { return &m_subtitleTracks; }
-    int selectedSubtitleStreamIndex() const {
-        return m_selectedSubtitleStreamIndex;
-    }
+    QAbstractItemModel* subtitleTracks() { return &m_subtitleTracks; }
+    int selectedSubtitleStreamIndex() const { return m_selectedSubtitleStreamIndex; }
     int openCount() const { return m_openCount; }
     int cancelCount() const { return m_cancelCount; }
     int retryCount() const { return m_retryCount; }
     int seekCount() const { return m_seekCount; }
-    qlonglong lastSeekMilliseconds() const {
-        return m_lastSeekMilliseconds;
-    }
+    qlonglong lastSeekMilliseconds() const { return m_lastSeekMilliseconds; }
 
     void setState(State state, bool hasFrame = false) {
         m_state = state;
@@ -412,14 +352,11 @@ public:
         m_ended = false;
         m_seeking = false;
         if (state == State::Ready) {
-            m_mediaUrl = QUrl::fromLocalFile(
-                QStringLiteral("test-video.mkv"));
-            m_displayName =
-                QStringLiteral("test-video.mkv");
+            m_mediaUrl = QUrl::fromLocalFile(QStringLiteral("test-video.mkv"));
+            m_displayName = QStringLiteral("test-video.mkv");
             m_decoderName = QStringLiteral("ffv1");
             m_decodePath = QStringLiteral("Software");
-            m_videoSummary =
-                QStringLiteral("96×64 · yuv420p · 8-bit");
+            m_videoSummary = QStringLiteral("96×64 · yuv420p · 8-bit");
             m_seekable = true;
             m_durationMilliseconds = 65'000;
         }
@@ -427,11 +364,8 @@ public:
         emit timelineChanged();
     }
 
-    void setTimeline(
-            qlonglong positionMilliseconds,
-            qlonglong durationMilliseconds,
-            bool seekable,
-            bool seeking = false) {
+    void setTimeline(qlonglong positionMilliseconds, qlonglong durationMilliseconds, bool seekable,
+                     bool seeking = false) {
         m_positionMilliseconds = positionMilliseconds;
         m_durationMilliseconds = durationMilliseconds;
         m_seekable = seekable;
@@ -440,37 +374,35 @@ public:
     }
 
     void setVolume(qreal volume) {
-        if (m_volume == volume)
+        if (m_volume == volume) {
             return;
+        }
         m_volume = volume;
         emit volumeChanged();
     }
 
     void setMuted(bool muted) {
-        if (m_muted == muted)
+        if (m_muted == muted) {
             return;
+        }
         m_muted = muted;
         emit mutedChanged();
     }
 
-    void setPlaybackInterruption(
-            PlaybackInterruption interruption) {
-        if (m_playbackInterruption == interruption)
+    void setPlaybackInterruption(PlaybackInterruption interruption) {
+        if (m_playbackInterruption == interruption) {
             return;
+        }
         m_playbackInterruption = interruption;
         emit sessionChanged();
     }
 
-    Q_INVOKABLE void openMedia(const QUrl &) {
-        ++m_openCount;
-    }
+    Q_INVOKABLE void openMedia(QUrl const&) { ++m_openCount; }
     Q_INVOKABLE void cancel() {
         ++m_cancelCount;
         setState(State::Empty);
     }
-    Q_INVOKABLE void retry() {
-        ++m_retryCount;
-    }
+    Q_INVOKABLE void retry() { ++m_retryCount; }
     Q_INVOKABLE void play() {
         m_playRequested = true;
         m_ended = false;
@@ -480,22 +412,22 @@ public:
         m_playRequested = false;
         emit sessionChanged();
     }
-    Q_INVOKABLE void seekToMilliseconds(
-            qlonglong positionMilliseconds) {
+    Q_INVOKABLE void seekToMilliseconds(qlonglong positionMilliseconds) {
         ++m_seekCount;
         m_lastSeekMilliseconds = positionMilliseconds;
         m_positionMilliseconds = positionMilliseconds;
         emit timelineChanged();
     }
     Q_INVOKABLE void selectSubtitleStream(int streamIndex) {
-        if (streamIndex != -1 && streamIndex != 2 && streamIndex != 3)
+        if (streamIndex != -1 && streamIndex != 2 && streamIndex != 3) {
             return;
+        }
         m_selectedSubtitleStreamIndex = streamIndex;
         m_subtitleTracks.select(streamIndex);
         emit subtitleChanged();
     }
 
-signals:
+  signals:
     void sessionChanged();
     void playbackMetricsChanged();
     void timelineChanged();
@@ -504,7 +436,7 @@ signals:
     void audioDiagnosticsChanged();
     void subtitleChanged();
 
-private:
+  private:
     State m_state = State::Empty;
     bool m_hasFrame = false;
     bool m_playRequested = false;
@@ -521,10 +453,8 @@ private:
     bool m_muted = false;
     bool m_hasAudioOutput = true;
     QString m_audioBackend = QStringLiteral("controlled");
-    MediaClockSource m_mediaClockSource =
-        MediaClockSource::PresentedAudio;
-    PlaybackInterruption m_playbackInterruption =
-        PlaybackInterruption::None;
+    MediaClockSource m_mediaClockSource = MediaClockSource::PresentedAudio;
+    PlaybackInterruption m_playbackInterruption = PlaybackInterruption::None;
     bool m_audioClockReliable = true;
     int m_audioQueuedMilliseconds = 80;
     qulonglong m_audioSubmittedFrames = 4'800;
@@ -555,27 +485,27 @@ class ShellTestActiveVideoSource final : public QObject {
 
     Q_PROPERTY(Route route READ route WRITE setRoute NOTIFY routeChanged)
 
-public:
+  public:
     enum class Route {
         Player,
         Diagnostics,
     };
     Q_ENUM(Route)
 
-    explicit ShellTestActiveVideoSource(QObject *parent)
-        : QObject(parent) {}
+    explicit ShellTestActiveVideoSource(QObject* parent) : QObject(parent) {}
 
     Route route() const { return m_route; }
     void setRoute(Route route) {
-        if (route == m_route)
+        if (route == m_route) {
             return;
+        }
         m_route = route;
         emit routeChanged();
     }
 
-signals:
+  signals:
     void routeChanged();
 
-private:
+  private:
     Route m_route = Route::Player;
 };

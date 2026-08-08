@@ -12,27 +12,24 @@
 // underruns. Slot fields are atomic because a callback may wrap and overwrite
 // old entries while the control thread is sampling them.
 struct AudioOutputPosition {
-    bool operator==(const AudioOutputPosition &) const = default;
+    bool operator==(AudioOutputPosition const&) const = default;
 
     std::uint64_t mediaFrame = 0;
     bool holding = false;
 };
 
 class AudioOutputLedger final {
-public:
+  public:
     explicit AudioOutputLedger(std::size_t spanCapacity);
 
     void reset();
-    void record(
-        std::size_t mediaFrames,
-        std::size_t holdFrames);
-    std::optional<AudioOutputPosition> positionForOutputFrame(
-        std::uint64_t outputFrame) const;
+    void record(std::size_t mediaFrames, std::size_t holdFrames);
+    std::optional<AudioOutputPosition> positionForOutputFrame(std::uint64_t outputFrame) const;
 
     std::uint64_t outputFrames() const;
     std::uint64_t mediaFrames() const;
 
-private:
+  private:
     struct Slot {
         std::atomic<std::uint64_t> sequence{0};
         std::atomic<std::uint64_t> outputStart{0};
@@ -41,7 +38,7 @@ private:
         std::atomic<std::uint64_t> holdFrameCount{0};
     };
 
-    const std::size_t m_spanCapacity;
+    std::size_t const m_spanCapacity;
     std::unique_ptr<Slot[]> m_slots;
     std::atomic<std::uint64_t> m_publishedSequence{0};
     std::atomic<std::uint64_t> m_outputFrames{0};

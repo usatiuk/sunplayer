@@ -68,7 +68,7 @@ struct SubtitleEvent {
     std::optional<std::int64_t> endMicroseconds;
     SubtitlePayloadType type = SubtitlePayloadType::Clear;
     QByteArray ass;
-    std::shared_ptr<const SubtitleBitmapComposition> bitmap;
+    std::shared_ptr<SubtitleBitmapComposition const> bitmap;
 
     bool isValid() const;
 };
@@ -76,8 +76,8 @@ struct SubtitleEvent {
 struct SubtitleStateSnapshot {
     std::uint64_t playbackGeneration = 0;
     std::uint64_t revision = 0;
-    std::shared_ptr<const SubtitleStreamConfiguration> configuration;
-    std::shared_ptr<const std::vector<SubtitleEvent>> events;
+    std::shared_ptr<SubtitleStreamConfiguration const> configuration;
+    std::shared_ptr<std::vector<SubtitleEvent> const> events;
     QString error;
 
     bool isEnabled() const;

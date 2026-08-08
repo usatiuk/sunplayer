@@ -14,73 +14,61 @@
 namespace {
 using namespace std::chrono_literals;
 
-PcmAudioBlock silentBlock(
-        std::uint64_t generation,
-        std::uint64_t streamFrame,
-        std::size_t frameCount) {
+PcmAudioBlock silentBlock(std::uint64_t generation, std::uint64_t streamFrame, std::size_t frameCount) {
     return {
         .playbackGeneration = generation,
         .streamFrameIndex = streamFrame,
-        .mediaStartMicroseconds = static_cast<std::int64_t>(
-            streamFrame * 1'000'000ULL / 48'000ULL),
+        .mediaStartMicroseconds = static_cast<std::int64_t>(streamFrame * 1'000'000ULL / 48'000ULL),
         .format = {48'000, 2},
         .samples = std::vector<float>(frameCount * 2, 0.0F),
     };
 }
 
-template<typename Predicate>
-bool waitUntil(Predicate predicate) {
-    const auto deadline = std::chrono::steady_clock::now() + 3s;
+template <typename Predicate> bool waitUntil(Predicate predicate) {
+    auto const deadline = std::chrono::steady_clock::now() + 3s;
     while (!predicate()) {
-        if (std::chrono::steady_clock::now() >= deadline)
+        if (std::chrono::steady_clock::now() >= deadline) {
             return false;
+        }
         std::this_thread::yield();
     }
     return true;
 }
 
-bool remainsUndrainedFor(
-        const CubebAudioSink &sink,
-        std::chrono::milliseconds duration) {
-    const auto deadline = std::chrono::steady_clock::now() + duration;
+bool remainsUndrainedFor(CubebAudioSink const& sink, std::chrono::milliseconds duration) {
+    auto const deadline = std::chrono::steady_clock::now() + duration;
     while (std::chrono::steady_clock::now() < deadline) {
-        if (sink.snapshot().drained)
+        if (sink.snapshot().drained) {
             return false;
+        }
         std::this_thread::yield();
     }
     return true;
 }
-}
+} // namespace
 
 class CubebAudioSinkTest final : public QObject {
     Q_OBJECT
 
-public:
+  public:
     static void initMain() {
 #ifdef Q_OS_WIN
-        SetErrorMode(
-            SEM_FAILCRITICALERRORS
-            | SEM_NOGPFAULTERRORBOX
-            | SEM_NOOPENFILEERRORBOX);
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 #endif
     }
 
-private slots:
+  private slots:
     void opensSystemDefaultRouteWithoutStartingPlayback();
     void rejectsABlockThatCouldDeadlockPreroll();
     void startsPausesAndDrainsSilentPcm();
 };
 
-void CubebAudioSinkTest::
-opensSystemDefaultRouteWithoutStartingPlayback() {
+void CubebAudioSinkTest::opensSystemDefaultRouteWithoutStartingPlayback() {
     CubebAudioSink sink(48'000);
     sink.reset(9, {48'000, 2});
 
-    const AudioSinkDiagnostics diagnostics =
-        sink.diagnostics();
-    QVERIFY2(
-        diagnostics.errorMessage.empty(),
-        diagnostics.errorMessage.c_str());
+    AudioSinkDiagnostics const diagnostics = sink.diagnostics();
+    QVERIFY2(diagnostics.errorMessage.empty(), diagnostics.errorMessage.c_str());
 #ifdef Q_OS_WIN
     QCOMPARE(diagnostics.backendName, std::string("wasapi"));
 #elif defined(Q_OS_MACOS)
@@ -90,21 +78,17 @@ opensSystemDefaultRouteWithoutStartingPlayback() {
 #endif
     QVERIFY(diagnostics.followsSystemDefault);
     QVERIFY(diagnostics.streamOpen);
-    QCOMPARE(
-        diagnostics.format,
-        (AudioStreamFormat{48'000, 2}));
+    QCOMPARE(diagnostics.format, (AudioStreamFormat{48'000, 2}));
     QCOMPARE(diagnostics.queueCapacityFrames, 48'000U);
     QVERIFY(diagnostics.requestedLatencyFrames != 0);
     QVERIFY(diagnostics.maximumSubmitFrames != 0);
 #ifdef Q_OS_WIN
     QVERIFY(diagnostics.deviceNotificationsAvailable);
 #endif
-    QCOMPARE(
-        diagnostics.positionAvailable,
-        diagnostics.deviceFramesPresented.has_value());
+    QCOMPARE(diagnostics.positionAvailable, diagnostics.deviceFramesPresented.has_value());
     QCOMPARE(diagnostics.underrunFrames, 0U);
 
-    const AudioPresentationSnapshot snapshot = sink.snapshot();
+    AudioPresentationSnapshot const snapshot = sink.snapshot();
     QCOMPARE(snapshot.playbackGeneration, 9U);
     QVERIFY(!snapshot.valid);
     QVERIFY(!snapshot.advancing);
@@ -116,16 +100,13 @@ opensSystemDefaultRouteWithoutStartingPlayback() {
     QVERIFY(!sink.snapshot().valid);
 }
 
-void CubebAudioSinkTest::
-rejectsABlockThatCouldDeadlockPreroll() {
+void CubebAudioSinkTest::rejectsABlockThatCouldDeadlockPreroll() {
     CubebAudioSink sink(100);
     sink.reset(10, {48'000, 2});
     QCOMPARE(sink.diagnostics().maximumSubmitFrames, 50U);
     QVERIFY(sink.submit(silentBlock(10, 0, 40)));
 
-    auto blocked = std::async(std::launch::async, [&sink] {
-        return sink.submit(silentBlock(10, 40, 70));
-    });
+    auto blocked = std::async(std::launch::async, [&sink] { return sink.submit(silentBlock(10, 40, 70)); });
     if (blocked.wait_for(2s) != std::future_status::ready) {
         sink.reset(11, {48'000, 2});
         blocked.wait();
@@ -142,11 +123,11 @@ void CubebAudioSinkTest::startsPausesAndDrainsSilentPcm() {
     sink.finish(20);
 
     QVERIFY(waitUntil([&] {
-        const AudioPresentationSnapshot current = sink.snapshot();
+        AudioPresentationSnapshot const current = sink.snapshot();
         return current.valid && current.presentedFrames != 0;
     }));
     QVERIFY(waitUntil([&] { return sink.snapshot().drained; }));
-    const AudioPresentationSnapshot drained = sink.snapshot();
+    AudioPresentationSnapshot const drained = sink.snapshot();
     QCOMPARE(drained.playbackGeneration, 20U);
     QCOMPARE(drained.submittedFrames, 12'000U);
     QCOMPARE(drained.presentedFrames, 12'000U);
@@ -154,11 +135,10 @@ void CubebAudioSinkTest::startsPausesAndDrainsSilentPcm() {
     QVERIFY(drained.drained);
     QVERIFY(drained.terminalPositionValid);
     QVERIFY(!drained.advancing);
-    const std::uint64_t drainedEpoch = drained.audioOutputEpoch;
+    std::uint64_t const drainedEpoch = drained.audioOutputEpoch;
     QVERIFY(drainedEpoch != 0);
 
-    const AudioSinkDiagnostics drainedDiagnostics =
-        sink.diagnostics();
+    AudioSinkDiagnostics const drainedDiagnostics = sink.diagnostics();
     QCOMPARE(drainedDiagnostics.mediaFramesSubmitted, 12'000U);
     QCOMPARE(drainedDiagnostics.mediaFramesPresented, 12'000U);
     QVERIFY(drainedDiagnostics.deviceFramesPresented.has_value());
@@ -172,13 +152,12 @@ void CubebAudioSinkTest::startsPausesAndDrainsSilentPcm() {
     QVERIFY(sink.submit(silentBlock(21, 0, 24'000)));
     sink.finish(21);
     QVERIFY(waitUntil([&] {
-        const AudioPresentationSnapshot current = sink.snapshot();
-        return current.advancing
-            && current.presentedFrames < current.submittedFrames;
+        AudioPresentationSnapshot const current = sink.snapshot();
+        return current.advancing && current.presentedFrames < current.submittedFrames;
     }));
     sink.pause();
     QVERIFY(remainsUndrainedFor(sink, 100ms));
-    const AudioPresentationSnapshot paused = sink.snapshot();
+    AudioPresentationSnapshot const paused = sink.snapshot();
     QVERIFY(paused.producerFinished);
     QVERIFY(!paused.advancing);
     QVERIFY(!paused.drained);

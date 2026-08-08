@@ -13,28 +13,16 @@ class DiagnosticVideoSource final : public RenderedVideoSource {
     QML_ELEMENT
     QML_UNCREATABLE("DiagnosticVideoSource is owned by the application")
 
-    Q_PROPERTY(float sourcePeakHeadroom READ sourcePeakHeadroom
-               WRITE setSourcePeakHeadroom NOTIFY settingsChanged)
-    Q_PROPERTY(bool toneMappingEnabled READ toneMappingEnabled
-               WRITE setToneMappingEnabled NOTIFY settingsChanged)
-    Q_PROPERTY(bool animatePattern READ animatePattern
-               WRITE setAnimatePattern NOTIFY settingsChanged)
-    Q_PROPERTY(bool useLibplacebo READ useLibplacebo
-               WRITE setUseLibplacebo NOTIFY rendererChanged)
+    Q_PROPERTY(float sourcePeakHeadroom READ sourcePeakHeadroom WRITE setSourcePeakHeadroom NOTIFY settingsChanged)
+    Q_PROPERTY(bool toneMappingEnabled READ toneMappingEnabled WRITE setToneMappingEnabled NOTIFY settingsChanged)
+    Q_PROPERTY(bool animatePattern READ animatePattern WRITE setAnimatePattern NOTIFY settingsChanged)
+    Q_PROPERTY(bool useLibplacebo READ useLibplacebo WRITE setUseLibplacebo NOTIFY rendererChanged)
 
-public:
-    explicit DiagnosticVideoSource(
-        VideoTargetReadback readback,
-        QObject *parent = nullptr);
-    DiagnosticVideoSource(
-        VideoProducerApi producerApi,
-        VideoTargetReadback readback,
-        QObject *parent = nullptr);
-    DiagnosticVideoSource(
-        VideoProducerApi producerApi,
-        VideoTargetReadback readback,
-        const QSize &inputFrameSize,
-        QObject *parent = nullptr);
+  public:
+    explicit DiagnosticVideoSource(VideoTargetReadback readback, QObject* parent = nullptr);
+    DiagnosticVideoSource(VideoProducerApi producerApi, VideoTargetReadback readback, QObject* parent = nullptr);
+    DiagnosticVideoSource(VideoProducerApi producerApi, VideoTargetReadback readback, QSize const& inputFrameSize,
+                          QObject* parent = nullptr);
 
     float sourcePeakHeadroom() const;
     bool toneMappingEnabled() const;
@@ -48,20 +36,18 @@ public:
     void setAnimatePattern(bool value);
     void setUseLibplacebo(bool value);
 
-    void prepareForPresentation(
-        std::chrono::steady_clock::time_point now) override;
+    void prepareForPresentation(std::chrono::steady_clock::time_point now) override;
     std::uint64_t contentRevision() const override;
     std::uint64_t producerConfigurationRevision() const override;
     std::optional<double> displayAspectRatio() const override;
     bool wantsContinuousFrames() const override;
-    std::unique_ptr<RenderedVideoProducer> createProducer(
-        GraphicsDeviceDomain &graphicsDevice) const override;
+    std::unique_ptr<RenderedVideoProducer> createProducer(GraphicsDeviceDomain& graphicsDevice) const override;
 
-signals:
+  signals:
     void settingsChanged();
     void rendererChanged();
 
-private:
+  private:
     void advanceRevision();
     void markContentChanged();
 
@@ -74,6 +60,5 @@ private:
     bool m_animatePattern = true;
     std::uint64_t m_contentRevision = 1;
     std::uint64_t m_producerConfigurationRevision = 1;
-    std::optional<std::chrono::steady_clock::time_point>
-        m_lastAnimationFrame;
+    std::optional<std::chrono::steady_clock::time_point> m_lastAnimationFrame;
 };
