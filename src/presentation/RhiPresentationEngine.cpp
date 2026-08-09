@@ -404,6 +404,7 @@ void RhiPresentationEngine::renderFrame() {
 
     m_surfaceDeclarationPending = false;
     m_retriedFrameError = false;
+    m_hasPresentedFrame = true;
     if (requestedSurface) {
         emit videoFramePresented(requestedSurface->contentRevision);
     }
@@ -484,6 +485,13 @@ void RhiPresentationEngine::releaseSwapChainResources() {
 }
 
 QQuickWindow* RhiPresentationEngine::quickWindow() const { return m_quickUi ? m_quickUi->quickWindow() : nullptr; }
+
+bool RhiPresentationEngine::hasPresentedFrame() const { return m_hasPresentedFrame; }
+
+void RhiPresentationEngine::handleSurfaceCreated() {
+    Q_ASSERT(!m_swapChain);
+    m_hasPresentedFrame = false;
+}
 
 bool RhiPresentationEngine::initializeDevice() {
     Q_ASSERT(!m_quickUi);

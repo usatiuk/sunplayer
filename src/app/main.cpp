@@ -46,6 +46,41 @@ bool hasExactArgument(int argc, char* argv[], std::string_view expected) {
     }
     return false;
 }
+
+bool verifyInitialWindowBackground(PresentationWindow& window) {
+    HWND const windowHandle = reinterpret_cast<HWND>(window.winId());
+    HDC const screenDeviceContext = GetDC(nullptr);
+    HDC const memoryDeviceContext = screenDeviceContext ? CreateCompatibleDC(screenDeviceContext) : nullptr;
+    HBITMAP const bitmap = screenDeviceContext ? CreateCompatibleBitmap(screenDeviceContext, 1, 1) : nullptr;
+    HGDIOBJ const previousObject = memoryDeviceContext && bitmap ? SelectObject(memoryDeviceContext, bitmap) : nullptr;
+    bool const bitmapSelected = previousObject && previousObject != HGDI_ERROR;
+
+    bool passed = false;
+    if (windowHandle && memoryDeviceContext && bitmap && bitmapSelected &&
+        PatBlt(memoryDeviceContext, 0, 0, 1, 1, WHITENESS)) {
+        LRESULT const eraseResult =
+            SendMessageW(windowHandle, WM_ERASEBKGND, reinterpret_cast<WPARAM>(memoryDeviceContext), 0);
+        passed = eraseResult == 1 && GetPixel(memoryDeviceContext, 0, 0) == RGB(0, 0, 0);
+    }
+
+    if (memoryDeviceContext && bitmapSelected) {
+        SelectObject(memoryDeviceContext, previousObject);
+    }
+    if (bitmap) {
+        DeleteObject(bitmap);
+    }
+    if (memoryDeviceContext) {
+        DeleteDC(memoryDeviceContext);
+    }
+    if (screenDeviceContext) {
+        ReleaseDC(nullptr, screenDeviceContext);
+    }
+
+    std::fprintf(passed ? stdout : stderr, "Sunroom initial window background verification %s.\n",
+                 passed ? "passed" : "failed");
+    std::fflush(passed ? stdout : stderr);
+    return passed;
+}
 } // namespace
 #endif
 
@@ -292,7 +327,8 @@ int main(int argc, char* argv[]) {
     // QGuiApplication initializes the platform plugin in its constructor.
     // Suppress native failure dialogs before that boundary for the bounded
     // noninteractive application scenario.
-    if (hasExactArgument(argc, argv, "--playback-smoke") || hasExactArgument(argc, argv, "--fullscreen-smoke")) {
+    if (hasExactArgument(argc, argv, "--playback-smoke") || hasExactArgument(argc, argv, "--fullscreen-smoke") ||
+        hasExactArgument(argc, argv, "--verify-initial-background")) {
         SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
     }
 #endif
@@ -314,6 +350,12 @@ int main(int argc, char* argv[]) {
         QStringLiteral("verify-qml"),
         QStringLiteral("Load the packaged QML module and exit without opening a window."));
     parser.addOption(verifyQmlOption);
+#ifdef Q_OS_WIN
+    QCommandLineOption const verifyInitialBackgroundOption(
+        QStringLiteral("verify-initial-background"),
+        QStringLiteral("Verify the Windows pre-presentation client background and exit."));
+    parser.addOption(verifyInitialBackgroundOption);
+#endif
     QCommandLineOption const debugLogOption(QStringLiteral("debug-log"),
                                             QStringLiteral("Enable Sunroom debug logging in the session log."));
     parser.addOption(debugLogOption);
@@ -356,6 +398,15 @@ int main(int argc, char* argv[]) {
         qCCritical(sunroomLogApplication).noquote() << "--fullscreen-smoke requires exactly one positional media file.";
         return EXIT_FAILURE;
     }
+#ifdef Q_OS_WIN
+    if (parser.isSet(verifyInitialBackgroundOption) &&
+        (parser.isSet(verifyQmlOption) || parser.isSet(playbackSmokeOption) || parser.isSet(fullscreenSmokeOption) ||
+         !positionalArguments.isEmpty())) {
+        qCCritical(sunroomLogApplication).noquote()
+            << "--verify-initial-background cannot be combined with a media file or another application scenario.";
+        return EXIT_FAILURE;
+    }
+#endif
 
     ApplicationLogOptions logOptions{
         .fileEnabled = !parser.isSet(noLogFileOption),
@@ -402,7 +453,7 @@ int main(int argc, char* argv[]) {
 
     if (parser.isSet(verifyQmlOption)) {
 #ifdef Q_OS_WIN
-        const QString deployedQmlPath = QLibraryInfo::path(QLibraryInfo::QmlImportsPath);
+        QString const deployedQmlPath = QLibraryInfo::path(QLibraryInfo::QmlImportsPath);
         if (!QFileInfo(deployedQmlPath).isDir()) {
             qCCritical(sunroomLogApplication).noquote() << "Missing deployed QML directory:" << deployedQmlPath;
             return EXIT_FAILURE;
@@ -437,6 +488,11 @@ int main(int argc, char* argv[]) {
     PresentationWindow window(windowContext);
 #else
     PresentationWindow window;
+#endif
+#ifdef Q_OS_WIN
+    if (parser.isSet(verifyInitialBackgroundOption)) {
+        return verifyInitialWindowBackground(window) ? EXIT_SUCCESS : EXIT_FAILURE;
+    }
 #endif
     if (!positionalArguments.isEmpty()) {
         QString const absolutePath = QFileInfo(positionalArguments.constFirst()).absoluteFilePath();

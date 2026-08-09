@@ -629,6 +629,19 @@ set_tests_properties(
 
 if (WIN32)
     add_test(
+            NAME application-initial-background
+            COMMAND $<TARGET_FILE:sunroom>
+                    --verify-initial-background
+                    --no-log-file
+    )
+    set_tests_properties(
+            application-initial-background
+            PROPERTIES
+            LABELS "application;ui;gpu;integration;windows"
+            TIMEOUT 30
+    )
+
+    add_test(
             NAME application-fullscreen
             COMMAND $<TARGET_FILE:sunroom>
                     --fullscreen-smoke

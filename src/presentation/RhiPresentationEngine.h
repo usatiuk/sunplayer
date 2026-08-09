@@ -41,12 +41,14 @@ class RhiPresentationEngine final : public QObject {
 
     void render();
     void handleExposure();
+    void handleSurfaceCreated();
     void requestFrame();
     void markUiDirty();
     void markPresentationDirty();
     void releaseSwapChain();
 
     QQuickWindow* quickWindow() const;
+    bool hasPresentedFrame() const;
 
   signals:
     // Emitted only after the swapchain accepts a frame containing the active
@@ -103,6 +105,10 @@ class RhiPresentationEngine final : public QObject {
     bool m_framePending = false;
     // Captures synchronous dirty signals without recursively entering render().
     bool m_frameRequestedWhileRendering = false;
+    // Tracks whether the current native surface has entered API-owned
+    // presentation. Windows may paint the client background only before this
+    // transition because flip-model HWNDs must not mix GDI and Direct3D.
+    bool m_hasPresentedFrame = false;
     // Native display callbacks are hints. Query and mutate at the render point.
     bool m_outputCharacteristicsDirty = false;
     bool m_surfaceTransitionPending = false;

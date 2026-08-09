@@ -66,7 +66,7 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 
 ## Current implementation status
 
-As of 2026-08-03, the repository contains Windows D3D11, Apple-Silicon macOS
+As of 2026-08-09, the repository contains Windows D3D11, Apple-Silicon macOS
 Metal, and native-Wayland Vulkan presentation paths plus continuous local-file
 playback:
 
@@ -74,6 +74,10 @@ playback:
   same-device libplacebo GPU, FFmpeg D3D11VA device, shared immediate-context
   execution guard, and device generation; the presentation engine owns its
   window swapchain.
+* On Windows, the native client area is painted black only before the current
+  surface's first successful QRhi presentation. The D3D flip-model swapchain
+  remains the sole client-area producer afterward, eliminating the white
+  startup flash without a layered or delayed window.
 * Qt Quick renders through `QQuickRenderControl` into an application-owned
   RGBA16F texture with the matching depth/stencil attachment required by its
   default depth-assisted 2D ordering.

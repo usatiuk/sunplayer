@@ -42,3 +42,4 @@ the newer note or decision rather than silently rewriting the investigation.
 * [2026-08-02: WSLg and Ubuntu system-cubeb audio](2026-08-02-wslg-system-cubeb-audio.md)
 * [2026-08-02: GitHub Actions platform CI](2026-08-02-github-actions-platform-ci.md)
 * [2026-08-02: Qt Metal EDR declaration across macOS screen transitions](2026-08-02-qt-metal-edr-screen-transition.md)
+* [2026-08-09: Windows background before the first QRhi presentation](2026-08-09-windows-first-presentation-background.md)

@@ -55,6 +55,9 @@ class PresentationWindow : public QWindow {
     void wheelEvent(QWheelEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;
+#ifdef Q_OS_WIN
+    bool nativeEvent(QByteArray const& eventType, void* message, qintptr* result) override;
+#endif
     bool event(QEvent* event) override;
 
   private:

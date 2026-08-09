@@ -40,6 +40,8 @@ Startup currently:
 5. On Linux, inventories optional Wayland color/decorations capabilities and
    creates the window-scoped `QVulkanInstance`.
 6. Constructs and shows one `PresentationWindow`, then enters the event loop.
+   On Windows, native background erase paints black until that surface's first
+   successful QRhi presentation; D3D owns the client area from then on.
 
 One optional positional command-line path opens local media after construction.
 `--playback-smoke` is a narrow noninteractive verification mode for that path:
@@ -116,6 +118,13 @@ The native window translates:
 * `UpdateRequest` into engine rendering.
 * Resize and device-pixel-ratio changes into UI and viewport invalidation.
 * Native surface destruction into swapchain teardown.
+
+Windows `WM_ERASEBKGND` is the one pre-presentation exception to API-owned
+client rendering. It fills black only until the presentation engine records a
+successful frame for the current native surface. Qt still handles `WM_PAINT`
+and exposure. Surface creation resets the boundary; resize, swapchain rebuild,
+and graphics recovery on the same HWND do not. This avoids mixing GDI with the
+D3D flip-model swapchain after presentation begins.
 
 Mouse, wheel, and ordinary keyboard input are forwarded to the redirected
 hidden `QQuickWindow`, including the complete native double-click event
@@ -201,15 +210,17 @@ Test targets. A Qt Quick component target verifies root initial-property
 handoff, all four initial Player states, cancel/retry/close command wiring,
 Player/HDR-Lab route selection, and active-page viewport publication.
 The current Player executable has a registered no-window mode that loads its
-packaged QML module with production type registrations. A second registered,
+packaged QML module with production type registrations. A Windows-only native
+message probe verifies that the real presentation window paints its initial
+client background black before first presentation. Another registered,
 bounded application scenario opens a real audio-first A/V fixture through the
 production FFmpeg and Cubeb paths, shows the native presentation window, and
 waits for two distinct video content revisions plus continued live Cubeb
 audio-clock progress. A second bounded real-window scenario verifies native
 keyboard/gesture routing, fullscreen state/restoration, cursor hiding, video
 presentation after each transition, and an unchanged advancing cubeb audio
-epoch. It is a registered Windows test; Windows has not been rerun after the
-audio assertion was added. On Linux, a prior video-only WSLg run verified
+epoch. The 2026-08-09 Windows run passes alongside the initial-background and
+playback scenarios. On Linux, a prior video-only WSLg run verified
 continued presentation and teardown once, while two attempts timed out on
 cursor convergence. The current audio-bearing explicit run ended in an
 unresolved buffer/configure protocol failure before its final assertion. WSLg
@@ -218,6 +229,11 @@ output, or route-change evidence. The scenarios exercise startup, initial
 playback wiring, and fullscreen;
 broader command,
 error, shutdown, and packaged-install scenarios remain future work.
+
+Repeated visible Windows cold starts in SDR and HDR desktop modes remain the
+complete physical matrix that no compositor/DWM transient escapes the native
+message regression boundary. The 2026-08-09 user check confirms the white
+flash is gone in the current Windows desktop mode.
 
 On Apple M2/macOS 26, the registered playback scenario passes through the real
 Metal/MoltenVK presentation path and AudioUnit-backed clock, then exits

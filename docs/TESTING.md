@@ -297,9 +297,12 @@ Early tests can call public subsystem APIs in-process. The out-of-process
 channel is justified when it removes duplicated orchestration and proves
 startup, shutdown, and application wiring that in-process tests cannot.
 
-The current `--playback-smoke` and `--fullscreen-smoke` modes are deliberately
-narrower than that future channel. Each opens one positional file and observes
-production application state directly. Playback smoke waits for distinct video
+The current `--verify-initial-background`, `--playback-smoke`, and
+`--fullscreen-smoke` modes are deliberately narrower than that future channel.
+The Windows-only background probe sends native erase to the real unshown
+presentation window with a contrasting memory DC and requires black output.
+The other modes each open one positional file and observe production
+application state directly. Playback smoke waits for distinct video
 revisions plus live Cubeb-derived audio-master clock progress; fullscreen smoke
 drives native F11, Escape, Space, and redirected background double-click input
 while checking normal/maximized restoration, native cursor hiding, and continued

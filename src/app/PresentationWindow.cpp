@@ -12,8 +12,13 @@
 #include <QTimer>
 #include <QWheelEvent>
 
+#ifdef Q_OS_WIN
+#include <qt_windows.h>
+#endif
+
 #include "app/PresentationSettings.h"
 #include "app/VideoViewportState.h"
+#include "diagnostics/LogCategories.h"
 #include "graphics/GraphicsBackendFactory.h"
 #include "platform/DisplayStateProvider.h"
 #include "playback/MediaSession.h"
@@ -226,6 +231,29 @@ void PresentationWindow::keyReleaseEvent(QKeyEvent* event) {
     }
 }
 
+#ifdef Q_OS_WIN
+bool PresentationWindow::nativeEvent(QByteArray const& eventType, void* message, qintptr* result) {
+    Q_ASSERT(message);
+    Q_ASSERT(result);
+    if (eventType == QByteArrayLiteral("windows_generic_MSG")) {
+        MSG const& nativeMessage = *static_cast<MSG const*>(message);
+        bool const presentationOwnsClientArea = m_engine && m_engine->hasPresentedFrame();
+        if (nativeMessage.message == WM_ERASEBKGND && !presentationOwnsClientArea) {
+            RECT clientRect{};
+            HDC const deviceContext = reinterpret_cast<HDC>(nativeMessage.wParam);
+            HBRUSH const blackBrush = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+            if (deviceContext && blackBrush && GetClientRect(nativeMessage.hwnd, &clientRect) &&
+                FillRect(deviceContext, &clientRect, blackBrush)) {
+                *result = 1;
+                return true;
+            }
+            qCWarning(sunroomLogApplication, "Could not paint the pre-presentation Windows client background");
+        }
+    }
+    return QWindow::nativeEvent(eventType, message, result);
+}
+#endif
+
 bool PresentationWindow::event(QEvent* event) {
     if (m_presentationLifecycle != PresentationLifecycle::Active) {
         return QWindow::event(event);
@@ -239,8 +267,10 @@ bool PresentationWindow::event(QEvent* event) {
         m_engine->markUiDirty();
         break;
     case QEvent::PlatformSurface:
-        if (static_cast<QPlatformSurfaceEvent*>(event)->surfaceEventType() ==
-            QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed) {
+        if (static_cast<QPlatformSurfaceEvent*>(event)->surfaceEventType() == QPlatformSurfaceEvent::SurfaceCreated) {
+            m_engine->handleSurfaceCreated();
+        } else if (static_cast<QPlatformSurfaceEvent*>(event)->surfaceEventType() ==
+                   QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed) {
             m_engine->releaseSwapChain();
         }
         break;
