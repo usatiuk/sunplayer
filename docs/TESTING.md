@@ -408,6 +408,9 @@ Initial additions should be narrowly tied to milestones:
   zero-output audio after a seek, clock handoff after drain, complete leading
   source silence, due-first-video scheduling, startup liveness, and midstream
   discontinuity handling.
+* A deterministic DTS/Matroska fixture exercises 512-sample audio frames in a
+  millisecond stream time base. Two independent full decodes must preserve
+  exactly 144,384 contiguous PCM frames without inventing silence.
 * Four deterministic, four-frame Main10 HEVC elementary streams cover
   BT.2020 limited-range static HDR10/PQ with explicit mastering and content-
   light metadata, HLG, a two-scene HDR10+ sequence, and Dolby Vision Profile

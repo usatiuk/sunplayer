@@ -114,10 +114,12 @@ An output epoch begins at the requested media position. If stream metadata
 declares that selected audio begins later, the decoder publishes the complete
 declared interval as timeline-advancing silence, split into bounded PCM blocks,
 before packet routing can form a packet/frame/PCM queue cycle. Decoded
-timestamps remain authoritative: they fill any additional leading or
-midstream gap and reject overlaps. This is source silence and advances media
-time. It is distinct from callback underrun hold silence, which does not
-advance media time.
+timestamps are reconciled with decoded sample durations using FFmpeg's
+`av_rescale_delta()`. Quantization within one source timestamp tick plus
+integer-sample rounding does not start a new PCM output region or invent
+silence; larger forward gaps still publish source silence and backward overlaps
+still fail. This is distinct from callback underrun hold silence, which does
+not advance media time.
 
 FFmpeg owns compressed decoding. libswresample owns sample-format conversion,
 planar/interleaved conversion, channel rematrixing, sample-rate conversion, and

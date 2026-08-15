@@ -564,41 +564,52 @@ class AudioConverter final {
         if (!ensureContext(frame, error)) {
             return AudioConvertResult::Failed;
         }
+        AVRational const sampleTimeBase{1, frame.sample_rate};
+        std::int64_t const expectedInputSample = m_nextInputSample;
+        std::optional<std::int64_t> const expectedMediaTime =
+            normalizedTimestampMicroseconds(expectedInputSample, sampleTimeBase, m_origin);
+        if (expectedInputSample != AV_NOPTS_VALUE && !expectedMediaTime) {
+            error = QStringLiteral("Decoded audio timestamp range is not representable");
+            return AudioConvertResult::Failed;
+        }
+        std::int64_t nextInputSample = m_nextInputSample;
+        std::optional<std::int64_t> const frameStartSample = reconcileFrameStartSample(frame, nextInputSample, error);
+        if (!error.isEmpty()) {
+            return AudioConvertResult::Failed;
+        }
+        if (!frameStartSample) {
+            error = QStringLiteral("The first decoded audio frame has no timestamp");
+            return AudioConvertResult::Failed;
+        }
         std::optional<std::int64_t> const frameTime =
-            normalizedTimestampMicroseconds(frame.best_effort_timestamp, m_streamTimeBase, m_origin);
+            normalizedTimestampMicroseconds(*frameStartSample, sampleTimeBase, m_origin);
+        if (!frameTime) {
+            error = QStringLiteral("Decoded audio timestamp range is not representable");
+            return AudioConvertResult::Failed;
+        }
         if (!m_anchorMediaMicroseconds) {
-            if (!frameTime) {
-                error = QStringLiteral("The first decoded audio frame has no timestamp");
-                return AudioConvertResult::Failed;
-            }
             m_anchorMediaMicroseconds = *frameTime;
         }
-        if (frameTime && m_expectedNextMediaMicroseconds) {
-            std::int64_t const tolerance =
-                std::max<std::int64_t>(1'000, av_rescale_q(2, {1, frame.sample_rate}, AV_TIME_BASE_Q));
-            std::optional<std::int64_t> const difference =
-                checkedTimestampSubtract(*frameTime, *m_expectedNextMediaMicroseconds);
-            if (!difference || *difference < -tolerance) {
+        if (expectedMediaTime) {
+            std::int64_t const toleranceSamples =
+                std::max<std::int64_t>(1, av_rescale_q_rnd(1, m_streamTimeBase, sampleTimeBase, AV_ROUND_UP)) + 1;
+            std::optional<std::int64_t> const differenceSamples =
+                checkedTimestampSubtract(*frameStartSample, expectedInputSample);
+            if (!differenceSamples || *differenceSamples < -toleranceSamples) {
                 error = QStringLiteral("Decoded audio overlaps the previous timeline "
                                        "region (expected %1 us, got %2 us)")
-                            .arg(*m_expectedNextMediaMicroseconds)
+                            .arg(*expectedMediaTime)
                             .arg(*frameTime);
                 return AudioConvertResult::Failed;
             }
-            if (*difference > tolerance) {
-                AudioConvertResult const gap = beginForwardGap(*frameTime, error);
+            if (*differenceSamples > toleranceSamples) {
+                AudioConvertResult const gap = beginForwardGap(*frameTime, *expectedMediaTime, error);
                 if (gap != AudioConvertResult::Converted) {
                     return gap;
                 }
             }
         }
-        std::int64_t const effectiveFrameTime = frameTime ? *frameTime : *m_expectedNextMediaMicroseconds;
-        m_expectedNextMediaMicroseconds = checkedTimestampAdd(
-            effectiveFrameTime, av_rescale_q(frame.nb_samples, {1, frame.sample_rate}, AV_TIME_BASE_Q));
-        if (!m_expectedNextMediaMicroseconds) {
-            error = QStringLiteral("Decoded audio timestamp range is not representable");
-            return AudioConvertResult::Failed;
-        }
+        m_nextInputSample = nextInputSample;
 
         std::int64_t const delay = swr_get_delay(m_swr.get(), frame.sample_rate);
         std::int64_t const capacity =
@@ -661,15 +672,40 @@ class AudioConverter final {
     std::optional<std::int64_t> observedEndMicroseconds() const { return m_observedEndMicroseconds; }
 
   private:
-    AudioConvertResult beginForwardGap(std::int64_t nextFrameTimeMicroseconds, QString& error) {
+    std::optional<std::int64_t> reconcileFrameStartSample(AVFrame const& frame, std::int64_t& nextInputSample,
+                                                          QString& error) const {
+        if (frame.nb_samples <= 0) {
+            error = QStringLiteral("The decoded audio frame has no samples");
+            return std::nullopt;
+        }
+        if (frame.best_effort_timestamp != AV_NOPTS_VALUE) {
+            AVRational const sampleTimeBase{1, frame.sample_rate};
+            return av_rescale_delta(m_streamTimeBase, frame.best_effort_timestamp, sampleTimeBase, frame.nb_samples,
+                                    &nextInputSample, sampleTimeBase);
+        }
+        if (nextInputSample == AV_NOPTS_VALUE) {
+            return std::nullopt;
+        }
+        std::int64_t const frameStartSample = nextInputSample;
+        std::optional<std::int64_t> const next = checkedTimestampAdd(frameStartSample, frame.nb_samples);
+        if (!next) {
+            error = QStringLiteral("Decoded audio sample range is not representable");
+            return std::nullopt;
+        }
+        nextInputSample = *next;
+        return frameStartSample;
+    }
+
+    AudioConvertResult beginForwardGap(std::int64_t nextFrameTimeMicroseconds,
+                                       std::int64_t expectedFrameTimeMicroseconds, QString& error) {
         AudioConvertResult const flushed = flush(error);
         if (flushed != AudioConvertResult::Converted) {
             return flushed;
         }
 
         std::int64_t const playbackStart = m_request.video.start.targetPositionMicroseconds.value_or(0);
-        std::int64_t const silenceStart = std::max(
-            playbackStart, m_observedEndMicroseconds.value_or(m_expectedNextMediaMicroseconds.value_or(playbackStart)));
+        std::int64_t const silenceStart =
+            std::max(playbackStart, m_observedEndMicroseconds.value_or(expectedFrameTimeMicroseconds));
         AudioConvertResult const silence = publishSilence(silenceStart, nextFrameTimeMicroseconds, error);
         if (silence != AudioConvertResult::Converted) {
             return silence;
@@ -892,8 +928,8 @@ class AudioConverter final {
     bool m_inputLayoutInitialized = false;
     int m_inputSampleRate = 0;
     int m_inputSampleFormat = AV_SAMPLE_FMT_NONE;
+    std::int64_t m_nextInputSample = AV_NOPTS_VALUE;
     std::optional<std::int64_t> m_anchorMediaMicroseconds;
-    std::optional<std::int64_t> m_expectedNextMediaMicroseconds;
     std::uint64_t m_convertedFrames = 0;
     std::uint64_t m_streamFrameIndex = 0;
     std::optional<std::int64_t> m_outputAnchorMediaMicroseconds;
