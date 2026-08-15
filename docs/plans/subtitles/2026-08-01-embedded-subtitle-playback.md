@@ -77,10 +77,11 @@ style identity machinery is unnecessary.
 
 ### Decode boundary
 
-Introduce immutable subtitle values under `src/subtitles/`:
+Use the media-owned `EmbeddedMediaStreamDescriptor` for embedded track
+discovery, then introduce the subtitle-specific immutable values under
+`src/subtitles/`:
 
 ```text
-SubtitleTrackDescriptor
 SubtitleStreamConfiguration
     playback generation
     selected stream index

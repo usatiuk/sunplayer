@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <future>
 #include <memory>
+#include <numeric>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -73,6 +74,22 @@ QString textSubtitleManifestPath() {
     return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-subtitles.toml");
 }
 
+QString multitrackFixturePath() {
+    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-multitrack-flac.mkv");
+}
+
+QString multitrackManifestPath() {
+    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-multitrack-flac.toml");
+}
+
+QString programFixturePath() {
+    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-mpegts-two-programs.ts");
+}
+
+QString programManifestPath() {
+    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-mpegts-two-programs.toml");
+}
+
 FfmpegMediaDecodeRequest requestFor(QString const& path, std::uint64_t generation = 1) {
     return {
         .video =
@@ -98,6 +115,7 @@ struct DecodeCapture {
     std::vector<PcmAudioBlock> audio;
     std::optional<FfmpegVideoStreamDiagnostics> videoDiagnostics;
     std::optional<FfmpegAudioStreamDiagnostics> audioDiagnostics;
+    std::optional<FfmpegMediaStreamSelection> streamSelection;
 };
 
 FfmpegMediaDecodeResult decode(FfmpegMediaDecodeRequest const& request, DecodeCapture& capture) {
@@ -108,11 +126,16 @@ FfmpegMediaDecodeResult decode(FfmpegMediaDecodeRequest const& request, DecodeCa
             capture.video.push_back(std::move(frame));
             return true;
         },
-        [&capture](PcmAudioBlock block, FfmpegAudioStreamDiagnostics const& diagnostics, std::stop_token) {
-            capture.audioDiagnostics = diagnostics;
-            capture.audio.push_back(std::move(block));
-            return true;
-        });
+        FfmpegAudioOutputSink{
+            .submit =
+                [&capture](PcmAudioBlock block, FfmpegAudioStreamDiagnostics const& diagnostics, std::stop_token) {
+                    capture.audioDiagnostics = diagnostics;
+                    capture.audio.push_back(std::move(block));
+                    return true;
+                },
+            .endOfStream = [](std::uint64_t) {},
+        },
+        [&capture](FfmpegMediaStreamSelection const& selection) { capture.streamSelection = selection; });
 }
 
 std::vector<float> flattenAudio(std::vector<PcmAudioBlock> const& blocks) {
@@ -174,6 +197,11 @@ class FfmpegMediaDecoderTest final : public QObject {
   private slots:
     void rejectsUnsupportedOutputFormat();
     void rejectsIncompleteAudioLifecycleSink();
+    void selectsEmbeddedVideoAndAudioTracks_data();
+    void selectsEmbeddedVideoAndAudioTracks();
+    void rejectsInvalidEmbeddedTrackSelections_data();
+    void rejectsInvalidEmbeddedTrackSelections();
+    void keepsEmbeddedTrackSelectionWithinOneProgram();
     void decodesSynchronizedFixtureThroughOneDemuxOperation();
     void streamsRealDecodeThroughBoundedSink();
     void seeksAndTrimsAudioOnTheSharedTimeline();
@@ -212,6 +240,139 @@ void FfmpegMediaDecoderTest::rejectsIncompleteAudioLifecycleSink() {
         FfmpegMediaStreamSink{}, std::stop_token{});
     QVERIFY(!result.isSuccess());
     QCOMPARE(result.error, QStringLiteral("Media decode request is invalid"));
+}
+
+void FfmpegMediaDecoderTest::selectsEmbeddedVideoAndAudioTracks_data() {
+    QTest::addColumn<int>("requestedVideo");
+    QTest::addColumn<int>("requestedAudio");
+    QTest::addColumn<int>("expectedVideo");
+    QTest::addColumn<int>("expectedAudio");
+    QTest::addColumn<int>("expectedLuma");
+    QTest::addColumn<double>("expectedAudioSample");
+
+    QTest::newRow("container defaults") << -1 << -1 << 2 << 3 << 235 << -0.25;
+    QTest::newRow("dark video and negative audio") << 0 << 3 << 0 << 3 << 16 << -0.25;
+    QTest::newRow("light video and positive audio") << 2 << 1 << 2 << 1 << 235 << 0.25;
+}
+
+void FfmpegMediaDecoderTest::selectsEmbeddedVideoAndAudioTracks() {
+    QFETCH(int, requestedVideo);
+    QFETCH(int, requestedAudio);
+    QFETCH(int, expectedVideo);
+    QFETCH(int, expectedAudio);
+    QFETCH(int, expectedLuma);
+    QFETCH(double, expectedAudioSample);
+
+    QByteArray const declaredHash = expectedFixtureHash(multitrackManifestPath());
+    QVERIFY2(!declaredHash.isEmpty(), "Fixture manifest has no valid SHA-256");
+    QCOMPARE(fixtureHash(multitrackFixturePath()), declaredHash);
+
+    FfmpegMediaDecodeRequest request = requestFor(multitrackFixturePath());
+    request.selectedVideoStreamIndex = requestedVideo;
+    request.selectedAudioStreamIndex = requestedAudio;
+    DecodeCapture capture;
+    FfmpegMediaDecodeResult const result = decode(request, capture);
+
+    QVERIFY2(result.isSuccess(), qPrintable(result.error));
+    QVERIFY(capture.streamSelection.has_value());
+    FfmpegMediaStreamSelection const& selection = *capture.streamSelection;
+    QCOMPARE(selection.selectedVideoStreamIndex, expectedVideo);
+    QCOMPARE(selection.selectedAudioStreamIndex, expectedAudio);
+    QCOMPARE(selection.videoTracks.size(), 2U);
+    QCOMPARE(selection.audioTracks.size(), 2U);
+    QCOMPARE(selection.videoTracks[0].streamIndex, 0);
+    QCOMPARE(selection.videoTracks[1].streamIndex, 2);
+    QCOMPARE(selection.audioTracks[0].streamIndex, 1);
+    QCOMPARE(selection.audioTracks[1].streamIndex, 3);
+    QCOMPARE(selection.videoTracks[0].title, QStringLiteral("Dark"));
+    QCOMPARE(selection.videoTracks[0].endMicroseconds, std::optional<std::int64_t>(1'250'000));
+    QCOMPARE(selection.videoTracks[1].language, QStringLiteral("ces"));
+    QVERIFY(selection.videoTracks[1].isDefault);
+    QCOMPARE(selection.audioTracks[0].title, QStringLiteral("Positive"));
+    QVERIFY(selection.audioTracks[1].isDefault);
+    QVERIFY(std::ranges::all_of(selection.videoTracks, &EmbeddedMediaStreamDescriptor::supported));
+    QVERIFY(std::ranges::all_of(selection.audioTracks, &EmbeddedMediaStreamDescriptor::supported));
+
+    QVERIFY(capture.videoDiagnostics.has_value());
+    QCOMPARE(capture.videoDiagnostics->videoStreamIndex, expectedVideo);
+    QVERIFY(capture.audioDiagnostics.has_value());
+    QCOMPARE(capture.audioDiagnostics->audioStreamIndex, expectedAudio);
+    QVERIFY(!capture.video.empty());
+    AVFrame const& frame = capture.video.front()->ffmpegFrame();
+    QVERIFY(frame.data[0]);
+    int const centerLuma = frame.data[0][frame.height / 2 * frame.linesize[0] + frame.width / 2];
+    QVERIFY(std::abs(centerLuma - expectedLuma) <= 1);
+
+    std::vector<float> const samples = flattenAudio(capture.audio);
+    QVERIFY(!samples.empty());
+    double const mean = std::accumulate(samples.begin(), samples.end(), 0.0) / static_cast<double>(samples.size());
+    QVERIFY(std::abs(mean) > 0.10);
+    QCOMPARE(mean > 0.0, expectedAudioSample > 0.0);
+}
+
+void FfmpegMediaDecoderTest::rejectsInvalidEmbeddedTrackSelections_data() {
+    QTest::addColumn<int>("requestedVideo");
+    QTest::addColumn<int>("requestedAudio");
+    QTest::addColumn<QString>("expectedError");
+
+    QTest::newRow("audio index requested as video")
+        << 1 << -1 << QStringLiteral("The selected video track is unavailable");
+    QTest::newRow("video index requested as audio")
+        << -1 << 2 << QStringLiteral("The selected audio track is unavailable");
+    QTest::newRow("missing video index") << 99 << -1 << QStringLiteral("The selected video track is unavailable");
+    QTest::newRow("missing audio index") << -1 << 99 << QStringLiteral("The selected audio track is unavailable");
+}
+
+void FfmpegMediaDecoderTest::rejectsInvalidEmbeddedTrackSelections() {
+    QFETCH(int, requestedVideo);
+    QFETCH(int, requestedAudio);
+    QFETCH(QString, expectedError);
+
+    FfmpegMediaDecodeRequest request = requestFor(multitrackFixturePath());
+    request.selectedVideoStreamIndex = requestedVideo;
+    request.selectedAudioStreamIndex = requestedAudio;
+    DecodeCapture capture;
+    FfmpegMediaDecodeResult const result = decode(request, capture);
+    QVERIFY(!result.isSuccess());
+    QCOMPARE(result.error, expectedError);
+    QVERIFY(capture.video.empty());
+    QVERIFY(capture.audio.empty());
+}
+
+void FfmpegMediaDecoderTest::keepsEmbeddedTrackSelectionWithinOneProgram() {
+    QCOMPARE(fixtureHash(programFixturePath()), expectedFixtureHash(programManifestPath()));
+
+    FfmpegMediaDecodeRequest request = requestFor(programFixturePath());
+    DecodeCapture capture;
+    FfmpegMediaDecodeResult result = decode(request, capture);
+    QVERIFY2(result.isSuccess(), qPrintable(result.error));
+    QVERIFY(capture.streamSelection);
+    QCOMPARE(capture.streamSelection->selectedVideoStreamIndex, 0);
+    QCOMPARE(capture.streamSelection->selectedAudioStreamIndex, 1);
+    QCOMPARE(capture.streamSelection->videoTracks.size(), 1U);
+    QCOMPARE(capture.streamSelection->videoTracks.front().streamIndex, 0);
+    QCOMPARE(capture.streamSelection->audioTracks.size(), 1U);
+    QCOMPARE(capture.streamSelection->audioTracks.front().streamIndex, 1);
+
+    request.selectedVideoStreamIndex = 2;
+    capture = {};
+    result = decode(request, capture);
+    QVERIFY2(result.isSuccess(), qPrintable(result.error));
+    QVERIFY(capture.streamSelection);
+    QCOMPARE(capture.streamSelection->selectedVideoStreamIndex, 2);
+    QCOMPARE(capture.streamSelection->selectedAudioStreamIndex, 3);
+    QCOMPARE(capture.streamSelection->videoTracks.size(), 1U);
+    QCOMPARE(capture.streamSelection->videoTracks.front().streamIndex, 2);
+    QCOMPARE(capture.streamSelection->audioTracks.size(), 1U);
+    QCOMPARE(capture.streamSelection->audioTracks.front().streamIndex, 3);
+
+    request.selectedAudioStreamIndex = 1;
+    capture = {};
+    result = decode(request, capture);
+    QVERIFY(!result.isSuccess());
+    QCOMPARE(result.error, QStringLiteral("The selected audio track is unavailable"));
+    QVERIFY(capture.video.empty());
+    QVERIFY(capture.audio.empty());
 }
 
 void FfmpegMediaDecoderTest::decodesSynchronizedFixtureThroughOneDemuxOperation() {
@@ -498,7 +659,7 @@ void FfmpegMediaDecoderTest::discoversAndDecodesSelectedPgsInTheSingleMediaOpera
     FfmpegMediaDecodeRequest request = requestFor(fixturePath, 31);
     request.selectedSubtitleStreamIndex = 2;
     DecodeCapture capture;
-    std::vector<SubtitleTrackDescriptor> tracks;
+    std::vector<EmbeddedMediaStreamDescriptor> tracks;
     std::optional<SubtitleStreamConfiguration> configuration;
     std::vector<SubtitleEvent> events;
     QString subtitleFailure;
@@ -580,7 +741,7 @@ void FfmpegMediaDecoderTest::discoversAndDecodesSelectedPgsInTheSingleMediaOpera
 void FfmpegMediaDecoderTest::discoversTextTracksFontsAndFfmpegAssConversion() {
     QCOMPARE(fixtureHash(textSubtitleFixturePath()), expectedFixtureHash(textSubtitleManifestPath()));
     struct SubtitleCapture {
-        std::vector<SubtitleTrackDescriptor> tracks;
+        std::vector<EmbeddedMediaStreamDescriptor> tracks;
         std::optional<SubtitleStreamConfiguration> configuration;
         std::vector<SubtitleEvent> events;
         QString error;

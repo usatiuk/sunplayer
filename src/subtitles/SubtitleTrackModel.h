@@ -4,6 +4,7 @@
 
 #include <QAbstractListModel>
 
+#include "media/MediaStreamTypes.h"
 #include "subtitles/SubtitleTypes.h"
 
 class SubtitleTrackModel final : public QAbstractListModel {
@@ -23,7 +24,7 @@ class SubtitleTrackModel final : public QAbstractListModel {
     QVariant data(QModelIndex const& index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
 
-    void setTracks(std::vector<SubtitleTrackDescriptor> tracks, int selectedStreamIndex);
+    void setTracks(std::vector<EmbeddedMediaStreamDescriptor> tracks, int selectedStreamIndex);
     void setSelectedStreamIndex(int streamIndex);
     int selectedStreamIndex() const;
     bool canSelect(int streamIndex) const;

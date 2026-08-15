@@ -5,12 +5,17 @@
 #include <cstdlib>
 #include <memory>
 #include <mutex>
+#include <numeric>
 
 #include <QCryptographicHash>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QSignalSpy>
 #include <QtTest>
+
+extern "C" {
+#include <libavutil/frame.h>
+}
 
 #ifdef Q_OS_WIN
 #include <qt_windows.h>
@@ -46,6 +51,10 @@ QString longVideoTailFixturePath() {
 }
 
 QString subtitleFixturePath() { return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-subtitles.mkv"); }
+
+QString multitrackFixturePath() {
+    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-multitrack-flac.mkv");
+}
 
 QString interFrameSeekFixturePath() {
     return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-h264-seek.mkv");
@@ -140,6 +149,7 @@ class MediaSessionTest final : public QObject {
     void playbackProgressDoesNotRequirePresentationConsumer();
     void trailingVideoContinuesAfterAudioDrains();
     void longPostAudioSeekDoesNotStall();
+    void embeddedMediaTrackSelectionUsesPlaybackGeneration();
     void embeddedSubtitleSelectionUsesPlaybackGeneration();
     void audioOutputFailureBecomesSessionError();
     void sustainedAudioUnderrunEntersBuffering();
@@ -394,6 +404,153 @@ void MediaSessionTest::embeddedSubtitleSelectionUsesPlaybackGeneration() {
         QVERIFY(std::find(requestedSubtitleStreams.begin(), requestedSubtitleStreams.end(), 2) !=
                 requestedSubtitleStreams.end());
     }
+}
+
+void MediaSessionTest::embeddedMediaTrackSelectionUsesPlaybackGeneration() {
+    auto audioSink = std::make_shared<ControlledAudioSink>(4'096);
+    MediaSession session(
+        VideoTargetReadback::Disabled,
+        [](FfmpegMediaDecodeRequest const& request, FfmpegVideoFrameSink const& videoSink,
+           FfmpegAudioOutputSink const& audioOutput, FfmpegMediaStreamSink const& streamSink,
+           FfmpegSubtitleOutputSink const& subtitleSink, std::stop_token stopToken) {
+            return decodeMediaFrames(request, videoSink, audioOutput, streamSink, subtitleSink, stopToken);
+        },
+        audioSink);
+
+    auto const prepareVideo = [&] {
+        session.videoSource().prepareForPresentation(std::chrono::steady_clock::now() + std::chrono::hours(24));
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+    };
+    auto const waitUntil = [&](auto predicate, int timeoutMs) {
+        QElapsedTimer timer;
+        timer.start();
+        while (!predicate() && timer.elapsed() < timeoutMs) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+            prepareVideo();
+            QThread::yieldCurrentThread();
+        }
+        return predicate();
+    };
+    auto const renderFreshAudio = [&] {
+        ControlledAudioRender rendered;
+        QElapsedTimer timer;
+        timer.start();
+        while (rendered.frames == 0 && timer.elapsed() < 5'000) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+            rendered = audioSink->render(257);
+            prepareVideo();
+            QThread::yieldCurrentThread();
+        }
+        return rendered;
+    };
+    auto const meanSample = [](ControlledAudioRender const& rendered) {
+        return std::accumulate(rendered.samples.begin(), rendered.samples.end(), 0.0) /
+               static_cast<double>(rendered.samples.size());
+    };
+    auto const currentLuma = [&] {
+        AVFrame const& frame = session.videoSource().currentFrame()->ffmpegFrame();
+        return static_cast<int>(frame.data[0][frame.height / 2 * frame.linesize[0] + frame.width / 2]);
+    };
+
+    session.openMedia(QUrl::fromLocalFile(multitrackFixturePath()));
+    QVERIFY(waitUntil(
+        [&] {
+            return session.state() == MediaSession::State::Ready && session.hasFrame() &&
+                   session.videoTracks()->rowCount() == 2 && session.audioTracks()->rowCount() == 2;
+        },
+        10'000));
+    QCOMPARE(session.selectedVideoStreamIndex(), 2);
+    QCOMPARE(session.selectedAudioStreamIndex(), 3);
+    QCOMPARE(currentLuma(), 235);
+    ControlledAudioRender rendered = renderFreshAudio();
+    QVERIFY(rendered.frames != 0);
+    QVERIFY(meanSample(rendered) < -0.10);
+    audioSink->advancePresentedFrames(rendered.frames);
+
+    QElapsedTimer playbackTimer;
+    playbackTimer.start();
+    while (audioSink->presentedFrames() < 9'600 && playbackTimer.elapsed() < 10'000) {
+        rendered = audioSink->render(257);
+        if (rendered.frames != 0) {
+            audioSink->advancePresentedFrames(rendered.frames);
+        }
+        prepareVideo();
+    }
+    QVERIFY(audioSink->presentedFrames() >= 9'600);
+    qlonglong const playingPosition = session.positionMilliseconds();
+    std::uint64_t const initialGeneration = session.playbackGeneration();
+    session.selectVideoStream(0);
+    QVERIFY(session.playbackGeneration() > initialGeneration);
+    QVERIFY(waitUntil(
+        [&] {
+            return session.state() == MediaSession::State::Ready && session.hasFrame() &&
+                   session.selectedVideoStreamIndex() == 0;
+        },
+        10'000));
+    QVERIFY(session.playing());
+    QCOMPARE(currentLuma(), 16);
+    rendered = renderFreshAudio();
+    QVERIFY(rendered.frames != 0);
+    QVERIFY(meanSample(rendered) < -0.10);
+    QVERIFY(std::abs(session.positionMilliseconds() - playingPosition) <= 1);
+
+    session.pause();
+    qlonglong const pausedPosition = session.positionMilliseconds();
+    std::uint64_t const videoGeneration = session.playbackGeneration();
+    session.selectAudioStream(1);
+    QVERIFY(session.playbackGeneration() > videoGeneration);
+    QVERIFY(waitUntil(
+        [&] {
+            return session.state() == MediaSession::State::Ready && session.hasFrame() &&
+                   session.selectedAudioStreamIndex() == 1;
+        },
+        10'000));
+    QVERIFY(!session.playing());
+    QVERIFY(std::abs(session.positionMilliseconds() - pausedPosition) <= 1);
+    QCOMPARE(session.selectedVideoStreamIndex(), 0);
+    QCOMPARE(currentLuma(), 16);
+    session.play();
+    rendered = renderFreshAudio();
+    QVERIFY(rendered.frames != 0);
+    QVERIFY(meanSample(rendered) > 0.10);
+
+    std::uint64_t const selectedGeneration = session.playbackGeneration();
+    session.selectVideoStream(0);
+    session.selectAudioStream(99);
+    QCOMPARE(session.playbackGeneration(), selectedGeneration);
+
+    session.seekToMilliseconds(1'000);
+    QVERIFY(waitUntil(
+        [&] {
+            return session.state() == MediaSession::State::Ready && session.hasFrame() &&
+                   session.selectedVideoStreamIndex() == 0 && session.selectedAudioStreamIndex() == 1;
+        },
+        10'000));
+    QCOMPARE(currentLuma(), 16);
+    rendered = renderFreshAudio();
+    QVERIFY(rendered.frames != 0);
+    QVERIFY(meanSample(rendered) > 0.10);
+
+    session.pause();
+    session.selectVideoStream(2);
+    QVERIFY(waitUntil(
+        [&] {
+            return session.state() == MediaSession::State::Ready && session.hasFrame() &&
+                   session.selectedVideoStreamIndex() == 2;
+        },
+        10'000));
+    session.seekToMilliseconds(1'500);
+    QVERIFY(waitUntil([&] { return session.state() == MediaSession::State::Ready && session.hasFrame(); }, 10'000));
+    session.selectVideoStream(0);
+    QVERIFY(waitUntil(
+        [&] {
+            return session.state() == MediaSession::State::Ready && session.hasFrame() &&
+                   session.selectedVideoStreamIndex() == 0;
+        },
+        10'000));
+    QVERIFY(!session.playing());
+    QCOMPARE(session.positionMilliseconds(), 1'249);
+    QCOMPARE(currentLuma(), 16);
 }
 
 void MediaSessionTest::mutedPlaybackKeepsPresentedAudioAsMaster() {

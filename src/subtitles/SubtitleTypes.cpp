@@ -19,8 +19,6 @@ bool validRgbaSize(QSize const& size, qsizetype byteCount) {
 }
 } // namespace
 
-bool SubtitleTrackDescriptor::isValid() const { return streamIndex >= 0 && !label.isEmpty() && !codec.isEmpty(); }
-
 bool SubtitleStreamConfiguration::isValid() const {
     return playbackGeneration != 0 && streamIndex >= 0 && !codec.isEmpty();
 }

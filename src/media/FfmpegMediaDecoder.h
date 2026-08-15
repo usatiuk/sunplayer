@@ -11,6 +11,7 @@
 
 #include "audio/AudioTypes.h"
 #include "media/FfmpegVideoDecoder.h"
+#include "media/MediaStreamTypes.h"
 #include "subtitles/SubtitleTypes.h"
 
 struct FfmpegAudioStreamDiagnostics {
@@ -28,6 +29,8 @@ struct FfmpegMediaDecodeRequest {
     FfmpegVideoDecodeRequest video;
     bool decodeSelectedAudio = true;
     AudioStreamFormat audioOutput{48'000, 2};
+    int selectedVideoStreamIndex = -1;
+    int selectedAudioStreamIndex = -1;
     int selectedSubtitleStreamIndex = -1;
 
     bool isValid() const;
@@ -75,8 +78,12 @@ struct FfmpegMediaStreamSelection {
     // begins at or after the audio endpoint. The stream remains selected for
     // diagnostics, but playback need not wait for an output epoch.
     bool audioOutputExpected = false;
+    int selectedVideoStreamIndex = -1;
+    int selectedAudioStreamIndex = -1;
     FfmpegVideoStreamDiagnostics videoDiagnostics;
-    std::vector<SubtitleTrackDescriptor> subtitleTracks;
+    std::vector<EmbeddedMediaStreamDescriptor> videoTracks;
+    std::vector<EmbeddedMediaStreamDescriptor> audioTracks;
+    std::vector<EmbeddedMediaStreamDescriptor> subtitleTracks;
     std::optional<SubtitleStreamConfiguration> subtitleConfiguration;
 };
 

@@ -15,21 +15,6 @@ enum class SubtitlePayloadType {
     Clear,
 };
 
-struct SubtitleTrackDescriptor {
-    int streamIndex = -1;
-    QString label;
-    QString language;
-    QString title;
-    QString codec;
-    bool isDefault = false;
-    bool isForced = false;
-    bool isHearingImpaired = false;
-    bool isCommentary = false;
-    bool supported = false;
-
-    bool isValid() const;
-};
-
 struct SubtitleFontAttachment {
     QString name;
     QByteArray bytes;

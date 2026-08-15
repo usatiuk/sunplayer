@@ -138,6 +138,100 @@ QString metadataValue(AVDictionary const* metadata, char const* key) {
     return entry && entry->value ? QString::fromUtf8(entry->value) : QString{};
 }
 
+bool selectableVideoStream(AVStream const& stream) {
+    return stream.codecpar->codec_type == AVMEDIA_TYPE_VIDEO &&
+           !(stream.disposition & (AV_DISPOSITION_ATTACHED_PIC | AV_DISPOSITION_DEPENDENT));
+}
+
+bool programContainsStream(AVProgram const* program, int streamIndex) {
+    if (!program) {
+        return true;
+    }
+    for (unsigned int index = 0; index < program->nb_stream_indexes; ++index) {
+        if (program->stream_index[index] == streamIndex) {
+            return true;
+        }
+    }
+    return false;
+}
+
+QString mediaTrackLabel(AVStream const& stream, AVMediaType type, int ordinal) {
+    QString const languageTag = metadataValue(stream.metadata, "language");
+    QString language = languageTag;
+    if (!languageTag.isEmpty()) {
+        QLocale const locale(languageTag);
+        if (locale.language() != QLocale::AnyLanguage && locale.language() != QLocale::C) {
+            language = QLocale::languageToString(locale.language());
+        }
+    }
+    QString const title = metadataValue(stream.metadata, "title");
+    QString label;
+    if (!language.isEmpty() && !title.isEmpty()) {
+        label = language + QStringLiteral(" - ") + title;
+    } else if (!title.isEmpty()) {
+        label = title;
+    } else if (!language.isEmpty()) {
+        label = language;
+    } else {
+        label = type == AVMEDIA_TYPE_VIDEO ? QStringLiteral("Video %1").arg(ordinal)
+                                           : QStringLiteral("Audio %1").arg(ordinal);
+    }
+
+    QStringList details{QString::fromLatin1(avcodec_get_name(stream.codecpar->codec_id))};
+    if (type == AVMEDIA_TYPE_VIDEO && stream.codecpar->width > 0 && stream.codecpar->height > 0) {
+        details.push_back(QStringLiteral("%1x%2").arg(stream.codecpar->width).arg(stream.codecpar->height));
+    } else if (type == AVMEDIA_TYPE_AUDIO && stream.codecpar->ch_layout.nb_channels > 0) {
+        char channelLayout[64]{};
+        if (av_channel_layout_describe(&stream.codecpar->ch_layout, channelLayout, sizeof(channelLayout)) >= 0) {
+            details.push_back(QString::fromUtf8(channelLayout));
+        }
+    }
+    if (stream.disposition & AV_DISPOSITION_DEFAULT) {
+        details.push_back(QStringLiteral("Default"));
+    }
+    if (stream.disposition & AV_DISPOSITION_COMMENT) {
+        details.push_back(QStringLiteral("Commentary"));
+    }
+    if (stream.disposition & AV_DISPOSITION_HEARING_IMPAIRED) {
+        details.push_back(QStringLiteral("Hearing impaired"));
+    }
+    if (stream.disposition & AV_DISPOSITION_VISUAL_IMPAIRED) {
+        details.push_back(QStringLiteral("Audio description"));
+    }
+    return label + QStringLiteral(" (%1)").arg(details.join(QStringLiteral(", ")));
+}
+
+std::vector<EmbeddedMediaStreamDescriptor> discoverMediaTracks(AVFormatContext& formatContext, AVMediaType type,
+                                                               int selectedVideoIndex, AVProgram const* program) {
+    std::vector<EmbeddedMediaStreamDescriptor> tracks;
+    int ordinal = 0;
+    for (unsigned int index = 0; index < formatContext.nb_streams; ++index) {
+        AVStream const& stream = *formatContext.streams[index];
+        if (!programContainsStream(program, static_cast<int>(index)) || stream.codecpar->codec_type != type ||
+            (type == AVMEDIA_TYPE_VIDEO && !selectableVideoStream(stream))) {
+            continue;
+        }
+        ++ordinal;
+        AVCodec const* decoder = nullptr;
+        int const resolved =
+            av_find_best_stream(&formatContext, type, static_cast<int>(index), selectedVideoIndex, &decoder, 0);
+        tracks.push_back({
+            .streamIndex = static_cast<int>(index),
+            .label = mediaTrackLabel(stream, type, ordinal),
+            .language = metadataValue(stream.metadata, "language"),
+            .title = metadataValue(stream.metadata, "title"),
+            .codec = QString::fromLatin1(avcodec_get_name(stream.codecpar->codec_id)),
+            .isDefault = static_cast<bool>(stream.disposition & AV_DISPOSITION_DEFAULT),
+            .isForced = static_cast<bool>(stream.disposition & AV_DISPOSITION_FORCED),
+            .isHearingImpaired = static_cast<bool>(stream.disposition & AV_DISPOSITION_HEARING_IMPAIRED),
+            .isVisualImpaired = static_cast<bool>(stream.disposition & AV_DISPOSITION_VISUAL_IMPAIRED),
+            .isCommentary = static_cast<bool>(stream.disposition & AV_DISPOSITION_COMMENT),
+            .supported = resolved == static_cast<int>(index) && decoder != nullptr,
+        });
+    }
+    return tracks;
+}
+
 QString subtitleTrackLabel(AVStream const& stream, int ordinal) {
     QString const languageTag = metadataValue(stream.metadata, "language");
     QString language = languageTag;
@@ -178,8 +272,8 @@ QString subtitleTrackLabel(AVStream const& stream, int ordinal) {
     return label;
 }
 
-std::vector<SubtitleTrackDescriptor> discoverSubtitleTracks(AVFormatContext const& formatContext) {
-    std::vector<SubtitleTrackDescriptor> tracks;
+std::vector<EmbeddedMediaStreamDescriptor> discoverSubtitleTracks(AVFormatContext const& formatContext) {
+    std::vector<EmbeddedMediaStreamDescriptor> tracks;
     int ordinal = 0;
     for (unsigned int index = 0; index < formatContext.nb_streams; ++index) {
         AVStream const& stream = *formatContext.streams[index];
@@ -197,6 +291,7 @@ std::vector<SubtitleTrackDescriptor> discoverSubtitleTracks(AVFormatContext cons
             .isDefault = static_cast<bool>(stream.disposition & AV_DISPOSITION_DEFAULT),
             .isForced = static_cast<bool>(stream.disposition & AV_DISPOSITION_FORCED),
             .isHearingImpaired = static_cast<bool>(stream.disposition & AV_DISPOSITION_HEARING_IMPAIRED),
+            .isVisualImpaired = static_cast<bool>(stream.disposition & AV_DISPOSITION_VISUAL_IMPAIRED),
             .isCommentary = static_cast<bool>(stream.disposition & AV_DISPOSITION_COMMENT),
             .supported = decoder != nullptr,
         });
@@ -1120,7 +1215,8 @@ bool FfmpegAudioOutputSink::isValid() const { return static_cast<bool>(submit) &
 
 bool FfmpegMediaDecodeRequest::isValid() const {
     return video.isValid() && (!decodeSelectedAudio || audioOutput == AudioStreamFormat{48'000, 2}) &&
-           selectedSubtitleStreamIndex >= -1;
+           selectedVideoStreamIndex >= -1 && selectedAudioStreamIndex >= -1 && selectedSubtitleStreamIndex >= -1 &&
+           (decodeSelectedAudio || selectedAudioStreamIndex < 0);
 }
 
 bool FfmpegSubtitleOutputSink::isValid() const { return static_cast<bool>(submit); }
@@ -1210,33 +1306,86 @@ FfmpegMediaDecodeResult decodeMediaFrames(FfmpegMediaDecodeRequest const& reques
         return fail(QStringLiteral("Could not discover media streams: %1").arg(ffmpegError(status)));
     }
 
+    std::vector<EmbeddedMediaStreamDescriptor> videoTracks =
+        discoverMediaTracks(*formatContext, AVMEDIA_TYPE_VIDEO, -1, nullptr);
+    auto const requestedVideo =
+        request.selectedVideoStreamIndex >= 0
+            ? std::find_if(videoTracks.begin(), videoTracks.end(),
+                           [&](auto const& track) { return track.streamIndex == request.selectedVideoStreamIndex; })
+            : videoTracks.end();
+    if (request.selectedVideoStreamIndex >= 0 && requestedVideo == videoTracks.end()) {
+        return fail(QStringLiteral("The selected video track is unavailable"));
+    }
+    if (requestedVideo != videoTracks.end() && !requestedVideo->supported) {
+        return fail(QStringLiteral("The selected video codec is unsupported"));
+    }
+
     AVCodec const* videoDecoder = nullptr;
-    int const videoIndex = av_find_best_stream(formatContext.get(), AVMEDIA_TYPE_VIDEO, -1, -1, &videoDecoder, 0);
-    if (videoIndex < 0 || !videoDecoder) {
+    int videoIndex = av_find_best_stream(formatContext.get(), AVMEDIA_TYPE_VIDEO, request.selectedVideoStreamIndex, -1,
+                                         &videoDecoder, 0);
+    if (request.selectedVideoStreamIndex < 0 &&
+        (videoIndex < 0 || !videoDecoder || !selectableVideoStream(*formatContext->streams[videoIndex]))) {
+        auto fallback = std::find_if(videoTracks.begin(), videoTracks.end(),
+                                     [](auto const& track) { return track.supported && track.isDefault; });
+        if (fallback == videoTracks.end()) {
+            fallback =
+                std::find_if(videoTracks.begin(), videoTracks.end(), [](auto const& track) { return track.supported; });
+        }
+        if (fallback != videoTracks.end()) {
+            videoIndex = av_find_best_stream(formatContext.get(), AVMEDIA_TYPE_VIDEO, fallback->streamIndex, -1,
+                                             &videoDecoder, 0);
+        }
+    }
+    if (videoIndex < 0) {
         return fail(QStringLiteral("Could not select video stream: %1").arg(ffmpegError(videoIndex)));
     }
+    if (!videoDecoder || !selectableVideoStream(*formatContext->streams[videoIndex])) {
+        return fail(QStringLiteral("The media has no selectable video track"));
+    }
     AVStream& videoStream = *formatContext->streams[videoIndex];
+    AVProgram const* playbackProgram = av_find_program_from_stream(formatContext.get(), nullptr, videoIndex);
+    if (playbackProgram) {
+        videoTracks = discoverMediaTracks(*formatContext, AVMEDIA_TYPE_VIDEO, -1, playbackProgram);
+    }
 
+    std::vector<EmbeddedMediaStreamDescriptor> audioTracks =
+        discoverMediaTracks(*formatContext, AVMEDIA_TYPE_AUDIO, videoIndex, playbackProgram);
     AVCodec const* audioDecoder = nullptr;
     int audioIndex = -1;
     AVStream* audioStream = nullptr;
     if (request.decodeSelectedAudio) {
-        audioIndex = av_find_best_stream(formatContext.get(), AVMEDIA_TYPE_AUDIO, -1, videoIndex, &audioDecoder, 0);
-        if (audioIndex >= 0 && audioDecoder) {
+        auto const requestedAudio =
+            request.selectedAudioStreamIndex >= 0
+                ? std::find_if(audioTracks.begin(), audioTracks.end(),
+                               [&](auto const& track) { return track.streamIndex == request.selectedAudioStreamIndex; })
+                : audioTracks.end();
+        if (request.selectedAudioStreamIndex >= 0 && requestedAudio == audioTracks.end()) {
+            return fail(QStringLiteral("The selected audio track is unavailable"));
+        }
+        if (requestedAudio != audioTracks.end() && !requestedAudio->supported) {
+            return fail(QStringLiteral("The selected audio codec is unsupported"));
+        }
+        audioIndex = av_find_best_stream(formatContext.get(), AVMEDIA_TYPE_AUDIO, request.selectedAudioStreamIndex,
+                                         videoIndex, &audioDecoder, 0);
+        if (audioIndex >= 0 && audioDecoder && programContainsStream(playbackProgram, audioIndex)) {
             audioStream = formatContext->streams[audioIndex];
             result.audioStreamPresent = true;
-        } else if (audioIndex != AVERROR_STREAM_NOT_FOUND) {
+        } else if (audioIndex == AVERROR_STREAM_NOT_FOUND ||
+                   (audioIndex >= 0 && !programContainsStream(playbackProgram, audioIndex))) {
+            audioIndex = -1;
+            audioDecoder = nullptr;
+        } else {
             return fail(QStringLiteral("Could not select audio stream: %1").arg(ffmpegError(audioIndex)));
         }
     }
 
-    std::vector<SubtitleTrackDescriptor> const subtitleTracks = discoverSubtitleTracks(*formatContext);
+    std::vector<EmbeddedMediaStreamDescriptor> const subtitleTracks = discoverSubtitleTracks(*formatContext);
     AVCodec const* subtitleDecoder = nullptr;
     AVStream* subtitleStream = nullptr;
     int subtitleIndex = -1;
     if (request.selectedSubtitleStreamIndex >= 0) {
         auto const selected =
-            std::find_if(subtitleTracks.begin(), subtitleTracks.end(), [&](SubtitleTrackDescriptor const& track) {
+            std::find_if(subtitleTracks.begin(), subtitleTracks.end(), [&](EmbeddedMediaStreamDescriptor const& track) {
                 return track.streamIndex == request.selectedSubtitleStreamIndex;
             });
         if (selected == subtitleTracks.end()) {
@@ -1260,6 +1409,10 @@ FfmpegMediaDecodeResult decodeMediaFrames(FfmpegMediaDecodeRequest const& reques
                     : std::nullopt;
     std::optional<std::int64_t> const audioEndMicroseconds =
         audioStream ? ffmpegDeclaredStreamEndMicroseconds(*formatContext, *audioStream, origin) : std::nullopt;
+    for (EmbeddedMediaStreamDescriptor& track : videoTracks) {
+        track.endMicroseconds =
+            ffmpegDeclaredStreamEndMicroseconds(*formatContext, *formatContext->streams[track.streamIndex], origin);
+    }
     std::int64_t const requestedStartMicroseconds = request.video.start.targetPositionMicroseconds.value_or(0);
     bool const audioOutputExpected =
         audioStream && (!audioEndMicroseconds || requestedStartMicroseconds < *audioEndMicroseconds);
@@ -1377,7 +1530,11 @@ FfmpegMediaDecodeResult decodeMediaFrames(FfmpegMediaDecodeRequest const& reques
         streamSink({
             .audioStreamPresent = audioStream != nullptr,
             .audioOutputExpected = audioOutputExpected,
+            .selectedVideoStreamIndex = videoIndex,
+            .selectedAudioStreamIndex = audioIndex,
             .videoDiagnostics = initialVideoDiagnostics,
+            .videoTracks = videoTracks,
+            .audioTracks = audioTracks,
             .subtitleTracks = subtitleTracks,
             .subtitleConfiguration = subtitleConfiguration,
         });

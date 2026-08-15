@@ -137,6 +137,10 @@ void AppShellTest::publishesActiveViewport() {
     QObject* const statisticsMenuItem = rootItem->findChild<QObject*>(QStringLiteral("statisticsMenuItem"));
     QObject* const moreButton = rootItem->findChild<QObject*>(QStringLiteral("moreButton"));
     QObject* const transportMenu = rootItem->findChild<QObject*>(QStringLiteral("transportMenu"));
+    QObject* const videoTrackMenu = rootItem->findChild<QObject*>(QStringLiteral("videoTrackMenu"));
+    QObject* const videoDarkItem = rootItem->findChild<QObject*>(QStringLiteral("videoTrack_0"));
+    QObject* const audioTrackMenu = rootItem->findChild<QObject*>(QStringLiteral("audioTrackMenu"));
+    QObject* const audioPositiveItem = rootItem->findChild<QObject*>(QStringLiteral("audioTrack_1"));
     QObject* const subtitleMenu = rootItem->findChild<QObject*>(QStringLiteral("subtitleMenu"));
     QObject* const subtitleOffItem = rootItem->findChild<QObject*>(QStringLiteral("subtitleTrack_-1"));
     QObject* const subtitleEnglishItem = rootItem->findChild<QObject*>(QStringLiteral("subtitleTrack_2"));
@@ -182,6 +186,10 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(statisticsMenuItem);
     QVERIFY(moreButton);
     QVERIFY(transportMenu);
+    QVERIFY(videoTrackMenu);
+    QVERIFY(videoDarkItem);
+    QVERIFY(audioTrackMenu);
+    QVERIFY(audioPositiveItem);
     QVERIFY(subtitleMenu);
     QVERIFY(subtitleOffItem);
     QVERIFY(subtitleEnglishItem);
@@ -385,6 +393,14 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(QMetaObject::invokeMethod(transportMenu, "open", Qt::DirectConnection));
     QTRY_VERIFY(transportMenu->property("visible").toBool());
     QTRY_VERIFY(windowCommands.windowShortcutsBlocked());
+    QCOMPARE(mediaSession.selectedVideoStreamIndex(), 2);
+    QVERIFY(QMetaObject::invokeMethod(videoDarkItem, "triggered", Qt::DirectConnection));
+    QTRY_COMPARE(mediaSession.selectedVideoStreamIndex(), 0);
+    QTRY_VERIFY(videoDarkItem->property("checked").toBool());
+    QCOMPARE(mediaSession.selectedAudioStreamIndex(), 3);
+    QVERIFY(QMetaObject::invokeMethod(audioPositiveItem, "triggered", Qt::DirectConnection));
+    QTRY_COMPARE(mediaSession.selectedAudioStreamIndex(), 1);
+    QTRY_VERIFY(audioPositiveItem->property("checked").toBool());
     QCOMPARE(mediaSession.selectedSubtitleStreamIndex(), -1);
     QVERIFY(QMetaObject::invokeMethod(subtitleEnglishItem, "triggered", Qt::DirectConnection));
     QTRY_COMPARE(mediaSession.selectedSubtitleStreamIndex(), 2);

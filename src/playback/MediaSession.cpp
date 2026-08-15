@@ -173,6 +173,14 @@ std::optional<AudioPresentationSnapshot> MediaSession::currentAudioPresentation(
     return snapshot;
 }
 
+QAbstractItemModel* MediaSession::videoTracks() { return &m_videoTracks; }
+
+QAbstractItemModel* MediaSession::audioTracks() { return &m_audioTracks; }
+
+int MediaSession::selectedVideoStreamIndex() const { return m_selectedVideoStreamIndex; }
+
+int MediaSession::selectedAudioStreamIndex() const { return m_selectedAudioStreamIndex; }
+
 QAbstractItemModel* MediaSession::subtitleTracks() { return &m_subtitleTracks; }
 
 int MediaSession::selectedSubtitleStreamIndex() const { return m_selectedSubtitleStreamIndex; }
@@ -287,6 +295,7 @@ void MediaSession::cancel() {
     m_mediaUrl = QUrl{};
     m_displayName.clear();
     m_errorMessage.clear();
+    resetMediaTracks();
     m_selectedSubtitleStreamIndex = -1;
     m_subtitleTracks.setTracks({}, -1);
     m_subtitleError.clear();
@@ -448,6 +457,46 @@ void MediaSession::selectSubtitleStream(int streamIndex) {
     restartAt(position, m_activeVideoDecodeCapability, false);
 }
 
+void MediaSession::selectVideoStream(int streamIndex) {
+    Q_ASSERT(QThread::currentThread() == thread());
+    if ((m_state != State::Opening && m_state != State::Ready) || streamIndex == m_selectedVideoStreamIndex ||
+        !m_videoTracks.canSelect(streamIndex)) {
+        return;
+    }
+    std::int64_t position = m_state == State::Opening
+                                ? m_requestedPositionMicroseconds
+                                : mediaClockSnapshotAt(std::chrono::steady_clock::now()).positionMicroseconds;
+    if (std::optional<std::int64_t> const end = m_videoTracks.endMicroseconds(streamIndex); end && position >= *end) {
+        position = std::max<std::int64_t>(0, *end - 1);
+    }
+    qCInfo(sunroomLogPlayback).noquote() << "event=playback.video_track_selected"
+                                         << "from=" + QString::number(m_selectedVideoStreamIndex)
+                                         << "to=" + QString::number(streamIndex)
+                                         << "positionUs=" + QString::number(position);
+    m_selectedVideoStreamIndex = streamIndex;
+    emit mediaTracksChanged();
+    restartAt(position, m_activeVideoDecodeCapability, false);
+}
+
+void MediaSession::selectAudioStream(int streamIndex) {
+    Q_ASSERT(QThread::currentThread() == thread());
+    if (!m_audioSink || (m_state != State::Opening && m_state != State::Ready) ||
+        streamIndex == m_selectedAudioStreamIndex ||
+        !m_audioTracks.canSelect(streamIndex)) {
+        return;
+    }
+    std::int64_t const position = m_state == State::Opening
+                                      ? m_requestedPositionMicroseconds
+                                      : mediaClockSnapshotAt(std::chrono::steady_clock::now()).positionMicroseconds;
+    qCInfo(sunroomLogPlayback).noquote() << "event=playback.audio_track_selected"
+                                         << "from=" + QString::number(m_selectedAudioStreamIndex)
+                                         << "to=" + QString::number(streamIndex)
+                                         << "positionUs=" + QString::number(position);
+    m_selectedAudioStreamIndex = streamIndex;
+    emit mediaTracksChanged();
+    restartAt(position, m_activeVideoDecodeCapability, false);
+}
+
 void MediaSession::startOpen(QUrl const& url, QString const& path, VideoHardwareDecodeCapability hardwareDecode) {
     startDecode(url, path, std::move(hardwareDecode), 0, true, false);
 }
@@ -477,6 +526,7 @@ void MediaSession::startDecode(QUrl const& url, QString const& path, VideoHardwa
     if (newMedia) {
         m_mediaUrl = url;
         m_displayName = QFileInfo(path).fileName();
+        resetMediaTracks();
         m_selectedSubtitleStreamIndex = -1;
         m_subtitleTracks.setTracks({}, -1);
         m_subtitleError.clear();
@@ -525,6 +575,8 @@ void MediaSession::startDecode(QUrl const& url, QString const& path, VideoHardwa
                             },
                     },
                 .decodeSelectedAudio = static_cast<bool>(m_audioSink),
+                .selectedVideoStreamIndex = m_selectedVideoStreamIndex,
+                .selectedAudioStreamIndex = m_selectedAudioStreamIndex,
                 .selectedSubtitleStreamIndex = m_selectedSubtitleStreamIndex,
             },
     });
@@ -709,7 +761,6 @@ void MediaSession::workerLoop(std::stop_token workerStopToken) {
                         m_audioOutputExpected = selection.audioOutputExpected;
                         m_audioOutputEndedWithoutFrames = false;
                         m_initialVideoDiagnostics = selection.videoDiagnostics;
-                        m_streamDiscoveryComplete = true;
                     }
                 }
                 qCInfo(sunroomLogPlayback).noquote()
@@ -719,6 +770,10 @@ void MediaSession::workerLoop(std::stop_token workerStopToken) {
                            QString(selection.audioStreamPresent ? QStringLiteral("true") : QStringLiteral("false"))
                     << "audioOutputExpected=" +
                            QString(selection.audioOutputExpected ? QStringLiteral("true") : QStringLiteral("false"))
+                    << "videoTracks=" + QString::number(selection.videoTracks.size())
+                    << "audioTracks=" + QString::number(selection.audioTracks.size())
+                    << "selectedVideo=" + QString::number(selection.selectedVideoStreamIndex)
+                    << "selectedAudio=" + QString::number(selection.selectedAudioStreamIndex)
                     << "subtitleTracks=" + QString::number(selection.subtitleTracks.size())
                     << "selectedSubtitle=" + QString::number(selection.subtitleConfiguration
                                                                  ? selection.subtitleConfiguration->streamIndex
@@ -729,18 +784,37 @@ void MediaSession::workerLoop(std::stop_token workerStopToken) {
                 QMetaObject::invokeMethod(
                     this,
                     [this, generation, configured = selection.subtitleConfiguration.has_value(),
-                     tracks = selection.subtitleTracks]() mutable {
+                     selectedVideo = selection.selectedVideoStreamIndex,
+                     selectedAudio = selection.selectedAudioStreamIndex, videoTracks = selection.videoTracks,
+                     audioTracks = selection.audioTracks, subtitleTracks = selection.subtitleTracks]() mutable {
                         if (generation != m_playbackGeneration) {
                             return;
+                        }
+                        m_selectedVideoStreamIndex = selectedVideo;
+                        m_videoTracks.setTracks(std::move(videoTracks));
+                        if (m_audioSink) {
+                            m_selectedAudioStreamIndex = selectedAudio;
+                            m_audioTracks.setTracks(std::move(audioTracks));
+                        } else {
+                            m_selectedAudioStreamIndex = -1;
+                            m_audioTracks.setTracks({});
                         }
                         if (configured) {
                             m_subtitleError.clear();
                         }
-                        m_subtitleTracks.setTracks(std::move(tracks), m_selectedSubtitleStreamIndex);
+                        m_subtitleTracks.setTracks(std::move(subtitleTracks), m_selectedSubtitleStreamIndex);
+                        emit mediaTracksChanged();
                         emit subtitleChanged();
+                        {
+                            std::lock_guard lock(m_streamDiscoveryMutex);
+                            if (m_streamDiscoveryGeneration != generation) {
+                                return;
+                            }
+                            m_streamDiscoveryComplete = true;
+                        }
+                        postFramesAvailable(generation);
                     },
                     Qt::QueuedConnection);
-                postFramesAvailable(generation);
             },
             FfmpegSubtitleOutputSink{
                 .submit =
@@ -977,6 +1051,7 @@ void MediaSession::failWithoutWorker(QUrl const& url, QString const& message) {
     m_mediaUrl = url;
     m_displayName = url.fileName();
     m_errorMessage = message;
+    resetMediaTracks();
     m_selectedSubtitleStreamIndex = -1;
     m_subtitleTracks.setTracks({}, -1);
     m_subtitleError.clear();
@@ -1055,6 +1130,14 @@ void MediaSession::resetDiagnostics() {
     m_seekable = false;
     m_durationMicroseconds.reset();
     m_timelineOrigin.reset();
+}
+
+void MediaSession::resetMediaTracks() {
+    m_selectedVideoStreamIndex = -1;
+    m_selectedAudioStreamIndex = -1;
+    m_videoTracks.setTracks({});
+    m_audioTracks.setTracks({});
+    emit mediaTracksChanged();
 }
 
 void MediaSession::resetPlayback(std::int64_t positionMicroseconds) {

@@ -1,0 +1,18 @@
+file = "sdr-bt709-mpegts-two-programs.ts"
+sha256 = "226362c45c587520e773f40174974112c96a95e551a95ca7f01dce707a4122a4"
+provenance = "Generated analytically for Sunroom; no external source media"
+purpose = "Two unrelated MPEG-TS programs for program-safe video and audio selection"
+generator = "FFmpeg 9.0-full_build-www.gyan.dev"
+license = "CC0-1.0"
+
+[generation]
+command = '''
+ffmpeg -hide_banner -loglevel error -nostdin -y -f lavfi -i "color=c=black:size=64x48:rate=2:duration=1,format=yuv420p" -f lavfi -i "color=c=white:size=64x48:rate=2:duration=1,format=yuv420p" -f lavfi -i "aevalsrc=0.25:s=48000:d=1" -f lavfi -i "aevalsrc=-0.25:s=48000:d=1" -map 0:v:0 -map 2:a:0 -map 1:v:0 -map 3:a:0 -c:v mpeg2video -g 1 -q:v 2 -c:a mp2 -b:a 128k -program "program_num=100:title=Main:st=0:st=1" -program "program_num=200:title=Other:st=2:st=3" -fflags +bitexact -flags:v +bitexact -flags:a +bitexact -map_metadata -1 sdr-bt709-mpegts-two-programs.ts
+'''
+
+[expected]
+program_100_streams = [0, 1]
+program_200_streams = [2, 3]
+
+[coverage]
+features = ["ffmpeg-program-boundary", "related-audio-selection", "cross-program-rejection"]

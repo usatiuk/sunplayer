@@ -64,6 +64,8 @@ qt_add_executable(sunroom_subtitle_source_tests
 qt_add_executable(sunroom_media_session_tests
         unit/playback/tst_MediaSession.cpp
         ../src/playback/CoalescedGenerationWake.h
+        ../src/playback/MediaTrackModel.cpp
+        ../src/playback/MediaTrackModel.h
         ../src/playback/MediaSession.cpp
         ../src/playback/MediaSession.h
         ../src/playback/VideoFrameQueue.cpp

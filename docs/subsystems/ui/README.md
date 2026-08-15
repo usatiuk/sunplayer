@@ -23,8 +23,9 @@ the controls, menu, sliders, or statistics panel need interaction.
 Its position/duration timeline performs seek through the session's
 generation-scoped restart boundary and previews the selected time while the
 scrubber is pressed. Session-lifetime volume and mute remain wired to the
-audio-output boundary; track and subtitle controls remain absent until those
-commands exist.
+audio-output boundary. The overflow menu exposes checked video, audio, and
+subtitle track lists backed by the session's observable selection state;
+unsupported embedded streams are disabled.
 
 The native presentation window handles non-repeating `F11`/`Escape` and gated
 Space play/pause because the redirected Quick window is not the active native
@@ -163,8 +164,8 @@ playback.
 Queue/frame counters plus audio-clock, PCM-occupancy, and underrun information
 live in an optional upper-right playback-statistics panel toggled from the
 transport menu. Diagnostics no longer occupy permanent space around the movie.
-Add track and subtitle controls only when their underlying commands and
-observable states exist.
+Video/audio track changes and subtitle changes all use their implemented
+session commands rather than QML-owned playback state.
 
 ## HDR Lab and diagnostics
 

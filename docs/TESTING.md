@@ -411,6 +411,14 @@ Initial additions should be narrowly tied to milestones:
 * A deterministic DTS/Matroska fixture exercises 512-sample audio frames in a
   millisecond stream time base. Two independent full decodes must preserve
   exactly 144,384 contiguous PCM frames without inventing silence.
+* A deterministic four-stream Matroska fixture interleaves two constant-luma
+  FFV1 streams, including a shorter alternate, and two opposite-polarity FLAC
+  streams. Decoder coverage proves initial and explicit stream selection from
+  actual pixels and PCM; session coverage proves same-position generation
+  replacement, endpoint clamping, play-intent preservation, and selection
+  retention through seek; QML coverage proves the checked menu wiring. A tiny
+  two-program MPEG-TS fixture proves that selection does not mix streams from
+  unrelated programs.
 * Four deterministic, four-frame Main10 HEVC elementary streams cover
   BT.2020 limited-range static HDR10/PQ with explicit mastering and content-
   light metadata, HLG, a two-scene HDR10+ sequence, and Dolby Vision Profile

@@ -1,11 +1,64 @@
 #pragma once
 
+#include <utility>
+
 #include <QAbstractListModel>
 #include <QObject>
 #include <QString>
 #include <QUrl>
 #include <QWindow>
 #include <QtQml/qqmlregistration.h>
+
+class ShellTestMediaTrackModel final : public QAbstractListModel {
+    Q_OBJECT
+
+  public:
+    enum Role {
+        LabelRole = Qt::UserRole + 1,
+        StreamIndexRole,
+        AvailableRole,
+    };
+
+    ShellTestMediaTrackModel(QString firstLabel, int firstIndex, QString secondLabel, int secondIndex,
+                             QObject* parent = nullptr)
+        : QAbstractListModel(parent), m_labels{std::move(firstLabel), std::move(secondLabel)},
+          m_streamIndexes{firstIndex, secondIndex} {}
+
+    int rowCount(QModelIndex const& parent = {}) const override { return parent.isValid() ? 0 : 2; }
+
+    QVariant data(QModelIndex const& index, int role) const override {
+        if (!index.isValid() || index.row() < 0 || index.row() >= 2) {
+            return {};
+        }
+        switch (role) {
+        case Qt::DisplayRole:
+        case LabelRole:
+            return m_labels[index.row()];
+        case StreamIndexRole:
+            return m_streamIndexes[index.row()];
+        case AvailableRole:
+            return true;
+        default:
+            return {};
+        }
+    }
+
+    QHash<int, QByteArray> roleNames() const override {
+        return {
+            {LabelRole, QByteArrayLiteral("label")},
+            {StreamIndexRole, QByteArrayLiteral("streamIndex")},
+            {AvailableRole, QByteArrayLiteral("available")},
+        };
+    }
+
+    bool contains(int streamIndex) const {
+        return m_streamIndexes[0] == streamIndex || m_streamIndexes[1] == streamIndex;
+    }
+
+  private:
+    QString m_labels[2];
+    int m_streamIndexes[2];
+};
 
 class ShellTestSubtitleTrackModel final : public QAbstractListModel {
     Q_OBJECT
@@ -293,6 +346,10 @@ class ShellTestMediaSession final : public QObject {
     Q_PROPERTY(qulonglong audioSubmittedFrames MEMBER m_audioSubmittedFrames NOTIFY audioDiagnosticsChanged)
     Q_PROPERTY(qulonglong audioPresentedFrames MEMBER m_audioPresentedFrames NOTIFY audioDiagnosticsChanged)
     Q_PROPERTY(qulonglong audioUnderrunFrames MEMBER m_audioUnderrunFrames NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(QAbstractItemModel* videoTracks READ videoTracks CONSTANT)
+    Q_PROPERTY(QAbstractItemModel* audioTracks READ audioTracks CONSTANT)
+    Q_PROPERTY(int selectedVideoStreamIndex READ selectedVideoStreamIndex NOTIFY mediaTracksChanged)
+    Q_PROPERTY(int selectedAudioStreamIndex READ selectedAudioStreamIndex NOTIFY mediaTracksChanged)
     Q_PROPERTY(QAbstractItemModel* subtitleTracks READ subtitleTracks CONSTANT)
     Q_PROPERTY(int selectedSubtitleStreamIndex READ selectedSubtitleStreamIndex NOTIFY subtitleChanged)
     Q_PROPERTY(QString subtitleError MEMBER m_subtitleError NOTIFY subtitleChanged)
@@ -321,7 +378,11 @@ class ShellTestMediaSession final : public QObject {
     };
     Q_ENUM(PlaybackInterruption)
 
-    explicit ShellTestMediaSession(QObject* parent) : QObject(parent) {}
+    explicit ShellTestMediaSession(QObject* parent)
+        : QObject(parent), m_videoTracks(QStringLiteral("English - Dark (ffv1, 96x64)"), 0,
+                                         QStringLiteral("Czech - Light (ffv1, 96x64, Default)"), 2, this),
+          m_audioTracks(QStringLiteral("English - Positive (flac, mono)"), 1,
+                        QStringLiteral("Czech - Negative (flac, mono, Default)"), 3, this) {}
 
     State state() const { return m_state; }
     bool hasFrame() const { return m_hasFrame; }
@@ -337,6 +398,10 @@ class ShellTestMediaSession final : public QObject {
     qlonglong durationMilliseconds() const { return m_durationMilliseconds; }
     qreal volume() const { return m_volume; }
     bool muted() const { return m_muted; }
+    QAbstractItemModel* videoTracks() { return &m_videoTracks; }
+    QAbstractItemModel* audioTracks() { return &m_audioTracks; }
+    int selectedVideoStreamIndex() const { return m_selectedVideoStreamIndex; }
+    int selectedAudioStreamIndex() const { return m_selectedAudioStreamIndex; }
     QAbstractItemModel* subtitleTracks() { return &m_subtitleTracks; }
     int selectedSubtitleStreamIndex() const { return m_selectedSubtitleStreamIndex; }
     int openCount() const { return m_openCount; }
@@ -418,6 +483,20 @@ class ShellTestMediaSession final : public QObject {
         m_positionMilliseconds = positionMilliseconds;
         emit timelineChanged();
     }
+    Q_INVOKABLE void selectVideoStream(int streamIndex) {
+        if (!m_videoTracks.contains(streamIndex)) {
+            return;
+        }
+        m_selectedVideoStreamIndex = streamIndex;
+        emit mediaTracksChanged();
+    }
+    Q_INVOKABLE void selectAudioStream(int streamIndex) {
+        if (!m_audioTracks.contains(streamIndex)) {
+            return;
+        }
+        m_selectedAudioStreamIndex = streamIndex;
+        emit mediaTracksChanged();
+    }
     Q_INVOKABLE void selectSubtitleStream(int streamIndex) {
         if (streamIndex != -1 && streamIndex != 2 && streamIndex != 3) {
             return;
@@ -434,6 +513,7 @@ class ShellTestMediaSession final : public QObject {
     void volumeChanged();
     void mutedChanged();
     void audioDiagnosticsChanged();
+    void mediaTracksChanged();
     void subtitleChanged();
 
   private:
@@ -460,6 +540,10 @@ class ShellTestMediaSession final : public QObject {
     qulonglong m_audioSubmittedFrames = 4'800;
     qulonglong m_audioPresentedFrames = 960;
     qulonglong m_audioUnderrunFrames = 0;
+    ShellTestMediaTrackModel m_videoTracks;
+    ShellTestMediaTrackModel m_audioTracks;
+    int m_selectedVideoStreamIndex = 2;
+    int m_selectedAudioStreamIndex = 3;
     ShellTestSubtitleTrackModel m_subtitleTracks;
     int m_selectedSubtitleStreamIndex = -1;
     QString m_subtitleError;

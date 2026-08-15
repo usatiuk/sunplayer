@@ -770,6 +770,76 @@ VideoPage {
             }
 
             Menu {
+                id: videoTrackMenu
+                objectName: "videoTrackMenu"
+                title: qsTr("Video track")
+
+                Instantiator {
+                    id: videoTrackInstantiator
+                    model: root.session.videoTracks
+
+                    delegate: MenuItem {
+                        objectName: "videoTrack_" + streamIndex
+                        required property string label
+                        required property int streamIndex
+                        required property bool available
+
+                        text: label
+                        enabled: available
+                        checkable: true
+                        checked: streamIndex === root.session.selectedVideoStreamIndex
+                        onTriggered: root.session.selectVideoStream(streamIndex)
+                    }
+
+                    onObjectAdded: (index, object) =>
+                        videoTrackMenu.insertItem(index, object)
+                    onObjectRemoved: (index, object) =>
+                        videoTrackMenu.removeItem(object)
+                }
+
+                MenuItem {
+                    visible: videoTrackInstantiator.count === 0
+                    text: qsTr("No video tracks available")
+                    enabled: false
+                }
+            }
+
+            Menu {
+                id: audioTrackMenu
+                objectName: "audioTrackMenu"
+                title: qsTr("Audio track")
+
+                Instantiator {
+                    id: audioTrackInstantiator
+                    model: root.session.audioTracks
+
+                    delegate: MenuItem {
+                        objectName: "audioTrack_" + streamIndex
+                        required property string label
+                        required property int streamIndex
+                        required property bool available
+
+                        text: label
+                        enabled: available
+                        checkable: true
+                        checked: streamIndex === root.session.selectedAudioStreamIndex
+                        onTriggered: root.session.selectAudioStream(streamIndex)
+                    }
+
+                    onObjectAdded: (index, object) =>
+                        audioTrackMenu.insertItem(index, object)
+                    onObjectRemoved: (index, object) =>
+                        audioTrackMenu.removeItem(object)
+                }
+
+                MenuItem {
+                    visible: audioTrackInstantiator.count === 0
+                    text: qsTr("No audio tracks available")
+                    enabled: false
+                }
+            }
+
+            Menu {
                 id: subtitleMenu
                 objectName: "subtitleMenu"
                 title: qsTr("Subtitles")

@@ -42,14 +42,14 @@ QHash<int, QByteArray> SubtitleTrackModel::roleNames() const {
     };
 }
 
-void SubtitleTrackModel::setTracks(std::vector<SubtitleTrackDescriptor> tracks, int selectedStreamIndex) {
+void SubtitleTrackModel::setTracks(std::vector<EmbeddedMediaStreamDescriptor> tracks, int selectedStreamIndex) {
     beginResetModel();
     m_entries.clear();
     m_entries.push_back({
         .label = QStringLiteral("Off"),
         .streamIndex = -1,
     });
-    for (SubtitleTrackDescriptor& track : tracks) {
+    for (EmbeddedMediaStreamDescriptor& track : tracks) {
         if (!track.isValid()) {
             continue;
         }

@@ -1,0 +1,26 @@
+file = "sdr-bt709-ffv1-multitrack-flac.mkv"
+sha256 = "16173e5884d6074962976112ebc6f789fc22cfb8b2ee1281bee4184ef683feac"
+provenance = "Generated analytically for Sunroom; no external source media"
+purpose = "Two distinguishable embedded video streams and two distinguishable embedded audio streams"
+generator = "FFmpeg 9.0-full_build-www.gyan.dev"
+license = "CC0-1.0"
+
+[generation]
+command = '''
+ffmpeg -hide_banner -loglevel error -nostdin -y -f lavfi -i "color=c=black:size=96x64:rate=4:duration=1.25,format=yuv420p,setparams=range=limited:color_primaries=bt709:color_trc=bt709:colorspace=bt709" -f lavfi -i "color=c=white:size=96x64:rate=4:duration=2,format=yuv420p,setparams=range=limited:color_primaries=bt709:color_trc=bt709:colorspace=bt709" -f lavfi -i "aevalsrc=0.25:s=48000:d=2" -f lavfi -i "aevalsrc=-0.25:s=48000:d=2" -map 0:v:0 -map 2:a:0 -map 1:v:0 -map 3:a:0 -c:v ffv1 -level 3 -coder 1 -context 1 -g 1 -threads:v 1 -c:a flac -compression_level 12 -sample_fmt s16 -disposition:v:0 0 -disposition:v:1 default -disposition:a:0 0 -disposition:a:1 default -metadata:s:v:0 language=eng -metadata:s:v:0 title=Dark -metadata:s:v:1 language=ces -metadata:s:v:1 title=Light -metadata:s:a:0 language=eng -metadata:s:a:0 title=Positive -metadata:s:a:1 language=ces -metadata:s:a:1 title=Negative -fflags +bitexact -flags:v +bitexact -flags:a +bitexact -map_metadata -1 sdr-bt709-ffv1-multitrack-flac.mkv
+'''
+
+[expected]
+duration_microseconds = 2000000
+dark_video_end_microseconds = 1250000
+video_streams = [0, 2]
+audio_streams = [1, 3]
+default_video_stream = 2
+default_audio_stream = 3
+dark_video_luma = 16
+light_video_luma = 235
+positive_audio_sample = 0.25
+negative_audio_sample = -0.25
+
+[coverage]
+features = ["embedded-track-discovery", "strict-video-selection", "strict-audio-selection", "decoded-output-identity", "shorter-video-switch"]

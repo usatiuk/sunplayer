@@ -62,6 +62,16 @@ position or the first frame after it. Paused seeks stay paused; playing seeks
 resume from the requested clock anchor. Rapid seeks use the existing
 latest-request replacement and stale-generation rejection.
 
+Embedded video/audio selection uses that same replacement boundary. The
+session records the concrete indexes reported by the initial probe, captures
+the current media clock when a different stream is chosen, and restarts the
+whole generation at that position. The other video/audio selection, subtitle
+selection, and play/pause intent remain unchanged. Selections survive seeks
+and graphics/decode recovery for the current media, but a new open resets them
+to FFmpeg's normal initial selection. If the current position is beyond a
+selected video's declared endpoint, the restart is clamped to that track's
+last representable instant.
+
 Early ordinary-playback frames remain queued, due frames are selected only at
 the presentation boundary, and if several frames are due only the newest is
 published while earlier due frames are counted as dropped. Decoder wakeups
@@ -215,6 +225,11 @@ exercise paused snapshots, multi-due dropping, and one authoritative declared
 session endpoint independently of the clock producer. Queue tests cover hard
 backpressure plus stop/generation wakeups;
 timeline tests cover valid, missing, repeated, and non-monotonic timestamps.
+
+The multitrack controlled-sink scenario proves that video-only and audio-only
+changes replace the generation at the current position, publish the requested
+pixels and PCM, preserve paused/playing intent, and retain
+both selections through a later seek.
 
 The controlled-sink session scenario crosses the production shared FFmpeg A/V
 operation, resampling, bounded PCM and frame queues, presented-audio position,

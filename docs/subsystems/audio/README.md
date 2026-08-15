@@ -220,10 +220,10 @@ device-frame position continues to advance while its media-frame mapping stays
 fixed, then resumes from the next real PCM frame. End-of-stream is
 generation-scoped so a stale decoder cannot finish a newer sink epoch.
 
-Application-level stream replacement is not implemented. Cubeb performs normal
-default-route migration while its monotonic logical position continues through
-the existing media/hold ledger. A disappearing endpoint may still cause an
-audible gap or skip; V1 does not claim gapless device migration.
+Application-level audio-device stream replacement is not implemented. Cubeb
+performs normal default-route migration while its monotonic logical position
+continues through the existing media/hold ledger. A disappearing endpoint may
+still cause an audible gap or skip; V1 does not claim gapless device migration.
 
 A later bounded recovery slice handles actual cubeb error or demonstrated
 no-progress by freezing the last confident media time, recreating only the

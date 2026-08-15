@@ -280,6 +280,7 @@ add_library(sunroom_media STATIC
         src/media/FfmpegHardwareDevice.h
         src/media/FfmpegMediaDecoder.cpp
         src/media/FfmpegMediaDecoder.h
+        src/media/MediaStreamTypes.h
         src/media/FfmpegVideoDecoder.cpp
         src/media/FfmpegVideoDecoder.h
         src/media/ffmpeg/FfmpegPacketRouter.cpp
@@ -406,6 +407,8 @@ endif ()
 
 qt_add_executable(sunroom
         src/playback/CoalescedGenerationWake.h
+        src/playback/MediaTrackModel.cpp
+        src/playback/MediaTrackModel.h
         src/playback/MediaSession.cpp
         src/playback/MediaSession.h
         src/playback/VideoFrameQueue.cpp

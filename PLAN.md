@@ -457,7 +457,7 @@ Documentation: `docs/subsystems/subtitles/`
 * [x] Play and pause controls
 * [x] Seek bar and timestamps
 * [x] Jump backward and forward
-* [ ] Audio-track selection
+* [x] Embedded video- and audio-track selection
 * [x] Subtitle-track selection
 * [x] Volume and mute
 * [x] Fullscreen

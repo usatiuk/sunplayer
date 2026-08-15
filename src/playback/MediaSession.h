@@ -21,6 +21,7 @@
 #include "media/FfmpegMediaDecoder.h"
 #include "media/FfmpegVideoDecoder.h"
 #include "playback/CoalescedGenerationWake.h"
+#include "playback/MediaTrackModel.h"
 #include "playback/VideoFrameQueue.h"
 #include "playback/VideoFrameScheduler.h"
 #include "subtitles/SubtitleSource.h"
@@ -64,6 +65,10 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     Q_PROPERTY(qulonglong audioSubmittedFrames READ audioSubmittedFrames NOTIFY audioDiagnosticsChanged)
     Q_PROPERTY(qulonglong audioPresentedFrames READ audioPresentedFrames NOTIFY audioDiagnosticsChanged)
     Q_PROPERTY(qulonglong audioUnderrunFrames READ audioUnderrunFrames NOTIFY audioDiagnosticsChanged)
+    Q_PROPERTY(QAbstractItemModel* videoTracks READ videoTracks CONSTANT)
+    Q_PROPERTY(QAbstractItemModel* audioTracks READ audioTracks CONSTANT)
+    Q_PROPERTY(int selectedVideoStreamIndex READ selectedVideoStreamIndex NOTIFY mediaTracksChanged)
+    Q_PROPERTY(int selectedAudioStreamIndex READ selectedAudioStreamIndex NOTIFY mediaTracksChanged)
     Q_PROPERTY(QAbstractItemModel* subtitleTracks READ subtitleTracks CONSTANT)
     Q_PROPERTY(int selectedSubtitleStreamIndex READ selectedSubtitleStreamIndex NOTIFY subtitleChanged)
     Q_PROPERTY(QString subtitleError READ subtitleError NOTIFY subtitleChanged)
@@ -139,6 +144,10 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     qulonglong audioPresentedFrames() const;
     qulonglong audioUnderrunFrames() const;
     std::optional<AudioPresentationSnapshot> currentAudioPresentation() const;
+    QAbstractItemModel* videoTracks();
+    QAbstractItemModel* audioTracks();
+    int selectedVideoStreamIndex() const;
+    int selectedAudioStreamIndex() const;
     QAbstractItemModel* subtitleTracks();
     int selectedSubtitleStreamIndex() const;
     QString subtitleError() const;
@@ -157,6 +166,8 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     void setVolume(qreal volume);
     void setMuted(bool muted);
     Q_INVOKABLE void seekToMilliseconds(qlonglong positionMilliseconds);
+    Q_INVOKABLE void selectVideoStream(int streamIndex);
+    Q_INVOKABLE void selectAudioStream(int streamIndex);
     Q_INVOKABLE void selectSubtitleStream(int streamIndex);
 
   signals:
@@ -166,6 +177,7 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     void volumeChanged();
     void mutedChanged();
     void audioDiagnosticsChanged();
+    void mediaTracksChanged();
     void subtitleChanged();
 
   private:
@@ -214,6 +226,7 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     bool enterReady(std::chrono::steady_clock::time_point now);
     void updateVideoSummary(QueuedVideoFrame const& frame);
     void monitorPlayback();
+    void resetMediaTracks();
 
     std::shared_ptr<DecodedVideoFrame const>
     selectFrameForPresentation(std::chrono::steady_clock::time_point now) override;
@@ -223,6 +236,8 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     std::shared_ptr<AudioSink> m_audioSink;
     DecodedVideoSource m_videoSource;
     SubtitleSource m_subtitleSource;
+    MediaTrackModel m_videoTracks;
+    MediaTrackModel m_audioTracks;
     SubtitleTrackModel m_subtitleTracks;
     VideoFrameQueue m_frameQueue;
     VideoFrameScheduler m_frameScheduler;
@@ -241,6 +256,8 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     std::int64_t m_graphicsRecoveryPositionMicroseconds = 0;
     bool m_graphicsRecoverySeeking = false;
     bool m_hardwareImportFallbackConsumed = false;
+    int m_selectedVideoStreamIndex = -1;
+    int m_selectedAudioStreamIndex = -1;
     int m_selectedSubtitleStreamIndex = -1;
     QString m_subtitleError;
     bool m_userWantsPlaying = true;

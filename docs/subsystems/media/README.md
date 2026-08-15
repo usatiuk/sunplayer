@@ -17,8 +17,12 @@ the system FFmpeg exposes VAAPI/DRM capability, but native-frame import is not
 implemented yet.
 
 The production `decodeMediaFrames()` operation accepts one restartable request,
-opens a local file, discovers selected video/audio streams and every embedded
-subtitle track, and continuously emits immutable media values.
+opens a local file, discovers every selectable embedded video and audio stream and every embedded subtitle stream,
+resolves optional requested video/audio stream indexes strictly, and
+continuously emits immutable media values. Stream indexes belong only to that
+opened demuxer; they are not persisted as media identities. When a container
+defines programs, the selectable video/audio set stays inside the selected
+video's program so unrelated timelines are not mixed.
 `decodeFirstVideoFrame()` is now only a focused-test
 adapter over that same implementation, so hardware negotiation, metadata,
 timestamp, EOF, and fallback behavior do not diverge.
@@ -288,3 +292,8 @@ short-audio fixture also verifies a clean video-only seek interval after
 selected audio has already ended. A no-presentation-consumer scenario proves
 the playback monitor drains the bounded frame mailbox so the shared demuxer
 and audio path keep making progress.
+
+A separate hashed two-second Matroska fixture interleaves two FFV1 video
+streams and two FLAC audio streams. Crossed explicit selections must change
+the decoded center-pixel luma and PCM polarity, while invalid or wrong-type
+stream indexes fail instead of falling back.
