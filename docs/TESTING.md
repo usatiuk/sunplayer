@@ -310,6 +310,17 @@ video and audio-clock presentation through both fullscreen transitions. Both
 report a process result and exit. Keep these modes small until scenarios need
 shared interactive command/event orchestration.
 
+The Player component scenario also checks the session-only other-display
+blanking menu command through a supported-capability window fake. It proves
+visibility and checked-state/property wiring, not native multi-monitor
+placement. The registered Windows fullscreen smoke enables the option and
+checks the real companion count, target screens, fullscreen/non-focusable
+flags, and destruction on exit. Acceptance still requires two physical Windows
+displays to confirm black pixel coverage, move the presentation window between
+displays, verify keyboard focus remains on Player, and disconnect/reconnect a
+secondary display. Do not substitute the QML fake or window-topology checks for
+that native evidence.
+
 ## Focused deterministic tests
 
 Use focused tests where the oracle is stronger than an end-to-end result:

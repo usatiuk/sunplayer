@@ -900,6 +900,16 @@ VideoPage {
                     root.showPlaybackDetails = !root.showPlaybackDetails
             }
 
+            MenuItem {
+                objectName: "blankOtherDisplaysMenuItem"
+                visible: root.windowCommands.otherDisplayBlankingAvailable
+                text: qsTr("Blank other displays in fullscreen")
+                checkable: true
+                checked: root.windowCommands.blankOtherDisplaysInFullscreen
+                onClicked: root.windowCommands.blankOtherDisplaysInFullscreen =
+                    !root.windowCommands.blankOtherDisplaysInFullscreen
+            }
+
             Menu {
                 id: videoTrackMenu
                 objectName: "videoTrackMenu"

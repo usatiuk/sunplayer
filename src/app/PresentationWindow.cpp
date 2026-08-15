@@ -4,11 +4,15 @@
 
 #include <QCoreApplication>
 #include <QCursor>
+#include <QGuiApplication>
 #include <QKeyEvent>
 #include <QMouseEvent>
+#include <QPainter>
 #include <QPlatformSurfaceEvent>
 #include <QQuickWindow>
+#include <QRasterWindow>
 #include <QResizeEvent>
+#include <QScreen>
 #include <QTimer>
 #include <QWheelEvent>
 
@@ -30,6 +34,27 @@
 #ifdef Q_OS_LINUX
 #include "platform/linux/LinuxWaylandWindowContext.h"
 #endif
+
+namespace {
+
+class OtherDisplayBlankingWindow final : public QRasterWindow {
+  public:
+    OtherDisplayBlankingWindow(QScreen& targetScreen, QWindow& presentationWindow) {
+        setTransientParent(&presentationWindow);
+        setFlags(Qt::Tool | Qt::FramelessWindowHint | Qt::WindowDoesNotAcceptFocus);
+        setScreen(&targetScreen);
+        setGeometry(targetScreen.geometry());
+        setCursor(QCursor(Qt::BlankCursor));
+    }
+
+  protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter painter(this);
+        painter.fillRect(QRect(QPoint(), size()), Qt::black);
+    }
+};
+
+} // namespace
 
 #ifdef Q_OS_LINUX
 PresentationWindow::PresentationWindow(LinuxWaylandWindowContext& windowContext)
@@ -69,7 +94,21 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
         if (state != Qt::WindowFullScreen) {
             m_restoreMaximizedAfterFullscreen = state == Qt::WindowMaximized;
         }
-        QTimer::singleShot(0, this, [this] { applyCursorVisibility(); });
+        QTimer::singleShot(0, this, [this] {
+            applyCursorVisibility();
+            updateOtherDisplayBlanking();
+        });
+    });
+    auto const scheduleDisplayBlankingUpdate = [this](QScreen*) {
+        QTimer::singleShot(0, this, [this] { updateOtherDisplayBlanking(); });
+    };
+    connect(this, &QWindow::screenChanged, this, scheduleDisplayBlankingUpdate);
+    connect(qGuiApp, &QGuiApplication::screenAdded, this, scheduleDisplayBlankingUpdate);
+    connect(qGuiApp, &QGuiApplication::screenRemoved, this, [this](QScreen*) {
+        // Remove any window associated with the departing screen before Qt
+        // relocates it to the primary screen, then rebuild after the screen list settles.
+        m_otherDisplayBlankingWindows.clear();
+        QTimer::singleShot(0, this, [this] { updateOtherDisplayBlanking(); });
     });
 
     setMinimumSize({760, 560});
@@ -131,6 +170,31 @@ bool PresentationWindow::windowShortcutsBlocked() const { return m_windowShortcu
 
 void PresentationWindow::setWindowShortcutsBlocked(bool blocked) { m_windowShortcutsBlocked = blocked; }
 
+bool PresentationWindow::otherDisplayBlankingAvailable() const {
+#ifdef Q_OS_WIN
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool PresentationWindow::blankOtherDisplaysInFullscreen() const { return m_blankOtherDisplaysInFullscreen; }
+
+void PresentationWindow::setBlankOtherDisplaysInFullscreen(bool enabled) {
+    if (enabled && !otherDisplayBlankingAvailable()) {
+        Q_ASSERT_X(false, "PresentationWindow::setBlankOtherDisplaysInFullscreen",
+                   "Other-display blanking is not enabled on this platform");
+        return;
+    }
+    if (enabled == m_blankOtherDisplaysInFullscreen) {
+        return;
+    }
+
+    m_blankOtherDisplaysInFullscreen = enabled;
+    updateOtherDisplayBlanking();
+    emit blankOtherDisplaysInFullscreenChanged();
+}
+
 WindowChromeController* PresentationWindow::windowChrome() { return &m_windowChrome; }
 
 void PresentationWindow::applyCursorVisibility() {
@@ -138,6 +202,28 @@ void PresentationWindow::applyCursorVisibility() {
         setCursor(QCursor(Qt::BlankCursor));
     } else {
         unsetCursor();
+    }
+}
+
+void PresentationWindow::updateOtherDisplayBlanking() {
+    m_otherDisplayBlankingWindows.clear();
+    if (!otherDisplayBlankingAvailable() || !m_blankOtherDisplaysInFullscreen ||
+        windowState() != Qt::WindowFullScreen) {
+        return;
+    }
+
+    QScreen* const presentationScreen = screen();
+    if (!presentationScreen) {
+        return;
+    }
+    for (QScreen* const targetScreen : QGuiApplication::screens()) {
+        if (targetScreen == presentationScreen) {
+            continue;
+        }
+
+        auto blankingWindow = std::make_unique<OtherDisplayBlankingWindow>(*targetScreen, *this);
+        blankingWindow->showFullScreen();
+        m_otherDisplayBlankingWindows.push_back(std::move(blankingWindow));
     }
 }
 

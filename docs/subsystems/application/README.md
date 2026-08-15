@@ -2,8 +2,8 @@
 
 ## Status
 
-The application shell is a single-window Windows, Apple-Silicon macOS, and
-native-Wayland presentation host with a thin QML `AppShell`, default Player
+The application shell is a single-presentation-window Windows, Apple-Silicon
+macOS, and native-Wayland host with a thin QML `AppShell`, default Player
 page, and retained HDR Lab. It establishes
 startup, object ownership, native presentation events, redirected Qt Quick
 input, the active video-viewport boundary, and asynchronous continuous local
@@ -24,7 +24,9 @@ Keep one native presentation window, one QML engine, and one redirected Qt
 Quick scene. The application layer owns their lifetime and the top-level
 connection to session services; page selection, viewport policy, and the
 retained HDR Lab belong to the UI subsystem. Canonical playback/session state
-does not live in the application window or QML page.
+does not live in the application window or QML page. Temporary raster-only
+companion windows may cover unused displays, but they never become
+presentation, graphics, media, or QML owners.
 
 ## Startup
 
@@ -153,6 +155,15 @@ fullscreen restores normal or maximized state without custom geometry, native
 window-style edits, display-mode switching, or exclusive fullscreen. Existing
 Qt resize, exposure, surface, and QRhi paths handle the asynchronous change.
 
+On Windows, a session-only QML command can ask `PresentationWindow` to blank
+the other displays whenever it is fullscreen. The window then owns one opaque
+black `QRasterWindow` per other `QScreen`; each is frameless, non-focusable,
+and tied to the presentation window without an always-on-top hint. The set is
+destroyed on fullscreen exit or when the command is disabled and rebuilt from
+Qt's current screen list after movement or hotplug. The same code uses only
+public Qt window APIs, but the capability remains hidden on macOS and Wayland
+until those native behaviors are validated.
+
 The current forwarding is incomplete for a player shell. Touch, tablet, input
 methods, accessibility, drag-and-drop, and file-open events remain deferred.
 
@@ -209,6 +220,8 @@ Viewport, active-source routing, and media-session lifecycle have focused Qt
 Test targets. A Qt Quick component target verifies root initial-property
 handoff, all four initial Player states, cancel/retry/close command wiring,
 Player/HDR-Lab route selection, and active-page viewport publication.
+It also verifies the other-display blanking command's availability and
+checked-state binding through the QML window-command boundary.
 The current Player executable has a registered no-window mode that loads its
 packaged QML module with production type registrations. A Windows-only native
 message probe verifies that the real presentation window paints its initial
@@ -229,6 +242,13 @@ output, or route-change evidence. The scenarios exercise startup, initial
 playback wiring, and fullscreen;
 broader command,
 error, shutdown, and packaged-install scenarios remain future work.
+
+On Windows, the fullscreen scenario enables display blanking and checks that
+one non-focusable fullscreen companion appears on every other Qt screen, that
+the presentation screen is skipped, and that the companions disappear after
+both fullscreen exits. This proves the real native window lifecycle but not
+black pixel coverage or live movement and hotplug; those require a physical
+two-display check.
 
 Repeated visible Windows cold starts in SDR and HDR desktop modes remain the
 complete physical matrix that no compositor/DWM transient escapes the native

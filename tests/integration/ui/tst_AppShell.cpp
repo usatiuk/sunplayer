@@ -135,6 +135,8 @@ void AppShellTest::publishesActiveViewport() {
     QObject* const audioDiagnosticsLabel = rootItem->findChild<QObject*>(QStringLiteral("audioDiagnosticsLabel"));
     QObject* const playbackStateLabel = rootItem->findChild<QObject*>(QStringLiteral("playbackStateLabel"));
     QObject* const playbackDetailsMenuItem = rootItem->findChild<QObject*>(QStringLiteral("playbackDetailsMenuItem"));
+    QObject* const blankOtherDisplaysMenuItem =
+        rootItem->findChild<QObject*>(QStringLiteral("blankOtherDisplaysMenuItem"));
     QObject* const selectedVideoDetailsLabel =
         rootItem->findChild<QObject*>(QStringLiteral("selectedVideoDetailsLabel"));
     QObject* const videoSignalDetailsLabel = rootItem->findChild<QObject*>(QStringLiteral("videoSignalDetailsLabel"));
@@ -195,6 +197,7 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(audioDiagnosticsLabel);
     QVERIFY(playbackStateLabel);
     QVERIFY(playbackDetailsMenuItem);
+    QVERIFY(blankOtherDisplaysMenuItem);
     QVERIFY(selectedVideoDetailsLabel);
     QVERIFY(videoSignalDetailsLabel);
     QVERIFY(selectedAudioDetailsLabel);
@@ -435,6 +438,22 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(QMetaObject::invokeMethod(transportMenu, "open", Qt::DirectConnection));
     QTRY_VERIFY(transportMenu->property("visible").toBool());
     QTRY_VERIFY(windowCommands.windowShortcutsBlocked());
+    windowCommands.setOtherDisplayBlankingAvailable(false);
+    QTRY_VERIFY(!blankOtherDisplaysMenuItem->property("visible").toBool());
+    windowCommands.setOtherDisplayBlankingAvailable(true);
+    QTRY_VERIFY(blankOtherDisplaysMenuItem->property("visible").toBool());
+    QVERIFY(!blankOtherDisplaysMenuItem->property("checked").toBool());
+    QVERIFY(!windowCommands.blankOtherDisplaysInFullscreen());
+    windowCommands.setBlankOtherDisplaysInFullscreen(true);
+    QTRY_VERIFY(blankOtherDisplaysMenuItem->property("checked").toBool());
+    windowCommands.setBlankOtherDisplaysInFullscreen(false);
+    QTRY_VERIFY(!blankOtherDisplaysMenuItem->property("checked").toBool());
+    QVERIFY(QMetaObject::invokeMethod(blankOtherDisplaysMenuItem, "clicked", Qt::DirectConnection));
+    QVERIFY(windowCommands.blankOtherDisplaysInFullscreen());
+    QTRY_VERIFY(blankOtherDisplaysMenuItem->property("checked").toBool());
+    QVERIFY(QMetaObject::invokeMethod(blankOtherDisplaysMenuItem, "clicked", Qt::DirectConnection));
+    QVERIFY(!windowCommands.blankOtherDisplaysInFullscreen());
+    QTRY_VERIFY(!blankOtherDisplaysMenuItem->property("checked").toBool());
     QCOMPARE(mediaSession.selectedVideoStreamIndex(), 2);
     QVERIFY(QMetaObject::invokeMethod(videoDarkItem, "triggered", Qt::DirectConnection));
     QTRY_COMPARE(mediaSession.selectedVideoStreamIndex(), 0);

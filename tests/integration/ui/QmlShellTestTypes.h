@@ -165,6 +165,10 @@ class ShellTestWindowCommands final : public QWindow {
     QML_UNCREATABLE("Test commands are supplied by the component harness")
     Q_PROPERTY(bool cursorHidden READ cursorHidden WRITE setCursorHidden)
     Q_PROPERTY(bool windowShortcutsBlocked READ windowShortcutsBlocked WRITE setWindowShortcutsBlocked)
+    Q_PROPERTY(bool otherDisplayBlankingAvailable READ otherDisplayBlankingAvailable NOTIFY
+                   otherDisplayBlankingAvailableChanged)
+    Q_PROPERTY(bool blankOtherDisplaysInFullscreen READ blankOtherDisplaysInFullscreen WRITE
+                   setBlankOtherDisplaysInFullscreen NOTIFY blankOtherDisplaysInFullscreenChanged)
     Q_PROPERTY(QObject* windowChrome READ windowChrome CONSTANT)
 
   public:
@@ -175,6 +179,22 @@ class ShellTestWindowCommands final : public QWindow {
     void setCursorHidden(bool hidden) { m_cursorHidden = hidden; }
     bool windowShortcutsBlocked() const { return m_windowShortcutsBlocked; }
     void setWindowShortcutsBlocked(bool blocked) { m_windowShortcutsBlocked = blocked; }
+    bool otherDisplayBlankingAvailable() const { return m_otherDisplayBlankingAvailable; }
+    void setOtherDisplayBlankingAvailable(bool available) {
+        if (available == m_otherDisplayBlankingAvailable) {
+            return;
+        }
+        m_otherDisplayBlankingAvailable = available;
+        emit otherDisplayBlankingAvailableChanged();
+    }
+    bool blankOtherDisplaysInFullscreen() const { return m_blankOtherDisplaysInFullscreen; }
+    void setBlankOtherDisplaysInFullscreen(bool enabled) {
+        if (enabled == m_blankOtherDisplaysInFullscreen) {
+            return;
+        }
+        m_blankOtherDisplaysInFullscreen = enabled;
+        emit blankOtherDisplaysInFullscreenChanged();
+    }
 
     void reset() { m_toggleCount = 0; }
 
@@ -183,11 +203,17 @@ class ShellTestWindowCommands final : public QWindow {
     Q_INVOKABLE void toggleFullscreen() { ++m_toggleCount; }
     QObject* windowChrome() { return &m_windowChrome; }
 
+  signals:
+    void otherDisplayBlankingAvailableChanged();
+    void blankOtherDisplaysInFullscreenChanged();
+
   private:
     ShellTestWindowChromeController m_windowChrome;
     int m_toggleCount = 0;
     bool m_cursorHidden = false;
     bool m_windowShortcutsBlocked = false;
+    bool m_otherDisplayBlankingAvailable = true;
+    bool m_blankOtherDisplaysInFullscreen = false;
 };
 
 class ShellTestPresentationOutputState final : public QObject {

@@ -463,6 +463,7 @@ Documentation: `docs/subsystems/subtitles/`
 * [x] Subtitle-track selection
 * [x] Volume and mute
 * [x] Fullscreen
+* [x] Session-only Windows fullscreen blanking of other displays
 * [x] Continuous video loading and media error presentation
 * [x] Initial audio-buffering status presentation
 * [ ] General source-buffering presentation

@@ -112,6 +112,34 @@ void sendMouseDoubleClick(PresentationWindow& window, QPointF const& position) {
     send(QEvent::MouseButtonRelease, Qt::NoButton);
 }
 
+qsizetype otherDisplayBlankingWindowCount(PresentationWindow const& presentationWindow) {
+    qsizetype count = 0;
+    for (QWindow const* const window : QGuiApplication::topLevelWindows()) {
+        if (window->transientParent() == &presentationWindow) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+bool otherDisplayBlankingReady(PresentationWindow const& presentationWindow) {
+    QList<QScreen*> remainingScreens = QGuiApplication::screens();
+    remainingScreens.removeOne(presentationWindow.screen());
+    for (QWindow const* const window : QGuiApplication::topLevelWindows()) {
+        if (window->transientParent() != &presentationWindow) {
+            continue;
+        }
+        if (!window->isVisible() || window->windowState() != Qt::WindowFullScreen ||
+            !remainingScreens.removeOne(window->screen()) || window->type() != Qt::Tool ||
+            !window->flags().testFlag(Qt::FramelessWindowHint) ||
+            !window->flags().testFlag(Qt::WindowDoesNotAcceptFocus) ||
+            window->flags().testFlag(Qt::WindowStaysOnTopHint)) {
+            return false;
+        }
+    }
+    return remainingScreens.isEmpty();
+}
+
 enum class FullscreenSmokeStage {
     InitialFrame,
     FullscreenFromNormal,
@@ -129,6 +157,7 @@ struct FullscreenSmokeState {
     qulonglong frameBaseline = 0;
     std::uint64_t initialAudioPresentedFrames = 0;
     std::uint64_t audioOutputEpoch = 0;
+    bool blankingDisableCycleCompleted = false;
 };
 
 void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& window) {
@@ -151,10 +180,11 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
         std::fprintf(stderr,
                      "Sunroom fullscreen smoke timed out: stage=%d, "
                      "windowState=%d, presentedFrames=%llu, "
-                     "cursorHidden=%d, cursorShape=%d\n",
+                     "cursorHidden=%d, cursorShape=%d, blankingWindows=%lld\n",
                      static_cast<int>(state->stage), static_cast<int>(window.windowState()),
                      static_cast<unsigned long long>(state->presentedFrames), window.cursorHidden() ? 1 : 0,
-                     static_cast<int>(window.cursor().shape()));
+                     static_cast<int>(window.cursor().shape()),
+                     static_cast<long long>(otherDisplayBlankingWindowCount(window)));
         std::fflush(stderr);
         app.exit(EXIT_FAILURE);
     });
@@ -184,6 +214,19 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
             }
             state->initialAudioPresentedFrames = audio->presentedFrames;
             state->audioOutputEpoch = audio->audioOutputEpoch;
+#ifdef Q_OS_WIN
+            if (!window.otherDisplayBlankingAvailable()) {
+                std::fprintf(stderr, "Sunroom fullscreen smoke failed: Windows display blanking is unavailable\n");
+                std::fflush(stderr);
+                deadline->stop();
+                poll->stop();
+                app.exit(EXIT_FAILURE);
+                return;
+            }
+#endif
+            if (window.otherDisplayBlankingAvailable()) {
+                window.setBlankOtherDisplaysInFullscreen(true);
+            }
             waitForNextFrame();
             sendKeyClick(window, Qt::Key_F11);
             state->stage = FullscreenSmokeStage::FullscreenFromNormal;
@@ -191,7 +234,17 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
         }
         case FullscreenSmokeStage::FullscreenFromNormal:
             if (window.windowState() != Qt::WindowFullScreen || !window.cursorHidden() ||
-                window.cursor().shape() != Qt::BlankCursor || !hasNewFrame()) {
+                window.cursor().shape() != Qt::BlankCursor || !hasNewFrame() ||
+                (window.otherDisplayBlankingAvailable() && !otherDisplayBlankingReady(window))) {
+                return;
+            }
+            if (window.otherDisplayBlankingAvailable() && !state->blankingDisableCycleCompleted) {
+                window.setBlankOtherDisplaysInFullscreen(false);
+                if (otherDisplayBlankingWindowCount(window) != 0) {
+                    return;
+                }
+                window.setBlankOtherDisplaysInFullscreen(true);
+                state->blankingDisableCycleCompleted = true;
                 return;
             }
             waitForNextFrame();
@@ -213,7 +266,8 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
             state->stage = FullscreenSmokeStage::RestoredNormal;
             return;
         case FullscreenSmokeStage::RestoredNormal:
-            if (window.windowState() != Qt::WindowNoState || !hasNewFrame()) {
+            if (window.windowState() != Qt::WindowNoState || !hasNewFrame() ||
+                otherDisplayBlankingWindowCount(window) != 0) {
                 return;
             }
             waitForNextFrame();
@@ -286,7 +340,8 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
             state->stage = FullscreenSmokeStage::FullscreenFromMaximized;
             return;
         case FullscreenSmokeStage::FullscreenFromMaximized:
-            if (window.windowState() != Qt::WindowFullScreen || !hasNewFrame()) {
+            if (window.windowState() != Qt::WindowFullScreen || !hasNewFrame() ||
+                (window.otherDisplayBlankingAvailable() && !otherDisplayBlankingReady(window))) {
                 return;
             }
             waitForNextFrame();
@@ -297,17 +352,22 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
             auto const audio = window.mediaSession().currentAudioPresentation();
             if (window.windowState() != Qt::WindowMaximized || !hasNewFrame() || !audio ||
                 audio->audioOutputEpoch != state->audioOutputEpoch ||
-                audio->presentedFrames <= state->initialAudioPresentedFrames) {
+                audio->presentedFrames <= state->initialAudioPresentedFrames ||
+                otherDisplayBlankingWindowCount(window) != 0) {
                 return;
             }
-            qCInfo(sunroomLogApplication).noquote() << "event=application.fullscreen_smoke_complete"
-                                                    << "audioBackend=" + window.mediaSession().audioBackend()
-                                                    << "audioPresented=" + QString::number(audio->presentedFrames);
+            window.setBlankOtherDisplaysInFullscreen(false);
+            qCInfo(sunroomLogApplication).noquote()
+                << "event=application.fullscreen_smoke_complete"
+                << "audioBackend=" + window.mediaSession().audioBackend()
+                << "audioPresented=" + QString::number(audio->presentedFrames)
+                << "screenCount=" + QString::number(QGuiApplication::screens().size());
             QByteArray const backend = window.mediaSession().audioBackend().toUtf8();
             std::fprintf(stdout,
                          "Sunroom fullscreen smoke passed: "
-                         "audioBackend=%s, audioPresented=%llu\n",
-                         backend.constData(), static_cast<unsigned long long>(audio->presentedFrames));
+                         "audioBackend=%s, audioPresented=%llu, screenCount=%lld\n",
+                         backend.constData(), static_cast<unsigned long long>(audio->presentedFrames),
+                         static_cast<long long>(QGuiApplication::screens().size()));
             std::fflush(stdout);
             deadline->stop();
             poll->stop();

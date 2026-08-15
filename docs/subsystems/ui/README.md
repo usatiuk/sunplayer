@@ -25,7 +25,10 @@ generation-scoped restart boundary and previews the selected time while the
 scrubber is pressed. Session-lifetime volume and mute remain wired to the
 audio-output boundary. The overflow menu exposes checked video, audio, and
 subtitle track lists backed by the session's observable selection state;
-unsupported embedded streams are disabled.
+unsupported embedded streams are disabled. On Windows, the same menu has a
+session-only checked action to blank every other display while Player is
+fullscreen. It is hidden on other platforms for now and creates no persistent
+preference.
 
 The native presentation window handles non-repeating `F11`/`Escape` and gated
 Space play/pause because the redirected Quick window is not the active native
@@ -229,7 +232,10 @@ preparing state disappears after frame publication. It also verifies full-page
 Player geometry, timeline formatting, scrub-preview time, relative and slider
 seek commands, backend position updates, disabled seeking state, fullscreen
 gesture dispatch, popup Escape priority state, island hit testing, and
-native-cursor intent without launching a native dialog. The shell test also
+native-cursor intent without launching a native dialog. The window-command
+fake additionally proves the Windows-only menu action's visibility and
+two-way checked-state binding; it does not claim physical monitor coverage.
+The shell test also
 checks disabled, normal, maximized, and fullscreen application-chrome state;
 stable empty-page inset; full-root, media-independent outline visibility and
 DPR-derived thickness; and the invariant that title fade never moves an active
@@ -254,7 +260,11 @@ The Windows-registered fullscreen application scenario additionally crosses
 the real window, QRhi swapchain, QML, media, and video-presentation boundaries
 while driving native F11, Escape, Space, and redirected background double-click
 input and checking normal/maximized restoration, cursor hiding, and one
-advancing cubeb audio epoch. Linux runs it explicitly and non-gating while its
+advancing cubeb audio epoch. On Windows it also enables other-display blanking
+and checks the native companion count, target screens, fullscreen flags, focus
+policy, and destruction on exit. A two-display Windows check is still required
+for black pixel coverage, presentation-screen movement, and hotplug behavior.
+Linux runs it explicitly and non-gating while its
 current WSLg buffer/configure failure remains unresolved.
 
 On Apple M2/macOS 26, the registered playback scenario crosses the production
