@@ -1,14 +1,14 @@
 # Pinned color-pipeline source verification
 
 * Date: 2026-08-01
-* Scope: FFmpeg 8.1.2 and libplacebo 7.360.1 as pinned by Sunroom
+* Scope: FFmpeg 8.1.2 and libplacebo 7.360.1 as pinned by SunPlayer
 * Related input:
   [Video-rendering and color-management milestone review](2026-08-01-color.md)
 
 ## Question
 
 Which claims from the broader color-management review are supported by the
-exact dependency versions and build configuration used by Sunroom, and which
+exact dependency versions and build configuration used by SunPlayer, and which
 claims need narrower wording or an experiment?
 
 ## Sources inspected
@@ -21,7 +21,7 @@ source/configuration. Relevant implementation points were:
   and libav helper headers, and generated build configuration;
 * FFmpeg `libavcodec/decode.c`, codec-parameter/context propagation, frame side
   data, and the installed feature configuration;
-* Sunroom's current FFmpeg-frame importer, D3D11 importer, presentation target,
+* SunPlayer's current FFmpeg-frame importer, D3D11 importer, presentation target,
   and compositor boundaries.
 
 ## Confirmed findings
@@ -91,7 +91,7 @@ not private branch behavior.
 FFmpeg 8.1.2 propagates common scalar color fields and coded side data through
 codec parameters and the codec context. Its decode core fills unspecified
 frame fields from the context while retaining explicit decoder-provided frame
-values. By the time Sunroom receives the final `AVFrame`, it cannot reliably
+values. By the time SunPlayer receives the final `AVFrame`, it cannot reliably
 distinguish those two origins.
 
 Consequently, provenance must say “final FFmpeg-decoded frame value, possibly
@@ -106,11 +106,11 @@ subset and may overwrite already valid HDR fields.
 
 `pl_map_avframe_ex` retains an `AVFrame` reference until unmapping. Software
 upload callbacks can retain plane references, and reusable upload textures may
-outlive one mapping. Sunroom must still retain native hardware resources until
+outlive one mapping. SunPlayer must still retain native hardware resources until
 GPU consumption completes.
 
 The exact libplacebo helper has direct paths for DRM PRIME, VAAPI-derived DRM,
-and Vulkan frames. It does not make Sunroom's separate D3D11VA or future
+and Vulkan frames. It does not make SunPlayer's separate D3D11VA or future
 VideoToolbox importer seams redundant.
 
 ## ICC and display calibration
@@ -118,7 +118,7 @@ VideoToolbox importer seams redundant.
 The current libplacebo build has LCMS disabled, and the current FFmpeg build
 does not add LCMS processing. Embedded ICC bytes can be retained and exposed
 through mapped frame/profile state, but libplacebo currently falls back to
-scalar color tags rather than executing the ICC transform. Sunroom must not
+scalar color tags rather than executing the ICC transform. SunPlayer must not
 claim source-ICC rendering yet.
 
 Source ICC and display ICC are different responsibilities:
@@ -126,7 +126,7 @@ Source ICC and display ICC are different responsibilities:
 * Source ICC describes content and belongs before the shared working space.
 * Display ICC calibrates the final composed surface to a physical monitor.
 
-For modern managed paths, Sunroom should tag the presentation surface and let
+For modern managed paths, SunPlayer should tag the presentation surface and let
 the OS/compositor apply display calibration exactly once. This includes
 Windows Advanced Color, macOS ColorSync/EDR, and a supporting Wayland color
 management compositor. When Windows Advanced Color is inactive, ordinary

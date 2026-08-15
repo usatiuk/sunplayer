@@ -76,7 +76,7 @@ bool verifyInitialWindowBackground(PresentationWindow& window) {
         ReleaseDC(nullptr, screenDeviceContext);
     }
 
-    std::fprintf(passed ? stdout : stderr, "Sunroom initial window background verification %s.\n",
+    std::fprintf(passed ? stdout : stderr, "SunPlayer initial window background verification %s.\n",
                  passed ? "passed" : "failed");
     std::fflush(passed ? stdout : stderr);
     return passed;
@@ -171,14 +171,14 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
     QObject::connect(&window, &PresentationWindow::videoFramePresented, &app,
                      [state](qulonglong) { ++state->presentedFrames; });
     QObject::connect(deadline, &QTimer::timeout, &app, [&app, &window, state] {
-        qCCritical(sunroomLogApplication).noquote()
+        qCCritical(sunplayerLogApplication).noquote()
             << "event=application.fullscreen_smoke_timeout"
             << "stage=" + QString::number(static_cast<int>(state->stage))
             << "windowState=" + QString::number(static_cast<int>(window.windowState()))
             << "presentedFrames=" + QString::number(state->presentedFrames)
             << "error=" + window.mediaSession().errorMessage();
         std::fprintf(stderr,
-                     "Sunroom fullscreen smoke timed out: stage=%d, "
+                     "SunPlayer fullscreen smoke timed out: stage=%d, "
                      "windowState=%d, presentedFrames=%llu, "
                      "cursorHidden=%d, cursorShape=%d, blankingWindows=%lld\n",
                      static_cast<int>(state->stage), static_cast<int>(window.windowState()),
@@ -190,10 +190,10 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
     });
     QObject::connect(poll, &QTimer::timeout, &app, [&app, &window, state, deadline, poll] {
         if (window.mediaSession().state() == MediaSession::State::Error) {
-            qCCritical(sunroomLogApplication).noquote() << "event=application.fullscreen_smoke_failed"
+            qCCritical(sunplayerLogApplication).noquote() << "event=application.fullscreen_smoke_failed"
                                                         << "error=" + window.mediaSession().errorMessage();
             QByteArray const error = window.mediaSession().errorMessage().toUtf8();
-            std::fprintf(stderr, "Sunroom fullscreen smoke media failure: %s\n", error.constData());
+            std::fprintf(stderr, "SunPlayer fullscreen smoke media failure: %s\n", error.constData());
             std::fflush(stderr);
             deadline->stop();
             poll->stop();
@@ -216,7 +216,7 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
             state->audioOutputEpoch = audio->audioOutputEpoch;
 #ifdef Q_OS_WIN
             if (!window.otherDisplayBlankingAvailable()) {
-                std::fprintf(stderr, "Sunroom fullscreen smoke failed: Windows display blanking is unavailable\n");
+                std::fprintf(stderr, "SunPlayer fullscreen smoke failed: Windows display blanking is unavailable\n");
                 std::fflush(stderr);
                 deadline->stop();
                 poll->stop();
@@ -252,7 +252,7 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
             sendKeyClick(window, Qt::Key_Escape);
             if (window.windowState() != Qt::WindowFullScreen) {
                 std::fprintf(stderr,
-                             "Sunroom fullscreen smoke failed: blocked Escape "
+                             "SunPlayer fullscreen smoke failed: blocked Escape "
                              "changed state to %d\n",
                              static_cast<int>(window.windowState()));
                 std::fflush(stderr);
@@ -273,10 +273,10 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
             waitForNextFrame();
             sendAutoRepeatKeyPress(window, Qt::Key_F11);
             if (window.windowState() != Qt::WindowNoState) {
-                qCCritical(sunroomLogApplication).noquote() << "event=application.fullscreen_smoke_failed"
+                qCCritical(sunplayerLogApplication).noquote() << "event=application.fullscreen_smoke_failed"
                                                             << "reason=repeated_f11_changed_state";
                 std::fprintf(stderr,
-                             "Sunroom fullscreen smoke failed: "
+                             "SunPlayer fullscreen smoke failed: "
                              "repeated F11 changed state to %d\n",
                              static_cast<int>(window.windowState()));
                 std::fflush(stderr);
@@ -287,10 +287,10 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
             }
             sendKeyClick(window, Qt::Key_Escape);
             if (window.windowState() != Qt::WindowNoState) {
-                qCCritical(sunroomLogApplication).noquote() << "event=application.fullscreen_smoke_failed"
+                qCCritical(sunplayerLogApplication).noquote() << "event=application.fullscreen_smoke_failed"
                                                             << "reason=windowed_escape_changed_state";
                 std::fprintf(stderr,
-                             "Sunroom fullscreen smoke failed: "
+                             "SunPlayer fullscreen smoke failed: "
                              "windowed Escape changed state to %d\n",
                              static_cast<int>(window.windowState()));
                 std::fflush(stderr);
@@ -301,7 +301,7 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
             }
             sendKeyClick(window, Qt::Key_Space);
             if (window.mediaSession().playRequested()) {
-                std::fprintf(stderr, "Sunroom fullscreen smoke failed: "
+                std::fprintf(stderr, "SunPlayer fullscreen smoke failed: "
                                      "Space did not pause playback\n");
                 std::fflush(stderr);
                 deadline->stop();
@@ -314,7 +314,7 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
         case FullscreenSmokeStage::PausedBySpace:
             sendKeyClick(window, Qt::Key_Space);
             if (!window.mediaSession().playRequested()) {
-                std::fprintf(stderr, "Sunroom fullscreen smoke failed: "
+                std::fprintf(stderr, "SunPlayer fullscreen smoke failed: "
                                      "Space did not resume playback\n");
                 std::fflush(stderr);
                 deadline->stop();
@@ -357,14 +357,14 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
                 return;
             }
             window.setBlankOtherDisplaysInFullscreen(false);
-            qCInfo(sunroomLogApplication).noquote()
+            qCInfo(sunplayerLogApplication).noquote()
                 << "event=application.fullscreen_smoke_complete"
                 << "audioBackend=" + window.mediaSession().audioBackend()
                 << "audioPresented=" + QString::number(audio->presentedFrames)
                 << "screenCount=" + QString::number(QGuiApplication::screens().size());
             QByteArray const backend = window.mediaSession().audioBackend().toUtf8();
             std::fprintf(stdout,
-                         "Sunroom fullscreen smoke passed: "
+                         "SunPlayer fullscreen smoke passed: "
                          "audioBackend=%s, audioPresented=%llu, screenCount=%lld\n",
                          backend.constData(), static_cast<unsigned long long>(audio->presentedFrames),
                          static_cast<long long>(QGuiApplication::screens().size()));
@@ -397,11 +397,11 @@ int main(int argc, char* argv[]) {
 #endif
     QGuiApplication app(argc, argv);
     app.styleHints()->setColorScheme(Qt::ColorScheme::Dark);
-    QCoreApplication::setApplicationName(QStringLiteral("Sunroom"));
-    QCoreApplication::setApplicationVersion(QStringLiteral(SUNROOM_VERSION));
+    QCoreApplication::setApplicationName(QStringLiteral("SunPlayer"));
+    QCoreApplication::setApplicationVersion(QStringLiteral(SUNPLAYER_VERSION));
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(QStringLiteral("Sunroom HDR video player"));
+    parser.setApplicationDescription(QStringLiteral("SunPlayer HDR video player"));
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addPositionalArgument(QStringLiteral("media"), QStringLiteral("Local media file to open."),
@@ -417,12 +417,12 @@ int main(int argc, char* argv[]) {
     parser.addOption(verifyInitialBackgroundOption);
 #endif
     QCommandLineOption const debugLogOption(QStringLiteral("debug-log"),
-                                            QStringLiteral("Enable Sunroom debug logging in the session log."));
+                                            QStringLiteral("Enable SunPlayer debug logging in the session log."));
     parser.addOption(debugLogOption);
     QCommandLineOption const logFileOption(
         QStringLiteral("log-file"),
         QStringLiteral("Write the session log to local <path> instead of the temporary "
-                       "Sunroom log directory."),
+                       "SunPlayer log directory."),
         QStringLiteral("path"));
     parser.addOption(logFileOption);
     QCommandLineOption const noLogFileOption(
@@ -440,29 +440,29 @@ int main(int argc, char* argv[]) {
     parser.process(app);
 
     if (parser.isSet(logFileOption) && parser.isSet(noLogFileOption)) {
-        qCCritical(sunroomLogApplication).noquote() << "--log-file and --no-log-file cannot be used together.";
+        qCCritical(sunplayerLogApplication).noquote() << "--log-file and --no-log-file cannot be used together.";
         return EXIT_FAILURE;
     }
 
     QStringList const positionalArguments = parser.positionalArguments();
     if (parser.isSet(playbackSmokeOption) && parser.isSet(fullscreenSmokeOption)) {
-        qCCritical(sunroomLogApplication).noquote()
+        qCCritical(sunplayerLogApplication).noquote()
             << "--playback-smoke and --fullscreen-smoke are mutually exclusive.";
         return EXIT_FAILURE;
     }
     if (parser.isSet(playbackSmokeOption) && positionalArguments.size() != 1) {
-        qCCritical(sunroomLogApplication).noquote() << "--playback-smoke requires exactly one positional media file.";
+        qCCritical(sunplayerLogApplication).noquote() << "--playback-smoke requires exactly one positional media file.";
         return EXIT_FAILURE;
     }
     if (parser.isSet(fullscreenSmokeOption) && positionalArguments.size() != 1) {
-        qCCritical(sunroomLogApplication).noquote() << "--fullscreen-smoke requires exactly one positional media file.";
+        qCCritical(sunplayerLogApplication).noquote() << "--fullscreen-smoke requires exactly one positional media file.";
         return EXIT_FAILURE;
     }
 #ifdef Q_OS_WIN
     if (parser.isSet(verifyInitialBackgroundOption) &&
         (parser.isSet(verifyQmlOption) || parser.isSet(playbackSmokeOption) || parser.isSet(fullscreenSmokeOption) ||
          !positionalArguments.isEmpty())) {
-        qCCritical(sunroomLogApplication).noquote()
+        qCCritical(sunplayerLogApplication).noquote()
             << "--verify-initial-background cannot be combined with a media file or another application scenario.";
         return EXIT_FAILURE;
     }
@@ -476,22 +476,22 @@ int main(int argc, char* argv[]) {
     QString logError;
     std::unique_ptr<ApplicationLog> applicationLog = ApplicationLog::install(logOptions, &logError);
     if (!applicationLog && logOptions.fileEnabled) {
-        qCWarning(sunroomLogApplication).noquote() << logError << "- continuing without a session log file.";
+        qCWarning(sunplayerLogApplication).noquote() << logError << "- continuing without a session log file.";
         logOptions.fileEnabled = false;
         logOptions.filePath.clear();
         applicationLog = ApplicationLog::install(logOptions, &logError);
     }
     if (!applicationLog) {
-        qCWarning(sunroomLogApplication).noquote() << "Could not initialize application logging:" << logError;
+        qCWarning(sunplayerLogApplication).noquote() << "Could not initialize application logging:" << logError;
     } else {
-        qCInfo(sunroomLogApplication).noquote()
+        qCInfo(sunplayerLogApplication).noquote()
             << "event=application.start"
             << "version=" + QCoreApplication::applicationVersion()
             << "debug=" + QString(applicationLog->debugEnabled() ? QStringLiteral("true") : QStringLiteral("false"))
             << "file=" +
                    (applicationLog->filePath().isEmpty() ? QStringLiteral("disabled") : QStringLiteral("enabled"));
         if (!applicationLog->filePath().isEmpty()) {
-            qCDebug(sunroomLogApplication).noquote() << "event=application.log_file"
+            qCDebug(sunplayerLogApplication).noquote() << "event=application.log_file"
                                                      << "path=" + applicationLog->filePath();
         }
     }
@@ -515,7 +515,7 @@ int main(int argc, char* argv[]) {
 #ifdef Q_OS_WIN
         QString const deployedQmlPath = QLibraryInfo::path(QLibraryInfo::QmlImportsPath);
         if (!QFileInfo(deployedQmlPath).isDir()) {
-            qCCritical(sunroomLogApplication).noquote() << "Missing deployed QML directory:" << deployedQmlPath;
+            qCCritical(sunplayerLogApplication).noquote() << "Missing deployed QML directory:" << deployedQmlPath;
             return EXIT_FAILURE;
         }
 #endif
@@ -532,12 +532,12 @@ int main(int argc, char* argv[]) {
         engine.setImportPathList(importPaths);
 #endif
         QQmlComponent component(&engine);
-        component.loadFromModule(QStringLiteral("Sunroom"), QStringLiteral("Main"));
+        component.loadFromModule(QStringLiteral("SunPlayer"), QStringLiteral("Main"));
         if (component.isError()) {
-            qCCritical(sunroomLogApplication).noquote() << component.errorString();
+            qCCritical(sunplayerLogApplication).noquote() << component.errorString();
             return EXIT_FAILURE;
         }
-        qCInfo(sunroomLogApplication).noquote() << "event=application.verify_qml_complete";
+        qCInfo(sunplayerLogApplication).noquote() << "event=application.verify_qml_complete";
         return EXIT_SUCCESS;
     }
 
@@ -571,7 +571,7 @@ int main(int argc, char* argv[]) {
                          [&app, &window, &firstVideoContentRevision, &distinctVideoContentPresented] {
                              MediaSession const& session = window.mediaSession();
                              auto const audio = session.currentAudioPresentation();
-                             qCCritical(sunroomLogApplication).noquote()
+                             qCCritical(sunplayerLogApplication).noquote()
                                  << "event=application.playback_smoke_timeout"
                                  << "state=" + QString::number(static_cast<int>(session.state()))
                                  << "hasFrame=" +
@@ -579,7 +579,7 @@ int main(int argc, char* argv[]) {
                                  << "positionMs=" + QString::number(session.positionMilliseconds())
                                  << "error=" + session.errorMessage();
                              std::fprintf(stderr,
-                                          "Sunroom playback smoke timed out: state=%d, "
+                                          "SunPlayer playback smoke timed out: state=%d, "
                                           "hasFrame=%d, positionMs=%lld, "
                                           "audioPresented=%llu, audioValid=%d, "
                                           "firstVideoRevision=%llu, "
@@ -611,11 +611,11 @@ int main(int argc, char* argv[]) {
                           &distinctVideoContentPresented, &firstPresentedPositionMilliseconds] {
                              MediaSession const& session = window.mediaSession();
                              if (session.state() == MediaSession::State::Error) {
-                                 qCCritical(sunroomLogApplication).noquote()
+                                 qCCritical(sunplayerLogApplication).noquote()
                                      << "event=application.playback_smoke_failed"
                                      << "error=" + session.errorMessage();
                                  QByteArray const error = session.errorMessage().toUtf8();
-                                 std::fprintf(stderr, "Sunroom playback smoke failed: %s\n", error.constData());
+                                 std::fprintf(stderr, "SunPlayer playback smoke failed: %s\n", error.constData());
                                  std::fflush(stderr);
                                  playbackSmokeDeadline.stop();
                                  playbackSmokePoll.stop();
@@ -632,14 +632,14 @@ int main(int argc, char* argv[]) {
                                  return;
                              }
 
-                             qCInfo(sunroomLogApplication).noquote()
+                             qCInfo(sunplayerLogApplication).noquote()
                                  << "event=application.playback_smoke_complete"
                                  << "positionMs=" + QString::number(position)
                                  << "audioBackend=" + session.audioBackend()
                                  << "audioPresented=" + QString::number(audio->presentedFrames);
                              QByteArray const backend = session.audioBackend().toUtf8();
                              std::fprintf(stdout,
-                                          "Sunroom playback smoke passed: positionMs=%lld, "
+                                          "SunPlayer playback smoke passed: positionMs=%lld, "
                                           "audioBackend=%s, audioPresented=%llu\n",
                                           static_cast<long long>(position), backend.constData(),
                                           static_cast<unsigned long long>(audio->presentedFrames));
@@ -657,7 +657,7 @@ int main(int argc, char* argv[]) {
     window.show();
 
     int const exitCode = app.exec();
-    qCInfo(sunroomLogApplication).noquote() << "event=application.stop"
+    qCInfo(sunplayerLogApplication).noquote() << "event=application.stop"
                                             << "exitCode=" + QString::number(exitCode);
     return exitCode;
 }

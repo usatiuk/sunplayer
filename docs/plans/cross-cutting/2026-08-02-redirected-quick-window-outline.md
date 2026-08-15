@@ -73,7 +73,7 @@ window. Its code was reverted before this plan began.
 Run from clean build directories where practical:
 
 * Configure and build the Linux Debug tree with tests enabled.
-* Run `sunroom_qmllint`, the focused `qml-shell` test, packaged-QML
+* Run `sunplayer_qmllint`, the focused `qml-shell` test, packaged-QML
   verification, and then the complete Linux CTest set.
 * Configure/build/install Release and verify the installed QML module.
 * Run the bounded native-Wayland production scenario under Vulkan standard and
@@ -136,12 +136,12 @@ viewport, and hides in fullscreen.
 The final working tree passed:
 
 ```sh
-cmake -S . -B /tmp/sunroom-outline-debug -G Ninja \
+cmake -S . -B /tmp/sunplayer-outline-debug -G Ninja \
   -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
-cmake --build /tmp/sunroom-outline-debug --parallel 2
-ctest --test-dir /tmp/sunroom-outline-debug \
+cmake --build /tmp/sunplayer-outline-debug --parallel 2
+ctest --test-dir /tmp/sunplayer-outline-debug \
   --output-on-failure --parallel 2
-cmake --build /tmp/sunroom-outline-debug \
+cmake --build /tmp/sunplayer-outline-debug \
   --parallel 2 --target all_qmllint
 ```
 
@@ -150,12 +150,12 @@ All 24 CTests and both QML lint targets passed.
 The installed Release path also passed:
 
 ```sh
-cmake -S . -B /tmp/sunroom-outline-release -G Ninja \
+cmake -S . -B /tmp/sunplayer-outline-release -G Ninja \
   -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
-  -DCMAKE_INSTALL_PREFIX=/tmp/sunroom-outline-install
-cmake --build /tmp/sunroom-outline-release --parallel 2
-cmake --install /tmp/sunroom-outline-release
-/tmp/sunroom-outline-install/bin/sunroom \
+  -DCMAKE_INSTALL_PREFIX=/tmp/sunplayer-outline-install
+cmake --build /tmp/sunplayer-outline-release --parallel 2
+cmake --install /tmp/sunplayer-outline-release
+/tmp/sunplayer-outline-install/bin/sunplayer \
   --verify-qml --no-log-file
 ```
 
@@ -165,7 +165,7 @@ under the Khronos standard and synchronization validation layers:
 ```sh
 VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation \
 VK_LAYER_VALIDATE_SYNC=1 \
-  /tmp/sunroom-outline-install/bin/sunroom \
+  /tmp/sunplayer-outline-install/bin/sunplayer \
   --fullscreen-smoke --no-log-file \
   tests/fixtures/media/sdr-bt709-ffv1-video-late-flac.mkv
 ```

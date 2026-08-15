@@ -164,7 +164,7 @@ playback:
   and presents software-decoded video through the shared direct RGBA16F target
   and redirected QML compositor. Missing managed-color capability selects
   unmanaged assumed-sRGB. A complete version-2 managed-HDR set selects a
-  Sunroom-declared BT.2020/PQ surface with RGB10A2 HDR10 presentation, stable
+  SunPlayer-declared BT.2020/PQ surface with RGB10A2 HDR10 presentation, stable
   across HDR and SDR output movement; genuine presentation failure rolls the
   complete tuple back to managed gamma-2.2 SDR for that graphics generation.
   One bounded WSLg run completes the unmanaged llvmpipe production
@@ -211,7 +211,7 @@ playback:
   consumes preallocated PCM,
   records bounded output-to-media mappings, and represents short underruns as
   hold silence. Cubeb and the operating-system sound service own ordinary
-  default-route migration within one cubeb-stream epoch; Sunroom adds no
+  default-route migration within one cubeb-stream epoch; SunPlayer adds no
   parallel device watcher or backend policy.
 * Playback exposes user play intent independently from audio interruption.
   Sustained hold-silence enters `Buffering`, preserves the last confident
@@ -410,7 +410,7 @@ Documentation: `docs/subsystems/graphics/`
 * [x] Real FFmpeg-decoded static-PQ fixture and retained-metadata validation
 * [ ] Actual display-gamut propagation
 * [x] HLG target-response validation through the shared FFmpeg/libplacebo
-  path, without a Sunroom-authored HLG pipeline
+  path, without a SunPlayer-authored HLG pipeline
 * [x] Production FFmpeg/libplacebo mapping acceptance, validation, and
   capability diagnostics for SDR, HDR10/PQ, HLG, HDR10+, and Dolby Vision as
   required for V1

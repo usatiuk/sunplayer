@@ -22,7 +22,7 @@ void GraphicsBackendFactory::configureQtQuick() {
 #elif defined(Q_OS_LINUX)
     QQuickWindow::setGraphicsApi(QSGRendererInterface::Vulkan);
 #else
-    qCFatal(sunroomLogGraphics, "Sunroom does not provide a graphics backend for this platform");
+    qCFatal(sunplayerLogGraphics, "SunPlayer does not provide a graphics backend for this platform");
 #endif
 }
 
@@ -34,7 +34,7 @@ QSurface::SurfaceType GraphicsBackendFactory::windowSurfaceType() {
 #elif defined(Q_OS_LINUX)
     return QSurface::VulkanSurface;
 #else
-    qCFatal(sunroomLogGraphics, "Sunroom does not provide a window surface for this platform");
+    qCFatal(sunplayerLogGraphics, "SunPlayer does not provide a window surface for this platform");
     return QSurface::RasterSurface;
 #endif
 }
@@ -50,7 +50,7 @@ std::unique_ptr<GraphicsDeviceDomain> GraphicsBackendFactory::createDeviceDomain
     return createVulkanGraphicsDeviceDomain(window);
 #else
     Q_UNUSED(window);
-    qCCritical(sunroomLogGraphics, "Sunroom does not provide a graphics device for this platform");
+    qCCritical(sunplayerLogGraphics, "SunPlayer does not provide a graphics device for this platform");
     return {};
 #endif
 }

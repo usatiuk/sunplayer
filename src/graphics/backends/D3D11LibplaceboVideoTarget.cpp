@@ -137,7 +137,7 @@ VideoTargetUpdate D3D11LibplaceboVideoTarget::createTarget(QSize const& pixelSiz
     }
 
     m_texture.reset(m_rhi.newTexture(QRhiTexture::RGBA16F, pixelSize, 1, textureFlags));
-    m_texture->setName(QByteArrayLiteral("Sunroom libplacebo video surface"));
+    m_texture->setName(QByteArrayLiteral("SunPlayer libplacebo video surface"));
     if (!m_texture->create()) {
         bool const lost = deviceLost();
         setUnavailableDiagnostics(lost ? QStringLiteral("Graphics device lost")
@@ -148,7 +148,7 @@ VideoTargetUpdate D3D11LibplaceboVideoTarget::createTarget(QSize const& pixelSiz
 
     QRhiTextureRenderTargetDescription const description(QRhiColorAttachment(m_texture.get()));
     m_renderTarget.reset(m_rhi.newTextureRenderTarget(description));
-    m_renderTarget->setName(QByteArrayLiteral("Sunroom libplacebo external render target"));
+    m_renderTarget->setName(QByteArrayLiteral("SunPlayer libplacebo external render target"));
     m_renderPassDescriptor.reset(m_renderTarget->newCompatibleRenderPassDescriptor());
     m_renderTarget->setRenderPassDescriptor(m_renderPassDescriptor.get());
     if (!m_renderTarget->create()) {

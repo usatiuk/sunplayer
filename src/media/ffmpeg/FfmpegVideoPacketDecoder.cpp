@@ -309,7 +309,7 @@ decodeFfmpegVideoPackets(FfmpegVideoDecodeRequest const& request, AVCodec const&
             ++result.framesDecoded;
             if (result.framesDecoded == 1 ||
                 (request.start.targetPositionMicroseconds && result.framesDecoded % 64 == 0)) {
-                qCDebug(sunroomLogMediaDecode).noquote()
+                qCDebug(sunplayerLogMediaDecode).noquote()
                     << (result.framesDecoded == 1 ? "event=decode.first_frame" : "event=decode.seek_progress")
                     << "generation=" + QString::number(request.firstFrameIdentity.playbackGeneration)
                     << "frames=" + QString::number(result.framesDecoded)

@@ -1,6 +1,6 @@
 file = "sdr-bt709-ffv1-dts-coarse-timebase.mkv"
 sha256 = "3195b79013e14801b0ebd6ea67ac402a48f6e6c42cd1f96a20bc97c8d3c7b5d8"
-provenance = "Generated analytically for Sunroom; no external source media"
+provenance = "Generated analytically for SunPlayer; no external source media"
 purpose = "DTS sample durations represented by quantized millisecond Matroska timestamps"
 generator = "FFmpeg 9.0-full_build-www.gyan.dev"
 license = "CC0-1.0"

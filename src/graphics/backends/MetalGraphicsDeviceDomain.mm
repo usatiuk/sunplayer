@@ -87,20 +87,20 @@ void logLibplacebo(
     switch (level) {
     case PL_LOG_FATAL:
     case PL_LOG_ERR:
-        qCCritical(sunroomLogGraphics).noquote()
+        qCCritical(sunplayerLogGraphics).noquote()
             << "libplacebo:" << message;
         break;
     case PL_LOG_WARN:
-        qCWarning(sunroomLogGraphics).noquote()
+        qCWarning(sunplayerLogGraphics).noquote()
             << "libplacebo:" << message;
         break;
     case PL_LOG_INFO:
-        qCInfo(sunroomLogGraphics).noquote()
+        qCInfo(sunplayerLogGraphics).noquote()
             << "libplacebo:" << message;
         break;
     case PL_LOG_DEBUG:
     case PL_LOG_TRACE:
-        qCDebug(sunroomLogGraphics).noquote()
+        qCDebug(sunplayerLogGraphics).noquote()
             << "libplacebo:" << message;
         break;
     case PL_LOG_NONE:
@@ -121,7 +121,7 @@ public:
                 m_rhi->nativeHandles());
         if (!native || !native->dev || !native->cmdQueue) {
             qCCritical(
-                sunroomLogGraphics,
+                sunplayerLogGraphics,
                 "QRhi did not expose one complete Metal device domain");
             return;
         }
@@ -149,7 +149,7 @@ public:
 
         if (!usesSameMetalDevice()) {
             qCCritical(
-                sunroomLogGraphics,
+                sunplayerLogGraphics,
                 "QRhi Metal and MoltenVK selected different MTLDevices");
             return;
         }

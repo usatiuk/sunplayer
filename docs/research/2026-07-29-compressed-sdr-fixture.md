@@ -18,7 +18,7 @@ The next fixture is analytically generated and contains no external media:
 * Limited/TV range and left chroma location.
 * Flat black, gray, white, red, green, and blue tiles with known YUV codes.
 
-FFV1 and Matroska are available in Sunroom's existing pinned FFmpeg libraries,
+FFV1 and Matroska are available in SunPlayer's existing pinned FFmpeg libraries,
 so the fixture adds no runtime or build dependency. It is software-only and
 does not prove D3D11VA.
 

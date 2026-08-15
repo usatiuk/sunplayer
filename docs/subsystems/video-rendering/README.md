@@ -2,7 +2,7 @@
 
 ## Status
 
-Sunroom has an explicit rendered-video surface contract and two diagnostic
+SunPlayer has an explicit rendered-video surface contract and two diagnostic
 producers behind the same lifecycle. HDR Lab uses the persistent libplacebo
 7.360.1 producer by default and can select the procedural QRhi producer for
 diagnostic comparison. This switch is not a player fallback: real playback
@@ -119,12 +119,12 @@ or stale-query protection.
 The retained decoded `AVFrame` is the authoritative source-color boundary and
 the exact object consumed by libplacebo. `VideoSignalDescription` is only a
 small display snapshot of scalar names and component depth. FFmpeg already
-propagates ordinary scalar and static metadata; Sunroom only attaches global
+propagates ordinary scalar and static metadata; SunPlayer only attaches global
 HDR10+ metadata when a decoded frame lacks it. Frame-local metadata otherwise
 wins by construction.
 
 libplacebo owns source interpretation, tone mapping, and gamut mapping.
-libplacebo's linear convention uses `1.0 = 203 nits`; Sunroom's rendered-video
+libplacebo's linear convention uses `1.0 = 203 nits`; SunPlayer's rendered-video
 surface uses `1.0 = active reference white`. For relative SDR and static PQ,
 the producer currently expresses headroom as
 `max_luma = 203 * targetPeakHeadroom`. Analytic capture proves that numerical
@@ -144,12 +144,12 @@ discontinuity.
 
 Static PQ has an analytical target-response oracle. A real HLG fixture also
 confirms that libplacebo 7.360.1 changes the captured OOTF response when
-Sunroom's virtual destination changes, because the library uses that HDR
+SunPlayer's virtual destination changes, because the library uses that HDR
 destination maximum while inferring HLG. V1 accepts this behavior for
 display-relative playback, but does not claim absolute-reference HLG
 monitoring. If physical evidence later rejects it, the next step is a focused
 upstream API separating physical HLG peak from destination coordinates, not a
-second Sunroom HLG stage. HDR10+'s source-authored targeted-display luminance
+second SunPlayer HLG stage. HDR10+'s source-authored targeted-display luminance
 stays separate from the current display destination. The pinned Dolby Vision
 helper supports the tested Profile 8.1 reshape but not all target trims or
 enhancement-layer residual processing.
@@ -170,7 +170,7 @@ unverified color behavior, not a plan to omit HLG, HDR10+, or Dolby Vision from
 the player or to deliberately break files that already render.
 
 Minimum target luminance and whether it is known are also part of the surface
-description supplied to libplacebo. Sunroom preserves a measured physical zero
+description supplied to libplacebo. SunPlayer preserves a measured physical zero
 as distinct from unavailable metadata. Because libplacebo reserves numeric
 zero for unknown minimum luminance and otherwise infers a linear-target
 contrast ratio, the adapter uses `PL_COLOR_HDR_BLACK` at that API boundary for
@@ -193,7 +193,7 @@ silently change behavior relative to the Windows build. Source ICC rendering
 is deferred until packaging, semantic profile validation, and SDR RGB behavior
 are tested. ICC combined with PQ, HLG, HDR10+, or Dolby Vision remains
 unsupported pending a separate model. Display calibration is a different
-responsibility: on a system-managed path Sunroom declares the final
+responsibility: on a system-managed path SunPlayer declares the final
 presentation encoding and lets the OS/compositor apply the active display
 profile once to the entire composition. Ordinary Windows SDR with Advanced
 Color inactive and unmanaged Wayland SDR are sRGB-assumed fallbacks.

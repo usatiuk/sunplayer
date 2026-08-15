@@ -5,7 +5,7 @@
 The synchronized fixture stores selected packets from 5 to 8 seconds. FFmpeg
 8.1.2 reports `AVFormatContext.start_time = 5 s`, `duration = 8 s`,
 `duration_estimation_method = AVFMT_DURATION_FROM_STREAM`, and no selected
-`AVStream.duration`. Should Sunroom report 3 or 8 seconds after normalizing the
+`AVStream.duration`. Should SunPlayer report 3 or 8 seconds after normalizing the
 selected-media origin to zero?
 
 ## Local source evidence
@@ -32,7 +32,7 @@ subtracting start would incorrectly truncate playback to five seconds.
 
 ## Accepted consequence
 
-Sunroom treats FFmpeg's open-time duration as provisional and never subtracts
+SunPlayer treats FFmpeg's open-time duration as provisional and never subtracts
 `start_time` from it. The one-pass decoder observes normalized selected-stream
 endpoints while it is already decoding:
 
@@ -51,4 +51,4 @@ to three seconds at EOF. A genuine stream spanning 5 to 15 finalizes to ten
 seconds. Unselected subtitle or data tails cannot inflate the result.
 
 An exact pre-play duration would require an explicit index or tail-discovery
-operation. Sunroom does not add that extra I/O to ordinary playback.
+operation. SunPlayer does not add that extra I/O to ordinary playback.

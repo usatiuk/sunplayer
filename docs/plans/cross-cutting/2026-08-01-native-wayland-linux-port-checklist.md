@@ -98,7 +98,7 @@ roadmap state actually changes.
 | --- | --- | --- | --- | --- |
 | DISP-01 | Bind color-management-v1 version 2, inventory parametric/perceptual/sRGB/BT.2020/gamma-2.2/PQ capabilities, and reject older globals from the managed path | Done | [Managed HDR plan](2026-08-03-managed-wayland-hdr.md), [ADR 0021](../../decisions/0021-use-hdr10-pq-for-managed-wayland-hdr.md) | Latest-only callbacks are compile-time checked and capability-tested; KWin v1 remains SDR |
 | DISP-02 | Parse completed preferred descriptions into semantic target state, ignore equivalent updates, and follow exceptional native-surface recreation | Done | [Managed HDR plan](2026-08-03-managed-wayland-hdr.md) | Protocol identities and obsolete-request suppression remain adapter-local; native lifecycle still needs physical exercise |
-| DISP-03 | Own one version-2 color-management surface with ready sRGB/PQ descriptions while keeping Qt as sole toplevel/window owner | Done | [ADR 0021](../../decisions/0021-use-hdr10-pq-for-managed-wayland-hdr.md) | Qt color space stays unset; QRhi uses pass-through and Sunroom owns only the narrow color declaration |
+| DISP-03 | Own one version-2 color-management surface with ready sRGB/PQ descriptions while keeping Qt as sole toplevel/window owner | Done | [ADR 0021](../../decisions/0021-use-hdr10-pq-for-managed-wayland-hdr.md) | Qt color space stays unset; QRhi uses pass-through and SunPlayer owns only the narrow color declaration |
 | DISP-04 | Implement stable BT.2020/PQ HDR10 presentation across HDR/SDR output movement | Done | [ADR 0021](../../decisions/0021-use-hdr10-pq-for-managed-wayland-hdr.md) | Preferred output feedback never changes the content encoding or recreates the window |
 | DISP-05 | Implement complete managed gamma-2.2 SDR rollback after genuine HDR10 format/render-pass/create/resize failure | Done | [Managed HDR plan](2026-08-03-managed-wayland-hdr.md) | One rejection per graphics generation; only a new generation permits SDR→PQ retry |
 | DISP-06 | Rerender the retained current frame when effective preferred target values change, including while paused | Done | [Managed HDR plan](2026-08-03-managed-wayland-hdr.md) | Existing semantic target invalidation performs the rerender; native paused evidence remains |
@@ -137,11 +137,11 @@ roadmap state actually changes.
 
 | Current test/boundary | Linux disposition | Status |
 | --- | --- | --- |
-| `sunroom_cubeb_dependency_tests` | Reuse with platform-shaped ABI/backend assertions | Done: shared ABI test passes; real sink diagnostics report the selected backend |
-| `sunroom_cubeb_audio_sink_tests` | Reuse shared lifecycle/clock cases; isolate only native Windows control-thread setup | Done |
-| `sunroom_ffmpeg_dependency_tests` | Reuse with Linux FFmpeg ABI plus VAAPI/DRM PRIME assertions instead of D3D11/no-Vulkan assumptions | Done |
-| `sunroom_libplacebo_dependency_tests` | Reuse with API 360, Vulkan, shader-backend, DOVI, LCMS-observation, and explicit ICC-policy assertions | In progress: dependency features pass; BUILD-07/08 own ICC policy |
-| `sunroom_libass_dependency_tests` and platform-neutral subtitle/media tests | Reuse system libass plus the same embedded ASS/SubRip/PGS fixtures and session behavior | Done: system libass rendering and shared subtitle decode/state behavior pass; Linux QRhi subtitle capture remains to be added to the implemented Vulkan domain |
+| `sunplayer_cubeb_dependency_tests` | Reuse with platform-shaped ABI/backend assertions | Done: shared ABI test passes; real sink diagnostics report the selected backend |
+| `sunplayer_cubeb_audio_sink_tests` | Reuse shared lifecycle/clock cases; isolate only native Windows control-thread setup | Done |
+| `sunplayer_ffmpeg_dependency_tests` | Reuse with Linux FFmpeg ABI plus VAAPI/DRM PRIME assertions instead of D3D11/no-Vulkan assumptions | Done |
+| `sunplayer_libplacebo_dependency_tests` | Reuse with API 360, Vulkan, shader-backend, DOVI, LCMS-observation, and explicit ICC-policy assertions | In progress: dependency features pass; BUILD-07/08 own ICC policy |
+| `sunplayer_libass_dependency_tests` and platform-neutral subtitle/media tests | Reuse system libass plus the same embedded ASS/SubRip/PGS fixtures and session behavior | Done: system libass rendering and shared subtitle decode/state behavior pass; Linux QRhi subtitle capture remains to be added to the implemented Vulkan domain |
 | D3D11 target/import/capture tests | Keep Windows-only and add paired Vulkan target/import/capture coverage through the same public behavior | Pending |
 | `application-audio-first-playback` | Register on Linux once Vulkan and cubeb production paths exist | Done |
 | `application-fullscreen` | Register on Linux and wait for asynchronous Wayland state/presentation convergence | In progress: audio continuity assertion implemented; registration awaits reliable WSLg/native compositor convergence |

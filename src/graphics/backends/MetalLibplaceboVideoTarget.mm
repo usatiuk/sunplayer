@@ -130,7 +130,7 @@ public:
             if (deviceLost())
                 return VideoOperationResult::DeviceLost;
             qCFatal(
-                sunroomLogGraphics,
+                sunplayerLogGraphics,
                 "Libplacebo failed the Metal/Vulkan texture handoff");
         }
         m_producerAccessActive = false;
@@ -262,7 +262,7 @@ private:
         m_texture.reset(m_rhi.newTexture(
             QRhiTexture::RGBA16F, pixelSize, 1, flags));
         m_texture->setName(QByteArrayLiteral(
-            "Sunroom shared Metal video surface"));
+            "SunPlayer shared Metal video surface"));
         if (!m_texture->create() || !importTexture()) {
             const bool lost = deviceLost();
             resetTarget();
@@ -332,7 +332,7 @@ private:
         parameters.import_handle = PL_HANDLE_MTL_TEX;
         parameters.shared_mem.handle.handle =
             (__bridge void *)metalTexture;
-        parameters.debug_tag = "Sunroom shared Metal video surface";
+        parameters.debug_tag = "SunPlayer shared Metal video surface";
         m_wrappedTexture = pl_tex_create(m_gpu, &parameters);
         if (!m_wrappedTexture
                 || !m_wrappedTexture->params.renderable) {
@@ -377,7 +377,7 @@ private:
                 if (deviceLost())
                     return VideoOperationResult::DeviceLost;
                 qCFatal(
-                    sunroomLogGraphics,
+                    sunplayerLogGraphics,
                     "Libplacebo failed the initial Metal/Vulkan texture handoff");
             }
             m_initialHandoffPending = false;
@@ -398,7 +398,7 @@ private:
                 commandBuffer.nativeHandles());
         if (!native || !native->commandBuffer) {
             qCFatal(
-                sunroomLogGraphics,
+                sunplayerLogGraphics,
                 "QRhi did not expose its Metal command buffer");
         }
         id<MTLCommandBuffer> metalCommandBuffer =
@@ -416,7 +416,7 @@ private:
                 commandBuffer.nativeHandles());
         if (!native || !native->commandBuffer) {
             qCFatal(
-                sunroomLogGraphics,
+                sunplayerLogGraphics,
                 "QRhi did not expose its Metal command buffer");
         }
         id<MTLCommandBuffer> metalCommandBuffer =
@@ -429,7 +429,7 @@ private:
         ++m_handoffValue;
         if (m_handoffValue == 0) {
             qCFatal(
-                sunroomLogGraphics,
+                sunplayerLogGraphics,
                 "The Metal/Vulkan handoff counter overflowed");
         }
         return m_handoffValue;

@@ -1,6 +1,6 @@
 file = "dovi-profile81-hevc.hevc"
 sha256 = "3bd33c21897a8cbc4628819df84de3571caeb0a46fcef1427145fc162f49eca8"
-provenance = "Sunroom analytical HDR10 base stream plus generated Dolby Vision Profile 8.1 RPU"
+provenance = "SunPlayer analytical HDR10 base stream plus generated Dolby Vision Profile 8.1 RPU"
 generator = "dovi_tool 2.3.3 x86_64-pc-windows-msvc"
 generator_sha256 = "37ae198f2a535c910befad39fc09c21cded76bf3ef2d5459d542e58c2c158311"
 source_metadata = "dovi-profile81.json"

@@ -2,11 +2,11 @@
 
 ## Status and intent
 
-This document defines Sunroom's testing direction. It is an architectural
+This document defines SunPlayer's testing direction. It is an architectural
 guide, not a requirement to build every layer before the corresponding player
 feature exists.
 
-Sunroom integrates timing, concurrency, color metadata, native GPU resources,
+SunPlayer integrates timing, concurrency, color metadata, native GPU resources,
 operating-system display state, and physical output. A large suite of tests
 against mocked collaborators could be fast while proving little about those
 boundaries. The default regression test should therefore exercise the highest
@@ -81,7 +81,7 @@ The central principle is:
 
 ## Coverage shape
 
-Sunroom aims for complementary layers rather than a prescribed ratio:
+SunPlayer aims for complementary layers rather than a prescribed ratio:
 
 ```text
           Guided or automated physical display lab
@@ -175,7 +175,7 @@ Sources:
 ### Add when a concrete need appears
 
 Qt Quick Test is suitable for isolated QML models and components. It does not
-replace tests of Sunroom's redirected Quick rendering, custom input forwarding,
+replace tests of SunPlayer's redirected Quick rendering, custom input forwarding,
 or actual presentation path.
 
 A future private application-control channel can use
@@ -279,7 +279,7 @@ runner should be able to launch the real binary with an isolated profile and
 opt-in local control endpoint, conceptually:
 
 ```text
-sunroom --isolated-profile=<temporary-directory>
+sunplayer --isolated-profile=<temporary-directory>
         --test-control=<unique-local-name>
 ```
 
@@ -456,7 +456,7 @@ Initial additions should be narrowly tied to milestones:
   profile, and unusual-format fixtures only as those features arrive.
 
 FFmpeg FATE is valuable validation for the exact FFmpeg dependency build, but
-it tests FFmpeg rather than Sunroom's integration. The same distinction applies
+it tests FFmpeg rather than SunPlayer's integration. The same distinction applies
 to libplacebo's upstream suite.
 
 Sources:
@@ -577,7 +577,7 @@ therefore remains open. These results do not satisfy a
 real-GPU, color-management-v1, HDR, VAAPI, compositor-decoration, or physical-
 output gate. WSLg's zero-size fullscreen configure warnings, xdg-surface
 buffer/configure diagnostics, and broken-pipe messages are recorded as
-environment output. Sunroom does not add a compositor-specific state machine to
+environment output. SunPlayer does not add a compositor-specific state machine to
 suppress them; native compositor transition coverage remains open.
 
 ## Physical-output verification

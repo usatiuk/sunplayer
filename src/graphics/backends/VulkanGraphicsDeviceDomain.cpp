@@ -38,17 +38,17 @@ void logLibplacebo(void*, enum pl_log_level level, char const* message) {
     switch (level) {
     case PL_LOG_FATAL:
     case PL_LOG_ERR:
-        qCCritical(sunroomLogGraphics).noquote() << "libplacebo:" << message;
+        qCCritical(sunplayerLogGraphics).noquote() << "libplacebo:" << message;
         break;
     case PL_LOG_WARN:
-        qCWarning(sunroomLogGraphics).noquote() << "libplacebo:" << message;
+        qCWarning(sunplayerLogGraphics).noquote() << "libplacebo:" << message;
         break;
     case PL_LOG_INFO:
-        qCInfo(sunroomLogGraphics).noquote() << "libplacebo:" << message;
+        qCInfo(sunplayerLogGraphics).noquote() << "libplacebo:" << message;
         break;
     case PL_LOG_DEBUG:
     case PL_LOG_TRACE:
-        qCDebug(sunroomLogGraphics).noquote() << "libplacebo:" << message;
+        qCDebug(sunplayerLogGraphics).noquote() << "libplacebo:" << message;
         break;
     case PL_LOG_NONE:
         break;
@@ -60,7 +60,7 @@ class VulkanGraphicsDeviceDomain final : public GraphicsDeviceDomain {
     explicit VulkanGraphicsDeviceDomain(QWindow& window) {
         QVulkanInstance* const instance = window.vulkanInstance();
         if (!instance || !instance->isValid()) {
-            qCCritical(sunroomLogGraphics, "The presentation window has no valid Vulkan instance");
+            qCCritical(sunplayerLogGraphics, "The presentation window has no valid Vulkan instance");
             return;
         }
         m_instance = instance;
@@ -80,32 +80,32 @@ class VulkanGraphicsDeviceDomain final : public GraphicsDeviceDomain {
         auto const* const native = static_cast<QRhiVulkanNativeHandles const*>(m_rhi->nativeHandles());
         if (!native || !native->inst || native->inst != instance || native->physDev == VK_NULL_HANDLE ||
             native->dev == VK_NULL_HANDLE || native->gfxQueue == VK_NULL_HANDLE) {
-            qCCritical(sunroomLogGraphics, "QRhi did not expose one complete Vulkan device domain");
+            qCCritical(sunplayerLogGraphics, "QRhi did not expose one complete Vulkan device domain");
             return;
         }
         if (native->gfxQueueIdx != 0) {
-            qCCritical(sunroomLogGraphics, "QRhi selected unsupported Vulkan queue index %u", native->gfxQueueIdx);
+            qCCritical(sunplayerLogGraphics, "QRhi selected unsupported Vulkan queue index %u", native->gfxQueueIdx);
             return;
         }
 
         QVulkanFunctions* const vulkanFunctions = instance->functions();
         QVulkanDeviceFunctions* const deviceFunctions = instance->deviceFunctions(native->dev);
         if (!vulkanFunctions || !deviceFunctions) {
-            qCCritical(sunroomLogGraphics, "Qt did not expose Vulkan instance/device functions");
+            qCCritical(sunplayerLogGraphics, "Qt did not expose Vulkan instance/device functions");
             return;
         }
         m_deviceFunctions = deviceFunctions;
         VkPhysicalDeviceProperties physicalDeviceProperties{};
         vulkanFunctions->vkGetPhysicalDeviceProperties(native->physDev, &physicalDeviceProperties);
         if (physicalDeviceProperties.apiVersion < VK_API_VERSION_1_3) {
-            qCCritical(sunroomLogGraphics, "QRhi selected a physical device below Vulkan 1.3");
+            qCCritical(sunplayerLogGraphics, "QRhi selected a physical device below Vulkan 1.3");
             return;
         }
 
         std::uint32_t queueFamilyCount = 0;
         vulkanFunctions->vkGetPhysicalDeviceQueueFamilyProperties(native->physDev, &queueFamilyCount, nullptr);
         if (native->gfxQueueFamilyIdx >= queueFamilyCount) {
-            qCCritical(sunroomLogGraphics, "QRhi selected invalid Vulkan queue family %u", native->gfxQueueFamilyIdx);
+            qCCritical(sunplayerLogGraphics, "QRhi selected invalid Vulkan queue family %u", native->gfxQueueFamilyIdx);
             return;
         }
         std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
@@ -113,7 +113,7 @@ class VulkanGraphicsDeviceDomain final : public GraphicsDeviceDomain {
                                                                   queueFamilies.data());
         VkQueueFlags const requiredQueueFlags = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT;
         if ((queueFamilies[native->gfxQueueFamilyIdx].queueFlags & requiredQueueFlags) != requiredQueueFlags) {
-            qCCritical(sunroomLogGraphics, "QRhi selected a Vulkan graphics queue without compute support");
+            qCCritical(sunplayerLogGraphics, "QRhi selected a Vulkan graphics queue without compute support");
             return;
         }
 
@@ -135,7 +135,7 @@ class VulkanGraphicsDeviceDomain final : public GraphicsDeviceDomain {
         vulkanFunctions->vkGetPhysicalDeviceFeatures2(native->physDev, &enabledFeatures);
         if (!enabledFeatures12.hostQueryReset || !enabledFeatures12.timelineSemaphore ||
             !enabledFeatures13.synchronization2) {
-            qCCritical(sunroomLogGraphics, "The selected Vulkan device lacks QRhi/libplacebo features");
+            qCCritical(sunplayerLogGraphics, "The selected Vulkan device lacks QRhi/libplacebo features");
             return;
         }
         // Qt 6.10 enables every reported core 1.0-1.3 feature except these

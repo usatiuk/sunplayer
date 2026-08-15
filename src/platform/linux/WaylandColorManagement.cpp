@@ -80,8 +80,8 @@ WaylandSurfaceSelection selectWaylandSurface(WaylandColorManagementCapabilities 
             .mode = WaylandSdrSurfaceMode::ManagedGamma22,
             .managedHdr10 = managedHdr10,
             .diagnostic = managedHdr10
-                              ? QStringLiteral("Sunroom-owned color-management-v1 · BT.2020 PQ · managed sRGB fallback")
-                              : QStringLiteral("Sunroom-owned color-management-v1 · sRGB primaries · gamma 2.2"),
+                              ? QStringLiteral("SunPlayer-owned color-management-v1 · BT.2020 PQ · managed sRGB fallback")
+                              : QStringLiteral("SunPlayer-owned color-management-v1 · sRGB primaries · gamma 2.2"),
         };
     }
 

@@ -6,14 +6,14 @@
 
 ## Question
 
-Which testing tools and boundaries fit Sunroom now, and which parts of the
+Which testing tools and boundaries fit SunPlayer now, and which parts of the
 long-term whole-pipeline, GPU, and physical-output strategy are supported by
 current upstream facilities rather than requiring project-specific
 infrastructure?
 
 ## Project stage at the start of the investigation
 
-Sunroom is currently a Windows D3D11/QRhi HDR presentation playground:
+SunPlayer is currently a Windows D3D11/QRhi HDR presentation playground:
 
 * No CTest or test target exists.
 * No FFmpeg, libplacebo, libass, playback, or audio pipeline exists.
@@ -43,7 +43,7 @@ Primary sources:
 ### Qt Quick Test is narrower than application UI coverage
 
 Qt Quick Test is an appropriate QML unit-test framework. It does not by itself
-exercise Sunroom's redirected `QQuickRenderControl` integration, native
+exercise SunPlayer's redirected `QQuickRenderControl` integration, native
 presentation window, custom input forwarding, or packaged application.
 
 It should be selected when isolated player QML components exist, not installed
@@ -59,7 +59,7 @@ Qt's redirected-rendering example demonstrates rendering Qt Quick into a
 `QRhiTexture`. QRhi can read raw texture data back asynchronously through
 `QRhiResourceUpdateBatch::readBackTexture()`.
 
-Constraints relevant to a Sunroom harness:
+Constraints relevant to a SunPlayer harness:
 
 * A source texture needs `UsedAsTransferSource`.
 * Multisample textures cannot be read back directly.
@@ -86,7 +86,7 @@ Qt's `QLocalServer` and `QLocalSocket` provide event-driven local IPC using
 named pipes on Windows and local-domain sockets on Unix. They are a reasonable
 candidate for a private, opt-in application test channel.
 
-Qt does not provide Sunroom's command protocol, event schema, scenario
+Qt does not provide SunPlayer's command protocol, event schema, scenario
 language, or application runner. Those would be project facilities and should
 be designed from several real scenarios rather than one illustrative syntax.
 
@@ -106,7 +106,7 @@ thresholds, and difference output. Its documented comparison API does not
 supply every proposed metric, and perceptual comparisons have color-space
 assumptions that must not be applied blindly to arbitrary HDR data.
 
-Before adopting either dependency, Sunroom must define the capture contract:
+Before adopting either dependency, SunPlayer must define the capture contract:
 primaries, transfer, reference white, luminance scale, alpha, orientation, and
 NaN/infinity policy. A first analytic QRhi test can compare raw half-float
 values without introducing an image-corpus toolchain.
@@ -122,9 +122,9 @@ FFmpeg FATE is FFmpeg's regression suite. libplacebo also ships its own tests.
 Running those suites for the pinned dependency builds is useful dependency and
 toolchain verification.
 
-Neither suite proves Sunroom's metadata precedence, `AVFrame` mapping,
+Neither suite proves SunPlayer's metadata precedence, `AVFrame` mapping,
 native-texture lifetime, synchronization, display target, compositor contract,
-or fallback diagnostics. Those need Sunroom scenarios using the real
+or fallback diagnostics. Those need SunPlayer scenarios using the real
 dependencies.
 
 Primary sources:

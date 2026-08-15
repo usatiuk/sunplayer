@@ -2,7 +2,7 @@
 
 ## Question
 
-Can Sunroom's first Linux port use Ubuntu 26.04's system Qt, FFmpeg,
+Can SunPlayer's first Linux port use Ubuntu 26.04's system Qt, FFmpeg,
 libplacebo, Vulkan/VAAPI/Wayland, and cubeb packages without maintaining a
 second vendored dependency stack, and what constraints does that choice place
 on the port?
@@ -14,7 +14,7 @@ implementation. It is evidence for the execution plan, not a support claim.
 
 The early HDR recommendation below is superseded by
 [ADR 0021](../decisions/0021-use-hdr10-pq-for-managed-wayland-hdr.md) and the
-[follow-up investigation](2026-08-03-wayland-hdr10-presentation.md). Sunroom
+[follow-up investigation](2026-08-03-wayland-hdr10-presentation.md). SunPlayer
 now owns a version-2 BT.2020/PQ description and uses an RGB10A2 QRhi HDR10
 swapchain instead of recreating Qt surfaces for FP16 `SRgbLinear`.
 
@@ -22,7 +22,7 @@ Linux working value `1.0` remains active platform reference white; it is not
 an 80-nit scRGB value. The final encoder places it at PQ's 203-nit source-
 reference coordinate, which the compositor anchors to the output. Mutter's
 current preferred target reports the 10,000-nit PQ envelope, while another
-compositor may report a lower, output-specific maximum. Sunroom trusts the
+compositor may report a lower, output-specific maximum. SunPlayer trusts the
 declared target and caps only at PQ's representable `10000 / 203` working
 coordinate.
 
@@ -82,13 +82,13 @@ Ubuntu hardware.
   presence at build time is not proof that a usable hardware device exists at
   runtime.
 * Ubuntu's cubeb runtime links PulseAudio support along with other Linux
-  backends. Sunroom can use cubeb's default Linux route for both a real
+  backends. SunPlayer can use cubeb's default Linux route for both a real
   PulseAudio server and PipeWire's PulseAudio-compatible server. Selecting a
   cubeb backend by name would add policy the application does not need.
 
 The reference Linux contract is the Ubuntu 26.04 package family, not arbitrary
 newer major versions. CMake should accept Qt `>=6.10,<6.11` on Linux because
-Sunroom consumes private Qt RHI and Wayland APIs whose headers must match the
+SunPlayer consumes private Qt RHI and Wayland APIs whose headers must match the
 runtime packages. FFmpeg major ABIs and libplacebo API 360 should be checked
 explicitly. Windows retains its existing vcpkg pins independently.
 
@@ -120,12 +120,12 @@ space is present in the window's requested `QSurfaceFormat`. For
 `QColorSpace::SRgbLinear`, it creates a parametric image description with sRGB
 primaries and the extended-linear transfer function. With no explicit
 luminances, the protocol's sRGB defaults are 0.2-nit minimum, 80-nit maximum,
-and 80-nit reference white. This agrees with Sunroom's extended-linear
+and 80-nit reference white. This agrees with SunPlayer's extended-linear
 working convention that `1.0` represents 80 nits.
 
 Qt owns that surface protocol object. Creating a second
 `wp_color_management_surface_v1` for the same `wl_surface` would be a protocol
-error. A Sunroom adapter may instead create the distinct
+error. A SunPlayer adapter may instead create the distinct
 `wp_color_management_surface_feedback_v1` object, parse completed preferred
 image descriptions, and publish only the semantic output information Qt does
 not expose through a suitable high-level API. It should not duplicate Qt's
@@ -133,11 +133,11 @@ image-description creation or surface policy.
 
 For `QColorSpace::SRgb`, Qt 6.10 maps the surface transfer function to
 color-management-v1 `gamma22`, not the piecewise sRGB OETF currently emitted
-by Sunroom's SDR compositor. The same mapping remains in the upstream Qt 6.11
+by SunPlayer's SDR compositor. The same mapping remains in the upstream Qt 6.11
 branch and current development branch. Qt attaches the description only after
 its private image-description object reports `ready`; an early frame can
 therefore precede the new declaration. That transient ordering is acceptable
-under Sunroom's semantic convergence policy. Qt's private `failed` handler only
+under SunPlayer's semantic convergence policy. Qt's private `failed` handler only
 logs and does not expose a public application callback; this rare upstream
 defect is not justification for shadow protocol ownership, duplicated probes,
 or log parsing.
@@ -214,7 +214,7 @@ libplacebo must cross ownership through `pl_vulkan_release_ex` and
 `QRhiTexture::setNativeLayout()`.
 
 Qt 6.10.2's Vulkan backend assigns every externally supplied queue-wait
-semaphore to `VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT`. Sunroom samples
+semaphore to `VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT`. SunPlayer samples
 the rendered video target in the fragment shader, which may run before that
 stage; wiring the libplacebo semaphore directly through QRhi's queue-submit
 parameters therefore does not prove producer-to-sampler visibility. The spike
@@ -242,7 +242,7 @@ Ubuntu libplacebo has LCMS enabled, unlike the current Windows build. The
 current render path copies the mapped `pl_frame` into the effective source and
 passes it to `pl_render_image`; an LCMS-enabled libplacebo can consume the
 profile from that copy. The build feature would therefore silently change
-Sunroom's renderer policy unless code clears both effective render-copy ICC
+SunPlayer's renderer policy unless code clears both effective render-copy ICC
 profile handles while retaining the original decoded metadata for diagnostics.
 An ICC-tagged regression must prove the current cross-platform contract until
 source ICC behavior is separately accepted and tested.

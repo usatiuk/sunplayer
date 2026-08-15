@@ -126,7 +126,7 @@ struct CubebAudioSink::Impl {
             owner.m_error.store(CubebAudioSink::Error::ComInitialization, std::memory_order_release);
         } else
 #endif
-            if (cubeb_init(&context, "Sunroom", requestedBackend) != CUBEB_OK) {
+            if (cubeb_init(&context, "SunPlayer", requestedBackend) != CUBEB_OK) {
             owner.m_error.store(CubebAudioSink::Error::ContextInitialization, std::memory_order_release);
         } else {
             char const* backend = cubeb_get_backend_id(context);
@@ -243,7 +243,7 @@ void CubebAudioSink::reset(std::uint64_t playbackGeneration, AudioStreamFormat f
                                                                     static_cast<std::size_t>(minimumLatency) * 2)));
         m_maximumSubmitFrames.store(m_queueCapacityFrames - m_prerollFrames, std::memory_order_release);
 
-        int const streamResult = cubeb_stream_init(m_impl->context, &m_impl->stream, "Sunroom playback", nullptr,
+        int const streamResult = cubeb_stream_init(m_impl->context, &m_impl->stream, "SunPlayer playback", nullptr,
                                                    nullptr, nullptr, &outputParameters, minimumLatency,
                                                    &Impl::dataCallback, &Impl::stateCallback, m_impl.get());
         if (streamResult != CUBEB_OK) {

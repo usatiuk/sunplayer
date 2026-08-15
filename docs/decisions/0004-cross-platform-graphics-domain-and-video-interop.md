@@ -9,7 +9,7 @@
 
 ## Context
 
-Sunroom will use libplacebo on Windows, native Wayland Linux, and macOS, while
+SunPlayer will use libplacebo on Windows, native Wayland Linux, and macOS, while
 final composition remains in QRhi. The native device, texture-sharing, and
 synchronization mechanisms necessarily differ:
 
@@ -127,7 +127,7 @@ share a render target. A same-device GPU copy remains a capability fallback.
 ### Build another general-purpose GPU abstraction
 
 Rejected. QRhi and libplacebo already provide their respective abstractions.
-Sunroom needs only the narrow device, target, synchronization, and diagnostic
+SunPlayer needs only the narrow device, target, synchronization, and diagnostic
 bridge between them.
 
 ## Not decided here

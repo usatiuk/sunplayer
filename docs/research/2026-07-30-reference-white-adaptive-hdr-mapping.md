@@ -1,12 +1,12 @@
 # Reference-white-adaptive HDR display mapping
 
 * Date: 2026-07-30
-* Scope: Sunroom's shared SDR/PQ display-mapping contract and its expression
+* Scope: SunPlayer's shared SDR/PQ display-mapping contract and its expression
   through libplacebo 7.360.1
 
 ## Question
 
-How should Sunroom map decoded video into its linear, SDR-white-relative
+How should SunPlayer map decoded video into its linear, SDR-white-relative
 composition surface when the platform's live SDR/reference-white level changes?
 
 The accepted product requirement is:
@@ -40,7 +40,7 @@ gamut capabilities. For FP16 scRGB presentation, numeric `1.0` represents
 the system SDR-white level.
 
 These sources establish the need for application-owned display mapping and the
-Windows output coordinate conversion. Sunroom's choice to anchor normal HDR
+Windows output coordinate conversion. SunPlayer's choice to anchor normal HDR
 playback to the platform reference-white level is an accepted product policy.
 
 ## Pinned libplacebo behavior
@@ -61,8 +61,8 @@ Relevant behavior:
   inverse tone mapping is explicitly enabled.
 * The default color mapper uses spline tone mapping and perceptual gamut
   mapping. The high-quality preset additionally enables contrast recovery;
-  Sunroom does not enable that preset.
-* The recommended renderer preset enables source peak detection, but Sunroom
+  SunPlayer does not enable that preset.
+* The recommended renderer preset enables source peak detection, but SunPlayer
   currently disables peak detection explicitly. Enabling and validating
   dynamic measurement is a separate quality/performance decision.
 * HLG source inference is target-dependent: libplacebo adjusts its effective
@@ -96,7 +96,7 @@ P = usable display peak
 H = P / W
 ```
 
-Sunroom's composition surface means:
+SunPlayer's composition surface means:
 
 ```text
 linear 1.0 = W
@@ -104,7 +104,7 @@ surface maximum = H
 ```
 
 Libplacebo writes linear `1.0` at its fixed 203-nit normalization. Therefore
-Sunroom describes the desired numerical target in libplacebo's coordinate
+SunPlayer describes the desired numerical target in libplacebo's coordinate
 system:
 
 ```text
@@ -125,7 +125,7 @@ P = 600 nits
 H = 6
 virtualTargetMax = 1218
 libplacebo output maximum = 1218 / 203 = 6
-Sunroom physical interpretation = 6 × 100 = 600 nits
+SunPlayer physical interpretation = 6 × 100 = 600 nits
 ```
 
 This lets libplacebo own the complete tone/gamut mapping while removing the
@@ -173,7 +173,7 @@ offscreen FP16 target. It does not prove emitted monitor luminance.
 
 ## Known gaps
 
-* The working RGB basis is extended-linear BT.709, but Sunroom does not yet
+* The working RGB basis is extended-linear BT.709, but SunPlayer does not yet
   provide actual display primaries in `target.color.hdr.prim`. Libplacebo
   therefore infers a BT.709 target gamut. Wide-gamut target observation and
   propagation are required before claiming wide-gamut output.
@@ -184,6 +184,6 @@ offscreen FP16 target. It does not prove emitted monitor luminance.
 * The virtual-target technique follows libplacebo's source behavior but is not
   a first-class destination-reference-white API. If it proves insufficient for
   HLG or dynamic metadata, pursue an upstream reference-white parameter rather
-  than adding a second Sunroom tone mapper.
+  than adding a second SunPlayer tone mapper.
 * Physical luminance and cross-platform equivalence still require actual
   display measurement.

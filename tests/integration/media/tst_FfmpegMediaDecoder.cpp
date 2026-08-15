@@ -29,65 +29,65 @@ extern "C" {
 
 namespace {
 QString synchronizedFixturePath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-flac-sync.mkv");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-flac-sync.mkv");
 }
 
 QString synchronizedManifestPath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-flac-sync.toml");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-flac-sync.toml");
 }
 
-QString videoOnlyFixturePath() { return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1.mkv"); }
+QString videoOnlyFixturePath() { return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1.mkv"); }
 
 QString shortAudioFixturePath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-short-flac.mkv");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-short-flac.mkv");
 }
 
 QString audioGapFixturePath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-audio-gap-flac.mkv");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-audio-gap-flac.mkv");
 }
 
 QString coarseTimeBaseDtsFixturePath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-dts-coarse-timebase.mkv");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-dts-coarse-timebase.mkv");
 }
 
 QString coarseTimeBaseDtsManifestPath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-dts-coarse-timebase.toml");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-dts-coarse-timebase.toml");
 }
 
-QString pgsFixturePath() { return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-pgs.mkv"); }
+QString pgsFixturePath() { return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-pgs.mkv"); }
 
 QString compressedPgsFixturePath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-pgs-zlib.mkv");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-pgs-zlib.mkv");
 }
 
-QString pgsManifestPath() { return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-pgs.toml"); }
+QString pgsManifestPath() { return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-pgs.toml"); }
 
 QString compressedPgsManifestPath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-pgs-zlib.toml");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-pgs-zlib.toml");
 }
 
 QString textSubtitleFixturePath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-subtitles.mkv");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-subtitles.mkv");
 }
 
 QString textSubtitleManifestPath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-subtitles.toml");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-subtitles.toml");
 }
 
 QString multitrackFixturePath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-multitrack-flac.mkv");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-multitrack-flac.mkv");
 }
 
 QString multitrackManifestPath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-multitrack-flac.toml");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-multitrack-flac.toml");
 }
 
 QString programFixturePath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-mpegts-two-programs.ts");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-mpegts-two-programs.ts");
 }
 
 QString programManifestPath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-mpegts-two-programs.toml");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-mpegts-two-programs.toml");
 }
 
 FfmpegMediaDecodeRequest requestFor(QString const& path, std::uint64_t generation = 1) {

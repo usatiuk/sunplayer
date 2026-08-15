@@ -82,9 +82,9 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
     m_qmlEngine = std::make_unique<QQmlEngine>();
 
     QQmlComponent component(m_qmlEngine.get());
-    component.loadFromModule(QStringLiteral("Sunroom"), QStringLiteral("Main"));
+    component.loadFromModule(QStringLiteral("SunPlayer"), QStringLiteral("Main"));
     if (component.isError()) {
-        qCFatal(sunroomLogPresentation, "Could not load the packaged Sunroom QML component:\n%s",
+        qCFatal(sunplayerLogPresentation, "Could not load the packaged SunPlayer QML component:\n%s",
                 qPrintable(component.errorString()));
     }
 
@@ -126,7 +126,7 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
     m_rootItem.reset(qobject_cast<QQuickItem*>(object));
     if (!m_rootItem) {
         delete object;
-        qCFatal(sunroomLogPresentation, "Sunroom Main.qml must create a QQuickItem root:\n%s",
+        qCFatal(sunplayerLogPresentation, "SunPlayer Main.qml must create a QQuickItem root:\n%s",
                 qPrintable(component.errorString()));
     }
 
@@ -136,7 +136,7 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
         if (m_rhi.isDeviceLost()) {
             return InitializationResult::DeviceLost;
         }
-        qCFatal(sunroomLogPresentation, "Could not initialize redirected Qt Quick rendering");
+        qCFatal(sunplayerLogPresentation, "Could not initialize redirected Qt Quick rendering");
     }
     return InitializationResult::Ready;
 }
@@ -166,7 +166,7 @@ QuickUiLayer::RenderTargetUpdate QuickUiLayer::ensureRenderTarget(QSize const& p
         if (!qFuzzyCompare(m_devicePixelRatio, devicePixelRatio)) {
             m_devicePixelRatio = devicePixelRatio;
             if (!m_rootItem->setProperty("renderDevicePixelRatio", devicePixelRatio)) {
-                qCFatal(sunroomLogPresentation, "Sunroom Main.qml must expose renderDevicePixelRatio");
+                qCFatal(sunplayerLogPresentation, "SunPlayer Main.qml must expose renderDevicePixelRatio");
             }
             markDirty();
         }
@@ -180,7 +180,7 @@ QuickUiLayer::RenderTargetUpdate QuickUiLayer::ensureRenderTarget(QSize const& p
             releaseRenderTarget();
             return RenderTargetUpdate::DeviceLost;
         }
-        qCFatal(sunroomLogPresentation, "Could not create the Qt Quick FP16 texture");
+        qCFatal(sunplayerLogPresentation, "Could not create the Qt Quick FP16 texture");
     }
 
     // fromRhiRenderTarget() adopts this target as-is. Qt Quick's default 2D
@@ -191,7 +191,7 @@ QuickUiLayer::RenderTargetUpdate QuickUiLayer::ensureRenderTarget(QSize const& p
             releaseRenderTarget();
             return RenderTargetUpdate::DeviceLost;
         }
-        qCFatal(sunroomLogPresentation, "Could not create the Qt Quick depth/stencil buffer");
+        qCFatal(sunplayerLogPresentation, "Could not create the Qt Quick depth/stencil buffer");
     }
 
     QRhiTextureRenderTargetDescription description(QRhiColorAttachment(m_texture.get()));
@@ -204,13 +204,13 @@ QuickUiLayer::RenderTargetUpdate QuickUiLayer::ensureRenderTarget(QSize const& p
             releaseRenderTarget();
             return RenderTargetUpdate::DeviceLost;
         }
-        qCFatal(sunroomLogPresentation, "Could not create the Qt Quick FP16 render target");
+        qCFatal(sunplayerLogPresentation, "Could not create the Qt Quick FP16 render target");
     }
 
     m_pixelSize = pixelSize;
     m_devicePixelRatio = devicePixelRatio;
     if (!m_rootItem->setProperty("renderDevicePixelRatio", devicePixelRatio)) {
-        qCFatal(sunroomLogPresentation, "Sunroom Main.qml must expose renderDevicePixelRatio");
+        qCFatal(sunplayerLogPresentation, "SunPlayer Main.qml must expose renderDevicePixelRatio");
     }
     configureRenderTarget();
     markDirty();

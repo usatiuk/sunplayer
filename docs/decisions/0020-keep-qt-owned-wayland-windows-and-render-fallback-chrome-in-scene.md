@@ -14,9 +14,9 @@ WSLg and GNOME-style environments may not provide server-side decorations, so
 a normal Qt Vulkan window can otherwise be left without usable move, resize,
 or window buttons.
 
-Sunroom already has exactly one Qt-owned `QWindow`, `wl_surface`, xdg-shell
+SunPlayer already has exactly one Qt-owned `QWindow`, `wl_surface`, xdg-shell
 toplevel, and `VkSurfaceKHR`, plus one redirected Qt Quick scene. Managed
-color adds one Sunroom-owned color-management object to that Qt-owned surface.
+color adds one SunPlayer-owned color-management object to that Qt-owned surface.
 Libdecor is not a decoration attachment API for an existing xdg toplevel: it
 creates and manages the xdg surface/toplevel, configure
 acknowledgements, geometry, commits, and destruction. Libadwaita supplies GTK
@@ -34,15 +34,15 @@ Qt remains the sole native-window and presentation-surface owner.
 Before creating the native window, the Linux context inventories Wayland
 globals:
 
-* If `zxdg_decoration_manager_v1` is advertised, Sunroom leaves the normal Qt
+* If `zxdg_decoration_manager_v1` is advertised, SunPlayer leaves the normal Qt
   window flags unchanged and assumes the supported modern compositor supplies
   server decoration.
-* If the global is absent, Sunroom sets `Qt::FramelessWindowHint` before native
+* If the global is absent, SunPlayer sets `Qt::FramelessWindowHint` before native
   creation and enables one application-chrome layer inside the existing
   redirected QML scene.
 
 This is deliberately a small happy-path policy, not a second negotiation
-engine. Sunroom does not inspect private Qt decoration state, create its own
+engine. SunPlayer does not inspect private Qt decoration state, create its own
 xdg-decoration object, probe with another toplevel, maintain compositor
 allowlists, or switch decoration ownership after mapping. A compositor that
 advertises the protocol but nevertheless leaves Qt's Vulkan window
@@ -60,7 +60,7 @@ The application chrome:
 * reserves titlebar height only when non-player/empty content needs a stable
   inset;
 * disables resize chrome while maximized or fullscreen;
-* uses a black titlebar, fixed Sunroom foreground tint, system symbolic icon
+* uses a black titlebar, fixed SunPlayer foreground tint, system symbolic icon
   names when available, and the existing bundled Lucide subset as fallback;
 * draws one crisp inward outline around the complete client area, independent
   of titlebar opacity, content, and media state; and
@@ -83,7 +83,7 @@ architecture.
 * The fallback geometry and interactions are testable through the shared QML
   boundary and could later be reused by an explicitly scoped Windows custom-
   chrome feature.
-* Theme icons influence glyph shape only. Sunroom controls tint so a light
+* Theme icons influence glyph shape only. SunPlayer controls tint so a light
   desktop icon theme cannot make controls unreadable on the black titlebar.
 * Exact desktop button order, KDecoration/Adwaita styling, exterior shadows,
   and the rare advertised-but-client-decorated negotiation result are not V1

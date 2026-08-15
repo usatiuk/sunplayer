@@ -1,6 +1,6 @@
 file = "sdr-rgb-first-frame.ppm"
 sha256 = "9ae200dd106eee886acaeff5a072863f4871da517fc28b0d3e869b11f8fce13a"
-provenance = "Hand-authored Sunroom test fixture; no external source data"
+provenance = "Hand-authored SunPlayer test fixture; no external source data"
 generator = "none"
 
 [expected]

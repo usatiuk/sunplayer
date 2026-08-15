@@ -20,7 +20,7 @@ coherent presentation contract:
   including while playback is paused.
 
 Linux keeps the macOS-style working contract: numeric `1.0` is active platform
-reference white. Sunroom does not apply Windows scRGB `/80` or
+reference white. SunPlayer does not apply Windows scRGB `/80` or
 `referenceWhiteNits / 80` scaling on Linux. The final PQ pass serializes that
 working coordinate; the compositor maps it to each output.
 
@@ -42,7 +42,7 @@ The implementation is grounded in the Ubuntu Qt 6.10.2, Mesa 26.0.3, Mutter
   requested logical format enum. Require both RGB10A2/HDR10 and
   RGB10A2/pass-through in the raw Vulkan format list.
 * Stock Qt binds protocol version 1 and exposes neither v2 readiness nor
-  description failure. Sunroom must own the narrow v2 protocol boundary.
+  description failure. SunPlayer must own the narrow v2 protocol boundary.
 * A Wayland image description labels buffer content, not a monitor mode.
   Preferred feedback is advisory. Mutter and KWin keep the client description
   separate from their preferred per-output state.
@@ -72,7 +72,7 @@ surface.
 
 The display provider follows the current `wl_surface` using Qt's private native
 surface signals and platform-surface events. For each surface it creates one
-Sunroom-owned color-management surface and one feedback object. It reapplies
+SunPlayer-owned color-management surface and one feedback object. It reapplies
 the currently declared description after exceptional native-surface
 recreation. The window context transfers this one provider exactly once and
 asserts that it is released after the engine and before the native window, so

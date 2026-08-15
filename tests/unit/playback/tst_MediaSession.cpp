@@ -26,41 +26,41 @@ extern "C" {
 #include "playback/MediaSession.h"
 
 namespace {
-QString fixturePath() { return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1.mkv"); }
+QString fixturePath() { return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1.mkv"); }
 
-QString playbackFixturePath() { return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-playback.mkv"); }
+QString playbackFixturePath() { return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-playback.mkv"); }
 
 QString synchronizedFixturePath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-flac-sync.mkv");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-flac-sync.mkv");
 }
 
 QString shortAudioFixturePath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-short-flac.mkv");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-short-flac.mkv");
 }
 
 QString audioLateFixturePath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-audio-late-long-flac.mkv");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-audio-late-long-flac.mkv");
 }
 
 QString videoLateFixturePath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-video-late-flac.mkv");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-video-late-flac.mkv");
 }
 
 QString longVideoTailFixturePath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-short-audio-long-video-flac.mkv");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-short-audio-long-video-flac.mkv");
 }
 
-QString subtitleFixturePath() { return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-subtitles.mkv"); }
+QString subtitleFixturePath() { return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-subtitles.mkv"); }
 
 QString multitrackFixturePath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-multitrack-flac.mkv");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-multitrack-flac.mkv");
 }
 
 QString interFrameSeekFixturePath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-h264-seek.mkv");
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-h264-seek.mkv");
 }
 
-QString replacementFixturePath() { return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-rgb-first-frame.ppm"); }
+QString replacementFixturePath() { return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-rgb-first-frame.ppm"); }
 
 FfmpegVideoDecodeResult cancelledResult() {
     FfmpegVideoDecodeResult result;

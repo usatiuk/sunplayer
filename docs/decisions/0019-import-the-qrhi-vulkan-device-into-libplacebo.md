@@ -8,7 +8,7 @@
 
 ## Context
 
-The native Wayland port needs Qt Quick, Sunroom's final compositor, and
+The native Wayland port needs Qt Quick, SunPlayer's final compositor, and
 libplacebo video rendering to share one Vulkan device. Giving Qt and
 libplacebo separate devices would require cross-device image export/import and
 would duplicate queue, feature, recovery, and lifetime policy. Creating the
@@ -33,14 +33,14 @@ On Linux:
 * `LinuxWaylandWindowContext` owns the `QVulkanInstance` for the native window.
 * QRhi creates and owns the physical-device selection, logical device, and
   graphics queue for each recoverable graphics-domain generation.
-* Sunroom queries the selected physical device and requires Vulkan 1.3,
+* SunPlayer queries the selected physical device and requires Vulkan 1.3,
   `hostQueryReset`, timeline semaphores, and synchronization2. It supplies
   libplacebo with the core 1.0 through 1.3 feature chain that Qt 6.10 enables,
   excluding the two robustness features Qt deliberately disables.
 * Libplacebo imports and borrows QRhi's instance, physical device, device, and
   one graphics queue. The selected graphics/present queue family must also
   support compute because libplacebo creates its compute command pool from the
-  imported family. Sunroom rejects an incompatible QRhi selection before
+  imported family. SunPlayer rejects an incompatible QRhi selection before
   import. Libplacebo never destroys the borrowed native objects.
 * One recursive execution mutex serializes CPU access to that queue. The
   recursive form lets a presentation execution scope call libplacebo, whose
@@ -50,14 +50,14 @@ On Linux:
   libplacebo, but there is no output-target CPU copy or second full-frame
   target copy.
 * Producer access uses libplacebo's Vulkan release/hold API plus one target-
-  owned timeline semaphore. Before releasing the image to libplacebo, Sunroom
+  owned timeline semaphore. Before releasing the image to libplacebo, SunPlayer
   submits the next timeline signal on the shared queue after all earlier QRhi
   work and passes that exact value as libplacebo's wait dependency. This makes
   prior QRhi sampling available before the next producer write without a
   queue-idle stall.
 * After rendering, libplacebo holds the image in the deterministic
   `SHADER_READ_ONLY_OPTIMAL` layout and signals the next timeline value. Before
-  QRhi samples it, Sunroom records one same-layout synchronization2 image
+  QRhi samples it, SunPlayer records one same-layout synchronization2 image
   barrier in the current QRhi command buffer, covering prior memory writes and
   making them visible to fragment sampling. `QRhiTexture::setNativeLayout()`
   reconciles Qt's layout tracker with that external handoff.

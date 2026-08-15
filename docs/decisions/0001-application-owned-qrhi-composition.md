@@ -5,7 +5,7 @@
 
 ## Context
 
-Sunroom needs to combine display-targeted HDR video, subtitles, Qt Quick UI,
+SunPlayer needs to combine display-targeted HDR video, subtitles, Qt Quick UI,
 and diagnostics before the final SDR or HDR presentation transform. The
 application must know which graphics device and swapchain are active, control
 the final output encoding, and eventually share textures with libplacebo and
@@ -49,7 +49,7 @@ Vulkan on native-Wayland Linux, each with one window.
 
 Benefits:
 
-* Sunroom controls the final color, luminance, geometry, and presentation
+* SunPlayer controls the final color, luminance, geometry, and presentation
   operation.
 * Qt Quick and custom GPU rendering share one device without an extra
   cross-device copy.

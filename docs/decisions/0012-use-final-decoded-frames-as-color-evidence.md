@@ -10,7 +10,7 @@
 Rendering needs one stable boundary describing what decoded pixels mean. FFmpeg
 can obtain color fields and coded side data from the bitstream, codec
 parameters, or codec context, and its decode core fills unspecified frame
-fields from that context. At Sunroom's returned-frame boundary, a populated
+fields from that context. At SunPlayer's returned-frame boundary, a populated
 field cannot always be attributed more narrowly than “final FFmpeg-decoded
 value.”
 
@@ -24,7 +24,7 @@ The retained final `AVFrame` is the authoritative input for pixel storage,
 scalar color fields, and side data. The existing `VideoSignalDescription`
 remains a small display-only snapshot of names and component depth. Dynamic
 metadata diagnostics inspect the retained frame and libplacebo's mapped frame
-when needed; Sunroom does not build a parallel metadata model. FFmpeg and
+when needed; SunPlayer does not build a parallel metadata model. FFmpeg and
 libplacebo remain responsible for interpretation.
 
 Timing, frame identity, storage, and geometry remain in their existing
@@ -32,7 +32,7 @@ Timing, frame identity, storage, and geometry remain in their existing
 when a policy needs them but does not become a second frame descriptor.
 
 Diagnostics label an ordinary populated field simply as a final
-FFmpeg-decoded value. Sunroom does not try to reconstruct whether the decoder
+FFmpeg-decoded value. SunPlayer does not try to reconstruct whether the decoder
 or FFmpeg's context fallback originally supplied it.
 
 Stream state may be frozen when FFmpeg demonstrably does not propagate a
@@ -71,7 +71,7 @@ Rejected. FFmpeg already handles ordinary propagation, and duplicating it
 creates more policy and stale-state risk than value. A narrow, evidenced copy
 onto the current decoded frame before retention is acceptable.
 
-### Replace library inference with a Sunroom metadata policy engine
+### Replace library inference with a SunPlayer metadata policy engine
 
 Rejected. Product-significant fallback should be diagnosed, but duplicating
 FFmpeg/libplacebo interpretation would be more complex and less trustworthy.

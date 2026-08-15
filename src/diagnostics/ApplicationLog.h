@@ -29,7 +29,7 @@ struct ApplicationLogOptions {
 };
 
 // Installs one process-wide Qt message handler while preserving the handler
-// that was active before Sunroom. The handler always forwards to that previous
+// that was active before SunPlayer. The handler always forwards to that previous
 // handler and optionally mirrors bounded, formatted records into a session
 // file. It does not replace QLoggingCategory filtering.
 class ApplicationLog final {

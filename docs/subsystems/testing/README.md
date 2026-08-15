@@ -2,7 +2,7 @@
 
 ## Status
 
-Sunroom has CTest/Qt Test targets for pure presentation-target policy,
+SunPlayer has CTest/Qt Test targets for pure presentation-target policy,
 video-viewport state, rendered-video surface validity/reuse, and real D3D11 or
 Metal QRhi/libplacebo producer/compositor capture. A non-presenting Qt Quick
 component test covers the real QML shell's initial-property and viewport
@@ -20,7 +20,7 @@ cover real continuous playback, controlled timestamp advancement, play/pause,
 drain/end, nonzero seek, paused/playing intent across seek, seek-to-end,
 position-preserving fallback, cancellation, stale-generation rejection,
 destruction, and presentation failure. A no-window application mode loads the
-packaged QML module with its production type registrations. Sunroom has narrow
+packaged QML module with its production type registrations. SunPlayer has narrow
 registered startup and playback scenarios on all three current platforms plus a
 registered Windows fullscreen scenario. Linux fullscreen is run explicitly
 while its WSLg/compositor convergence remains unstable. There is not yet a
@@ -112,8 +112,8 @@ The FFmpeg video integration target retains its historical
 `ffmpeg-first-frame` CTest name and is labeled `hardware-decode` in addition to
 its FFmpeg/GPU/platform labels. Direct manual execution reports an explicit Qt
 Test skip when the machine lacks that capability. The registered CTest target
-sets `SUNROOM_REQUIRE_D3D11VA=1` on Windows and
-`SUNROOM_REQUIRE_VIDEOTOOLBOX=1` on macOS, so a missing required capability
+sets `SUNPLAYER_REQUIRE_D3D11VA=1` on Windows and
+`SUNPLAYER_REQUIRE_VIDEOTOOLBOX=1` on macOS, so a missing required capability
 fails instead of silently appearing as covered.
 
 The QML shell component test uses `QTEST_MAIN` because Qt Quick Controls and

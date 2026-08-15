@@ -1,6 +1,6 @@
 file = "hdr10-pq-hevc.hevc"
 sha256 = "0179f288a48cfa5e57cd10563f21fb1574f2d375d07dfdba53c6313b8728f3c0"
-provenance = "Generated analytically for Sunroom; no external source media"
+provenance = "Generated analytically for SunPlayer; no external source media"
 generator = "FFmpeg 8.1.2-full_build-www.gyan.dev with libx265 4.2+37-b81f650"
 
 generation_command = """

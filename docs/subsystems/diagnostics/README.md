@@ -2,7 +2,7 @@
 
 ## Status
 
-Sunroom uses Qt logging categories and writes a bounded per-session application
+SunPlayer uses Qt logging categories and writes a bounded per-session application
 log by default. The initial instrumentation covers application lifetime and
 the open, probe, seek, demux, decode, normalized-preroll, and completion
 boundaries. Existing graphics, video, presentation, and platform messages use
@@ -33,7 +33,7 @@ The accepted logging policy is recorded in
 Use Qt's logger directly:
 
 ```cpp
-qCInfo(sunroomLogPlayback)
+qCInfo(sunplayerLogPlayback)
     << "event=playback.seek_start"
     << "generation=" + QString::number(generation)
     << "positionUs=" + QString::number(position);
@@ -42,14 +42,14 @@ qCInfo(sunroomLogPlayback)
 Category names follow subsystem ownership:
 
 ```text
-sunroom.application
-sunroom.media.io
-sunroom.media.decode
-sunroom.playback
-sunroom.graphics
-sunroom.video
-sunroom.presentation
-sunroom.platform
+sunplayer.application
+sunplayer.media.io
+sunplayer.media.decode
+sunplayer.playback
+sunplayer.graphics
+sunplayer.video
+sunplayer.presentation
+sunplayer.platform
 ```
 
 Add a narrower category only when it needs an independently useful runtime
@@ -76,7 +76,7 @@ application from continuing.
 By default, each process writes an info-level session file named like:
 
 ```text
-<Qt temporary location>/Sunroom/logs/sunroom-<UTC timestamp>-<pid>.log
+<Qt temporary location>/SunPlayer/logs/sunplayer-<UTC timestamp>-<pid>.log
 ```
 
 The file is capped at 8 MiB and at most ten automatic session files are
@@ -100,12 +100,12 @@ still takes precedence.
 Runtime controls:
 
 ```text
-sunroom --debug-log
-sunroom --log-file <path>
-sunroom --no-log-file
+sunplayer --debug-log
+sunplayer --log-file <path>
+sunplayer --no-log-file
 ```
 
-`--debug-log` enables `sunroom.*.debug` records. Qt's standard
+`--debug-log` enables `sunplayer.*.debug` records. Qt's standard
 `QT_LOGGING_RULES` remains authoritative for additional category filtering,
 and every record it admits reaches the session file as well as the previous
 handler. `QT_MESSAGE_PATTERN` continues to control console formatting.

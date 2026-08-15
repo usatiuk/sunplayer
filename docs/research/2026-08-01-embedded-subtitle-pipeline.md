@@ -4,7 +4,7 @@ Date: 2026-08-01
 
 ## Question
 
-How should Sunroom add selectable text and bitmap subtitles without opening the
+How should SunPlayer add selectable text and bitmap subtitles without opening the
 media twice, inventing a second clock, or coupling subtitle decoding to QML?
 
 ## Current-system evidence
@@ -87,7 +87,7 @@ them through one overlay contract:
 ## Real-file Matroska compression finding
 
 Manual acceptance against the UHD Dredd Matroska exposed a dependency feature
-rather than a subtitle scheduling defect. Sunroom discovered and selected the
+rather than a subtitle scheduling defect. SunPlayer discovered and selected the
 PGS stream, and the shared packet router delivered its packets, but the packet
 payload entering `avcodec_decode_subtitle2()` began with zlib bytes (`78 DA`)
 and produced no subtitle. The configured FFmpeg dependency reported
@@ -114,7 +114,7 @@ the FFmpeg zlib feature makes the compressed row produce no subtitle events.
 2. Discover every embedded subtitle track during the existing probe. Default to
    Off; selecting a stream performs the existing generation-scoped restart at
    the current canonical position.
-3. Copy decoded output into immutable Sunroom-owned data before freeing
+3. Copy decoded output into immutable SunPlayer-owned data before freeing
    `AVSubtitle`:
 
    ```text

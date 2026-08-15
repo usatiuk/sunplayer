@@ -106,17 +106,17 @@ void logLibplacebo(void*, enum pl_log_level level, char const* message) {
     switch (level) {
     case PL_LOG_FATAL:
     case PL_LOG_ERR:
-        qCCritical(sunroomLogGraphics).noquote() << "libplacebo:" << message;
+        qCCritical(sunplayerLogGraphics).noquote() << "libplacebo:" << message;
         break;
     case PL_LOG_WARN:
-        qCWarning(sunroomLogGraphics).noquote() << "libplacebo:" << message;
+        qCWarning(sunplayerLogGraphics).noquote() << "libplacebo:" << message;
         break;
     case PL_LOG_INFO:
-        qCInfo(sunroomLogGraphics).noquote() << "libplacebo:" << message;
+        qCInfo(sunplayerLogGraphics).noquote() << "libplacebo:" << message;
         break;
     case PL_LOG_DEBUG:
     case PL_LOG_TRACE:
-        qCDebug(sunroomLogGraphics).noquote() << "libplacebo:" << message;
+        qCDebug(sunplayerLogGraphics).noquote() << "libplacebo:" << message;
         break;
     case PL_LOG_NONE:
         break;
@@ -157,14 +157,14 @@ class D3D11GraphicsDeviceDomain final : public GraphicsDeviceDomain {
             createResult = createNativeDevice(D3D11_CREATE_DEVICE_BGRA_SUPPORT);
         }
         if (FAILED(createResult) || !m_device || !m_context) {
-            qCCritical(sunroomLogGraphics, "Could not create the video-capable D3D11 device: 0x%08lx",
+            qCCritical(sunplayerLogGraphics, "Could not create the video-capable D3D11 device: 0x%08lx",
                        static_cast<unsigned long>(createResult));
             return;
         }
 
         ComPtr<ID3D11DeviceContext1> context1;
         if (FAILED(m_context.As(&context1))) {
-            qCCritical(sunroomLogGraphics, "The D3D11 immediate context does not provide "
+            qCCritical(sunplayerLogGraphics, "The D3D11 immediate context does not provide "
                                            "ID3D11DeviceContext1");
             return;
         }
@@ -205,11 +205,11 @@ class D3D11GraphicsDeviceDomain final : public GraphicsDeviceDomain {
 
         auto const* const nativeHandles = static_cast<QRhiD3D11NativeHandles const*>(m_rhi->nativeHandles());
         if (!nativeHandles || !nativeHandles->dev || !nativeHandles->context) {
-            qCCritical(sunroomLogGraphics, "QRhi did not expose its D3D11 device and immediate context");
+            qCCritical(sunplayerLogGraphics, "QRhi did not expose its D3D11 device and immediate context");
             return;
         }
         if (nativeHandles->dev != m_device.Get() || nativeHandles->context != m_context.Get()) {
-            qCCritical(sunroomLogGraphics, "QRhi did not retain the imported D3D11 device domain");
+            qCCritical(sunplayerLogGraphics, "QRhi did not retain the imported D3D11 device domain");
             return;
         }
 
@@ -227,7 +227,7 @@ class D3D11GraphicsDeviceDomain final : public GraphicsDeviceDomain {
             libplaceboContext->Release();
         }
         if (!sharedImmediateContext) {
-            qCCritical(sunroomLogGraphics, "QRhi and libplacebo did not resolve the same D3D11 immediate context");
+            qCCritical(sunplayerLogGraphics, "QRhi and libplacebo did not resolve the same D3D11 immediate context");
             return;
         }
         m_libplacebo = {
@@ -241,7 +241,7 @@ class D3D11GraphicsDeviceDomain final : public GraphicsDeviceDomain {
                                   .unavailableReason = std::move(hardwareDecodeUnavailableReason),
                               };
         if (!m_videoDecode.isAvailable()) {
-            qCWarning(sunroomLogGraphics).noquote() << m_videoDecode.unavailableReason;
+            qCWarning(sunplayerLogGraphics).noquote() << m_videoDecode.unavailableReason;
         }
 
         m_diagnostics.backend = GraphicsBackend::D3D11;

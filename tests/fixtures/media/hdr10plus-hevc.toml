@@ -1,6 +1,6 @@
 file = "hdr10plus-hevc.hevc"
 sha256 = "83f1bb09698f1e6e3e7f19ecf364c89c17e486e72b7ea34a555548a81c4db20c"
-provenance = "Sunroom analytical HDR10 base stream plus hand-authored two-scene HDR10+ metadata"
+provenance = "SunPlayer analytical HDR10 base stream plus hand-authored two-scene HDR10+ metadata"
 generator = "hdr10plus_tool 1.7.2 x86_64-pc-windows-msvc"
 generator_sha256 = "82b2d560073941b14c6511a431f429e33e134e5caefb60d7e8f6f6e6da8e16ba"
 source_metadata = "hdr10plus-scenes.json"

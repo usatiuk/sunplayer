@@ -5,7 +5,7 @@
 
 ## Context
 
-Sunroom needs user seeking now and will also need decoder restarts for hardware
+SunPlayer needs user seeking now and will also need decoder restarts for hardware
 fallback and graphics-device recovery. The current pipeline deliberately gives
 one worker exclusive ownership of each FFmpeg context, bounds retained packets
 and frames, and rejects stale work by playback generation.

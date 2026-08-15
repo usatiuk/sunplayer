@@ -74,9 +74,9 @@ command:
 
 * `clang-format` was applied to every changed C++ source and header, and
   `git diff --check` passed.
-* The affected targets `sunroom_decoded_video_frame_tests`,
-  `sunroom_ffmpeg_media_decoder_tests`, `sunroom_media_session_tests`, and
-  `sunroom_qml_shell_tests` built successfully.
+* The affected targets `sunplayer_decoded_video_frame_tests`,
+  `sunplayer_ffmpeg_media_decoder_tests`, `sunplayer_media_session_tests`, and
+  `sunplayer_qml_shell_tests` built successfully.
 * Focused `ctest -R
   "^(decoded-video-frame|ffmpeg-media-decoder|media-session|qml-shell)$"`
   validation passed 4/4 after correcting a synthetic test fixture to

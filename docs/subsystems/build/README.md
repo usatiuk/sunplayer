@@ -74,10 +74,10 @@ Windows and macOS use vcpkg manifest mode. The repository owns:
 * `cmake/vcpkg/triplets/x64-windows-clangcl.cmake` and its chainloaded
   toolchain, so compiler identity participates in vcpkg's package ABI and
   binary-cache key.
-* `cmake/SunroomFFmpeg.cmake`, which discovers the vcpkg module before Qt can
+* `cmake/SunPlayerFFmpeg.cmake`, which discovers the vcpkg module before Qt can
   introduce its case-variant finder and wraps component import libraries and
   DLLs in configuration-aware imported targets.
-* `cmake/SunroomLibass.cmake`, which exposes vcpkg's pkg-config package on
+* `cmake/SunPlayerLibass.cmake`, which exposes vcpkg's pkg-config package on
   Windows and the system pkg-config package on Linux through one project-local
   target without duplicating libass's dependency graph.
 * the manifest's Windows-only `pkgconf` host dependency and explicit
@@ -100,7 +100,7 @@ Linux does not auto-select vcpkg and needs no vcpkg variables. It consumes the
 distribution's CMake config packages and pkg-config imported targets directly;
 an explicitly supplied CMake toolchain remains honored, but no Linux vcpkg
 configuration is currently claimed or tested. FFmpeg is wrapped by the same
-`sunroom_ffmpeg` target on both platforms because Windows needs explicit DLL
+`sunplayer_ffmpeg` target on both platforms because Windows needs explicit DLL
 staging while Linux consumes the system pkg-config target. Linux configures
 only when the expected FFmpeg 8 ABI majors, libplacebo API 360 family, Qt
 6.10 family, libass, Vulkan 1.3+, Wayland client/scanner and
@@ -133,7 +133,7 @@ The Windows libplacebo feature set enables D3D11, Shaderc, the shared
 SPIRV-Cross C API, and libplacebo's built-in DOVI handling. The optional
 external libdovi dependency, Vulkan, and OpenGL remain disabled. glslang and
 SPIRV-Tools are transitive implementation dependencies of the Shaderc build,
-not enabled Sunroom graphics backends. The port also stages libplacebo's
+not enabled SunPlayer graphics backends. The port also stages libplacebo's
 pinned Vulkan-Headers source submodule because its disabled Vulkan stub and
 public header require the types; this is not a Vulkan SDK, loader, runtime, or
 enabled backend. The compiler and dependency experiments behind this choice
@@ -208,19 +208,19 @@ the focused dependency boundary.
 
 ## Targets and resources
 
-The project defines the `sunroom` executable plus shared production static
-libraries: `sunroom_diagnostics`, `sunroom_audio`, `sunroom_media`, and
-`sunroom_video_pipeline`. Linux additionally builds `sunroom_linux_platform`
+The project defines the `sunplayer` executable plus shared production static
+libraries: `sunplayer_diagnostics`, `sunplayer_audio`, `sunplayer_media`, and
+`sunplayer_video_pipeline`. Linux additionally builds `sunplayer_linux_platform`
 for the native Wayland/Vulkan boundary. The application and integration tests
 link these same compiled libraries rather than maintaining parallel source
 lists.
 
 `qt_add_qml_module()` packages `src/app/Main.qml`, `AppShell.qml`,
 `pages/VideoPage.qml`, `pages/PlayerPage.qml`, and `pages/HdrLabPage.qml` under
-the `Sunroom` module together with the optional Wayland application chrome and
+the `SunPlayer` module together with the optional Wayland application chrome and
 its explicitly listed Lucide fallbacks.
 Qt's cross-target foreign-type generation exposes QML-marked source contracts
-from `sunroom_video_pipeline` without compiling their QObject metadata into the
+from `sunplayer_video_pipeline` without compiling their QObject metadata into the
 application again. `qt_add_shaders()` precompiles and packages the fullscreen
 vertex, diagnostic video producer, and compositor shaders from
 `src/presentation/shaders/` under `/shaders`.
@@ -249,7 +249,7 @@ have production graphics startup.
 ## Installation
 
 CMake installs the executable or bundle through `GNUInstallDirs`. Linux embeds
-the Sunroom QML module in the executable while keeping Qt's imported QML
+the SunPlayer QML module in the executable while keeping Qt's imported QML
 modules and native/media libraries system-owned; it does not run Qt's
 deployment copier. The eventual distro package must express those runtime
 package dependencies. On Windows, vcpkg's app-local dependency walker installs the executable's complete
@@ -261,9 +261,9 @@ the current Qt deployment step with:
 * No unsupported-platform configuration error.
 * No app-local D3D or DXC shader-compiler deployment.
 
-Sunroom's Windows backend is D3D11-only. Qt 6.11 supports Windows 10 1809 or
+SunPlayer's Windows backend is D3D11-only. Qt 6.11 supports Windows 10 1809 or
 newer, where `d3dcompiler_47.dll` is an operating-system component. Both Qt's
-D3D11 QRhi path and libplacebo prefer that serviced System32 copy; Sunroom does
+D3D11 QRhi path and libplacebo prefer that serviced System32 copy; SunPlayer does
 not expose Qt's D3D12/Shader Model 6 path that would use the separately
 distributed `dxcompiler.dll` and `dxil.dll`. The deployment flags therefore
 exclude all three redundant app-local copies instead of deleting them after
@@ -276,7 +276,7 @@ application and runs its `--verify-qml` probe. That probe obtains its deployed
 import directory from `QLibraryInfo`, so the same boundary follows the build
 tree's local `qt.conf` and Qt's standard install layout without duplicating
 either path. Trusted push and manual-dispatch runs then upload that complete
-Release install tree as a seven-day `sunroom-windows-release-<commit>` developer
+Release install tree as a seven-day `sunplayer-windows-release-<commit>` developer
 artifact; pull requests do not publish contributor-built executables. CI also
 rejects an install tree containing the excluded D3D or DXC compiler DLLs. Qt's
 deployment helper supplies the supported MSVC compiler-runtime payload. The
@@ -287,7 +287,7 @@ Build-tree application and test targets use vcpkg's app-local walker and CMake's
 `x_vcpkg_install_local_dependencies()` helper. That executable-import traversal
 includes libass, its shaping/font libraries, FFmpeg, zlib, cubeb, libplacebo,
 and graphics dependencies even when pkg-config does not expose them as CMake
-runtime targets. Sunroom's config-aware FFmpeg component targets also make its
+runtime targets. SunPlayer's config-aware FFmpeg component targets also make its
 four DLLs participate in CMake's standard traversal. This prevents loader
 dialogs and makes dependency boundaries reproducible during development.
 
@@ -377,11 +377,11 @@ HDR, physical-display, physical-audio, route-migration, or acoustic-sync
 evidence.
 
 The Windows job uses `windows-2022`, exact Qt 6.11.1 installed by a pinned
-`aqtinstall` revision with Qt 6.11 repository-layout support, MSVC for Sunroom,
+`aqtinstall` revision with Qt 6.11 repository-layout support, MSVC for SunPlayer,
 and the root manifest's clang-cl vcpkg triplet for dependencies. It caches only
 the exact Qt tree and vcpkg's ABI-addressed binary archives. It builds all GPU
 and device code, runs QML lint, then excludes CTests labeled `device` or `gpu`
-because a generic hosted runner does not satisfy Sunroom's hardware-only D3D11
+because a generic hosted runner does not satisfy SunPlayer's hardware-only D3D11
 or default-audio-device contracts. That exclusion also drops the software/HDR
 cases bundled into the mixed `ffmpeg-first-frame` executable; splitting a
 hosted software subset is deferred while the complete test remains dedicated-
@@ -405,7 +405,7 @@ corresponding-source, codec-policy, and redistribution work remains deferred.
 The complete Debug build and all 28 registered CTest cases pass in the current
 Windows/MSVC/Ninja environment after initializing the Visual Studio developer
 environment. The dependency graph is built under the project-local clang-cl
-triplet; the Sunroom executable remains MSVC-built. This includes the cubeb
+triplet; the SunPlayer executable remains MSVC-built. This includes the cubeb
 ABI/backend check, FFmpeg libswresample boundary, one-pass synchronized decode,
 bounded controlled sink, real D3D11VA decode/import, and GPU compositor tests.
 A bounded application scenario additionally opens an audio-first fixture in
@@ -431,7 +431,7 @@ libraries under distribution ownership.
 WSLg production smoke testing creates the real Qt Wayland window, Vulkan 1.3
 QRhi domain, imported libplacebo device, direct RGBA16F target, redirected QML
 scene, and swapchain. The installed Release executable verifies its embedded
-Sunroom module against system Qt imports. A prior video-only fixture run passed
+SunPlayer module against system Qt imports. A prior video-only fixture run passed
 fullscreen/restoration; the current audio-bearing explicit run ended in an
 unresolved buffer/configure protocol failure before its final assertion. The
 environment uses

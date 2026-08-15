@@ -396,7 +396,7 @@ The selected path and any fallback reason belong in diagnostics.
 
 The retained final FFmpeg `AVFrame` is the source-color truth. FFmpeg owns
 decoder and codec-context propagation; libplacebo owns rendering
-interpretation. Sunroom does not normalize the same metadata into a parallel
+interpretation. SunPlayer does not normalize the same metadata into a parallel
 policy model or blanket-copy stream properties after decode.
 
 A narrow exception is appropriate only when a pinned-library propagation gap

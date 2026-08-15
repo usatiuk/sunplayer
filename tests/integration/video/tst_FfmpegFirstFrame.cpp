@@ -393,8 +393,8 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
     QFETCH(int, formatKind);
     auto const kind = static_cast<HdrFixtureKind>(formatKind);
 
-    QString const fixture = QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/%1.hevc").arg(fixtureStem);
-    QString const manifest = QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/%1.toml").arg(fixtureStem);
+    QString const fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/%1.hevc").arg(fixtureStem);
+    QString const manifest = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/%1.toml").arg(fixtureStem);
     QByteArray const declaredHash = expectedFixtureHash(manifest);
     QVERIFY2(!declaredHash.isEmpty(), "Fixture manifest has no valid SHA-256");
     QCOMPARE(fixtureHash(fixture), declaredHash);
@@ -538,8 +538,8 @@ void FfmpegFirstFrameTest::realDemuxDecodeImportAndComposition() {
 #if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
     QSKIP("This test requires a D3D11 or Metal graphics domain");
 #else
-    const QString fixture = QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-rgb-first-frame.ppm");
-    QString const manifest = QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-rgb-first-frame.toml");
+    const QString fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-rgb-first-frame.ppm");
+    QString const manifest = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-rgb-first-frame.toml");
     QByteArray const declaredHash = expectedFixtureHash(manifest);
     QVERIFY2(!declaredHash.isEmpty(), "Fixture manifest has no valid SHA-256");
     QCOMPARE(fixtureHash(fixture), declaredHash);
@@ -708,8 +708,8 @@ void FfmpegFirstFrameTest::compressedYuvMetadataAndRendering() {
 #if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
     QSKIP("This test requires a D3D11 or Metal graphics domain");
 #else
-    const QString fixture = QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1.mkv");
-    QString const manifest = QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1.toml");
+    const QString fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1.mkv");
+    QString const manifest = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1.toml");
     QByteArray const declaredHash = expectedFixtureHash(manifest);
     QVERIFY2(!declaredHash.isEmpty(), "Fixture manifest has no valid SHA-256");
     QCOMPARE(fixtureHash(fixture), declaredHash);
@@ -828,7 +828,7 @@ void FfmpegFirstFrameTest::compressedYuvMetadataAndRendering() {
 }
 
 void FfmpegFirstFrameTest::continuousDecodeDrainsEveryFrame() {
-    QString const fixture = QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1.mkv");
+    QString const fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1.mkv");
     std::vector<std::shared_ptr<DecodedVideoFrame const>> frames;
     FfmpegVideoDecodeResult const result = decodeVideoFrames(
         {
@@ -860,8 +860,8 @@ void FfmpegFirstFrameTest::continuousDecodeDrainsEveryFrame() {
 }
 
 void FfmpegFirstFrameTest::seekDecodesInterFramePreroll() {
-    QString const fixture = QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-h264-seek.mkv");
-    QString const manifest = QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-h264-seek.toml");
+    QString const fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-h264-seek.mkv");
+    QString const manifest = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-h264-seek.toml");
     QByteArray const declaredHash = expectedFixtureHash(manifest);
     QVERIFY2(!declaredHash.isEmpty(), "Fixture manifest has no valid SHA-256");
     QCOMPARE(fixtureHash(fixture), declaredHash);
@@ -920,8 +920,8 @@ void FfmpegFirstFrameTest::seekDecodesInterFramePreroll() {
 }
 
 void FfmpegFirstFrameTest::longTimelineSeekUses64BitTarget() {
-    QString const fixture = QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-long-timeline.mkv");
-    QString const manifest = QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-long-timeline.toml");
+    QString const fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-long-timeline.mkv");
+    QString const manifest = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-long-timeline.toml");
     QByteArray const declaredHash = expectedFixtureHash(manifest);
     QVERIFY2(!declaredHash.isEmpty(), "Fixture manifest has no valid SHA-256");
     QCOMPARE(fixtureHash(fixture), declaredHash);
@@ -965,7 +965,7 @@ void FfmpegFirstFrameTest::longTimelineSeekUses64BitTarget() {
 }
 
 void FfmpegFirstFrameTest::hardwareDecodeFailureRetriesSoftware() {
-    QString const fixture = QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1.mkv");
+    QString const fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1.mkv");
     VideoFrameIdentity const identity{
         .playbackGeneration = 19,
         .decoderRevision = 1,
@@ -1028,7 +1028,7 @@ void FfmpegFirstFrameTest::videoToolboxHardwareDecodeDirectImport() {
     QFETCH(int, componentDepth);
     QFETCH(float, comparisonTolerance);
 
-    QString const fixture = QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/%1").arg(fixtureName);
+    QString const fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/%1").arg(fixtureName);
     std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
     QVERIFY2(graphics, "Could not create the Metal graphics domain");
     QCOMPARE(graphics->backend(), GraphicsBackend::Metal);
@@ -1036,7 +1036,7 @@ void FfmpegFirstFrameTest::videoToolboxHardwareDecodeDirectImport() {
     VideoHardwareDecodeCapability const& hardwareDecode = graphics->videoDecodeCapability();
     if (!hardwareDecode.isAvailable()) {
         QString const reason = QStringLiteral("VideoToolbox unavailable: %1").arg(hardwareDecode.unavailableReason);
-        if (qEnvironmentVariableIntValue("SUNROOM_REQUIRE_VIDEOTOOLBOX") != 0) {
+        if (qEnvironmentVariableIntValue("SUNPLAYER_REQUIRE_VIDEOTOOLBOX") != 0) {
             QFAIL(qPrintable(reason));
         }
         QSKIP(qPrintable(reason));
@@ -1137,7 +1137,7 @@ void FfmpegFirstFrameTest::continuousVideoToolboxDecodeAndImport() {
 #ifndef Q_OS_MACOS
     QSKIP("VideoToolbox decoding is macOS-specific");
 #else
-    const QString fixture = QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-h264.mkv");
+    const QString fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-h264.mkv");
     std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
     QVERIFY2(graphics, "Could not create the Metal graphics domain");
     VideoHardwareDecodeCapability const& hardwareDecode = graphics->videoDecodeCapability();
@@ -1199,12 +1199,12 @@ void FfmpegFirstFrameTest::continuousD3d11DecodeRetainsBoundedFrames() {
 #ifndef Q_OS_WIN
     QSKIP("D3D11VA decoding is Windows-specific");
 #else
-    const QString fixture = QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-h264.mkv");
+    const QString fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-h264.mkv");
     std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
     QVERIFY2(graphics, "Could not create D3D11 graphics domain");
     VideoHardwareDecodeCapability const capability = graphics->videoDecodeCapability();
     if (!capability.isAvailable()) {
-        if (qEnvironmentVariableIntValue("SUNROOM_REQUIRE_D3D11VA") != 0) {
+        if (qEnvironmentVariableIntValue("SUNPLAYER_REQUIRE_D3D11VA") != 0) {
             QFAIL(qPrintable(
                 QStringLiteral("D3D11VA is required by this test run: %1").arg(capability.unavailableReason)));
         }
@@ -1248,8 +1248,8 @@ void FfmpegFirstFrameTest::d3d11HardwareDecodeDirectImport() {
 #ifndef Q_OS_WIN
     QSKIP("D3D11VA direct import is Windows-specific");
 #else
-    const QString fixture = QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-h264.mkv");
-    QString const manifest = QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-h264.toml");
+    const QString fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-h264.mkv");
+    QString const manifest = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-h264.toml");
     QByteArray const declaredHash = expectedFixtureHash(manifest);
     QVERIFY2(!declaredHash.isEmpty(), "Fixture manifest has no valid SHA-256");
     QCOMPARE(fixtureHash(fixture), declaredHash);
@@ -1259,7 +1259,7 @@ void FfmpegFirstFrameTest::d3d11HardwareDecodeDirectImport() {
     VideoHardwareDecodeCapability const& hardwareDecode = graphics->videoDecodeCapability();
     if (!hardwareDecode.isAvailable()) {
         QString const reason = QStringLiteral("D3D11VA unavailable: %1").arg(hardwareDecode.unavailableReason);
-        if (qEnvironmentVariableIntValue("SUNROOM_REQUIRE_D3D11VA") != 0) {
+        if (qEnvironmentVariableIntValue("SUNPLAYER_REQUIRE_D3D11VA") != 0) {
             QFAIL(qPrintable(reason));
         }
         QSKIP(qPrintable(reason));

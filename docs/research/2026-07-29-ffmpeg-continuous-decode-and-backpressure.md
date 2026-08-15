@@ -82,7 +82,7 @@ Source:
 
 ## Implementation consequences
 
-Sunroom uses one demux owner, one decoder owner, a selected-video channel
+SunPlayer uses one demux owner, one decoder owner, a selected-video channel
 bounded to 64 packets/four MiB, and a three-frame decoded mailbox. The
 continuous decoder is also the implementation behind the focused first-frame
 adapter. The registered hardware test decodes and retains all three H.264

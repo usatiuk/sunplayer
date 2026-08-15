@@ -2,7 +2,7 @@
 
 ## Question
 
-Why does Sunroom briefly show a white client area while opening on Windows,
+Why does SunPlayer briefly show a white client area while opening on Windows,
 and how can it provide a black startup background without weakening the D3D11
 HDR presentation path?
 
@@ -13,7 +13,7 @@ backend. macOS and native Wayland do not share this native message path.
 
 `main.cpp` calls `PresentationWindow::show()` before entering the event loop.
 Windows then asks Qt to erase and paint the newly visible HWND. Qt turns
-`WM_PAINT` into the exposure that lets Sunroom create its QRhi swapchain and
+`WM_PAINT` into the exposure that lets SunPlayer create its QRhi swapchain and
 render the redirected Qt Quick scene. The first application-owned frame is
 black, but it cannot reach DWM until `QRhi::endFrame()` successfully presents
 the swapchain.
@@ -53,11 +53,11 @@ Primary sources:
 
 ## Accepted boundary
 
-Sunroom may fill `WM_ERASEBKGND` with black only while the current native
+SunPlayer may fill `WM_ERASEBKGND` with black only while the current native
 surface has not completed a successful QRhi presentation. It must let Qt
 continue to handle `WM_PAINT`, because that exposure drives first presentation.
 Once `QRhi::endFrame()` succeeds, Direct3D owns the client area for the rest of
-that native-surface lifetime and Sunroom performs no further GDI painting.
+that native-surface lifetime and SunPlayer performs no further GDI painting.
 
 The state belongs to the presentation engine because only that owner knows
 whether presentation succeeded. A newly created native surface starts a new

@@ -5,7 +5,7 @@
 
 ## Question
 
-How can Sunroom add accurate user seeking without weakening the existing
+How can SunPlayer add accurate user seeking without weakening the existing
 single-owner FFmpeg lifecycle, bounded queues, cancellation, hardware-frame
 lifetime, or generation invalidation?
 
@@ -33,7 +33,7 @@ and falls back internally to the older keyframe seek implementation. Adding a
 second application-level fallback would create different behavior rather than
 improve reliability.
 
-Sunroom's current operation probes and selects the stream before
+SunPlayer's current operation probes and selects the stream before
 `AVFormatContext` moves to its demux worker. Its `AVCodecContext` remains on
 the decoder worker. Therefore a fresh operation can perform the seek before
 either context begins packet processing without adding a cross-thread command
@@ -65,7 +65,7 @@ microsecond increment through a 32-bit `AVRational` numerator. See
 * Seeking positions the demuxer at a dependency-safe keyframe. Dependent
   frames must still be decoded; packets or frames must not be discarded
   before decode merely because their timestamp precedes the request.
-* Decoded preroll must be filtered before Sunroom's three-frame mailbox.
+* Decoded preroll must be filtered before SunPlayer's three-frame mailbox.
   Otherwise a long GOP can fill the mailbox before the requested frame can be
   reached.
 * A decoded frame duration is authoritative only when FFmpeg supplied it.

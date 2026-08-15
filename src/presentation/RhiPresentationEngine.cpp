@@ -35,7 +35,7 @@ float positiveOrFallback(float value, float fallback, char const* name) {
     if (std::isfinite(value) && value > 0.0f) {
         return value;
     }
-    qCWarning(sunroomLogPresentation, "QRhi reported invalid %s: %g; using %g", name, value, fallback);
+    qCWarning(sunplayerLogPresentation, "QRhi reported invalid %s: %g; using %g", name, value, fallback);
     return fallback;
 }
 
@@ -43,7 +43,7 @@ float nonNegativeOrZero(float value, char const* name) {
     if (std::isfinite(value) && value >= 0.0f) {
         return value;
     }
-    qCWarning(sunroomLogPresentation, "QRhi reported invalid %s: %g; using 0", name, value);
+    qCWarning(sunplayerLogPresentation, "QRhi reported invalid %s: %g; using 0", name, value);
     return 0.0f;
 }
 
@@ -109,7 +109,7 @@ RhiPresentationEngine::RhiPresentationEngine(QWindow& window, PresentationOutput
     connect(&m_mediaSession, &MediaSession::subtitleChanged, this, &RhiPresentationEngine::requestFrame);
 
     if (!initializeGraphicsDevice()) {
-        qCFatal(sunroomLogPresentation, "Could not create the QRhi backend");
+        qCFatal(sunplayerLogPresentation, "Could not create the QRhi backend");
     }
 }
 
@@ -251,7 +251,7 @@ void RhiPresentationEngine::renderFrame() {
     QString const subtitleError = m_subtitleRenderer->error();
     if (!subtitlePrepared && subtitleError != m_reportedSubtitleError) {
         m_reportedSubtitleError = subtitleError;
-        qCWarning(sunroomLogPresentation).noquote() << "event=subtitle.presentation_failed"
+        qCWarning(sunplayerLogPresentation).noquote() << "event=subtitle.presentation_failed"
                                                     << "error=" + subtitleError;
     } else if (subtitlePrepared) {
         m_reportedSubtitleError.clear();
@@ -326,7 +326,7 @@ void RhiPresentationEngine::renderFrame() {
         }
         QRhi::FrameOpResult const abandonedResult = finishFrame(QRhi::SkipPresent, false);
         if (abandonedResult != QRhi::FrameOpSuccess && abandonedResult != QRhi::FrameOpDeviceLost) {
-            qCWarning(sunroomLogPresentation, "QRhi returned %d while abandoning an unfinished frame",
+            qCWarning(sunplayerLogPresentation, "QRhi returned %d while abandoning an unfinished frame",
                       static_cast<int>(abandonedResult));
         }
     });
@@ -535,7 +535,7 @@ bool RhiPresentationEngine::refreshVideoProducer() {
 
     std::unique_ptr<RenderedVideoProducer> producer = m_videoSource.createProducer(*m_graphicsDevice);
     if (!producer) {
-        qCFatal(sunroomLogPresentation, "The video source did not create a producer");
+        qCFatal(sunplayerLogPresentation, "The video source did not create a producer");
     }
     m_videoProducer = std::move(producer);
     m_videoProducerConfigurationRevision = requestedRevision;
@@ -623,12 +623,12 @@ void RhiPresentationEngine::scheduleSwapChainRecovery(char const* operation) {
     constexpr auto retryDelay = std::chrono::milliseconds(250);
 
     if (m_swapChainRecoveryAttempts >= maximumAttempts) {
-        qCFatal(sunroomLogPresentation, "QRhi swapchain recovery failed after %d attempts while %s", maximumAttempts,
+        qCFatal(sunplayerLogPresentation, "QRhi swapchain recovery failed after %d attempts while %s", maximumAttempts,
                 operation);
     }
 
     ++m_swapChainRecoveryAttempts;
-    qCWarning(sunroomLogPresentation, "Retrying QRhi swapchain creation after failure while %s (%d/%d)", operation,
+    qCWarning(sunplayerLogPresentation, "Retrying QRhi swapchain creation after failure while %s (%d/%d)", operation,
               m_swapChainRecoveryAttempts, maximumAttempts);
     m_swapChainRecoveryTimer.start(retryDelay);
 }
@@ -651,7 +651,7 @@ void RhiPresentationEngine::releaseDevice() {
     if (m_rhi && !m_rhi->isDeviceLost()) {
         QRhi::FrameOpResult const finishResult = m_rhi->finish();
         if (finishResult != QRhi::FrameOpSuccess && finishResult != QRhi::FrameOpDeviceLost) {
-            qCFatal(sunroomLogGraphics, "Could not finish GPU work before releasing device resources");
+            qCFatal(sunplayerLogGraphics, "Could not finish GPU work before releasing device resources");
         }
     }
     releaseSwapChainResources();
@@ -675,7 +675,7 @@ void RhiPresentationEngine::releaseDevice() {
 }
 
 void RhiPresentationEngine::handleDeviceLoss(char const* operation) {
-    qCWarning(sunroomLogPresentation, "QRhi device was lost while %s; retrying", operation);
+    qCWarning(sunplayerLogPresentation, "QRhi device was lost while %s; retrying", operation);
     if (!m_recoveringDevice) {
         m_deviceRecoveryAttempts = 0;
     }
@@ -687,9 +687,9 @@ void RhiPresentationEngine::handleDeviceLoss(char const* operation) {
 
 void RhiPresentationEngine::handleFrameError(char const* operation, int result) {
     if (m_retriedFrameError) {
-        qCFatal(sunroomLogPresentation, "QRhi failed twice while %s: %d", operation, result);
+        qCFatal(sunplayerLogPresentation, "QRhi failed twice while %s: %d", operation, result);
     }
-    qCWarning(sunroomLogPresentation, "QRhi failed while %s: %d; rebuilding once", operation, result);
+    qCWarning(sunplayerLogPresentation, "QRhi failed while %s: %d; rebuilding once", operation, result);
     m_retriedFrameError = true;
     m_recoveringDevice = true;
     m_deviceRecoveryAttempts = 0;
@@ -716,12 +716,12 @@ bool RhiPresentationEngine::handleVideoOperationResult(char const* operation, Vi
                 diagnostics.failureKind == VideoFailureKind::None ? VideoFailureKind::General : diagnostics.failureKind,
             .reason = effectiveReason,
         })) {
-        qCWarning(sunroomLogPresentation, "Video path unavailable while %s: %s", operation,
+        qCWarning(sunplayerLogPresentation, "Video path unavailable while %s: %s", operation,
                   qPrintable(effectiveReason));
         requestFrame();
         return false;
     }
-    qCFatal(sunroomLogPresentation, "Video path unavailable while %s: %s", operation, qPrintable(effectiveReason));
+    qCFatal(sunplayerLogPresentation, "Video path unavailable while %s: %s", operation, qPrintable(effectiveReason));
     return false;
 }
 
@@ -730,11 +730,11 @@ void RhiPresentationEngine::scheduleDeviceRecovery() {
     constexpr auto retryDelay = std::chrono::milliseconds(250);
 
     if (m_deviceRecoveryAttempts >= maximumAttempts) {
-        qCFatal(sunroomLogPresentation, "QRhi device recovery failed after %d attempts", maximumAttempts);
+        qCFatal(sunplayerLogPresentation, "QRhi device recovery failed after %d attempts", maximumAttempts);
     }
 
     ++m_deviceRecoveryAttempts;
-    qCWarning(sunroomLogPresentation, "Retrying QRhi device recovery (%d/%d)", m_deviceRecoveryAttempts,
+    qCWarning(sunplayerLogPresentation, "Retrying QRhi device recovery (%d/%d)", m_deviceRecoveryAttempts,
               maximumAttempts);
     m_deviceRecoveryTimer.start(retryDelay);
 }
@@ -861,7 +861,7 @@ bool RhiPresentationEngine::reconcileOutputCharacteristics() {
 
 #ifdef Q_OS_MACOS
     if (refreshSwapChainSurface) {
-        qCInfo(sunroomLogPresentation, "Reapplying the Metal presentation surface after a screen change");
+        qCInfo(sunplayerLogPresentation, "Reapplying the Metal presentation surface after a screen change");
         return createOrResizeSwapChain("reconfiguring the presentation surface");
     }
 #endif
@@ -914,7 +914,7 @@ void RhiPresentationEngine::rejectRequiredHdrSurface(char const* reason) {
 
 void RhiPresentationEngine::rebuildForPresentIncompatibleSurface() {
     Q_ASSERT(m_graphicsDevice);
-    qCWarning(sunroomLogPresentation, "The Vulkan device cannot present to the current Wayland "
+    qCWarning(sunplayerLogPresentation, "The Vulkan device cannot present to the current Wayland "
                                       "surface; rebuilding the graphics domain");
     m_mediaSession.invalidateGraphicsDevice();
     if (!m_recoveringDevice) {

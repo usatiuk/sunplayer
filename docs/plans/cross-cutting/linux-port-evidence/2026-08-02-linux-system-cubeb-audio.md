@@ -23,10 +23,10 @@ Presentation: native Wayland, llvmpipe Vulkan
 `ldd` resolves the installed executable to Ubuntu's
 `/usr/lib/x86_64-linux-gnu/libcubeb.so.0`; that library resolves PulseAudio and
 ALSA libraries from the same system installation. The runtime selected backend
-reported by Sunroom's typed audio diagnostics is `pulse`.
+reported by SunPlayer's typed audio diagnostics is `pulse`.
 
 ```sh
-ldd /tmp/sunroom-linux-audio-install/bin/sunroom \
+ldd /tmp/sunplayer-linux-audio-install/bin/sunplayer \
   | rg 'cubeb|pulse|asound'
 dpkg-query -W -f='${Package} ${Version}\n' libcubeb0 libcubeb-dev
 printf '%s\n' "$PULSE_SERVER"
@@ -54,15 +54,15 @@ and value-initializes that trailing member where it exists.
 The Debug build completed from a fresh Ninja tree with tests enabled:
 
 ```sh
-cmake -S . -B /tmp/sunroom-linux-audio-debug -G Ninja \
+cmake -S . -B /tmp/sunplayer-linux-audio-debug -G Ninja \
   -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
-cmake --build /tmp/sunroom-linux-audio-debug --parallel 2
+cmake --build /tmp/sunplayer-linux-audio-debug --parallel 2
 ```
 
 Focused device and application gates passed:
 
 ```sh
-ctest --test-dir /tmp/sunroom-linux-audio-debug \
+ctest --test-dir /tmp/sunplayer-linux-audio-debug \
   --output-on-failure \
   -R 'cubeb-audio-sink|application-audio-first-playback'
 ```
@@ -76,9 +76,9 @@ application-audio-first-playback    Passed
 The complete Debug suite and QML lint passed:
 
 ```sh
-ctest --test-dir /tmp/sunroom-linux-audio-debug \
+ctest --test-dir /tmp/sunplayer-linux-audio-debug \
   --output-on-failure --parallel 2
-cmake --build /tmp/sunroom-linux-audio-debug --target all_qmllint
+cmake --build /tmp/sunplayer-linux-audio-debug --target all_qmllint
 ```
 
 ```text
@@ -89,17 +89,17 @@ all_qmllint passed
 A fresh Release tree configured, built, and installed with tests disabled:
 
 ```sh
-cmake -S . -B /tmp/sunroom-linux-audio-release -G Ninja \
+cmake -S . -B /tmp/sunplayer-linux-audio-release -G Ninja \
   -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
-  -DCMAKE_INSTALL_PREFIX=/tmp/sunroom-linux-audio-install
-cmake --build /tmp/sunroom-linux-audio-release --parallel 2
-cmake --install /tmp/sunroom-linux-audio-release
+  -DCMAKE_INSTALL_PREFIX=/tmp/sunplayer-linux-audio-install
+cmake --build /tmp/sunplayer-linux-audio-release --parallel 2
+cmake --install /tmp/sunplayer-linux-audio-release
 ```
 
 The installed QML module verified successfully:
 
 ```sh
-/tmp/sunroom-linux-audio-install/bin/sunroom \
+/tmp/sunplayer-linux-audio-install/bin/sunplayer \
   --verify-qml --no-log-file
 ```
 
@@ -109,13 +109,13 @@ and synchronization validation enabled:
 ```sh
 env VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation \
   VK_LAYER_VALIDATE_SYNC=1 \
-  /tmp/sunroom-linux-audio-install/bin/sunroom \
+  /tmp/sunplayer-linux-audio-install/bin/sunplayer \
   --playback-smoke --no-log-file \
   tests/fixtures/media/sdr-bt709-ffv1-video-late-flac.mkv
 ```
 
 ```text
-Sunroom playback smoke passed: positionMs=1533,
+SunPlayer playback smoke passed: positionMs=1533,
 audioBackend=pulse, audioPresented=73599
 ```
 
@@ -144,7 +144,7 @@ continuity assertion. Ownership and root cause remain unresolved.
 ```sh
 env VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation \
   VK_LAYER_VALIDATE_SYNC=1 \
-  /tmp/sunroom-linux-audio-install/bin/sunroom \
+  /tmp/sunplayer-linux-audio-install/bin/sunplayer \
   --fullscreen-smoke --no-log-file \
   tests/fixtures/media/sdr-bt709-ffv1-video-late-flac.mkv
 ```
@@ -169,7 +169,7 @@ playback audio gates and is not registered as a default Linux CTest.
 Native Linux must still validate:
 
 * audible playback on PulseAudio and PipeWire-Pulse sessions;
-* changing the system-default output during playback while the same Sunroom
+* changing the system-default output during playback while the same SunPlayer
   `audioOutputEpoch` remains live and presented media progress resumes;
 * USB/Bluetooth loss and reconnection;
 * sound-service interruption and restart;

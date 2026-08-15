@@ -21,7 +21,7 @@ that backend.
 The subtitle subsystem owns:
 
 * embedded subtitle-track descriptions and selection state;
-* FFmpeg subtitle decoder output copied into immutable Sunroom-owned events;
+* FFmpeg subtitle decoder output copied into immutable SunPlayer-owned events;
 * text/ASS configuration, event delivery, embedded fonts, and libass lifetime;
 * bitmap composition state and authored canvas placement;
 * resolving subtitle state against the canonical playback clock;
@@ -61,7 +61,7 @@ parallel reader for subtitles.
 
 The selected track belongs to the media session, not to one decoder generation,
 so seek, replay, hardware fallback, and graphics recovery retain it. New media
-and cancellation reset selection to Off. Sunroom does not scan backward just to
+and cancellation reset selection to Off. SunPlayer does not scan backward just to
 reconstruct a cue that began before a seek; the layer becomes correct when the
 next subtitle cue or bitmap composition arrives.
 

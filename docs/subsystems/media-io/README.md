@@ -62,7 +62,7 @@ playlist segment or by replacing the server stream at a requested timestamp
 instead; that behavior remains source-specific around the same normalized
 playback request.
 
-Sunroom currently reopens and reprobes the source for generation-scoped seek,
+SunPlayer currently reopens and reprobes the source for generation-scoped seek,
 hardware fallback, and graphics recovery. This keeps invalidation simple but
 can be expensive for remote media. Optimize ordinary remote seeking only after
 measurement, either with an ownership-safe in-place demux seek or a
@@ -75,7 +75,7 @@ A Jellyfin client is exploratory product scope rather than a V1 commitment.
 The server-specific layer would own authentication, library browsing, playback
 capability negotiation, progress reporting, and transcode-session lifetime.
 It would select a direct-play, remuxed, or transcoded locator and pass one
-sanitized media-input request into the normal Sunroom pipeline.
+sanitized media-input request into the normal SunPlayer pipeline.
 
 FFmpeg should initially handle the selected HTTP file or HLS stream. Custom
 AVIO is not required merely because the URL came from Jellyfin. It becomes

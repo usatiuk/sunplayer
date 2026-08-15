@@ -233,8 +233,8 @@ public:
             parameters.shared_mem.handle.handle =
                 (__bridge void *)texture;
             parameters.debug_tag = plane == 0
-                ? "Sunroom VideoToolbox luma plane"
-                : "Sunroom VideoToolbox chroma plane";
+                ? "SunPlayer VideoToolbox luma plane"
+                : "SunPlayer VideoToolbox chroma plane";
             m_active.textures[plane] =
                 pl_tex_create(m_gpu, &parameters);
             if (!m_active.textures[plane]

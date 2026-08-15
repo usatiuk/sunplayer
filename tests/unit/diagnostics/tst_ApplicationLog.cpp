@@ -21,7 +21,7 @@ namespace {
 void discardMessage(QtMsgType, QMessageLogContext const&, QString const&) {}
 } // namespace
 
-Q_LOGGING_CATEGORY(sunroomTestLog, "sunroom.test", QtInfoMsg)
+Q_LOGGING_CATEGORY(sunplayerTestLog, "sunplayer.test", QtInfoMsg)
 
 class ApplicationLogTest final : public QObject {
     Q_OBJECT
@@ -61,7 +61,7 @@ void ApplicationLogTest::writesCategorizedInfoRecord() {
         &error);
     QVERIFY2(logging, qPrintable(error));
 
-    qCInfo(sunroomLogApplication).noquote() << "event=test.record value=42";
+    qCInfo(sunplayerLogApplication).noquote() << "event=test.record value=42";
     logging->flush();
     logging.reset();
 
@@ -69,7 +69,7 @@ void ApplicationLogTest::writesCategorizedInfoRecord() {
     QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
     QByteArray const contents = file.readAll();
     QVERIFY(contents.contains("level=info"));
-    QVERIFY(contents.contains("category=sunroom.application"));
+    QVERIFY(contents.contains("category=sunplayer.application"));
     QVERIFY(contents.contains("event=test.record value=42"));
 }
 
@@ -87,7 +87,7 @@ void ApplicationLogTest::publishesRecordsWhileTheApplicationIsRunning() {
         &error);
     QVERIFY2(logging, qPrintable(error));
 
-    qCInfo(sunroomLogApplication).noquote() << "event=test.live_record";
+    qCInfo(sunplayerLogApplication).noquote() << "event=test.live_record";
 
     QTRY_VERIFY_WITH_TIMEOUT(
         [&] {
@@ -112,7 +112,7 @@ void ApplicationLogTest::boundsSessionFile() {
         &error);
     QVERIFY2(logging, qPrintable(error));
 
-    qCInfo(sunroomLogApplication).noquote() << "event=test.oversized" << QString(1024, u'x');
+    qCInfo(sunplayerLogApplication).noquote() << "event=test.oversized" << QString(1024, u'x');
     logging->flush();
     logging.reset();
 
@@ -139,7 +139,7 @@ void ApplicationLogTest::boundsProducerQueue() {
         &error);
     QVERIFY2(logging, qPrintable(error));
 
-    qCInfo(sunroomLogApplication).noquote() << "event=test.oversized_queue_record" << QString(1024, u'x');
+    qCInfo(sunplayerLogApplication).noquote() << "event=test.oversized_queue_record" << QString(1024, u'x');
     logging->flush();
     logging.reset();
 
@@ -165,7 +165,7 @@ void ApplicationLogTest::concurrentFlushesShareOneWatermark() {
         &error);
     QVERIFY2(logging, qPrintable(error));
 
-    qCInfo(sunroomLogApplication).noquote() << "event=test.concurrent_flush";
+    qCInfo(sunplayerLogApplication).noquote() << "event=test.concurrent_flush";
     std::vector<std::jthread> flushers;
     for (int index = 0; index < 32; ++index) {
         flushers.emplace_back([log = logging.get()] {
@@ -202,12 +202,12 @@ void ApplicationLogTest::preservesFatalRecordUnderQueuePressure() {
         &error);
     QVERIFY2(logging, qPrintable(error));
 
-    qCInfo(sunroomLogApplication).noquote() << "event=test.queue_pressure" << QString(1024, u'x');
+    qCInfo(sunplayerLogApplication).noquote() << "event=test.queue_pressure" << QString(1024, u'x');
     QtMessageHandler const applicationHandler = qInstallMessageHandler(discardMessage);
     QVERIFY(applicationHandler);
     qInstallMessageHandler(applicationHandler);
     QString const fatalMessage = QStringLiteral("event=test.fatal_preserved ") + QString(1024, u'y');
-    applicationHandler(QtFatalMsg, QMessageLogContext(__FILE__, __LINE__, Q_FUNC_INFO, "sunroom.test"), fatalMessage);
+    applicationHandler(QtFatalMsg, QMessageLogContext(__FILE__, __LINE__, Q_FUNC_INFO, "sunplayer.test"), fatalMessage);
     logging->flush();
     logging.reset();
 
@@ -222,7 +222,7 @@ void ApplicationLogTest::preservesFatalRecordUnderQueuePressure() {
 void ApplicationLogTest::customFileDoesNotPruneSiblingLogs() {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
-    QString const siblingPath = directory.filePath(QStringLiteral("sunroom-unrelated.log"));
+    QString const siblingPath = directory.filePath(QStringLiteral("sunplayer-unrelated.log"));
     QFile sibling(siblingPath);
     QVERIFY(sibling.open(QIODevice::WriteOnly | QIODevice::Text));
     QCOMPARE(sibling.write("keep"), 4);
@@ -238,7 +238,7 @@ void ApplicationLogTest::customFileDoesNotPruneSiblingLogs() {
         },
         &error);
     QVERIFY2(logging, qPrintable(error));
-    qCInfo(sunroomLogApplication) << "event=test.custom_file";
+    qCInfo(sunplayerLogApplication) << "event=test.custom_file";
     logging.reset();
 
     QVERIFY(QFileInfo::exists(siblingPath));
@@ -249,7 +249,7 @@ void ApplicationLogTest::rejectsWindowsRemoteCustomFile() {
     QString error;
     std::unique_ptr<ApplicationLog> logging = ApplicationLog::install(
         {
-            .filePath = QStringLiteral(R"(\\sunroom.invalid\share\session.log)"),
+            .filePath = QStringLiteral(R"(\\sunplayer.invalid\share\session.log)"),
         },
         &error);
     QVERIFY(!logging);
@@ -269,7 +269,7 @@ void ApplicationLogTest::acceptsWindowsExtendedLocalPath() {
     QString error;
     std::unique_ptr<ApplicationLog> logging = ApplicationLog::install({.filePath = extendedPath}, &error);
     QVERIFY2(logging, qPrintable(error));
-    qCInfo(sunroomLogApplication) << "event=test.extended_local_path";
+    qCInfo(sunplayerLogApplication) << "event=test.extended_local_path";
     logging->flush();
     logging.reset();
     QVERIFY(QFileInfo::exists(ordinaryPath));
@@ -288,7 +288,7 @@ void ApplicationLogTest::rejectsWindowsMappedRemoteCustomFile() {
         QString error;
         std::unique_ptr<ApplicationLog> logging = ApplicationLog::install(
             {
-                .filePath = QString::fromWCharArray(root.c_str()) + QStringLiteral("sunroom-log-policy-test.log"),
+                .filePath = QString::fromWCharArray(root.c_str()) + QStringLiteral("sunplayer-log-policy-test.log"),
             },
             &error);
         QVERIFY(!logging);
@@ -302,7 +302,7 @@ void ApplicationLogTest::rejectsWindowsMappedRemoteCustomFile() {
 }
 
 void ApplicationLogTest::honorsQtDebugCategoryRules() {
-    QLoggingCategory::setFilterRules(QStringLiteral("sunroom.test.debug=true"));
+    QLoggingCategory::setFilterRules(QStringLiteral("sunplayer.test.debug=true"));
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
     QString const path = directory.filePath(QStringLiteral("debug.log"));
@@ -316,7 +316,7 @@ void ApplicationLogTest::honorsQtDebugCategoryRules() {
         &error);
     QVERIFY2(logging, qPrintable(error));
 
-    qCDebug(sunroomTestLog).noquote() << "event=test.qt_debug_rule";
+    qCDebug(sunplayerTestLog).noquote() << "event=test.qt_debug_rule";
     logging->flush();
     logging.reset();
 

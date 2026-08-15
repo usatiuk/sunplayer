@@ -6,7 +6,7 @@ media operation. It complements the implementation summary in
 [README.md](README.md).
 
 SDR, PQ, HLG, HDR10+, and Dolby Vision are all V1 inputs. They use one
-FFmpeg/libplacebo path whenever the libraries can decode and map them; Sunroom
+FFmpeg/libplacebo path whenever the libraries can decode and map them; SunPlayer
 does not gate playback on a format-specific implementation. Color-correctness
 claims remain scoped to representative fixtures and target models that have
 actually been validated.
@@ -15,7 +15,7 @@ actually been validated.
 
 * Normal playback adapts every HDR format to the active desktop reference white
   and usable display headroom.
-* Sunroom's linear working surface uses `1.0 = active reference white` and
+* SunPlayer's linear working surface uses `1.0 = active reference white` and
   permits negative and greater-than-one components.
 * Libplacebo owns content transfer interpretation, tone mapping, and gamut
   mapping. The final compositor performs no video-only repair.
@@ -45,7 +45,7 @@ format correctness or emitted luminance.
 
 This completed milestone keeps FFmpeg and libplacebo
 remain responsible for decoding, source transfer interpretation, dynamic HDR
-metadata, tone mapping, and gamut mapping. Sunroom does not implement separate
+metadata, tone mapping, and gamut mapping. SunPlayer does not implement separate
 SDR, PQ, HLG, HDR10+, or Dolby Vision pipelines. Its work is to preserve the
 library inputs, describe the display target without contradictory units, and
 prove that the production path actually uses the expected library feature or
@@ -110,7 +110,7 @@ enabling another processing stage or prematurely adding quality presets.
   peak separately through the libplacebo destination.
 * [x] Report whether libplacebo applied Dolby Vision reshaping or displayed the
   decoder's base-layer result. Do not parse Dolby Vision profiles or implement
-  missing trims/residual processing in Sunroom.
+  missing trims/residual processing in SunPlayer.
 
 ### Production-boundary acceptance matrix
 
@@ -138,7 +138,7 @@ Immediate milestone outcome:
 * SDR and static PQ retain the validated numerical model.
 * HLG's observed target response is accepted for display-relative V1 playback;
   absolute-reference monitoring remains outside the claim rather than being
-  approximated by a second Sunroom color pipeline.
+  approximated by a second SunPlayer color pipeline.
 * HDR10+ metadata reaches libplacebo without stale carry-over.
 * Dolby Vision diagnostics distinguish mapped reshape from decoded base layer.
 * Unverified target behavior remains visible without blocking otherwise valid
@@ -148,7 +148,7 @@ Existing files that already decode and render must remain playable while this
 milestone replaces experimental target behavior with verified support. A new
 failure is acceptable only when FFmpeg/libplacebo genuinely lacks a valid path
 for that source and the fallback or error is explicit; it is not a reason to
-build a competing Sunroom implementation.
+build a competing SunPlayer implementation.
 
 ## Stage 2: Simplify live Windows target reconciliation
 
@@ -165,7 +165,7 @@ This is not a greenfield display observer. The current implementation already:
 
 The accepted design treats native events as hints and the latest semantic
 `PresentationTarget` as truth. Windows' HWND-bound `DisplayInformation` already
-tracks the window and is the Advanced Color authority. Sunroom will not add a
+tracks the window and is the Advanced Color authority. SunPlayer will not add a
 cross-platform hierarchy of selection, capability, provider, topology, or
 query revisions, nor a competing greatest-intersection display selector.
 
@@ -286,7 +286,7 @@ Windows V1 color release gate:
   readback for the Linux gamma-2.2 branch remains pending.
 * [x] Treat managed gamma-2.2 Wayland SDR as `SystemManaged` and its startup
   fallback as `UnmanagedSrgb` with one-times SDR headroom and HDR unavailable.
-  Sunroom owns the managed declaration while Qt remains the toplevel owner and
+  SunPlayer owns the managed declaration while Qt remains the toplevel owner and
   Vulkan pass-through prevents a competing WSI declaration.
 * [x] Observe preferred-output target state without using it as a content-
   encoding command. Keep a capable window BT.2020/PQ across HDR/SDR outputs;

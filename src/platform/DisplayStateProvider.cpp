@@ -31,7 +31,7 @@ float nonNegativeOrUnknown(float value, char const* name) {
     if (std::isfinite(value) && value >= 0.0f) {
         return value;
     }
-    qCWarning(sunroomLogPlatform, "Windows reported invalid %s: %g", name, value);
+    qCWarning(sunplayerLogPlatform, "Windows reported invalid %s: %g", name, value);
     return 0.0f;
 }
 
@@ -80,7 +80,7 @@ class WindowsDisplayStateProvider final : public DisplayStateProvider {
             m_hasChangeToken = true;
             publishCurrentState();
         } catch (winrt::hresult_error const& error) {
-            qCWarning(sunroomLogPlatform,
+            qCWarning(sunplayerLogPlatform,
                       "Windows HDR display monitoring is unavailable: "
                       "0x%08X %ls",
                       static_cast<unsigned int>(error.code().value), error.message().c_str());
@@ -123,7 +123,7 @@ class WindowsDisplayStateProvider final : public DisplayStateProvider {
             return true;
         }
 
-        qCWarning(sunroomLogPlatform, "Could not initialize the Windows Runtime: 0x%08X",
+        qCWarning(sunplayerLogPlatform, "Could not initialize the Windows Runtime: 0x%08X",
                   static_cast<unsigned int>(result));
         return false;
     }
@@ -134,7 +134,7 @@ class WindowsDisplayStateProvider final : public DisplayStateProvider {
                 return true;
             }
         } catch (winrt::hresult_error const& error) {
-            qCWarning(sunroomLogPlatform,
+            qCWarning(sunplayerLogPlatform,
                       "Could not query the Windows DispatcherQueue: "
                       "0x%08X %ls",
                       static_cast<unsigned int>(error.code().value), error.message().c_str());
@@ -149,7 +149,7 @@ class WindowsDisplayStateProvider final : public DisplayStateProvider {
         ABI::Windows::System::IDispatcherQueueController* controller = nullptr;
         const HRESULT result = CreateDispatcherQueueController(options, &controller);
         if (FAILED(result)) {
-            qCWarning(sunroomLogPlatform, "Could not create a Windows DispatcherQueue: 0x%08X",
+            qCWarning(sunplayerLogPlatform, "Could not create a Windows DispatcherQueue: 0x%08X",
                       static_cast<unsigned int>(result));
             return false;
         }
@@ -170,7 +170,7 @@ class WindowsDisplayStateProvider final : public DisplayStateProvider {
             state.maxLuminanceNits = nonNegativeOrUnknown(colorInfo.MaxLuminanceInNits(), "maximum luminance");
             emit stateChanged(state);
         } catch (winrt::hresult_error const& error) {
-            qCWarning(sunroomLogPlatform,
+            qCWarning(sunplayerLogPlatform,
                       "Could not refresh Windows HDR display information: "
                       "0x%08X %ls",
                       static_cast<unsigned int>(error.code().value), error.message().c_str());

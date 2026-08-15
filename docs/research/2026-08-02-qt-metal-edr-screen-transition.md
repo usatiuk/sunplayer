@@ -12,7 +12,7 @@ extended-linear sRGB declaration. Video highlights and Qt Quick colors are then
 interpreted through the wrong presentation color space, and the error persists
 after moving the window back until QRhi configures the layer again.
 
-This matched the observed Sunroom failure: AppKit headroom diagnostics updated,
+This matched the observed SunPlayer failure: AppKit headroom diagnostics updated,
 content still exceeded SDR white, but highlights clipped and native-style UI
 colors became unusually deep after a monitor move.
 
@@ -35,7 +35,7 @@ The inspected Qt sources are the `v6.11.1` tags of `qtbase` and
   in-place surface-configuration path; full device or presentation-resource
   teardown is unnecessary.
 
-Sunroom previously called `createOrResize()` for a resize only when the surface
+SunPlayer previously called `createOrResize()` for a resize only when the surface
 pixel size changed. Its semantic display reconciliation correctly retained an
 unchanged extended-linear format, but therefore missed this native layer-state
 change.
@@ -43,7 +43,7 @@ change.
 ## Resolution and scope
 
 On macOS only, an actual `QWindow::screenChanged` marks the Metal presentation
-surface dirty. At the next engine-owned render boundary, Sunroom first
+surface dirty. At the next engine-owned render boundary, SunPlayer first
 reconciles the desired swapchain format. If the format is unchanged, it calls
 the existing QRhi `createOrResize()` path on the same swapchain, which reapplies
 the extended-linear sRGB/EDR declaration. If the format changed, the normal

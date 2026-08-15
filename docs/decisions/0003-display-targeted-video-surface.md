@@ -64,7 +64,7 @@ FFmpeg supplies the final decoded frame and libplacebo performs source
 interpretation, chroma reconstruction, transfer and gamut conversion, tone
 mapping, scaling, and dithering as applicable. SDR, HDR10/PQ, HLG, dynamic HDR,
 and other supported source forms therefore converge on this one consumer
-contract. Sunroom validates representative paths and reports observed
+contract. SunPlayer validates representative paths and reports observed
 capabilities instead of reimplementing either library's format policy.
 
 Platform display adapters own native observation and report physical display
@@ -88,7 +88,7 @@ calibration once to the complete tagged composition. Any future
 application-managed display ICC mode must likewise operate after composition,
 not inside the video producer.
 
-Sunroom preserves the distinction between unknown minimum luminance and a
+SunPlayer preserves the distinction between unknown minimum luminance and a
 known physical zero. Renderer adapters translate that representation at their
 API boundary. In particular, libplacebo reserves numeric zero for unknown
 metadata and otherwise infers a linear-target contrast ratio, so its adapter

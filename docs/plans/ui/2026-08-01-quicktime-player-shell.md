@@ -116,7 +116,7 @@ unnecessary component boundary.
 
 ## Validation performed
 
-* The `sunroom_qmllint` target passed.
+* The `sunplayer_qmllint` target passed.
 * CLion regenerated the final QML resources and rebuilt the production
   application after the icon-centering, cursor-policy, and license-notice
   polish. The user exercised that executable interactively.

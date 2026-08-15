@@ -2,7 +2,7 @@
 
 ## Question
 
-Can Sunroom use Ubuntu 26.04's system cubeb package to open an advancing
+Can SunPlayer use Ubuntu 26.04's system cubeb package to open an advancing
 device-backed default-output stream through WSLg, and what source differences
 must the existing Windows cubeb sink accommodate?
 
@@ -33,7 +33,7 @@ built with `libpulse-dev`, ALSA, JACK, and sndio development packages.
 
 The matching `src/cubeb.c` default backend list attempts the compiled Pulse
 backend before JACK, sndio, and ALSA. Passing a null backend name therefore
-selects Pulse when WSLg's server is available without making Pulse a Sunroom
+selects Pulse when WSLg's server is available without making Pulse a SunPlayer
 policy constant. This matches the accepted system-default-route design.
 
 The Pulse implementation supplies:
@@ -42,14 +42,14 @@ The Pulse implementation supplies:
 * reported latency; and
 * output device-collection change notifications.
 
-It does not supply cubeb's stream-specific device-changed callback. Sunroom
+It does not supply cubeb's stream-specific device-changed callback. SunPlayer
 does not use that callback: the existing sink already treats collection
 revision as optional diagnostics rather than proof of a completed route
 migration.
 
 The installed public header states that passing a null output `cubeb_devid`
 allows the stream to follow the operating system's default output. That is the
-portable routing contract Sunroom consumes. In the matching Pulse backend, a
+portable routing contract SunPlayer consumes. In the matching Pulse backend, a
 server/default change refreshes cubeb's internal `default_sink_info` but does
 not invoke the device-collection callback; that callback covers device
 addition and removal. Collection revision therefore cannot be treated as a
@@ -57,16 +57,16 @@ default-switch completion event. PulseAudio, PipeWire-Pulse, or the desktop
 session owns any live movement of the null-device stream.
 
 Ubuntu's `cubeb_stream_params` ends after `prefs`; it does not contain the
-newer `input_params` member initialized by Sunroom's Windows build. That member
+newer `input_params` member initialized by SunPlayer's Windows build. That member
 does not describe an output-only stream requirement. Omitting it from the
 aggregate initializer value-initializes any trailing member in the newer
 header and compiles against the Ubuntu snapshot. A compatibility wrapper or
 version macro is unnecessary.
 
 The Ubuntu header and shared library also do not expose the newer
-`cubeb_get_backend_names()` enumeration helper used by Sunroom's Windows
+`cubeb_get_backend_names()` enumeration helper used by SunPlayer's Windows
 dependency test. Linux can verify the common public ABI without a device and
-observe the selected backend only after `cubeb_init()`. Sunroom should not
+observe the selected backend only after `cubeb_init()`. SunPlayer should not
 infer compiled-backend support by inspecting ELF dependencies at runtime.
 
 ## Runtime probe
@@ -74,7 +74,7 @@ infer compiled-backend support by inspecting ELF dependencies at runtime.
 A temporary program used only cubeb's public C API to:
 
 1. call `cubeb_init` with a null backend name;
-2. request the current Sunroom output format of 48 kHz, stereo,
+2. request the current SunPlayer output format of 48 kHz, stereo,
    native-endian float32;
 3. query the minimum latency;
 4. open the default output device;
@@ -86,9 +86,9 @@ It was compiled and run with:
 
 ```sh
 c++ -std=c++20 -Wall -Wextra -Wpedantic \
-  /tmp/sunroom-cubeb-wslg-probe.cpp \
-  -lcubeb -pthread -o /tmp/sunroom-cubeb-wslg-probe
-/tmp/sunroom-cubeb-wslg-probe
+  /tmp/sunplayer-cubeb-wslg-probe.cpp \
+  -lcubeb -pthread -o /tmp/sunplayer-cubeb-wslg-probe
+/tmp/sunplayer-cubeb-wslg-probe
 ```
 
 The result was:
@@ -102,7 +102,7 @@ callback_error=0
 
 The process exited successfully. The Pulse client printed a missing-cookie
 diagnostic, but WSLg accepted the connection and the cubeb stream started,
-advanced, and reported latency. Sunroom should not add cookie discovery or a
+advanced, and reported latency. SunPlayer should not add cookie discovery or a
 WSLg special case for a connection that already succeeds.
 
 ## Consequences

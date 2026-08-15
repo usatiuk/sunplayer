@@ -19,7 +19,7 @@ float headroomOrOne(CGFloat value, const char *name) {
     if (std::isfinite(headroom) && headroom >= 1.0f)
         return headroom;
     qCWarning(
-        sunroomLogPlatform,
+        sunplayerLogPlatform,
         "macOS reported invalid %s: %g; using 1",
         name,
         static_cast<double>(value));

@@ -70,7 +70,7 @@ BT.2020 SDR, full-range, 12-bit, chroma-location, contradictory-metadata, and
 dynamic-HDR profile coverage remains deferred. None of those gaps justifies a
 parallel source parser, decoder, or color pipeline.
 
-Sunroom also does not yet propagate actual target display primaries to
+SunPlayer also does not yet propagate actual target display primaries to
 libplacebo. The extended-linear BT.709 surface can encode wide-gamut
 chromaticities, but the current unset `target.color.hdr.prim` is inferred as a
 BT.709 target gamut. Platform target-gamut observation and shared propagation
@@ -87,7 +87,7 @@ runtime validation of resource creation, `QQuickRenderControl`, swapchain HDR
 information, surface loss, device recovery, and the matching Wayland private
 ABI where applicable. Narrow wrappers reduce exposure but cannot remove this
 maintenance cost. A Qt version containing qtdeclarative commit
-`bd1da1d7972f02a3be6e872a5fa05f73556d56d3` may make Sunroom's explicit macOS
+`bd1da1d7972f02a3be6e872a5fa05f73556d56d3` may make SunPlayer's explicit macOS
 native-dialog parent binding redundant; remove it only after native and forced
 non-native dialog paths are both verified with the new Qt build.
 
@@ -159,7 +159,7 @@ real backend need appears.
 ### ICC transforms and calibration fallbacks
 
 Embedded source ICC bytes remain owned by retained FFmpeg frames and are
-diagnosed, but Sunroom does not currently apply them on any platform. The
+diagnosed, but SunPlayer does not currently apply them on any platform. The
 render-local libplacebo frame clears both ICC handles so Ubuntu's LCMS-enabled
 system build cannot silently diverge from the LCMS-disabled Windows build.
 Enabling source-ICC rendering requires consistent LCMS packaging, semantic
@@ -168,9 +168,9 @@ Initial support should be limited to validated SDR RGB profiles; ICC combined
 with PQ, HLG, HDR10+, or Dolby Vision remains unsupported pending a separate
 target model or upstream-supported integration.
 
-Sunroom relies on the operating system or compositor for final display-profile
+SunPlayer relies on the operating system or compositor for final display-profile
 calibration on managed paths: Windows Advanced Color, implemented macOS
-ColorSync/EDR surface declaration, and the implemented Sunroom-owned Wayland
+ColorSync/EDR surface declaration, and the implemented SunPlayer-owned Wayland
 version-2 managed SDR and stable HDR10/PQ declarations.
 Managed Wayland HDR presentation and complete SDR rollback are implemented;
 broader compositor/GPU/display validation and any future version-1
@@ -214,7 +214,7 @@ hosted-versus-native-hardware test split are defined.
 
 ### Wayland decoration negotiation is not observable through public Qt API
 
-Sunroom selects system decoration when xdg-decoration is advertised and
+SunPlayer selects system decoration when xdg-decoration is advertised and
 application chrome when it is absent. Advertisement does not guarantee that
 the compositor's final choice will be server-side, while Qt does not expose
 that result publicly. A compositor that advertises the protocol but selects
@@ -255,7 +255,7 @@ command-line options have been parsed. A missing or unloadable Qt platform
 plugin can therefore fail before the session file is available. The packaged
 application test covers the normal deployed runtime, but a future early
 bootstrap or launcher should capture loader/platform initialization failures
-without duplicating Sunroom's command-line and logging policy.
+without duplicating SunPlayer's command-line and logging policy.
 
 ### Playback lacks physical audio-device replacement
 
@@ -308,7 +308,7 @@ next naturally decoded update.
 Cubeb's WASAPI, AudioUnit, and Pulse-family backends can follow a null-device
 stream through ordinary system-default routing, but they do not expose one
 portable stream-specific success notification or guarantee gapless delivery
-of audio queued to the old endpoint. Sunroom opens cubeb's default route and
+of audio queued to the old endpoint. SunPlayer opens cubeb's default route and
 keeps one output epoch for one cubeb stream while cubeb and the sound service perform ordinary
 route migration, as decided by ADR 0016.
 

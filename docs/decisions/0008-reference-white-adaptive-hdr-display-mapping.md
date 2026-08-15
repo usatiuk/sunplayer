@@ -6,7 +6,7 @@
 
 ## Context
 
-Sunroom composes video, subtitles, and UI in one linear surface where `1.0`
+SunPlayer composes video, subtitles, and UI in one linear surface where `1.0`
 means the active platform SDR/reference-white luminance. On Windows the final
 FP16 scene-referred scRGB conversion for an HDR Advanced Color output
 multiplies that composed value by `referenceWhiteNits / 80`. SDR Advanced
@@ -51,7 +51,7 @@ policy:
 * The final compositor performs no second video tone map or video-only
   brightness scale.
 
-For relative SDR and static PQ, Sunroom currently expresses the desired
+For relative SDR and static PQ, SunPlayer currently expresses the desired
 display-relative destination through libplacebo's existing 203-nit coordinate
 system:
 
@@ -72,7 +72,7 @@ libplacebo boundary because zero means unknown to libplacebo. Shared state
 continues to preserve the platform value and its known state.
 
 No pre-output normalization hook is used. For the capture-validated analytic
-SDR/static-PQ cases, libplacebo's resulting linear numbers satisfy Sunroom's
+SDR/static-PQ cases, libplacebo's resulting linear numbers satisfy SunPlayer's
 surface contract:
 
 ```text
@@ -92,7 +92,7 @@ For Windows SDR Advanced Color/WCG, working white maps to display-referred
 scRGB `1.0`; ordinary SDR with Advanced Color inactive uses the unmanaged sRGB
 fallback.
 
-The renderer constructs this destination without a separate Sunroom path for
+The renderer constructs this destination without a separate SunPlayer path for
 each source transfer. HLG, HDR10+, and Dolby Vision are accepted through the
 same FFmpeg/libplacebo route; diagnostics identify the observed reshape,
 dynamic-metadata, or base-layer result. Representative acceptance tests scope
@@ -131,7 +131,7 @@ Costs and limitations:
 * The destination luminance numbers are virtual coordinates derived from
   libplacebo's fixed 203-nit normalization, not literal physical target nits.
   This adapter behavior must remain documented and capture-tested.
-* Sunroom does not yet supply actual target display primaries, so the current
+* SunPlayer does not yet supply actual target display primaries, so the current
   libplacebo target gamut is inferred as BT.709.
 * The virtual target is not assumed valid as a universal HDR construction. In
   libplacebo 7.360.1 the HDR destination `max_luma` becomes the HLG source's
@@ -172,10 +172,10 @@ Rejected. A second global multiplier or highlight compressor after libplacebo
 breaks the single display-mapping stage and can decouple luminance from gamut
 mapping.
 
-### Implement a Sunroom tone mapper
+### Implement a SunPlayer tone mapper
 
 Rejected. Libplacebo already owns the required mapping algorithms and metadata
-handling. Sunroom should describe the destination correctly rather than
+handling. SunPlayer should describe the destination correctly rather than
 duplicate them.
 
 ### Patch or fork libplacebo immediately

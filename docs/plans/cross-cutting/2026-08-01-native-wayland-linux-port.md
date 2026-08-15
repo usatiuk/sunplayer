@@ -4,7 +4,7 @@ Status: Active
 
 ## Goal
 
-Deliver Sunroom on Ubuntu 26.04 as a native Wayland video player using the
+Deliver SunPlayer on Ubuntu 26.04 as a native Wayland video player using the
 distribution's Qt 6.10, FFmpeg 8, libplacebo 7.360, libass,
 Vulkan/VAAPI/DRM, and cubeb
 packages while preserving the existing shared playback, rendering, audio,
@@ -116,10 +116,10 @@ checklist must not duplicate or silently change them.
   automatic presentation fallback as supported.
 * Qt owns the `QWindow`, `wl_surface`, xdg toplevel, and Vulkan
   `VkSurfaceKHR`. When managed color is in use, exactly one component owns
-  `wp_color_management_surface_v1`; a duplicate is a protocol error. Sunroom's
+  `wp_color_management_surface_v1`; a duplicate is a protocol error. SunPlayer's
   narrow version-2 adapter is that color-declaration owner, while Qt's
   requested color space remains empty and Vulkan WSI uses pass-through.
-  Sunroom does not take over the Qt surface or buffer commits.
+  SunPlayer does not take over the Qt surface or buffer commits.
 * A narrow Linux display adapter may use Qt 6.10's private native
   `QWaylandWindow` interface to obtain the surface and follow its creation and
   destruction signals. The adapter binds exactly protocol version 2, creates
@@ -128,7 +128,7 @@ checklist must not duplicate or silently change them.
   semantic output state.
 * Support three explicit presentation encodings. `UnmanagedSrgb` leaves the
   Qt surface color space unset, assumes an SDR target, and emits exact
-  piecewise sRGB. The two managed encodings remain coupled to their Sunroom-
+  piecewise sRGB. The two managed encodings remain coupled to their SunPlayer-
   owned declarations:
   `ManagedGamma22Sdr` declares sRGB primaries plus `gamma22` and uses an SDR
   swapchain whose final compositor encodes normalized non-negative linear
@@ -163,7 +163,7 @@ checklist must not duplicate or silently change them.
   `DisplayState`. Protocol object identities and callbacks remain local to
   the adapter; equivalent values do not cause shared state churn. A surface
   recreation invalidates the old feedback object before binding the new one.
-* Managed HDR keeps Sunroom's linear-sRGB, active-reference-white working
+* Managed HDR keeps SunPlayer's linear-sRGB, active-reference-white working
   space and encodes the complete composition to BT.2020/PQ once at the final
   presentation boundary; managed SDR is explicitly gamma 2.2. Unmanaged SDR assumes one-times
   reference-white headroom and an sRGB target without claiming calibration.
@@ -192,7 +192,7 @@ checklist must not duplicate or silently change them.
   logical device shared by QRhi and libplacebo, the shared graphics queue lock,
   renderer state, target/importer factories, and diagnostics. QRhi creates and
   owns the Vulkan 1.3 device/queue; libplacebo borrows the native handles after
-  Sunroom verifies the selected physical-device API and Qt-enabled feature
+  SunPlayer verifies the selected physical-device API and Qt-enabled feature
   subset. A libplacebo-created device is not retained as an alternate path.
 * Start with one graphics queue family and disable separate asynchronous
   compute and transfer families. The existing execution scope serializes CPU
@@ -386,7 +386,7 @@ meets the first completion level.
 
 1. Bind color-management-v1 version 2, create ready managed gamma-2.2 and
    BT.2020/PQ descriptions, and follow the Qt-owned `wl_surface` with one
-   Sunroom-owned color-management surface and preferred-feedback object.
+   SunPlayer-owned color-management surface and preferred-feedback object.
 2. Keep an HDR-capable content surface BT.2020/PQ across HDR and SDR outputs.
    Require both raw Vulkan RGB10A2/HDR10 and RGB10A2/pass-through pairs and
    QRhi HDR10 support before accepting the presentation tuple.
@@ -406,7 +406,7 @@ meets the first completion level.
    Keep observed protocol identities out of shared state.
 
 Exit: HDR is reported as supported only on tested protocol/compositor/display
-combinations for which stable Sunroom declaration, HDR10 presentation, semantic
+combinations for which stable SunPlayer declaration, HDR10 presentation, semantic
 target feedback, and visible/measurement behavior all pass.
 
 ### 5. VAAPI/DRM PRIME acceleration
@@ -526,7 +526,7 @@ During implementation:
 * record an ADR after the direct Vulkan spike fixes the shared-device creator,
   queue/semaphore handoff, and teardown contract;
 * record an ADR after the Wayland spike fixes the division of ownership
-  between Qt's surface declaration and Sunroom's feedback adapter;
+  between Qt's surface declaration and SunPlayer's feedback adapter;
 * record unsupported device/compositor combinations and intentionally deferred
   work in `docs/DEFERRED.md`; and
 * keep the Ubuntu platform research note as historical evidence rather than
@@ -565,8 +565,8 @@ The following review suggestions were deliberately not adopted:
 * Bundling pinned Qt or libplacebo in the Linux artifact conflicts with the
   selected Ubuntu system-package policy and is unnecessary before the system
   stack fails a measured requirement.
-* Creating a Sunroom color-management surface would duplicate Qt's owner
-  and violate the protocol. Sunroom observes preferred feedback and otherwise
+* Creating a SunPlayer color-management surface would duplicate Qt's owner
+  and violate the protocol. SunPlayer observes preferred feedback and otherwise
   uses Qt's standard surface-color path.
 
 The earlier attempt to fix libplacebo-first device creation and direct QRhi
@@ -583,7 +583,7 @@ validation, so no alternate device creator or copy path was added.
   barrier and native-layout reconciliation. The
   accepted contract and validation evidence are recorded in ADR 0019 and the
   dated Linux presentation evidence note.
-* Sunroom's version-2 declaration, exact HDR10/pass-through format gate, stable
+* SunPlayer's version-2 declaration, exact HDR10/pass-through format gate, stable
   cross-output behavior, and complete same-surface SDR rollback must be
   validated on each claimed real compositor/GPU combination.
 * Native Ubuntu hardware is required for HDR, VAAPI/DRM PRIME, route migration,

@@ -4,7 +4,7 @@
 
 Which recommendations from the broader
 [production-player migration review](2026-08-01-video-audio-switch.md) fit
-Sunroom's current implementation and pinned dependencies, and which would add
+SunPlayer's current implementation and pinned dependencies, and which would add
 or remove real correctness?
 
 This note distinguishes current project behavior, exact pinned-source facts,
@@ -19,7 +19,7 @@ the decision.
 
 ### Display
 
-Sunroom currently has one small native `DisplayState`, one calculated
+SunPlayer currently has one small native `DisplayState`, one calculated
 `PresentationTarget`, and one `displayTargetRevision`. The revision is not a
 platform topology model. It is copied into `RenderedVideoSurfaceState` as a
 cache invalidator even though the same state already records the target's
@@ -41,7 +41,7 @@ Relevant project sources:
 
 ### Audio
 
-Sunroom already keeps the important small pieces:
+SunPlayer already keeps the important small pieces:
 
 * Playback generation for stale media.
 * A cubeb output epoch distinct from playback generation.
@@ -84,15 +84,15 @@ Inspection of the patched source used by the active vcpkg build confirms:
 * The context collection callback reports default and device-state changes,
   but it is not a stream-migration completion event.
 
-Therefore the broader report's proposal to start and re-anchor a new Sunroom
+Therefore the broader report's proposal to start and re-anchor a new SunPlayer
 epoch for every successful cubeb migration is not directly implementable on
 this backend without another cubeb patch or inference from coarse events.
 
 It is also not required for the simpler V1 contract. The logical position and
-Sunroom's existing media/hold history remain coherent within one cubeb stream.
+SunPlayer's existing media/hold history remain coherent within one cubeb stream.
 Pending audio queued to the old endpoint may be skipped acoustically during a
 route change, but subsequent media position and video selection converge on the
-same logical stream. Sunroom does not promise gapless or sample-perfect device
+same logical stream. SunPlayer does not promise gapless or sample-perfect device
 migration.
 
 ## Production precedent
@@ -148,8 +148,8 @@ Native display identity, raw capability values, provenance, and update reason
 may remain diagnostics. They are not independent invalidation domains.
 
 Normal default-audio migration is delegated to cubeb or the sound server. One
-cubeb stream keeps one Sunroom output epoch across that internal migration.
-Sunroom retains its media/hold ledger and current user intent. A cubeb error or
+cubeb stream keeps one SunPlayer output epoch across that internal migration.
+SunPlayer retains its media/hold ledger and current user intent. A cubeb error or
 demonstrated prolonged no-progress condition may trigger one application-level
 stream recreation; that recreation starts a new epoch, freezes at the last
 confident media time, prerolls, and reanchors before advancing again.

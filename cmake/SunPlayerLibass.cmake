@@ -1,16 +1,16 @@
-function(sunroom_configure_libass)
+function(sunplayer_configure_libass)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(
-            SUNROOM_LIBASS
+            SUNPLAYER_LIBASS
             REQUIRED
             IMPORTED_TARGET
             libass
     )
 
-    add_library(sunroom_libass INTERFACE)
+    add_library(sunplayer_libass INTERFACE)
     target_link_libraries(
-            sunroom_libass
+            sunplayer_libass
             INTERFACE
-            PkgConfig::SUNROOM_LIBASS
+            PkgConfig::SUNPLAYER_LIBASS
     )
 endfunction()

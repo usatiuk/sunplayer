@@ -46,9 +46,9 @@ class AppShellTest final : public QObject {
 
 void AppShellTest::publishesActiveViewport() {
     QQmlEngine engine;
-    engine.addImportPath(QStringLiteral(SUNROOM_QT_QML_IMPORT_PATH));
+    engine.addImportPath(QStringLiteral(SUNPLAYER_QT_QML_IMPORT_PATH));
     QQmlComponent component(&engine);
-    component.loadFromModule(QStringLiteral("SunroomShellTest"), QStringLiteral("Main"));
+    component.loadFromModule(QStringLiteral("SunPlayerShellTest"), QStringLiteral("Main"));
     QVERIFY2(!component.isError(), qPrintable(componentErrorText(component)));
 
     ShellTestPresentationOutputState outputState(nullptr);

@@ -3,4 +3,4 @@ MoltenVK provides the CMake target:
     find_package(MoltenVK CONFIG REQUIRED)
     target_link_libraries(main PRIVATE MoltenVK::MoltenVK)
 
-The Sunroom overlay uses Khronos' official static macOS archive.
+The SunPlayer overlay uses Khronos' official static macOS archive.

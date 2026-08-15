@@ -110,7 +110,7 @@ VideoOperationResult VulkanLibplaceboVideoTarget::endProducerAccess(QRhiCommandB
         if (deviceLost()) {
             return VideoOperationResult::DeviceLost;
         }
-        qCFatal(sunroomLogGraphics, "Libplacebo failed the mandatory Vulkan image handoff");
+        qCFatal(sunplayerLogGraphics, "Libplacebo failed the mandatory Vulkan image handoff");
     }
     m_compositionBarrierPending = true;
     m_texture->setNativeLayout(static_cast<int>(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
@@ -191,7 +191,7 @@ VideoTargetUpdate VulkanLibplaceboVideoTarget::createTarget(QSize const& pixelSi
     }
 
     m_texture.reset(m_rhi.newTexture(QRhiTexture::RGBA16F, pixelSize, 1, flags));
-    m_texture->setName(QByteArrayLiteral("Sunroom libplacebo Vulkan video surface"));
+    m_texture->setName(QByteArrayLiteral("SunPlayer libplacebo Vulkan video surface"));
     if (!m_texture->create() || !wrapTexture()) {
         bool const lost = deviceLost();
         resetTarget();
@@ -270,7 +270,7 @@ VideoOperationResult VulkanLibplaceboVideoTarget::signalQrhiCompletion() {
     if (result == VK_ERROR_DEVICE_LOST) {
         return VideoOperationResult::DeviceLost;
     }
-    qCFatal(sunroomLogGraphics, "Could not order QRhi completion before libplacebo: Vulkan error %d",
+    qCFatal(sunplayerLogGraphics, "Could not order QRhi completion before libplacebo: Vulkan error %d",
             static_cast<int>(result));
     Q_UNREACHABLE_RETURN(VideoOperationResult::Unavailable);
 }
@@ -284,7 +284,7 @@ void VulkanLibplaceboVideoTarget::recordCompositionBarrier(QRhiCommandBuffer& co
     auto const* const nativeCommandBuffer =
         static_cast<QRhiVulkanCommandBufferNativeHandles const*>(commandBuffer.nativeHandles());
     if (!nativeCommandBuffer || nativeCommandBuffer->commandBuffer == VK_NULL_HANDLE) {
-        qCFatal(sunroomLogGraphics, "QRhi did not expose its Vulkan command buffer");
+        qCFatal(sunplayerLogGraphics, "QRhi did not expose its Vulkan command buffer");
     }
 
     VkImageMemoryBarrier2 const imageBarrier{

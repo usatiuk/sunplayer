@@ -2,33 +2,33 @@ cmake_minimum_required(VERSION 3.22)
 
 if ((CMAKE_HOST_WIN32 OR CMAKE_HOST_APPLE)
         AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
-    set(_sunroom_vcpkg_toolchain)
+    set(_sunplayer_vcpkg_toolchain)
 
     if (DEFINED ENV{VCPKG_ROOT})
-        set(_sunroom_vcpkg_toolchain
+        set(_sunplayer_vcpkg_toolchain
                 "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
     elseif (CMAKE_HOST_WIN32 AND DEFINED ENV{VCToolsInstallDir})
         get_filename_component(
-                _sunroom_vc_root
+                _sunplayer_vc_root
                 "$ENV{VCToolsInstallDir}/../../.."
                 ABSOLUTE
         )
-        set(_sunroom_vcpkg_toolchain
-                "${_sunroom_vc_root}/vcpkg/scripts/buildsystems/vcpkg.cmake")
-        unset(_sunroom_vc_root)
+        set(_sunplayer_vcpkg_toolchain
+                "${_sunplayer_vc_root}/vcpkg/scripts/buildsystems/vcpkg.cmake")
+        unset(_sunplayer_vc_root)
     endif ()
 
-    if (_sunroom_vcpkg_toolchain
-            AND EXISTS "${_sunroom_vcpkg_toolchain}")
+    if (_sunplayer_vcpkg_toolchain
+            AND EXISTS "${_sunplayer_vcpkg_toolchain}")
         set(
                 CMAKE_TOOLCHAIN_FILE
-                "${_sunroom_vcpkg_toolchain}"
+                "${_sunplayer_vcpkg_toolchain}"
                 CACHE FILEPATH
-                "Toolchain used to configure Sunroom"
+                "Toolchain used to configure SunPlayer"
         )
     endif ()
 
-    unset(_sunroom_vcpkg_toolchain)
+    unset(_sunplayer_vcpkg_toolchain)
 endif ()
 
 if (CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET)
@@ -36,7 +36,7 @@ if (CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET)
             VCPKG_TARGET_TRIPLET
             x64-windows-clangcl
             CACHE STRING
-            "Sunroom dependency target triplet"
+            "SunPlayer dependency target triplet"
     )
 endif ()
 
@@ -45,7 +45,7 @@ if (CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_HOST_TRIPLET)
             VCPKG_HOST_TRIPLET
             x64-windows
             CACHE STRING
-            "Sunroom dependency host-tool triplet"
+            "SunPlayer dependency host-tool triplet"
     )
 endif ()
 
@@ -54,7 +54,7 @@ if (CMAKE_HOST_APPLE AND NOT DEFINED VCPKG_TARGET_TRIPLET)
             VCPKG_TARGET_TRIPLET
             arm64-osx
             CACHE STRING
-            "Sunroom dependency target triplet"
+            "SunPlayer dependency target triplet"
     )
 endif ()
 
@@ -67,7 +67,7 @@ if (CMAKE_HOST_APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
     )
 endif ()
 
-project(Sunroom VERSION 0.1.0 LANGUAGES C CXX)
+project(SunPlayer VERSION 0.1.0 LANGUAGES C CXX)
 
 if (APPLE)
     enable_language(OBJCXX)
@@ -86,10 +86,10 @@ if ((WIN32 OR APPLE) AND NOT VCPKG_MANIFEST_MODE)
             "VCPKG_ROOT or configure with the vcpkg CMake toolchain.")
 endif ()
 
-include(cmake/SunroomFFmpeg.cmake)
-sunroom_configure_ffmpeg()
-include(cmake/SunroomLibass.cmake)
-sunroom_configure_libass()
+include(cmake/SunPlayerFFmpeg.cmake)
+sunplayer_configure_ffmpeg()
+include(cmake/SunPlayerLibass.cmake)
+sunplayer_configure_libass()
 
 if (WIN32)
     find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS
@@ -101,9 +101,9 @@ if (WIN32)
     )
     find_package(libplacebo 7.360.1 EXACT CONFIG REQUIRED)
     find_package(cubeb CONFIG REQUIRED)
-    set(sunroom_qt_minimum_version 6.11.1)
+    set(sunplayer_qt_minimum_version 6.11.1)
 
-    function(sunroom_stage_windows_runtime target)
+    function(sunplayer_stage_windows_runtime target)
         add_custom_command(
                 TARGET ${target}
                 POST_BUILD
@@ -115,7 +115,7 @@ if (WIN32)
         )
     endfunction()
 
-    function(sunroom_stage_qt_platform_plugin target plugin_target)
+    function(sunplayer_stage_qt_platform_plugin target plugin_target)
         add_custom_command(
                 TARGET ${target}
                 POST_BUILD
@@ -129,14 +129,14 @@ if (WIN32)
     endfunction()
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_package(PkgConfig REQUIRED)
-    pkg_check_modules(SUNROOM_LIBPLACEBO REQUIRED
+    pkg_check_modules(SUNPLAYER_LIBPLACEBO REQUIRED
             IMPORTED_TARGET
             GLOBAL
             libplacebo>=7.360
             libplacebo<7.361
     )
     add_library(libplacebo::libplacebo
-            ALIAS PkgConfig::SUNROOM_LIBPLACEBO)
+            ALIAS PkgConfig::SUNPLAYER_LIBPLACEBO)
 
     find_package(Qt6 6.10...<6.11 REQUIRED COMPONENTS
             GuiPrivate
@@ -148,17 +148,17 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
             WaylandScannerTools
     )
     find_package(Vulkan 1.3 REQUIRED)
-    pkg_check_modules(SUNROOM_WAYLAND_PROTOCOLS REQUIRED
+    pkg_check_modules(SUNPLAYER_WAYLAND_PROTOCOLS REQUIRED
             wayland-protocols
     )
     pkg_get_variable(
-            SUNROOM_WAYLAND_PROTOCOLS_DIR
+            SUNPLAYER_WAYLAND_PROTOCOLS_DIR
             wayland-protocols
             pkgdatadir
     )
-    set(SUNROOM_WAYLAND_COLOR_MANAGEMENT_PROTOCOL
-            "${SUNROOM_WAYLAND_PROTOCOLS_DIR}/staging/color-management/color-management-v1.xml")
-    if (NOT EXISTS "${SUNROOM_WAYLAND_COLOR_MANAGEMENT_PROTOCOL}")
+    set(SUNPLAYER_WAYLAND_COLOR_MANAGEMENT_PROTOCOL
+            "${SUNPLAYER_WAYLAND_PROTOCOLS_DIR}/staging/color-management/color-management-v1.xml")
+    if (NOT EXISTS "${SUNPLAYER_WAYLAND_COLOR_MANAGEMENT_PROTOCOL}")
         message(FATAL_ERROR
                 "The system wayland-protocols package does not provide "
                 "staging/color-management/color-management-v1.xml")
@@ -174,16 +174,16 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
             libdrm
     )
     find_package(cubeb CONFIG REQUIRED)
-    set(sunroom_qt_minimum_version 6.10)
+    set(sunplayer_qt_minimum_version 6.10)
 elseif (APPLE)
     find_package(PkgConfig REQUIRED)
-    pkg_check_modules(SUNROOM_LIBPLACEBO REQUIRED
+    pkg_check_modules(SUNPLAYER_LIBPLACEBO REQUIRED
             IMPORTED_TARGET
             GLOBAL
             libplacebo=7.360.1
     )
     add_library(libplacebo::libplacebo
-            ALIAS PkgConfig::SUNROOM_LIBPLACEBO)
+            ALIAS PkgConfig::SUNPLAYER_LIBPLACEBO)
 
     find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS
             GuiPrivate
@@ -194,32 +194,32 @@ elseif (APPLE)
     )
     find_package(cubeb CONFIG REQUIRED)
     find_package(MoltenVK 1.4.2 EXACT CONFIG REQUIRED)
-    set(sunroom_qt_minimum_version 6.11.1)
+    set(sunplayer_qt_minimum_version 6.11.1)
 else ()
     message(FATAL_ERROR
-            "Sunroom currently supports Windows, Apple-Silicon macOS, and "
+            "SunPlayer currently supports Windows, Apple-Silicon macOS, and "
             "native Wayland Linux.")
 endif ()
 
-qt_standard_project_setup(REQUIRES ${sunroom_qt_minimum_version})
+qt_standard_project_setup(REQUIRES ${sunplayer_qt_minimum_version})
 
-add_library(sunroom_diagnostics STATIC
+add_library(sunplayer_diagnostics STATIC
         src/diagnostics/ApplicationLog.cpp
         src/diagnostics/ApplicationLog.h
         src/diagnostics/LogCategories.cpp
         src/diagnostics/LogCategories.h
 )
-target_include_directories(sunroom_diagnostics
+target_include_directories(sunplayer_diagnostics
         PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
-target_link_libraries(sunroom_diagnostics
+target_link_libraries(sunplayer_diagnostics
         PUBLIC
         Qt6::Core
 )
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    add_library(sunroom_linux_platform STATIC
+    add_library(sunplayer_linux_platform STATIC
             src/platform/linux/LinuxWaylandWindowContext.cpp
             src/platform/linux/LinuxWaylandWindowContext.h
             src/platform/linux/WaylandColorManagement.cpp
@@ -227,16 +227,16 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
             src/presentation/PresentationSurfaceContract.h
     )
     qt_generate_wayland_protocol_client_sources(
-            sunroom_linux_platform
+            sunplayer_linux_platform
             PRIVATE_CODE
             FILES
-            "${SUNROOM_WAYLAND_COLOR_MANAGEMENT_PROTOCOL}"
+            "${SUNPLAYER_WAYLAND_COLOR_MANAGEMENT_PROTOCOL}"
     )
-    target_include_directories(sunroom_linux_platform
+    target_include_directories(sunplayer_linux_platform
             PUBLIC
             "${CMAKE_CURRENT_SOURCE_DIR}/src"
     )
-    target_link_libraries(sunroom_linux_platform
+    target_link_libraries(sunplayer_linux_platform
             PUBLIC
             Qt6::Gui
             PRIVATE
@@ -244,11 +244,11 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
             Qt6::WaylandClientPrivate
             Vulkan::Vulkan
             Wayland::Client
-            sunroom_diagnostics
+            sunplayer_diagnostics
     )
 endif ()
 
-add_library(sunroom_audio STATIC
+add_library(sunplayer_audio STATIC
         src/audio/AudioSink.h
         src/audio/AudioOutputLedger.cpp
         src/audio/AudioOutputLedger.h
@@ -261,17 +261,17 @@ add_library(sunroom_audio STATIC
         src/audio/RealtimePcmQueue.cpp
         src/audio/RealtimePcmQueue.h
 )
-target_include_directories(sunroom_audio
+target_include_directories(sunplayer_audio
         PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
-target_link_libraries(sunroom_audio
+target_link_libraries(sunplayer_audio
         PRIVATE
         Qt6::Core
         cubeb::cubeb
 )
 
-add_library(sunroom_media STATIC
+add_library(sunplayer_media STATIC
         src/media/DecodedVideoFrame.cpp
         src/media/DecodedVideoFrame.h
         src/media/FfmpegFirstFrameDecoder.cpp
@@ -300,20 +300,20 @@ add_library(sunroom_media STATIC
         src/subtitles/SubtitleTypes.cpp
         src/subtitles/SubtitleTypes.h
 )
-target_include_directories(sunroom_media
+target_include_directories(sunplayer_media
         PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
-target_link_libraries(sunroom_media
+target_link_libraries(sunplayer_media
         PUBLIC
-        sunroom_audio
+        sunplayer_audio
         PRIVATE
         Qt6::Core
-        sunroom_diagnostics
-        sunroom_ffmpeg
+        sunplayer_diagnostics
+        sunplayer_ffmpeg
 )
 
-add_library(sunroom_video_pipeline STATIC
+add_library(sunplayer_video_pipeline STATIC
         src/graphics/GraphicsBackendFactory.cpp
         src/graphics/GraphicsBackendFactory.h
         src/graphics/GraphicsDeviceDomain.cpp
@@ -349,24 +349,24 @@ add_library(sunroom_video_pipeline STATIC
         src/video/libplacebo/LibplaceboRenderContext.cpp
         src/video/libplacebo/LibplaceboRenderContext.h
 )
-target_include_directories(sunroom_video_pipeline
+target_include_directories(sunplayer_video_pipeline
         PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
-target_link_libraries(sunroom_video_pipeline
+target_link_libraries(sunplayer_video_pipeline
         PUBLIC
         libplacebo::libplacebo
         PRIVATE
         Qt6::GuiPrivate
         Qt6::Quick
-        sunroom_diagnostics
-        sunroom_ffmpeg
-        sunroom_libass
-        sunroom_media
+        sunplayer_diagnostics
+        sunplayer_ffmpeg
+        sunplayer_libass
+        sunplayer_media
 )
 
 if (WIN32)
-    target_sources(sunroom_video_pipeline PRIVATE
+    target_sources(sunplayer_video_pipeline PRIVATE
             src/graphics/backends/D3D11GraphicsDeviceDomain.cpp
             src/graphics/backends/D3D11GraphicsDeviceDomain.h
             src/graphics/backends/D3D11LibplaceboFrameImporter.cpp
@@ -374,21 +374,21 @@ if (WIN32)
             src/graphics/backends/D3D11LibplaceboVideoTarget.cpp
             src/graphics/backends/D3D11LibplaceboVideoTarget.h
     )
-    target_link_libraries(sunroom_video_pipeline PRIVATE
+    target_link_libraries(sunplayer_video_pipeline PRIVATE
             d3d11
     )
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    target_sources(sunroom_video_pipeline PRIVATE
+    target_sources(sunplayer_video_pipeline PRIVATE
             src/graphics/backends/VulkanGraphicsDeviceDomain.cpp
             src/graphics/backends/VulkanGraphicsDeviceDomain.h
             src/graphics/backends/VulkanLibplaceboVideoTarget.cpp
             src/graphics/backends/VulkanLibplaceboVideoTarget.h
     )
-    target_link_libraries(sunroom_video_pipeline PRIVATE
+    target_link_libraries(sunplayer_video_pipeline PRIVATE
             Vulkan::Vulkan
     )
 elseif (APPLE)
-    target_sources(sunroom_video_pipeline PRIVATE
+    target_sources(sunplayer_video_pipeline PRIVATE
             src/graphics/backends/MetalGraphicsDeviceDomain.h
             src/graphics/backends/MetalGraphicsDeviceDomain.mm
             src/graphics/backends/MetalLibplaceboFrameImporter.h
@@ -396,16 +396,16 @@ elseif (APPLE)
             src/graphics/backends/MetalLibplaceboVideoTarget.h
             src/graphics/backends/MetalLibplaceboVideoTarget.mm
     )
-    target_compile_options(sunroom_video_pipeline PRIVATE
+    target_compile_options(sunplayer_video_pipeline PRIVATE
             $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>
     )
-    target_link_libraries(sunroom_video_pipeline PRIVATE
+    target_link_libraries(sunplayer_video_pipeline PRIVATE
             MoltenVK::MoltenVK
             "-framework CoreVideo"
     )
 endif ()
 
-qt_add_executable(sunroom
+qt_add_executable(sunplayer
         src/playback/CoalescedGenerationWake.h
         src/playback/MediaTrackModel.cpp
         src/playback/MediaTrackModel.h
@@ -440,11 +440,11 @@ qt_add_executable(sunroom
 )
 
 if (APPLE)
-    target_sources(sunroom PRIVATE
+    target_sources(sunplayer PRIVATE
             src/platform/macos/MacDisplayStateProvider.h
             src/platform/macos/MacDisplayStateProvider.mm
     )
-    target_compile_options(sunroom PRIVATE
+    target_compile_options(sunplayer PRIVATE
             $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>
     )
 endif ()
@@ -506,8 +506,8 @@ set_source_files_properties(src/app/icons/lucide/LICENSE PROPERTIES
         QT_RESOURCE_ALIAS icons/lucide/LICENSE
 )
 
-qt_add_qml_module(sunroom
-        URI Sunroom
+qt_add_qml_module(sunplayer
+        URI SunPlayer
         VERSION 1.0
         QML_FILES
         src/app/Main.qml
@@ -531,19 +531,19 @@ qt_add_qml_module(sunroom
         src/app/icons/lucide/LICENSE
 )
 
-qt_generate_foreign_qml_types(sunroom_video_pipeline sunroom)
+qt_generate_foreign_qml_types(sunplayer_video_pipeline sunplayer)
 
-set(sunroom_shader_options PRECOMPILE)
-find_program(sunroom_spirv_opt spirv-opt)
-if (sunroom_spirv_opt)
-    list(APPEND sunroom_shader_options OPTIMIZED)
+set(sunplayer_shader_options PRECOMPILE)
+find_program(sunplayer_spirv_opt spirv-opt)
+if (sunplayer_spirv_opt)
+    list(APPEND sunplayer_shader_options OPTIMIZED)
 else ()
     message(STATUS
             "spirv-opt was not found; skipping optional SPIR-V optimization")
 endif ()
 
-qt_add_shaders(sunroom "sunroom_shaders"
-        ${sunroom_shader_options}
+qt_add_shaders(sunplayer "sunplayer_shaders"
+        ${sunplayer_shader_options}
         PREFIX
         /shaders
         BASE
@@ -553,25 +553,25 @@ qt_add_shaders(sunroom "sunroom_shaders"
         src/presentation/shaders/diagnostic_video.frag
         src/presentation/shaders/compositor.frag
 )
-unset(sunroom_spirv_opt CACHE)
+unset(sunplayer_spirv_opt CACHE)
 
-target_link_libraries(sunroom
+target_link_libraries(sunplayer
         PRIVATE
         Qt6::GuiPrivate
         Qt6::Quick
         Qt6::QuickControls2
         Qt6::QuickDialogs2
-        sunroom_diagnostics
-        sunroom_video_pipeline
+        sunplayer_diagnostics
+        sunplayer_video_pipeline
 )
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    target_link_libraries(sunroom PRIVATE
-            sunroom_linux_platform
+    target_link_libraries(sunplayer PRIVATE
+            sunplayer_linux_platform
     )
 endif ()
 
-target_include_directories(sunroom
+target_include_directories(sunplayer
         PRIVATE
         "${CMAKE_CURRENT_BINARY_DIR}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
@@ -582,12 +582,12 @@ target_include_directories(sunroom
         "${CMAKE_CURRENT_SOURCE_DIR}/src/video"
 )
 
-target_compile_definitions(sunroom
+target_compile_definitions(sunplayer
         PRIVATE
-        SUNROOM_VERSION="${PROJECT_VERSION}"
+        SUNPLAYER_VERSION="${PROJECT_VERSION}"
 )
 
-set_target_properties(sunroom PROPERTIES
+set_target_properties(sunplayer PROPERTIES
         MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
         MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
         MACOSX_BUNDLE TRUE
@@ -595,15 +595,15 @@ set_target_properties(sunroom PROPERTIES
 )
 
 if (WIN32)
-    target_link_libraries(sunroom PRIVATE
+    target_link_libraries(sunplayer PRIVATE
             CoreMessaging
             RuntimeObject
             WindowsApp
     )
 
-    sunroom_stage_windows_runtime(sunroom)
+    sunplayer_stage_windows_runtime(sunplayer)
     add_custom_command(
-            TARGET sunroom
+            TARGET sunplayer
             POST_BUILD
             COMMAND "$<TARGET_FILE:Qt6::windeployqt>"
                     --qmldir
@@ -615,10 +615,10 @@ if (WIN32)
                     --no-opengl-sw
                     --no-system-d3d-compiler
                     --no-system-dxc-compiler
-                    "$<TARGET_FILE:sunroom>"
+                    "$<TARGET_FILE:sunplayer>"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/qt.conf"
-                    "$<TARGET_FILE_DIR:sunroom>/qt.conf"
+                    "$<TARGET_FILE_DIR:sunplayer>/qt.conf"
             VERBATIM
     )
 
@@ -635,14 +635,14 @@ endif ()
 
 include(GNUInstallDirs)
 
-install(TARGETS sunroom
+install(TARGETS sunplayer
         BUNDLE DESTINATION .
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
 install(FILES src/app/icons/lucide/LICENSE
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/sunroom/licenses
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/sunplayer/licenses
         RENAME Lucide.txt
 )
 
@@ -651,11 +651,11 @@ if (WIN32)
     # DLLs beside build-tree targets. Use the matching install helper so pkg-
     # config libraries such as libass and their dependencies are not missed.
     x_vcpkg_install_local_dependencies(
-            TARGETS sunroom
+            TARGETS sunplayer
             DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
     qt_generate_deploy_qml_app_script(
-            TARGET sunroom
+            TARGET sunplayer
             OUTPUT_SCRIPT deploy_script
             NO_TRANSLATIONS
             NO_UNSUPPORTED_PLATFORM_ERROR

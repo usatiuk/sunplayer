@@ -58,12 +58,12 @@ while Linux uses its distribution package. The real-time callback reads from
 preallocated PCM and metadata storage, writes bounded hold silence, and updates
 fixed-capacity observations only. It does not
 decode, allocate, block, log synchronously, invoke Qt, or perform recovery.
-Sunroom serializes stream lifecycle on its control thread. Cubeb and the sound
+SunPlayer serializes stream lifecycle on its control thread. Cubeb and the sound
 service own ordinary migration of a stream following the system default;
 application-level stream recreation is a fallback after an error or
 demonstrated persistent no-progress condition.
 
-When cubeb supplies a playback position, Sunroom treats that position as the
+When cubeb supplies a playback position, SunPlayer treats that position as the
 primary backend presentation observation. It does not subtract cubeb's reported
 latency again. Latency remains diagnostic and may support a lower-confidence
 fallback when a backend position is unavailable. Position, latency, and device

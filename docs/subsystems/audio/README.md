@@ -2,7 +2,7 @@
 
 ## Status
 
-Sunroom routes decoded audio through the production playback session and plays
+SunPlayer routes decoded audio through the production playback session and plays
 it through the system-default output on Windows, Apple-Silicon macOS, and
 Linux. Presented cubeb frames are the ordinary media clock for sources with
 audio; video-only sources retain the monotonic clock.
@@ -42,7 +42,7 @@ can be absorbed without increasing the three-frame decoded-video queue.
 
 The sink passes a null output device to cubeb, so cubeb and the platform sound
 service own normal system-default route migration inside one cubeb-stream
-epoch. Sunroom continues to own media/hold mapping, user intent, and explicit
+epoch. SunPlayer continues to own media/hold mapping, user intent, and explicit
 re-anchoring only when the cubeb stream itself must be recreated.
 
 Volume is a session-lifetime value from zero to one. Mute selects zero effective
@@ -129,7 +129,7 @@ negotiation and presentation observations; it does not reinterpret media PTS.
 
 The initial controlled and physical formats are 48 kHz stereo because that
 gives stable fixture expectations and avoids endpoint-driven format churn.
-Cubeb may adapt that stable requested format to a migrated endpoint. Sunroom
+Cubeb may adapt that stable requested format to a migrated endpoint. SunPlayer
 rebuilds libswresample only when its own requested stream format changes, such
 as a future multichannel policy change.
 
@@ -141,7 +141,7 @@ can produce a larger block.
 
 ## Device and clock direction
 
-The production backend is cubeb in shared mode. Sunroom opens cubeb's
+The production backend is cubeb in shared mode. SunPlayer opens cubeb's
 system-default route rather than enumerating and pinning the endpoint that is
 default at that instant. Cubeb or the sound server performs ordinary route
 migration inside the same cubeb stream. An audio-output epoch identifies that
@@ -150,7 +150,7 @@ hidden by it. Collection-change notifications remain low-rate diagnostics;
 they are not treated as successful stream-migration boundaries.
 
 The playback position reported by cubeb is the primary presentation
-observation. Sunroom must not subtract reported latency from that position a
+observation. SunPlayer must not subtract reported latency from that position a
 second time. Reported latency remains useful diagnostics and a possible
 lower-confidence fallback input. Backends expose different device identity and
 change-notification capabilities, so those observations remain optional and
@@ -297,7 +297,7 @@ the selected `wasapi` backend and the sink-owned MTA; macOS requires
 regression proves that a PCM block cannot create a preroll/capacity dependency
 cycle.
 
-A registered application scenario launches the built `sunroom` executable
+A registered application scenario launches the built `sunplayer` executable
 with the production FFmpeg, Cubeb, QML, QRhi, libplacebo, compositor, and
 swapchain paths. Its audio-first fixture reaches `Ready` before a video frame
 is available; the scenario requires two distinct video content revisions to

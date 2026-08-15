@@ -41,7 +41,7 @@ QString messageTypeName(QtMsgType type) {
 }
 
 QString automaticFileName() {
-    return QStringLiteral("sunroom-%1-%2.log")
+    return QStringLiteral("sunplayer-%1-%2.log")
         .arg(QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyyMMdd-HHmmss-zzz")))
         .arg(QCoreApplication::applicationPid());
 }
@@ -56,7 +56,7 @@ QString formattedRecord(QtMsgType type, QMessageLogContext const& context, QStri
 }
 
 QByteArray droppedRecordMarker(std::uint64_t count) {
-    return QStringLiteral("%1 level=warning category=sunroom.application "
+    return QStringLiteral("%1 level=warning category=sunplayer.application "
                           "event=log.records_dropped count=%2 reason=queue_full\n")
         .arg(QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs))
         .arg(count)
@@ -186,7 +186,7 @@ void ApplicationLog::flush() {
 
 QString ApplicationLog::defaultLogDirectory() {
     QString const temporary = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
-    return QDir(temporary).filePath(QStringLiteral("Sunroom/logs"));
+    return QDir(temporary).filePath(QStringLiteral("SunPlayer/logs"));
 }
 
 bool ApplicationLog::initialize(QString* error) {
@@ -241,7 +241,7 @@ bool ApplicationLog::initialize(QString* error) {
         if (!rules.isEmpty() && !rules.endsWith(u'\n')) {
             rules.append(u'\n');
         }
-        rules.append(QStringLiteral("sunroom.*.debug=true"));
+        rules.append(QStringLiteral("sunplayer.*.debug=true"));
         QLoggingCategory::setFilterRules(rules);
     }
 
@@ -389,7 +389,7 @@ void ApplicationLog::writeRecord(QFile& file, QByteArray const& record) {
 
     if (!m_truncationRecorded) {
         m_truncationRecorded = true;
-        QByteArray const marker = QByteArrayLiteral("level=warning category=sunroom.application "
+        QByteArray const marker = QByteArrayLiteral("level=warning category=sunplayer.application "
                                                     "event=log.truncated reason=maximum_file_size\n");
         if (marker.size() <= remaining) {
             qint64 const written = file.write(marker);
@@ -426,7 +426,7 @@ void ApplicationLog::pruneRetainedFiles() {
     QFileInfo const current(m_filePath);
     QDir directory(current.absolutePath());
     QFileInfoList files =
-        directory.entryInfoList({QStringLiteral("sunroom-*.log")}, QDir::Files, QDir::Time | QDir::Reversed);
+        directory.entryInfoList({QStringLiteral("sunplayer-*.log")}, QDir::Files, QDir::Time | QDir::Reversed);
     qsizetype const removeCount =
         std::max<qsizetype>(0, files.size() - static_cast<qsizetype>(m_options.retainedFileCount) + 1);
     for (qsizetype index = 0; index < removeCount; ++index) {

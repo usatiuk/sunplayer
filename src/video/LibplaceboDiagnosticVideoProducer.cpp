@@ -373,6 +373,6 @@ bool LibplaceboDiagnosticVideoProducer::deviceLost() const {
 
 VideoOperationResult LibplaceboDiagnosticVideoProducer::unavailable(QString const& reason) {
     m_failureReason = reason.isEmpty() ? QStringLiteral("Libplacebo video path is unavailable") : reason;
-    qCWarning(sunroomLogVideo).noquote() << m_failureReason;
+    qCWarning(sunplayerLogVideo).noquote() << m_failureReason;
     return VideoOperationResult::Unavailable;
 }

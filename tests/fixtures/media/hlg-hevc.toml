@@ -1,6 +1,6 @@
 file = "hlg-hevc.hevc"
 sha256 = "cc9130061a0f3dfab4457fe82bac8154cb918df57e4bd369c396080d68dec713"
-provenance = "Generated analytically for Sunroom; no external source media"
+provenance = "Generated analytically for SunPlayer; no external source media"
 generator = "FFmpeg 8.1.2-full_build-www.gyan.dev with libx265 4.2+37-b81f650"
 
 generation_command = """

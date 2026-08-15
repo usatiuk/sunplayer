@@ -4,13 +4,13 @@
 > fail-closed product policy is superseded by
 > [the 2026-08-01 reconciliation](2026-08-01-display-audio-migration-reconciliation.md)
 > and [ADR 0016](../decisions/0016-reconcile-output-changes-semantically.md).
-> Sunroom now accepts cubeb-stream-level logical continuity for ordinary
+> SunPlayer now accepts cubeb-stream-level logical continuity for ordinary
 > default-route migration instead of requiring a physical-endpoint epoch for
 > every hidden WASAPI client.
 
 ## Question
 
-Can Sunroom treat cubeb's automatic default-device migration as a trustworthy
+Can SunPlayer treat cubeb's automatic default-device migration as a trustworthy
 audio-output epoch, or must playback own device replacement and clock
 re-anchoring?
 
@@ -21,12 +21,12 @@ below.
 
 The conclusions were cross-checked against Microsoft's WASAPI recovery and
 clock contracts and upstream cubeb. On 2026-07-31, upstream `master` resolved
-to the same immutable commit Sunroom pins, so the source findings below do not
+to the same immutable commit SunPlayer pins, so the source findings below do not
 mix project behavior with a moving newer revision.
 
 ## Findings
 
-Sunroom now enumerates the enabled multimedia default, passes its explicit
+SunPlayer now enumerates the enabled multimedia default, passes its explicit
 `cubeb_devid` to `cubeb_stream_init`, and requests
 `CUBEB_STREAM_PREF_DISABLE_DEVICE_SWITCHING`. Cubeb's public contract says an
 explicit device stays on that device, whereas a null device may follow the OS
@@ -36,7 +36,7 @@ reconfigure event fail when switching is disabled, so a same-device WASAPI
 client replacement cannot silently preserve the old epoch either.
 
 The WASAPI backend does not implement
-`cubeb_stream_register_device_changed_callback`. Sunroom's available context
+`cubeb_stream_register_device_changed_callback`. SunPlayer's available context
 collection callback is not stream-specific: it may report an unrelated output
 device addition, removal, state change, or default change. It is evidence to
 re-enumerate devices, not proof that the active stream changed.
@@ -48,7 +48,7 @@ internal reconfiguration has no distinct success callback. The pinned backend
 also routes session-disconnect notifications through its reconfigure event
 even when default switching is disabled, which is why the preference alone is
 insufficient. Supplying an explicit device prevents that path from selecting a
-different endpoint. Sunroom's overlay patch closes the remaining same-endpoint
+different endpoint. SunPlayer's overlay patch closes the remaining same-endpoint
 hole in the render loop: when either stream direction disables switching, a
 reconfigure event exits with `CUBEB_STATE_ERROR` before closing or reopening
 the WASAPI clients. Presentation progress still needs observation for stalls
@@ -60,7 +60,7 @@ the accumulated position, including an outstanding tail that the old device
 may never present. The position can therefore advance across discarded audio.
 Monotonicity is not an acoustic-continuity guarantee.
 
-A newly created cubeb stream starts its device position at zero. Sunroom's
+A newly created cubeb stream starts its device position at zero. SunPlayer's
 current sink reset also clears its PCM queue and output ledger. Replacing the
 device therefore creates a new raw output-clock epoch, even when the playback
 generation and media timeline remain intact.
@@ -83,7 +83,7 @@ Relevant pinned source locations:
   enumeration behavior.
 * `vcpkg-ports/cubeb/fail-disabled-device-reconfigure.patch`: fail-closed
   handling for a disabled-switching reconfigure event.
-* `src/audio/CubebAudioSink.cpp`: Sunroom's explicit multimedia-device
+* `src/audio/CubebAudioSink.cpp`: SunPlayer's explicit multimedia-device
   selection, collection revision, queue, ledger, and reset behavior.
 
 The extracted dependency source is under the active vcpkg build tree and is

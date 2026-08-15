@@ -5,7 +5,7 @@
 
 ## Official vcpkg package
 
-At Sunroom's pinned vcpkg baseline
+At SunPlayer's pinned vcpkg baseline
 `9d7f79f56ae1a9b4704d6a7fb8237e347a974133`, the official FFmpeg port resolves
 to 8.1.2#3.
 
@@ -25,15 +25,15 @@ decode SDK, external codec library, or overlay port is required for D3D11VA.
 
 `swscale` is unnecessary because libplacebo owns video format conversion and
 scaling. `swresample` should be added when decoded audio must be converted to
-the chosen sink format. FFmpeg's `ass` feature is unrelated to Sunroom's
+the chosen sink format. FFmpeg's `ass` feature is unrelated to SunPlayer's
 planned direct libass subtitle renderer.
 
 The official CMake integration exposes configuration-aware include and library
 variables, but not runtime-aware imported component targets or a portable DLL
 list. Qt also ships a case-variant `FindFFmpeg.cmake` with different behavior.
-Sunroom therefore performs vcpkg FFmpeg discovery before Qt, wraps each Windows
+SunPlayer therefore performs vcpkg FFmpeg discovery before Qt, wraps each Windows
 component's Debug/Release import library and DLL in an imported target, and
-contains those targets behind `sunroom_ffmpeg`.
+contains those targets behind `sunplayer_ffmpeg`.
 
 ## Software-frame mapping
 
@@ -60,7 +60,7 @@ For an FFmpeg D3D11 frame:
 * `hw_frames_ctx` retains the pool and reports the software plane format,
   normally NV12, P010, P012, or P016.
 
-The implemented D3D11VA hardware context uses Sunroom's graphics-domain device
+The implemented D3D11VA hardware context uses SunPlayer's graphics-domain device
 rather than creating a second adapter/device. Decoder frame pools request
 shader-resource binding.
 

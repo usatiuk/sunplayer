@@ -584,7 +584,7 @@ void MediaSession::selectSubtitleStream(int streamIndex) {
     std::int64_t const position = m_state == State::Opening
                                       ? m_requestedPositionMicroseconds
                                       : mediaClockSnapshotAt(std::chrono::steady_clock::now()).positionMicroseconds;
-    qCInfo(sunroomLogPlayback).noquote() << "event=playback.subtitle_selected"
+    qCInfo(sunplayerLogPlayback).noquote() << "event=playback.subtitle_selected"
                                          << "from=" + QString::number(m_selectedSubtitleStreamIndex)
                                          << "to=" + QString::number(streamIndex)
                                          << "positionUs=" + QString::number(position);
@@ -607,7 +607,7 @@ void MediaSession::selectVideoStream(int streamIndex) {
     if (std::optional<std::int64_t> const end = m_videoTracks.endMicroseconds(streamIndex); end && position >= *end) {
         position = std::max<std::int64_t>(0, *end - 1);
     }
-    qCInfo(sunroomLogPlayback).noquote() << "event=playback.video_track_selected"
+    qCInfo(sunplayerLogPlayback).noquote() << "event=playback.video_track_selected"
                                          << "from=" + QString::number(m_selectedVideoStreamIndex)
                                          << "to=" + QString::number(streamIndex)
                                          << "positionUs=" + QString::number(position);
@@ -625,7 +625,7 @@ void MediaSession::selectAudioStream(int streamIndex) {
     std::int64_t const position = m_state == State::Opening
                                       ? m_requestedPositionMicroseconds
                                       : mediaClockSnapshotAt(std::chrono::steady_clock::now()).positionMicroseconds;
-    qCInfo(sunroomLogPlayback).noquote() << "event=playback.audio_track_selected"
+    qCInfo(sunplayerLogPlayback).noquote() << "event=playback.audio_track_selected"
                                          << "from=" + QString::number(m_selectedAudioStreamIndex)
                                          << "to=" + QString::number(streamIndex)
                                          << "positionUs=" + QString::number(position);
@@ -674,12 +674,12 @@ void MediaSession::startDecode(QUrl const& url, QString const& path, VideoHardwa
     m_audioPlayIntent.store(m_userWantsPlaying, std::memory_order_release);
     m_seeking = seeking;
 
-    qCInfo(sunroomLogPlayback).noquote() << (newMedia  ? "event=playback.open_start"
+    qCInfo(sunplayerLogPlayback).noquote() << (newMedia  ? "event=playback.open_start"
                                              : seeking ? "event=playback.seek_start"
                                                        : "event=playback.restart_start")
                                          << "generation=" + QString::number(generation)
                                          << "positionUs=" + QString::number(requestedPositionMicroseconds);
-    qCDebug(sunroomLogPlayback).noquote() << "event=playback.decode_request"
+    qCDebug(sunplayerLogPlayback).noquote() << "event=playback.decode_request"
                                           << "generation=" + QString::number(generation) << "path=" + path;
 
     std::int64_t decodePosition = requestedPositionMicroseconds;
@@ -793,7 +793,7 @@ void MediaSession::workerLoop(std::stop_token workerStopToken) {
                     ++seekPrerollFrames;
                     if (!firstSeekTimelineMicroseconds) {
                         firstSeekTimelineMicroseconds = queued.timelineTimeMicroseconds;
-                        qCDebug(sunroomLogPlayback).noquote()
+                        qCDebug(sunplayerLogPlayback).noquote()
                             << "event=playback.seek_first_frame"
                             << "generation=" + QString::number(generation)
                             << "targetUs=" + QString::number(*targetPosition)
@@ -809,7 +809,7 @@ void MediaSession::workerLoop(std::stop_token workerStopToken) {
                     auto const elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                                              std::chrono::steady_clock::now() - operationStarted)
                                              .count();
-                    qCInfo(sunroomLogPlayback).noquote()
+                    qCInfo(sunplayerLogPlayback).noquote()
                         << "event=playback.seek_preroll_complete"
                         << "generation=" + QString::number(generation) << "targetUs=" + QString::number(*targetPosition)
                         << "firstTimelineUs=" + QString::number(firstSeekTimelineMicroseconds.value_or(0))
@@ -817,7 +817,7 @@ void MediaSession::workerLoop(std::stop_token workerStopToken) {
                         << "decodedFrames=" + QString::number(seekPrerollFrames)
                         << "elapsedMs=" + QString::number(elapsed);
                 } else if (targetPosition && !seekAdmissionLogged && seekPrerollFrames % 64 == 0) {
-                    qCDebug(sunroomLogPlayback).noquote()
+                    qCDebug(sunplayerLogPlayback).noquote()
                         << "event=playback.seek_preroll_progress"
                         << "generation=" + QString::number(generation) << "targetUs=" + QString::number(*targetPosition)
                         << "decodedFrames=" + QString::number(seekPrerollFrames);
@@ -849,7 +849,7 @@ void MediaSession::workerLoop(std::stop_token workerStopToken) {
                             m_audioSink->reset(generation, block.format);
                             m_audioSinkGeneration.store(generation, std::memory_order_release);
                             audioOutputInitialized = true;
-                            qCInfo(sunroomLogPlayback).noquote()
+                            qCInfo(sunplayerLogPlayback).noquote()
                                 << "event=playback.audio_output_ready"
                                 << "generation=" + QString::number(generation)
                                 << "sampleRate=" + QString::number(block.format.sampleRate)
@@ -883,7 +883,7 @@ void MediaSession::workerLoop(std::stop_token workerStopToken) {
                                 m_audioOutputEndedWithoutFrames = true;
                             }
                         }
-                        qCInfo(sunroomLogPlayback).noquote() << "event=playback.audio_decode_drained"
+                        qCInfo(sunplayerLogPlayback).noquote() << "event=playback.audio_decode_drained"
                                                              << "generation=" + QString::number(generation);
                         postFramesAvailable(generation);
                     },
@@ -900,7 +900,7 @@ void MediaSession::workerLoop(std::stop_token workerStopToken) {
                         m_initialVideoDiagnostics = selection.videoDiagnostics;
                     }
                 }
-                qCInfo(sunroomLogPlayback).noquote()
+                qCInfo(sunplayerLogPlayback).noquote()
                     << "event=playback.streams_selected"
                     << "generation=" + QString::number(generation)
                     << "audio=" +
@@ -993,7 +993,7 @@ void MediaSession::workerLoop(std::stop_token workerStopToken) {
                     postFramesAvailable(request.generation);
                     if (request.decode.video.start.targetPositionMicroseconds && !seekAdmissionLogged) {
                         seekAdmissionLogged = true;
-                        qCInfo(sunroomLogPlayback).noquote()
+                        qCInfo(sunplayerLogPlayback).noquote()
                             << "event=playback.seek_preroll_fallback_complete"
                             << "generation=" + QString::number(request.generation)
                             << "targetUs=" + QString::number(*request.decode.video.start.targetPositionMicroseconds)
@@ -1006,7 +1006,7 @@ void MediaSession::workerLoop(std::stop_token workerStopToken) {
         }
         if (request.decode.video.start.targetPositionMicroseconds && !seekAdmissionLogged && result.isSuccess() &&
             !operationStopToken.stop_requested()) {
-            qCWarning(sunroomLogPlayback).noquote()
+            qCWarning(sunplayerLogPlayback).noquote()
                 << "event=playback.seek_no_admitted_frame"
                 << "generation=" + QString::number(request.generation)
                 << "targetUs=" + QString::number(*request.decode.video.start.targetPositionMicroseconds)
@@ -1016,19 +1016,19 @@ void MediaSession::workerLoop(std::stop_token workerStopToken) {
                 << "elapsedMs=" + QString::number(operationElapsed);
         }
         if (result.isCancelled()) {
-            qCDebug(sunroomLogPlayback).noquote() << "event=playback.decode_cancelled"
+            qCDebug(sunplayerLogPlayback).noquote() << "event=playback.decode_cancelled"
                                                   << "generation=" + QString::number(request.generation)
                                                   << "frames=" + QString::number(result.video.framesDecoded)
                                                   << "audioFrames=" + QString::number(result.outputAudioFrames)
                                                   << "elapsedMs=" + QString::number(operationElapsed);
         } else if (result.isStopped()) {
-            qCDebug(sunroomLogPlayback).noquote() << "event=playback.decode_stopped"
+            qCDebug(sunplayerLogPlayback).noquote() << "event=playback.decode_stopped"
                                                   << "generation=" + QString::number(request.generation)
                                                   << "frames=" + QString::number(result.video.framesDecoded)
                                                   << "audioFrames=" + QString::number(result.outputAudioFrames)
                                                   << "elapsedMs=" + QString::number(operationElapsed);
         } else if (result.isSuccess()) {
-            qCInfo(sunroomLogPlayback).noquote()
+            qCInfo(sunplayerLogPlayback).noquote()
                 << "event=playback.decode_complete"
                 << "generation=" + QString::number(request.generation)
                 << "frames=" + QString::number(result.video.framesDecoded)
@@ -1036,7 +1036,7 @@ void MediaSession::workerLoop(std::stop_token workerStopToken) {
                 << "endOfStream=" + QString(result.video.endOfStream ? QStringLiteral("true") : QStringLiteral("false"))
                 << "stopped=" + QString(result.video.stopped ? QStringLiteral("true") : QStringLiteral("false"));
         } else {
-            qCWarning(sunroomLogPlayback).noquote()
+            qCWarning(sunplayerLogPlayback).noquote()
                 << "event=playback.decode_failed"
                 << "generation=" + QString::number(request.generation)
                 << "frames=" + QString::number(result.video.framesDecoded)
@@ -1343,7 +1343,7 @@ void MediaSession::setPlaybackInterruption(PlaybackInterruption interruption) {
         state = QStringLiteral("buffering");
         break;
     }
-    qCInfo(sunroomLogPlayback).noquote() << "event=playback.interruption_changed"
+    qCInfo(sunplayerLogPlayback).noquote() << "event=playback.interruption_changed"
                                          << "generation=" + QString::number(m_playbackGeneration) << "state=" + state;
     emit sessionChanged();
     emit audioDiagnosticsChanged();
@@ -1479,7 +1479,7 @@ bool MediaSession::updateAudioOutputState(std::chrono::steady_clock::time_point 
         m_audioHoldSince.reset();
         m_audioClockUnavailableSince.reset();
         setPlaybackInterruption(PlaybackInterruption::None);
-        qCInfo(sunroomLogPlayback).noquote() << "event=playback.audio_tail_clock_started"
+        qCInfo(sunplayerLogPlayback).noquote() << "event=playback.audio_tail_clock_started"
                                              << "generation=" + QString::number(m_playbackGeneration)
                                              << "positionUs=" + QString::number(m_clockAnchorMediaMicroseconds);
     }
@@ -1498,7 +1498,7 @@ bool MediaSession::failCurrentAudioOutput(AudioPresentationSnapshot const& snaps
     if (reason.isEmpty()) {
         reason = fallbackReason.isEmpty() ? tr("The audio output device failed.") : fallbackReason;
     }
-    qCWarning(sunroomLogPlayback).noquote()
+    qCWarning(sunplayerLogPlayback).noquote()
         << "event=playback.audio_output_failed"
         << "generation=" + QString::number(m_playbackGeneration) << "error=" + reason;
 

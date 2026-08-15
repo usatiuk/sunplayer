@@ -63,7 +63,7 @@ Item {
                 leftMargin: 14
                 verticalCenter: parent.verticalCenter
             }
-            text: qsTr("Sunroom")
+            text: qsTr("SunPlayer")
             color: "#e8eaf0"
             font.pixelSize: 13
             font.weight: Font.Medium

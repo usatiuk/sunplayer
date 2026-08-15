@@ -550,7 +550,7 @@ SubtitleWorkerStatus decodeSubtitlePackets(CodecContextPtr codecContext, AVCodec
         int const decodeResult =
             avcodec_decode_subtitle2(codecContext.get(), &subtitle, &gotSubtitle, input.packet.get());
         ++packetCount;
-        qCDebug(sunroomLogMediaDecode).noquote()
+        qCDebug(sunplayerLogMediaDecode).noquote()
             << "event=subtitle.packet_decoded"
             << "generation=" + QString::number(playbackGeneration) << "packet=" + QString::number(packetCount)
             << "pts=" + QString::number(input.packet->pts) << "bytes=" + QString::number(input.packet->size)
@@ -569,7 +569,7 @@ SubtitleWorkerStatus decodeSubtitlePackets(CodecContextPtr codecContext, AVCodec
         }
         ++outputCount;
         if (outputCount == 1) {
-            qCInfo(sunroomLogMediaDecode).noquote()
+            qCInfo(sunplayerLogMediaDecode).noquote()
                 << "event=subtitle.first_output"
                 << "generation=" + QString::number(playbackGeneration) << "packet=" + QString::number(packetCount)
                 << "pts=" + QString::number(subtitle.pts) << "rects=" + QString::number(subtitle.num_rects);
@@ -1681,13 +1681,13 @@ FfmpegMediaDecodeResult decodeMediaFrames(FfmpegMediaDecodeRequest const& reques
     if (observedEnd) {
         result.video.diagnostics.durationMicroseconds = observedEnd;
         result.video.diagnostics.durationFinal = true;
-        qCInfo(sunroomLogMediaDecode).noquote() << "event=media.duration_finalized"
+        qCInfo(sunplayerLogMediaDecode).noquote() << "event=media.duration_finalized"
                                                 << "durationUs=" + QString::number(*observedEnd);
     } else if (audioStream) {
         result.video.diagnostics.durationMicroseconds = initialVideoDiagnostics.durationMicroseconds;
         result.video.diagnostics.durationFinal = false;
     }
-    qCInfo(sunroomLogMediaDecode).noquote()
+    qCInfo(sunplayerLogMediaDecode).noquote()
         << "event=decode.synchronized_complete"
         << "generation=" + QString::number(request.video.firstFrameIdentity.playbackGeneration)
         << "videoFrames=" + QString::number(result.video.framesDecoded)

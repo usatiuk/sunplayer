@@ -1,6 +1,6 @@
 file = "sdr-bt709-ffv1-flac-sync.mkv"
 sha256 = "47c785fa0de5ca82613c0e8fd1b8f2c73a47d72ad9af9d6c0e9bf105247c46a6"
-provenance = "Generated analytically for Sunroom; no external source media"
+provenance = "Generated analytically for SunPlayer; no external source media"
 generator = "FFmpeg 8.1.2-full_build-www.gyan.dev"
 license = "CC0-1.0"
 

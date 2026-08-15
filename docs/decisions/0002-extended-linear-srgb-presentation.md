@@ -110,6 +110,6 @@ This decision does not settle:
 * User overrides or confidence policy for unreliable display metadata.
 
 Display-calibration ownership is decided by
-[0013](0013-rely-on-system-display-calibration.md): Sunroom relies on the OS
+[0013](0013-rely-on-system-display-calibration.md): SunPlayer relies on the OS
 or compositor on managed paths, and application-managed display ICC remains
 deferred.

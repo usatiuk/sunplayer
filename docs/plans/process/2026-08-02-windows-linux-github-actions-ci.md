@@ -5,7 +5,7 @@ Status: Active
 ## Goal
 
 Add one understandable GitHub Actions workflow that continuously builds,
-lints, and tests Sunroom's current Windows and native-Wayland Linux targets.
+lints, and tests SunPlayer's current Windows and native-Wayland Linux targets.
 CI must fail on real regressions, expose capability gaps honestly, and remain
 close to the documented local commands.
 
@@ -80,11 +80,11 @@ directory.
 Use the runner's declared `C:\vcpkg` checkout and the repository's existing
 manifest, baseline, overlay ports, and clang-cl triplet. Persist vcpkg's
 filesystem binary cache through `actions/cache`; do not cache raw downloads,
-the Sunroom build tree, or `vcpkg_installed`. Map the runner's
+the SunPlayer build tree, or `vcpkg_installed`. Map the runner's
 `VCPKG_INSTALLATION_ROOT` to the `VCPKG_ROOT` consumed by the project and pass
 its toolchain plus the cached aqt Qt prefix explicitly to CMake after asserting
 both paths. Enter the Visual Studio x64 developer environment for configure and
-build, keeping MSVC as the Sunroom compiler while vcpkg's chainload file
+build, keeping MSVC as the SunPlayer compiler while vcpkg's chainload file
 selects clang-cl for dependencies.
 
 Run `all_qmllint`, then CTest excluding tests labeled `device` or `gpu`.
@@ -98,7 +98,7 @@ After those checks pass, configure and build a separate Release application,
 install it through the existing CMake deployment boundary, assert the generated
 relative `qt.conf`, and run the installed application's existing `--verify-qml`
 deployment probe. Trusted push and manual-dispatch runs then upload the complete
-install tree as `sunroom-windows-release-<commit>` for seven days. Pull requests
+install tree as `sunplayer-windows-release-<commit>` for seven days. Pull requests
 exercise the same installation probe but do not publish contributor-built
 executables. This workflow artifact is a developer convenience, not an
 installer or clean-machine portability claim.
@@ -130,7 +130,7 @@ The change is ready for a first hosted run when:
 * both jobs build, run QML lint, and invoke CTest through documented commands;
 * hosted-only capability exclusions are label-driven, minimal, and documented;
 * service readiness is observable and bounded;
-* caches contain no credentials, Sunroom build trees, or `vcpkg_installed`
+* caches contain no credentials, SunPlayer build trees, or `vcpkg_installed`
   tree; only the exact public Qt install and vcpkg's ABI-addressed dependency
   binaries are persisted; and
 * project documentation distinguishes local/hosted evidence from physical
@@ -164,7 +164,7 @@ are pinned to reviewed 40-character checkout, cache, or upload SHAs; Bash
 parses every Linux run script; and the cache hash inputs exist at their new
 root paths.
 
-A fresh root Debug tree at `/tmp/sunroom-ci-linux-debug` configured successfully,
+A fresh root Debug tree at `/tmp/sunplayer-ci-linux-debug` configured successfully,
 built all 237 Ninja edges, passed both `all_qmllint` targets, and passed all 26
 registered CTests. Source inspection confirms both application scenarios now
 carry `device`, while local CTest metadata confirms the audio-first label. The
@@ -226,6 +226,6 @@ single-test diagnostic and the final unchanged full-concurrency run both passed,
 so CI parallelism remains unchanged and the product-test issue remains visible.
 Installing the Debug tree to a fresh temporary prefix staged 152 files, including
 the relative `bin/qt.conf`, QML modules, plugins, transitive media dependencies,
-and compiler runtime; the installed `sunroom.exe --verify-qml` probe passed. The
+and compiler runtime; the installed `sunplayer.exe --verify-qml` probe passed. The
 Release configure/build/install/upload path cannot be exercised from that
 single-config Debug tree and remains hosted evidence.

@@ -6,7 +6,7 @@ endif()
 
 if((NOT VCPKG_TARGET_IS_WINDOWS AND NOT VCPKG_TARGET_IS_OSX)
         OR VCPKG_TARGET_IS_UWP)
-    message(FATAL_ERROR "The Sunroom libplacebo port supports Windows desktop and macOS only")
+    message(FATAL_ERROR "The SunPlayer libplacebo port supports Windows desktop and macOS only")
 endif()
 
 if("d3d11" IN_LIST FEATURES)

@@ -11,13 +11,13 @@ This note records evidence and rejected paths. Current accepted behavior is in
 
 ## Runtime observations
 
-Sunroom bound color-management-v1 version 2 and received distinct preferred
+SunPlayer bound color-management-v1 version 2 and received distinct preferred
 descriptions while moving between the connected HDR and SDR outputs. The HDR
 description reported a 162-nit reference, 0.005-nit minimum, and 10,000-nit
 target maximum; the SDR description reported 80/0.2/80. This proved the
 surface-following feedback lifetime. Mutter's 10,000-nit value is the PQ
 envelope rather than its panel peak; another compositor may publish a more
-output-specific target maximum. Sunroom consumes the compositor-declared value
+output-specific target maximum. SunPlayer consumes the compositor-declared value
 without compositor-specific reinterpretation.
 
 The first FP16 implementation failed because QRhi could not find
@@ -46,12 +46,12 @@ TODO rather than exposing a usable application failure result when creation is
 rejected. The materially relevant behavior remains in 6.11 and development.
 
 Stock Qt also binds `wp_color_manager_v1` at version 1. It therefore cannot
-satisfy Sunroom's intentional version-2-only use of `ready2` and
+satisfy SunPlayer's intentional version-2-only use of `ready2` and
 `preferred_changed2`, even on a compositor advertising version 2.
 
 Description creation is asynchronous: version 2 promises an eventual
 `ready2` or `failed`, not completion before the next display sync callback.
-Sunroom therefore waits for a terminal event from each startup description;
+SunPlayer therefore waits for a terminal event from each startup description;
 one `wl_display_roundtrip` alone must not be interpreted as rejection.
 
 ## QRhi and Vulkan WSI coupling
@@ -103,11 +103,11 @@ the client's content description.
 
 The inspected KWin 6.6.5 sources advertise extended-target-volume and related
 HDR features, and its linear transfer does not inherently clamp values above
-`1.0`. That release exposes protocol version 1, so it is outside Sunroom's
+`1.0`. That release exposes protocol version 1, so it is outside SunPlayer's
 current latest-only managed path. Its surface state likewise stores the client
 description separately from the compositor's preferred output description.
 
-No Sunroom policy branches on a compositor name. A version-2 KWin global with
+No SunPlayer policy branches on a compositor name. A version-2 KWin global with
 the required capabilities uses the same path as Mutter.
 
 ## Extended linear versus HDR10
@@ -134,7 +134,7 @@ request to set a monitor mode. The compositor may convert that source
 description to each output's description. Preferred feedback only indicates a
 potentially more efficient or accurate client encoding.
 
-Consequently an HDR-capable Sunroom window keeps its BT.2020/PQ description
+Consequently an HDR-capable SunPlayer window keeps its BT.2020/PQ description
 and HDR10 swapchain when it moves among HDR and SDR outputs or spans both.
 Changing encoding based on the dominant output would create brightness jumps,
 unnecessary swapchain churn, and a risk of one buffer being interpreted with
@@ -148,7 +148,7 @@ not retry triggers. A future explicit SDR-only session/content policy can use
 the same bidirectional tuple transition without making it output-driven.
 
 An SDR output's valid 1x preferred description still supplies reference white
-and target minimum/maximum while the content surface remains PQ. Sunroom uses
+and target minimum/maximum while the content surface remains PQ. SunPlayer uses
 those target fields without treating `hdrActive == false` as missing data.
 
 For the exceptional PQ-to-SDR fallback, the replacement swapchain and encoded
@@ -172,7 +172,7 @@ Do not clamp the extended linear-sRGB input before the matrix. Negative or
 greater-than-one components can represent a valid color after the primary
 conversion. Clamp negative light only after conversion.
 
-For each non-negative BT.2020 component `S`, Sunroom uses inverse ST 2084:
+For each non-negative BT.2020 component `S`, SunPlayer uses inverse ST 2084:
 
 ```text
 L = S * 203
@@ -204,7 +204,7 @@ not part of the initial implementation.
 ## Libplacebo boundary
 
 Libplacebo can perform BT.709/BT.2020/PQ conversion, but its normal color-map
-configuration can also introduce tone and gamut mapping. Sunroom needs one
+configuration can also introduce tone and gamut mapping. SunPlayer needs one
 fixed presentation encoder after video, subtitle, and UI composition, with the
 desktop compositor retaining final output tone mapping.
 
@@ -215,7 +215,7 @@ libplacebo:
     source decode/color interpretation and video rendering
     -> FP16 linear sRGB, 1.0 = reference white
 
-Sunroom final QRhi shader:
+SunPlayer final QRhi shader:
     linear composition -> BT.2020 matrix -> PQ -> RGB10A2
 ```
 

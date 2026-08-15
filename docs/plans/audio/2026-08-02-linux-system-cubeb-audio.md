@@ -81,7 +81,7 @@ Windows continues to request `wasapi` by name because that pinned dependency
 and packaging contract is deliberate. Linux passes a null backend name and
 records `cubeb_get_backend_id()` in the existing diagnostic snapshot.
 
-Sunroom does not force `pulse`. Ubuntu cubeb's own default order selects Pulse
+SunPlayer does not force `pulse`. Ubuntu cubeb's own default order selects Pulse
 when available, which covers a real PulseAudio server, PipeWire-Pulse, and
 WSLg. A different selected backend is observable; it is not silently rewritten
 into application policy.
@@ -98,7 +98,7 @@ Do not poll device enumeration or recreate the stream merely to manufacture a
 switch notification. WSLg can prove default-route opening but not a native
 Pulse/PipeWire device move. Native acceptance must change the system default
 while playback runs and observe that cubeb/platform routing follows it with
-one surviving Sunroom output epoch. A demonstrated backend error or persistent
+one surviving SunPlayer output epoch. A demonstrated backend error or persistent
 no-progress condition belongs to the separately bounded stream-recreation
 slice already allowed by ADR 0016.
 
@@ -146,7 +146,7 @@ or preprocessor logic for this optional trailing field.
 3. Select the cubeb initialization argument at compile time: `"wasapi"` on
    Windows, null on Linux.
 4. Remove the incompatible `input_params` designated initializer.
-5. Add `CubebAudioSink.cpp/.h` and `cubeb::cubeb` to `sunroom_audio` for both
+5. Add `CubebAudioSink.cpp/.h` and `cubeb::cubeb` to `sunplayer_audio` for both
    currently supported platforms instead of maintaining duplicate source
    lists.
 6. Include and instantiate `CubebAudioSink` from production `MediaSession` on
@@ -233,12 +233,12 @@ audio boundary, and semantic output-migration decisions.
 Use fresh build directories where practical:
 
 ```sh
-cmake -S . -B /tmp/sunroom-linux-audio-debug -G Ninja \
+cmake -S . -B /tmp/sunplayer-linux-audio-debug -G Ninja \
   -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
-cmake --build /tmp/sunroom-linux-audio-debug --parallel 2
-ctest --test-dir /tmp/sunroom-linux-audio-debug \
+cmake --build /tmp/sunplayer-linux-audio-debug --parallel 2
+ctest --test-dir /tmp/sunplayer-linux-audio-debug \
   --output-on-failure --parallel 2
-cmake --build /tmp/sunroom-linux-audio-debug \
+cmake --build /tmp/sunplayer-linux-audio-debug \
   --parallel 2 --target all_qmllint
 ```
 
@@ -246,7 +246,7 @@ Run the focused physical and production boundaries separately so their output
 is retained in delivery evidence:
 
 ```sh
-ctest --test-dir /tmp/sunroom-linux-audio-debug \
+ctest --test-dir /tmp/sunplayer-linux-audio-debug \
   --output-on-failure -R 'cubeb-audio-sink|application-audio-first-playback'
 ```
 

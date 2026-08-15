@@ -118,26 +118,26 @@ VideoTargetUpdate QrhiVideoTarget::createTarget(QSize const& pixelSize) {
     }
     if (!m_rhi.isTextureFormatSupported(QRhiTexture::RGBA16F, textureFlags)) {
         setUnavailableDiagnostics(QStringLiteral("RGBA16F render target is unsupported"));
-        qCWarning(sunroomLogVideo, "The active QRhi backend cannot create the requested "
+        qCWarning(sunplayerLogVideo, "The active QRhi backend cannot create the requested "
                                    "RGBA16F video target");
         return VideoTargetUpdate::Unavailable;
     }
 
     m_texture.reset(m_rhi.newTexture(QRhiTexture::RGBA16F, pixelSize, 1, textureFlags));
-    m_texture->setName(QByteArrayLiteral("Sunroom video surface"));
+    m_texture->setName(QByteArrayLiteral("SunPlayer video surface"));
     if (!m_texture->create()) {
         if (m_rhi.isDeviceLost()) {
             setUnavailableDiagnostics(QStringLiteral("Graphics device lost"));
             return VideoTargetUpdate::DeviceLost;
         }
         setUnavailableDiagnostics(QStringLiteral("Could not create the video texture"));
-        qCWarning(sunroomLogVideo, "Could not create the video texture");
+        qCWarning(sunplayerLogVideo, "Could not create the video texture");
         return VideoTargetUpdate::Unavailable;
     }
 
     QRhiTextureRenderTargetDescription const description(QRhiColorAttachment(m_texture.get()));
     m_renderTarget.reset(m_rhi.newTextureRenderTarget(description));
-    m_renderTarget->setName(QByteArrayLiteral("Sunroom video render target"));
+    m_renderTarget->setName(QByteArrayLiteral("SunPlayer video render target"));
     m_renderPassDescriptor.reset(m_renderTarget->newCompatibleRenderPassDescriptor());
     m_renderTarget->setRenderPassDescriptor(m_renderPassDescriptor.get());
     if (!m_renderTarget->create()) {
@@ -146,7 +146,7 @@ VideoTargetUpdate QrhiVideoTarget::createTarget(QSize const& pixelSize) {
             return VideoTargetUpdate::DeviceLost;
         }
         setUnavailableDiagnostics(QStringLiteral("Could not create the video render target"));
-        qCWarning(sunroomLogVideo, "Could not create the video render target");
+        qCWarning(sunplayerLogVideo, "Could not create the video render target");
         return VideoTargetUpdate::Unavailable;
     }
 
@@ -170,7 +170,7 @@ VideoTargetUpdate QrhiVideoTarget::resizeTarget(QSize const& pixelSize) {
             return VideoTargetUpdate::DeviceLost;
         }
         setUnavailableDiagnostics(QStringLiteral("Could not resize the video texture"));
-        qCWarning(sunroomLogVideo, "Could not resize the video texture");
+        qCWarning(sunplayerLogVideo, "Could not resize the video texture");
         return VideoTargetUpdate::Unavailable;
     }
     setDirectDiagnostics();

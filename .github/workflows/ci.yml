@@ -79,28 +79,28 @@ jobs:
 
       - name: Configure
         run: >-
-          cmake -S . -B "$RUNNER_TEMP/sunroom-linux-debug" -G Ninja
+          cmake -S . -B "$RUNNER_TEMP/sunplayer-linux-debug" -G Ninja
           -DCMAKE_BUILD_TYPE=Debug
           -DBUILD_TESTING=ON
 
       - name: Build
         run: >-
-          cmake --build "$RUNNER_TEMP/sunroom-linux-debug"
+          cmake --build "$RUNNER_TEMP/sunplayer-linux-debug"
           --parallel "$(nproc)"
 
       - name: Lint QML
         run: >-
-          cmake --build "$RUNNER_TEMP/sunroom-linux-debug"
+          cmake --build "$RUNNER_TEMP/sunplayer-linux-debug"
           --target all_qmllint
           --parallel "$(nproc)"
 
       - name: Test
         run: |
-          BUILD_DIR="$RUNNER_TEMP/sunroom-linux-debug"
-          WAYLAND_RUNTIME=/tmp/sunroom-wayland-runtime
-          PULSE_RUNTIME=/tmp/sunroom-pulse-runtime
-          WESTON_LOG=/tmp/sunroom-weston.log
-          PULSE_LOG=/tmp/sunroom-pulse.log
+          BUILD_DIR="$RUNNER_TEMP/sunplayer-linux-debug"
+          WAYLAND_RUNTIME=/tmp/sunplayer-wayland-runtime
+          PULSE_RUNTIME=/tmp/sunplayer-pulse-runtime
+          WESTON_LOG=/tmp/sunplayer-weston.log
+          PULSE_LOG=/tmp/sunplayer-pulse.log
           WESTON_PID=
           PULSE_PID=
 
@@ -152,7 +152,7 @@ jobs:
           install -d -o pulse -g pulse -m 0755 "$PULSE_RUNTIME"
 
           export XDG_RUNTIME_DIR="$WAYLAND_RUNTIME"
-          export WAYLAND_DISPLAY=wayland-sunroom
+          export WAYLAND_DISPLAY=wayland-sunplayer
           export QT_QPA_PLATFORM=wayland
 
           weston \
@@ -186,7 +186,7 @@ jobs:
           fi
 
           export PULSE_SERVER="unix:$PULSE_RUNTIME/native"
-          export PULSE_SINK=sunroom_ci
+          export PULSE_SINK=sunplayer_ci
 
           pulseaudio \
             --system \
@@ -220,12 +220,12 @@ jobs:
             echo "PulseAudio exited after becoming ready" >&2
             exit 1
           fi
-          if ! pactl list short sinks | awk '$2 == "sunroom_ci" { found = 1 } END { exit !found }'; then
-            echo "PulseAudio did not expose the sunroom_ci sink" >&2
+          if ! pactl list short sinks | awk '$2 == "sunplayer_ci" { found = 1 } END { exit !found }'; then
+            echo "PulseAudio did not expose the sunplayer_ci sink" >&2
             exit 1
           fi
           if [[ "$(pactl get-default-sink)" != "$PULSE_SINK" ]]; then
-            echo "PulseAudio did not select sunroom_ci as the default sink" >&2
+            echo "PulseAudio did not select sunplayer_ci as the default sink" >&2
             exit 1
           fi
 
@@ -279,7 +279,7 @@ jobs:
         shell: pwsh
         run: |
           $qtRoot = "$env:RUNNER_TEMP\Qt\6.11.1\msvc2022_64"
-          $binaryCache = "$env:RUNNER_TEMP\sunroom-vcpkg-binary-cache"
+          $binaryCache = "$env:RUNNER_TEMP\sunplayer-vcpkg-binary-cache"
           $requiredPaths = @(
             "$qtRoot\lib\cmake\Qt6\Qt6Config.cmake",
             "$qtRoot\lib\cmake\Qt6ShaderTools\Qt6ShaderToolsConfig.cmake",
@@ -297,7 +297,7 @@ jobs:
       - name: Restore vcpkg binaries
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          path: ${{ runner.temp }}\sunroom-vcpkg-binary-cache
+          path: ${{ runner.temp }}\sunplayer-vcpkg-binary-cache
           key: windows-2022-vcpkg-x64-windows-clangcl-r1-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'cmake/vcpkg/**') }}
           restore-keys: |
             windows-2022-vcpkg-x64-windows-clangcl-r1-
@@ -307,8 +307,8 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
-          set "VCPKG_BINARY_SOURCES=clear;files,%RUNNER_TEMP%\sunroom-vcpkg-binary-cache,readwrite"
-          cmake -S . -B "%RUNNER_TEMP%\sunroom-windows-debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DVCPKG_INSTALLED_DIR=%RUNNER_TEMP%\sunroom-vcpkg-installed" "-DCMAKE_PREFIX_PATH=%RUNNER_TEMP%\Qt\6.11.1\msvc2022_64"
+          set "VCPKG_BINARY_SOURCES=clear;files,%RUNNER_TEMP%\sunplayer-vcpkg-binary-cache,readwrite"
+          cmake -S . -B "%RUNNER_TEMP%\sunplayer-windows-debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DVCPKG_INSTALLED_DIR=%RUNNER_TEMP%\sunplayer-vcpkg-installed" "-DCMAKE_PREFIX_PATH=%RUNNER_TEMP%\Qt\6.11.1\msvc2022_64"
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Build
@@ -316,7 +316,7 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
-          cmake --build "%RUNNER_TEMP%\sunroom-windows-debug" --parallel %NUMBER_OF_PROCESSORS%
+          cmake --build "%RUNNER_TEMP%\sunplayer-windows-debug" --parallel %NUMBER_OF_PROCESSORS%
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Lint QML
@@ -324,7 +324,7 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
-          cmake --build "%RUNNER_TEMP%\sunroom-windows-debug" --target all_qmllint --parallel %NUMBER_OF_PROCESSORS%
+          cmake --build "%RUNNER_TEMP%\sunplayer-windows-debug" --target all_qmllint --parallel %NUMBER_OF_PROCESSORS%
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Test deterministic boundaries
@@ -332,7 +332,7 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
-          ctest --test-dir "%RUNNER_TEMP%\sunroom-windows-debug" --output-on-failure --parallel %NUMBER_OF_PROCESSORS% -LE "device|gpu"
+          ctest --test-dir "%RUNNER_TEMP%\sunplayer-windows-debug" --output-on-failure --parallel %NUMBER_OF_PROCESSORS% -LE "device|gpu"
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Configure Release bundle
@@ -340,8 +340,8 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
-          set "VCPKG_BINARY_SOURCES=clear;files,%RUNNER_TEMP%\sunroom-vcpkg-binary-cache,readwrite"
-          cmake -S . -B "%RUNNER_TEMP%\sunroom-windows-release" -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DVCPKG_INSTALLED_DIR=%RUNNER_TEMP%\sunroom-vcpkg-installed" "-DCMAKE_PREFIX_PATH=%RUNNER_TEMP%\Qt\6.11.1\msvc2022_64"
+          set "VCPKG_BINARY_SOURCES=clear;files,%RUNNER_TEMP%\sunplayer-vcpkg-binary-cache,readwrite"
+          cmake -S . -B "%RUNNER_TEMP%\sunplayer-windows-release" -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DVCPKG_INSTALLED_DIR=%RUNNER_TEMP%\sunplayer-vcpkg-installed" "-DCMAKE_PREFIX_PATH=%RUNNER_TEMP%\Qt\6.11.1\msvc2022_64"
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Build Release bundle
@@ -349,7 +349,7 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
-          cmake --build "%RUNNER_TEMP%\sunroom-windows-release" --target sunroom --parallel %NUMBER_OF_PROCESSORS%
+          cmake --build "%RUNNER_TEMP%\sunplayer-windows-release" --target sunplayer --parallel %NUMBER_OF_PROCESSORS%
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Stage Release bundle
@@ -357,20 +357,20 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
-          cmake --install "%RUNNER_TEMP%\sunroom-windows-release" --config Release --prefix "%RUNNER_TEMP%\sunroom-windows-artifact"
+          cmake --install "%RUNNER_TEMP%\sunplayer-windows-release" --config Release --prefix "%RUNNER_TEMP%\sunplayer-windows-artifact"
           if errorlevel 1 exit /b %errorlevel%
-          if not exist "%RUNNER_TEMP%\sunroom-windows-artifact\bin\qt.conf" exit /b 1
-          if exist "%RUNNER_TEMP%\sunroom-windows-artifact\bin\d3dcompiler_*.dll" exit /b 1
-          if exist "%RUNNER_TEMP%\sunroom-windows-artifact\bin\dxcompiler*.dll" exit /b 1
-          if exist "%RUNNER_TEMP%\sunroom-windows-artifact\bin\dxil*.dll" exit /b 1
-          "%RUNNER_TEMP%\sunroom-windows-artifact\bin\sunroom.exe" --verify-qml
+          if not exist "%RUNNER_TEMP%\sunplayer-windows-artifact\bin\qt.conf" exit /b 1
+          if exist "%RUNNER_TEMP%\sunplayer-windows-artifact\bin\d3dcompiler_*.dll" exit /b 1
+          if exist "%RUNNER_TEMP%\sunplayer-windows-artifact\bin\dxcompiler*.dll" exit /b 1
+          if exist "%RUNNER_TEMP%\sunplayer-windows-artifact\bin\dxil*.dll" exit /b 1
+          "%RUNNER_TEMP%\sunplayer-windows-artifact\bin\sunplayer.exe" --verify-qml
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Upload Windows developer bundle
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: sunroom-windows-release-${{ github.sha }}
-          path: ${{ runner.temp }}\sunroom-windows-artifact
+          name: sunplayer-windows-release-${{ github.sha }}
+          path: ${{ runner.temp }}\sunplayer-windows-artifact
           if-no-files-found: error
           retention-days: 7

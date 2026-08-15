@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Sunroom's deterministic PGS decoder fixture.
+"""Generate SunPlayer's deterministic PGS decoder fixture.
 
 The output is intentionally assembled from documented PGS segments instead of
 using FFmpeg (which has a PGS decoder but no encoder). It contains:

@@ -27,7 +27,7 @@ void LibassDependencyTest::rendersEmbeddedFontAssCue() {
     QVERIFY(ass_library_version() > 0);
     ASS_Library* library = ass_library_init();
     QVERIFY(library);
-    QFile font(QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/Ahem.ttf"));
+    QFile font(QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/Ahem.ttf"));
     QVERIFY(font.open(QIODevice::ReadOnly));
     QByteArray const fontBytes = font.readAll();
     QVERIFY(!fontBytes.isEmpty());

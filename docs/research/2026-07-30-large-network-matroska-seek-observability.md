@@ -36,7 +36,7 @@ than the application's D3D11VA path but confirms usable timestamps.
 
 ## Pinned FFmpeg seek semantics
 
-Sunroom's current `avformat_seek_file` request uses the selected video stream's
+SunPlayer's current `avformat_seek_file` request uses the selected video stream's
 time base and requests the closest dependency-safe point at or before the
 target. In FFmpeg 8.1.2, adding `AVSEEK_FLAG_BACKWARD` would not change this
 call; `avformat_seek_file` ignores that flag. `AVSEEK_FLAG_ANY`, byte seeking,
@@ -71,7 +71,7 @@ post-seek byte position = beginning of file
 first selected packet PTS = 0
 ```
 
-Sunroom used `av_add_stable()` to add the normalized microsecond offset to the
+SunPlayer used `av_add_stable()` to add the normalized microsecond offset to the
 timeline origin. That function is designed for stable repeated increments. In
 FFmpeg 8.1.2 it multiplies the increment into an `AVRational`; the rational's
 numerator is a 32-bit `int`. A microsecond position after
@@ -106,7 +106,7 @@ expected first sought PTS: 3,000,000,000 microseconds
 ```
 
 After restoring the fix, both reported real files were exercised through
-Sunroom's D3D11VA application pipeline at 3000 seconds:
+SunPlayer's D3D11VA application pipeline at 3000 seconds:
 
 | Case | Stream target | First packet | Preroll | Completion |
 | --- | ---: | ---: | ---: | ---: |

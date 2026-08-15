@@ -33,11 +33,11 @@ static_assert(offsetof(DiagnosticVideoParameters, canonicalYFlip) == 16);
 QShader loadShader(QString const& path) {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
-        qCFatal(sunroomLogVideo, "Could not open packaged shader: %s", qPrintable(path));
+        qCFatal(sunplayerLogVideo, "Could not open packaged shader: %s", qPrintable(path));
     }
     QShader shader = QShader::fromSerialized(file.readAll());
     if (!shader.isValid()) {
-        qCFatal(sunroomLogVideo, "Packaged shader is invalid: %s", qPrintable(path));
+        qCFatal(sunplayerLogVideo, "Packaged shader is invalid: %s", qPrintable(path));
     }
     return shader;
 }
@@ -50,7 +50,7 @@ DiagnosticVideoProducer::DiagnosticVideoProducer(GraphicsDeviceDomain& graphicsD
                                                          .readback = readback,
                                                      })) {
     if (!m_target) {
-        qCFatal(sunroomLogVideo, "The graphics backend does not provide a QRhi video target");
+        qCFatal(sunplayerLogVideo, "The graphics backend does not provide a QRhi video target");
     }
 }
 DiagnosticVideoProducer::~DiagnosticVideoProducer() = default;
@@ -171,12 +171,12 @@ VideoOperationResult DiagnosticVideoProducer::createResources() {
 
     m_uniformBuffer.reset(m_rhi.newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer,
                                           m_rhi.ubufAligned(sizeof(DiagnosticVideoParameters))));
-    m_uniformBuffer->setName(QByteArrayLiteral("Sunroom diagnostic video parameters"));
+    m_uniformBuffer->setName(QByteArrayLiteral("SunPlayer diagnostic video parameters"));
     if (!m_uniformBuffer->create()) {
         if (m_rhi.isDeviceLost()) {
             return VideoOperationResult::DeviceLost;
         }
-        qCFatal(sunroomLogVideo, "Could not create the diagnostic video uniform buffer");
+        qCFatal(sunplayerLogVideo, "Could not create the diagnostic video uniform buffer");
     }
 
     m_bindings.reset(m_rhi.newShaderResourceBindings());
@@ -187,13 +187,13 @@ VideoOperationResult DiagnosticVideoProducer::createResources() {
         if (m_rhi.isDeviceLost()) {
             return VideoOperationResult::DeviceLost;
         }
-        qCFatal(sunroomLogVideo, "Could not create the diagnostic video resource bindings");
+        qCFatal(sunplayerLogVideo, "Could not create the diagnostic video resource bindings");
     }
 
     QShader const vertexShader = loadShader(QStringLiteral(":/shaders/fullscreen.vert.qsb"));
     QShader const fragmentShader = loadShader(QStringLiteral(":/shaders/diagnostic_video.frag.qsb"));
     m_pipeline.reset(m_rhi.newGraphicsPipeline());
-    m_pipeline->setName(QByteArrayLiteral("Sunroom diagnostic video pipeline"));
+    m_pipeline->setName(QByteArrayLiteral("SunPlayer diagnostic video pipeline"));
     m_pipeline->setShaderStages({
         {QRhiShaderStage::Vertex, vertexShader},
         {QRhiShaderStage::Fragment, fragmentShader},
@@ -205,7 +205,7 @@ VideoOperationResult DiagnosticVideoProducer::createResources() {
         if (m_rhi.isDeviceLost()) {
             return VideoOperationResult::DeviceLost;
         }
-        qCFatal(sunroomLogVideo, "Could not create the diagnostic video graphics pipeline");
+        qCFatal(sunplayerLogVideo, "Could not create the diagnostic video graphics pipeline");
     }
     return VideoOperationResult::Ready;
 }

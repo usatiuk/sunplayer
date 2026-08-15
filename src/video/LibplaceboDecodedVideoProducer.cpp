@@ -238,6 +238,6 @@ VideoOperationResult LibplaceboDecodedVideoProducer::unavailable(QString const& 
     Q_ASSERT(failureKind != VideoFailureKind::None);
     m_failureReason = reason.isEmpty() ? QStringLiteral("Decoded libplacebo video path is unavailable") : reason;
     m_failureKind = failureKind;
-    qCWarning(sunroomLogVideo).noquote() << m_failureReason;
+    qCWarning(sunplayerLogVideo).noquote() << m_failureReason;
     return VideoOperationResult::Unavailable;
 }

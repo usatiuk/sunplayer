@@ -4,12 +4,12 @@ Status: Complete
 
 ## Goal
 
-Add ordinary desktop fullscreen behavior to Sunroom without bypassing Qt or
+Add ordinary desktop fullscreen behavior to SunPlayer without bypassing Qt or
 creating platform-specific window-management paths.
 
 Completion means:
 
-* `F11` toggles fullscreen while Sunroom is active.
+* `F11` toggles fullscreen while SunPlayer is active.
 * A left-button double-click on the Player video background toggles fullscreen.
 * Double-clicking transport controls, sliders, menus, dialogs, or diagnostic UI
   does not toggle fullscreen.
@@ -80,7 +80,7 @@ bits, monitor IDs, DXGI exclusive state, AppKit presentation options, or
 Wayland protocol objects.
 
 Track only whether the last non-fullscreen state was maximized. Entering
-fullscreen records that value. Leaving through Sunroom restores maximized or
+fullscreen records that value. Leaving through SunPlayer restores maximized or
 normal accordingly. Changes initiated by the window system remain authoritative;
 update the remembered non-fullscreen state from Qt's state notification rather
 than maintaining a second desired-state machine.
@@ -237,7 +237,7 @@ noninteractive implementation run and remain acceptance gaps:
 * Verify double-clicking every interactive overlay does not toggle.
 * Enter from both normal and maximized states and verify restoration.
 * Move the window to another display, then enter fullscreen and confirm the
-  platform chooses the current display without Sunroom repositioning it.
+  platform chooses the current display without SunPlayer repositioning it.
 * Toggle during playing, paused, buffering, and while controls are hidden.
 * Confirm video keeps presenting, aspect fitting and UI scale update, and the
   transport/cursor idle policy still works.
@@ -281,7 +281,7 @@ exception to the Qt-native policy.
 
 Automated validation completed on Windows Debug:
 
-* `sunroom`, `sunroom_qml_shell_tests`, and `all_qmllint` built successfully.
+* `sunplayer`, `sunplayer_qml_shell_tests`, and `all_qmllint` built successfully.
 * Production QML lint is clean. Test lint retains the separately deferred HDR
   Lab `videoColorPolicy` fake-type warning recorded in `docs/DEFERRED.md`.
 * All 25 registered CTests pass.

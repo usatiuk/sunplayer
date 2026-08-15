@@ -8,7 +8,7 @@
 struct LibplaceboGraphicsContext;
 
 // Shared libplacebo renderer policy for analytic and decoded inputs. It owns
-// target color description and tone-mapping selection. Sunroom describes the
+// target color description and tone-mapping selection. SunPlayer describes the
 // destination in libplacebo's fixed 203-nit coordinate system so its linear
 // output directly satisfies the active-reference-white surface contract.
 // Target allocation and synchronization remain in VideoTargetInterop.

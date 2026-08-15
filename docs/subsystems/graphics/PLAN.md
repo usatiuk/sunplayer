@@ -266,7 +266,7 @@ responsibilities.
   current headroom above `1.0`, unlike-display movement, and live HDR/SDR
   switching still require suitable native hardware.
 * [x] Implement native Wayland Linux Vulkan presentation, unmanaged piecewise-
-  sRGB fallback, Sunroom-owned version-2 managed descriptions, preferred-
+  sRGB fallback, SunPlayer-owned version-2 managed descriptions, preferred-
   target observation, stable BT.2020/PQ HDR10 across output movement, and
   complete gamma-2.2 SDR rollback after presentation failure. X11 and XWayland
   are unsupported.

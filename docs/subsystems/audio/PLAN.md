@@ -56,7 +56,7 @@ explicit recovery semantics.
 * [x] Implement `CubebAudioSink` with no allocation, blocking, application
   locks, synchronous logging, Qt calls, decode, or recovery in its callback.
 * [x] Use a stable 48 kHz stereo float32 request across ordinary endpoint
-  migration; rebuild libswresample only when Sunroom's requested stream format
+  migration; rebuild libswresample only when SunPlayer's requested stream format
   changes.
 * [x] Implement preroll, drain, and short-underrun hold silence.
 * [x] Implement gain and mute without changing media-clock progression.
@@ -106,7 +106,7 @@ explicit recovery semantics.
 * [x] Define `audioOutputEpoch` as one cubeb stream lifetime. Keep the existing
   compact media/hold history across internal backend migration and do not infer
   a hidden epoch from a collection notification.
-  The cubeb integration test verifies that Sunroom opens the system-default
+  The cubeb integration test verifies that SunPlayer opens the system-default
   route and that an actual sink reset advances the epoch.
 * [ ] On cubeb error or failed stream creation, recreate only
   device-dependent output state, re-anchor a new epoch at the last confident

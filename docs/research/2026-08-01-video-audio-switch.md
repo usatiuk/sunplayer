@@ -10,12 +10,12 @@ Evidence labels:
 * **[Source-confirmed]** Observed directly in current production source.
 * **[Issue evidence]** Demonstrated bug, regression, or maintainer discussion.
 * **[Inference]** Conclusion derived from the cited behavior.
-* **[Recommendation]** Proposed Sunroom policy.
+* **[Recommendation]** Proposed SunPlayer policy.
 * **[Experiment]** Requires validation on real systems.
 
 ## 1. Executive conclusion
 
-The smallest sound Sunroom architecture is:
+The smallest sound SunPlayer architecture is:
 
 ```text
 playback generation
@@ -47,7 +47,7 @@ Platform APIs already resolve which display is relevant, though they do not alwa
 
 **[Source-confirmed] Cubeb already performs substantial default-device migration internally.** The current WASAPI backend listens for default-endpoint and session-disconnection events, debounces endpoint changes, closes and rebuilds its internal clients on its render thread, and restarts the stream. The Rust CoreAudio backend similarly invokes asynchronous stream reinitialization for default-device changes.
 
-**[Recommendation] Sunroom should not immediately destroy its cubeb stream whenever it hears a device-change hint.** It should first treat the event as an audio-clock discontinuity, freeze the published media position, increment the audio epoch, and let cubeb’s backend recover. Application-level stream destruction is the fallback for a cubeb error, failed initialization, or a demonstrated no-progress condition.
+**[Recommendation] SunPlayer should not immediately destroy its cubeb stream whenever it hears a device-change hint.** It should first treat the event as an audio-clock discontinuity, freeze the published media position, increment the audio epoch, and let cubeb’s backend recover. Application-level stream destruction is the fallback for a cubeb error, failed initialization, or a demonstrated no-progress condition.
 
 **[Recommendation] Keep an explicit audio epoch above cubeb.** Cubeb’s WASAPI position implementation attempts to remain monotonic across internal reconfiguration by accumulating written frames and clamping against its previous result. Monotonicity is useful, but it does not prove that the returned number still has the same media-timeline meaning after latency changes, reinitialization, or injected hold silence.
 
@@ -91,7 +91,7 @@ Platform APIs already resolve which display is relevant, though they do not alwa
 
 **[Source-confirmed]** VLC’s D3D11 output keeps a compact `display_info_t`. It compares pixel format, luminance peak, color space, transfer function, primaries, range, and orientation, and rebuilds format resources only when that semantic value changes. The code even labels one peak calculation a “guestimate,” illustrating that elaborate provenance cannot make missing platform data precise.
 
-**Takeaway:** VLC has significant backend-specific synchronization because it directly owns WASAPI. Sunroom uses cubeb, so reproducing VLC’s MMDevice worker and endpoint-acquisition machinery above cubeb would duplicate the library.
+**Takeaway:** VLC has significant backend-specific synchronization because it directly owns WASAPI. SunPlayer uses cubeb, so reproducing VLC’s MMDevice worker and endpoint-acquisition machinery above cubeb would duplicate the library.
 
 ### Chromium
 
@@ -109,7 +109,7 @@ Platform APIs already resolve which display is relevant, though they do not alwa
 
 **[Source-confirmed]** Current cubeb WASAPI and CoreAudio backends automatically reinitialize default-device streams. Explicitly selected devices use different policy, which is one reason cubeb has a “disable device switching” preference and an open issue separating explicit selection from following the system default.
 
-**Takeaway:** for Sunroom’s current “follow default” requirement, cubeb is the endpoint migration owner. Sunroom owns the media-clock anchor and fallback if cubeb cannot recover.
+**Takeaway:** for SunPlayer’s current “follow default” requirement, cubeb is the endpoint migration owner. SunPlayer owns the media-clock anchor and fallback if cubeb cannot recover.
 
 ### Qt Multimedia
 
@@ -117,11 +117,11 @@ Platform APIs already resolve which display is relevant, though they do not alwa
 
 **[Source-confirmed]** The `QAudioOutput` implementation stores a concrete `QAudioDevice` and forwards changes to the platform output. Its constructor resolves the default immediately. There is no evidence in this wrapper for an automatic cross-platform “default changed, preserve media clock, reanchor” policy; that policy lives in player/backend layers. Source snapshot: `qt/qtmultimedia`, commit `6c4fe271aced360109765e1f89c1e3c6120e19ae`.
 
-**Takeaway:** Qt’s device notifications may be useful diagnostics, but Sunroom should avoid running a second default-device migration system beside cubeb.
+**Takeaway:** Qt’s device notifications may be useful diagnostics, but SunPlayer should avoid running a second default-device migration system beside cubeb.
 
 ### SDL as a contrast
 
-**[Source-confirmed]** SDL 3 maintains physical and logical audio devices, conversion streams, default logical-device identities, zombie-device handling, and migration inside its own audio core. This is appropriate because SDL intends to be the application’s audio abstraction. It would be redundant architecture for Sunroom, where cubeb already owns this layer. Source snapshot: commit `c15b6a14578bf6544cad834473d35bf2e38ff3fd`.
+**[Source-confirmed]** SDL 3 maintains physical and logical audio devices, conversion streams, default logical-device identities, zombie-device handling, and migration inside its own audio core. This is appropriate because SDL intends to be the application’s audio abstraction. It would be redundant architecture for SunPlayer, where cubeb already owns this layer. Source snapshot: commit `c15b6a14578bf6544cad834473d35bf2e38ff3fd`.
 
 ---
 
@@ -219,7 +219,7 @@ Do not add “reported,” “potential,” “usable,” and “effective” pe
 
 **[Recommendation]** Treat wake, display hotplug, an HDR toggle, and a profile change as reasons to mark display state dirty and validate presentation resources. Do not add a global `Sleeping`, `Waking`, or `ReprobingDisplays` state unless a demonstrated platform bug requires it.
 
-Windows Advanced Color and automatic color management should continue to own final calibration. Sunroom’s responsibility is to declare the correct surface color space and choose a tone-map target; it should not reproduce the OS’s ICC/display pipeline.
+Windows Advanced Color and automatic color management should continue to own final calibration. SunPlayer’s responsibility is to declare the correct surface color space and choose a tone-map target; it should not reproduce the OS’s ICC/display pipeline.
 
 ### macOS
 
@@ -262,7 +262,7 @@ Set `CAMetalLayer.wantsExtendedDynamicRangeContent` and the correct layer color 
 
 **[Recommendation]** Do not poll current EDR headroom every frame by default. Requery on notifications, window movement, presentation reactivation, and a small number of settling retries.
 
-A paused target-dependent frame must eventually be rerendered or re-tone-mapped when current EDR headroom changes. If Sunroom later retains a truly scene-linear, display-independent intermediate and performs all target mapping in the final compositor, a cheaper recompose may replace the full libplacebo rerender.
+A paused target-dependent frame must eventually be rerendered or re-tone-mapped when current EDR headroom changes. If SunPlayer later retains a truly scene-linear, display-independent intermediate and performs all target mapping in the final compositor, a cheaper recompose may replace the full libplacebo rerender.
 
 #### ColorSync and external displays
 
@@ -292,7 +292,7 @@ When `preferred_changed2` arrives:
 4. Ignore or destroy it if a newer preferred identity has superseded it.
 5. Retain the previous valid target until the new one is ready.
 
-This is a genuine asynchronous stale-result boundary, but the protocol’s own identity is sufficient. Sunroom does not need an additional provider generation, topology revision, and query revision.
+This is a genuine asynchronous stale-result boundary, but the protocol’s own identity is sufficient. SunPlayer does not need an additional provider generation, topology revision, and query revision.
 
 #### Missing protocol support
 
@@ -317,7 +317,7 @@ Do not silently attempt HDR based on output EDID alone. Do not fall back to X11.
 
 ## 4. Cross-platform audio migration comparison
 
-| Platform/backend            | Default-device owner            | Typical migration                       | Position implication                                    | Sunroom action                                     |
+| Platform/backend            | Default-device owner            | Typical migration                       | Position implication                                    | SunPlayer action                                     |
 | --------------------------- | ------------------------------- | --------------------------------------- | ------------------------------------------------------- | -------------------------------------------------- |
 | Windows/cubeb WASAPI        | Cubeb                           | Internal stop, close, setup, start      | Attempts monotonic position, latency/meaning may change | New epoch and anchor; app recreate only on failure |
 | macOS/cubeb CoreAudio       | Cubeb                           | Asynchronous backend reinit             | No cross-device media-time guarantee                    | New epoch and anchor                               |
@@ -352,7 +352,7 @@ Do not silently attempt HDR based on output EDID alone. Do not fall back to X11.
 * The stream may have spent an unknown period stopped or priming.
 * A backend can preserve a logical count while changing the count’s physical presentation relationship.
 
-**[Recommendation]** Keep a Sunroom audio epoch and establish a new anchor after migration even when cubeb’s number did not reset.
+**[Recommendation]** Keep a SunPlayer audio epoch and establish a new anchor after migration even when cubeb’s number did not reset.
 
 #### Bluetooth
 
@@ -381,13 +381,13 @@ Avoid repeated immediate destroy/reopen loops. After one failed attempt, wait fo
 
 **[Documented]** WASAPI reports endpoint format changes through session disconnection and requires reopening the native stream.
 
-**[Source-confirmed]** Cubeb performs that native reconfiguration internally. Sunroom does not need to rebuild libswresample merely because the hardware mix rate changed if it continues supplying the same cubeb stream format.
+**[Source-confirmed]** Cubeb performs that native reconfiguration internally. SunPlayer does not need to rebuild libswresample merely because the hardware mix rate changed if it continues supplying the same cubeb stream format.
 
 **[Issue evidence]** Firefox deliberately favors stable 44.1 or 48 kHz output because changing stream configuration can cause multi-second gaps on Bluetooth and HDMI devices.
 
 **[Recommendation]** V1 should use a stable requested cubeb PCM format—preferably interleaved float at 48 kHz, with a conservative stable channel layout. Let libswresample convert decoded media into that format and let cubeb adapt from the requested format to the endpoint’s current mix format.
 
-Rebuild Sunroom’s swresampler only when Sunroom’s requested stream format changes, not whenever the native endpoint changes internally.
+Rebuild SunPlayer’s swresampler only when SunPlayer’s requested stream format changes, not whenever the native endpoint changes internally.
 
 ### macOS and cubeb CoreAudio
 
@@ -395,7 +395,7 @@ Rebuild Sunroom’s swresampler only when Sunroom’s requested stream format ch
 
 **[Inference]** CoreAudio reinitialization can change device latency, nominal sample rate, callback scheduling, or the native clock source. There is no public cubeb contract that promises a seamless media-timeline mapping across that change.
 
-**[Recommendation]** Apply the same generic Sunroom audio-epoch policy. Do not implement a macOS-specific AirPods state machine.
+**[Recommendation]** Apply the same generic SunPlayer audio-epoch policy. Do not implement a macOS-specific AirPods state machine.
 
 AirPods reconnects, Bluetooth profile changes, aggregate-device changes, and sleep/wake are backend-specific triggers for the same operation:
 
@@ -415,7 +415,7 @@ old clock no longer trusted
 
 **[Documented]** PulseAudio can preserve active streams while profiles change when possible. Its default device also behaves partly as a fallback because stream-restore policy may remember a prior route.
 
-**[Inference]** On PipeWire-Pulse, much of the same rerouting happens in the server. The cubeb stream may remain alive while its physical route and latency change. Therefore an endpoint change does not necessarily imply that Sunroom should destroy its cubeb stream.
+**[Inference]** On PipeWire-Pulse, much of the same rerouting happens in the server. The cubeb stream may remain alive while its physical route and latency change. Therefore an endpoint change does not necessarily imply that SunPlayer should destroy its cubeb stream.
 
 **[Recommendation]**
 
@@ -424,7 +424,7 @@ old clock no longer trusted
 * Do not require the application to identify every Bluetooth profile transition.
 * Do not adopt native PipeWire in V1 merely for migration.
 
-Native PipeWire would give more direct graph and timing control, but it would also make Sunroom responsible for node selection, graph negotiation, policy changes, reconnection, and clock interpretation. It is more control, not a simplification.
+Native PipeWire would give more direct graph and timing control, but it would also make SunPlayer responsible for node selection, graph negotiation, policy changes, reconnection, and clock interpretation. It is more control, not a simplification.
 
 ### A/V synchronization after migration
 
@@ -432,7 +432,7 @@ The required invariant is:
 
 ```text
 For one audio epoch, every accepted backend position maps
-monotonically to exactly one Sunroom media time.
+monotonically to exactly one SunPlayer media time.
 ```
 
 The invariant does not require backend position itself to start at zero.
@@ -518,7 +518,7 @@ Classification:
 
 | Mechanism                                     | Keep, simplify, defer, or remove                       | Why                                                                                                 | Production evidence                                                                                      |
 | --------------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Playback generation                           | **Keep — class 1**                                     | Prevents stale decoded packets/frames after open, seek, fallback, or close                          | Existing Sunroom invariant; standard player requirement                                                  |
+| Playback generation                           | **Keep — class 1**                                     | Prevents stale decoded packets/frames after open, seek, fallback, or close                          | Existing SunPlayer invariant; standard player requirement                                                  |
 | Graphics-device generation                    | **Keep — class 1**                                     | Prevents stale native/GPU resources crossing device loss or recreation                              | Cubeb’s analogous native-lifetime races show why lifetime boundaries must be strict.                     |
 | Audio-stream epoch                            | **Keep, simplify — class 1**                           | Backend position cannot be trusted across endpoint/clock discontinuity without a new anchor         | Cubeb reinitializes internally; WASAPI position is logical/monotonic rather than a promised media clock. |
 | Current semantic `DisplayTarget`              | **Keep — class 2**                                     | Rendering must eventually use correct reference white, headroom, and presentation mode              | VLC compares semantic display state; platform APIs provide current state.                                |
@@ -551,11 +551,11 @@ audioStreamEpoch
 
 `DisplayTarget` is a value, not an identity domain. Its semantic equality determines whether anything must change.
 
-The Wayland preferred-description identity is platform protocol state, not a new global Sunroom generation.
+The Wayland preferred-description identity is platform protocol state, not a new global SunPlayer generation.
 
 ---
 
-## 7. Simplest sound Sunroom design
+## 7. Simplest sound SunPlayer design
 
 ### Minimal shared state
 
@@ -663,7 +663,7 @@ The cubeb wrapper should:
 * Open the system-default output.
 * Register cubeb state and device-change callbacks.
 * Feed preallocated PCM.
-* Expose backend position and latency observations tagged with the current Sunroom epoch.
+* Expose backend position and latency observations tagged with the current SunPlayer epoch.
 * Report callback progress, error, and device-change hints.
 * Serialize stream stop/destruction against callback lifetime.
 * Perform one controlled application-level recreation when cubeb reports an unrecoverable error.
@@ -678,7 +678,7 @@ It should not:
 
 ### Platform responsibility
 
-| Concern                            | Sunroom                                    | Library/backend                              | OS/compositor                          |
+| Concern                            | SunPlayer                                    | Library/backend                              | OS/compositor                          |
 | ---------------------------------- | ------------------------------------------ | -------------------------------------------- | -------------------------------------- |
 | Media open, seek, decode identity  | Playback generation and queue invalidation | FFmpeg decoding/demux                        | —                                      |
 | Video tone-map target              | Choose semantic target and rerender        | libplacebo executes mapping                  | Supplies capabilities/headroom         |
@@ -789,7 +789,7 @@ Collapse all display revisions into semantic equality of `DisplayTarget`.
 * Rich provenance/confidence UI.
 * Continuous macOS EDR polling.
 * DisplayConfig identity beyond diagnostics/fallback lookup.
-* `IDXGIFactory1::IsCurrent` unless Sunroom caches adapter enumeration.
+* `IDXGIFactory1::IsCurrent` unless SunPlayer caches adapter enumeration.
 * Platform-specific Bluetooth state machines.
 
 ### Suggested project policy text
@@ -1260,7 +1260,7 @@ For WASAPI, CoreAudio, and Pulse:
 2. Trigger a default-device migration.
 3. Log device callback, state callback, data callbacks, position, and latency.
 4. Determine whether position resets, jumps, stalls, or stays monotonic.
-5. Verify that Sunroom’s epoch anchor removes all visible media-time jumps.
+5. Verify that SunPlayer’s epoch anchor removes all visible media-time jumps.
 
 **[Experiment] Application fallback threshold**
 
@@ -1367,7 +1367,7 @@ For V1, continuity should win over format churn unless multichannel output is al
 
 ## Final recommendation
 
-Sunroom should converge on this design:
+SunPlayer should converge on this design:
 
 ```text
 Display:
@@ -1379,7 +1379,7 @@ Display:
 
 Audio:
     cubeb owns normal default-endpoint migration
-    → Sunroom marks a new audio epoch
+    → SunPlayer marks a new audio epoch
     → freezes media time
     → accepts recovery or recreates after error
     → prerolls

@@ -7,7 +7,7 @@ Status: Complete
 Make SDR, HDR10/PQ, HLG, HDR10+, and Dolby Vision inputs pass through the
 single production FFmpeg/libplacebo renderer with explicit, reproducible
 policy and representative behavioral regression coverage. Preserve the best
-available FFmpeg/libplacebo result rather than introducing Sunroom-authored
+available FFmpeg/libplacebo result rather than introducing SunPlayer-authored
 format decoders or tone mappers.
 
 ## Grounded current state
@@ -88,7 +88,7 @@ monitoring; later physical evidence may motivate a focused upstream API.
   expansion behavior.
 * HLG target behavior is either validated and accepted or remains functional
   with a precise documented limitation and upstream action; it is not replaced
-  by a Sunroom HLG implementation.
+  by a SunPlayer HLG implementation.
 * HDR10+ does not carry stale scene metadata across frames or generations.
 * Dolby Vision diagnostics state whether reshaping was mapped or an available
   base-layer result was displayed.
@@ -114,7 +114,7 @@ changes; otherwise ship one coherent reviewed milestone.
 ## Actual outcome
 
 The existing shared renderer accepted every required input family without a
-format-specific Sunroom decoder, parser, or tone mapper. The delivered change:
+format-specific SunPlayer decoder, parser, or tone mapper. The delivered change:
 
 * explicitly selects spline tone mapping and perceptual gamut mapping while
   retaining disabled inverse mapping, peak detection, and dithering;

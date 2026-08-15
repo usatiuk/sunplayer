@@ -136,7 +136,7 @@ Implement alongside graphics milestone 1:
   treating 10-bit or BT.2020 signaling as HDR.
 * [ ] Cover HLG target response with a real multi-target FFmpeg-decoded fixture
   through the same libplacebo path. Keep any claim scoped to observed output;
-  do not add a parallel Sunroom HLG implementation.
+  do not add a parallel SunPlayer HLG implementation.
 * [ ] Add real FFmpeg-decoded HDR10+ scene-transition coverage for current
   dynamic metadata, reset, and no stale carry-over. Assert that the
   source-authored targeted-display luminance remains unchanged while the
@@ -158,7 +158,7 @@ Implement alongside graphics milestone 1:
 * [x] Exercise a persistent 640×360 animated diagnostic input into a 1100×600
   target for 60 frames and report throughput without a shared-CI timing gate.
 * [ ] Decide whether the growing corpus justifies OpenEXR/OpenImageIO.
-* [ ] Treat FATE as optional pinned-FFmpeg dependency validation, not Sunroom
+* [ ] Treat FATE as optional pinned-FFmpeg dependency validation, not SunPlayer
   integration coverage.
 
 ## Milestone 3: playback scenarios

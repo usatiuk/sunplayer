@@ -74,7 +74,7 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
 #ifdef Q_OS_LINUX
     m_windowContext.configureWindow(*this);
 #endif
-    setTitle(tr("Sunroom"));
+    setTitle(tr("SunPlayer"));
 
     m_outputState = displayStateProvider
                         ? std::make_unique<PresentationOutputState>(std::move(displayStateProvider), nullptr)
@@ -333,7 +333,7 @@ bool PresentationWindow::nativeEvent(QByteArray const& eventType, void* message,
                 *result = 1;
                 return true;
             }
-            qCWarning(sunroomLogApplication, "Could not paint the pre-presentation Windows client background");
+            qCWarning(sunplayerLogApplication, "Could not paint the pre-presentation Windows client background");
         }
     }
     return QWindow::nativeEvent(eventType, message, result);

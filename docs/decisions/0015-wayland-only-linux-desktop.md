@@ -7,7 +7,7 @@
 
 ## Context
 
-Sunroom needs one coherent Linux presentation target for HDR, color
+SunPlayer needs one coherent Linux presentation target for HDR, color
 management, native graphics interop, window/output changes, and packaging.
 Wayland's color-management protocol and surface-oriented presentation model
 can express the intended modern pipeline. X11 would require a separate,
@@ -24,7 +24,7 @@ test matrices. No current product requirement justifies that work.
 The supported Linux desktop target is native Wayland. X11 and XWayland
 presentation are unsupported and are not fallback targets.
 
-Sunroom will:
+SunPlayer will:
 
 * Build the Linux graphics and presentation path around Vulkan, Wayland, and
   color-management-v1 where available.

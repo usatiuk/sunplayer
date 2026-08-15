@@ -2,11 +2,11 @@
 
 #include <QLoggingCategory>
 
-Q_DECLARE_LOGGING_CATEGORY(sunroomLogApplication)
-Q_DECLARE_LOGGING_CATEGORY(sunroomLogMediaIo)
-Q_DECLARE_LOGGING_CATEGORY(sunroomLogMediaDecode)
-Q_DECLARE_LOGGING_CATEGORY(sunroomLogPlayback)
-Q_DECLARE_LOGGING_CATEGORY(sunroomLogGraphics)
-Q_DECLARE_LOGGING_CATEGORY(sunroomLogVideo)
-Q_DECLARE_LOGGING_CATEGORY(sunroomLogPresentation)
-Q_DECLARE_LOGGING_CATEGORY(sunroomLogPlatform)
+Q_DECLARE_LOGGING_CATEGORY(sunplayerLogApplication)
+Q_DECLARE_LOGGING_CATEGORY(sunplayerLogMediaIo)
+Q_DECLARE_LOGGING_CATEGORY(sunplayerLogMediaDecode)
+Q_DECLARE_LOGGING_CATEGORY(sunplayerLogPlayback)
+Q_DECLARE_LOGGING_CATEGORY(sunplayerLogGraphics)
+Q_DECLARE_LOGGING_CATEGORY(sunplayerLogVideo)
+Q_DECLARE_LOGGING_CATEGORY(sunplayerLogPresentation)
+Q_DECLARE_LOGGING_CATEGORY(sunplayerLogPlatform)

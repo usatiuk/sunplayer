@@ -12,7 +12,7 @@ the same reference-counted `AVFrame` API. On Windows, a D3D11VA frame identifies
 an FFmpeg-owned texture array and slice; on other platforms the native backing
 and synchronization model differ.
 
-Copying pixels into a Sunroom-owned generic framebuffer would make ownership
+Copying pixels into a SunPlayer-owned generic framebuffer would make ownership
 simple but force a CPU transfer for hardware decoding. Copying native pointers
 out of `AVFrame` would lose the references that keep decoder pools, side data,
 and hardware contexts alive.
@@ -23,7 +23,7 @@ geometry, storage kind, and diagnostic metadata.
 
 ## Decision
 
-`DecodedVideoFrame` is an immutable Sunroom boundary backed by a cloned or
+`DecodedVideoFrame` is an immutable SunPlayer boundary backed by a cloned or
 referenced `AVFrame`.
 
 The retained `AVFrame` remains authoritative for:
@@ -33,7 +33,7 @@ The retained `AVFrame` remains authoritative for:
 * HDR10+, Dolby Vision, ICC, film-grain, and other side-data payloads.
 * The lifetime of every FFmpeg-owned allocation referenced by the frame.
 
-Sunroom snapshots stable values needed outside FFmpeg:
+SunPlayer snapshots stable values needed outside FFmpeg:
 
 * Playback generation, decoder revision, and unique frame identifier.
 * PTS, duration, and explicit time base.
@@ -43,7 +43,7 @@ Sunroom snapshots stable values needed outside FFmpeg:
 
 The final FFmpeg-decoded frame is the authoritative source-color boundary.
 FFmpeg has already applied its decoder and codec-context propagation rules.
-Sunroom does not maintain a second metadata policy engine or blanket-copy
+SunPlayer does not maintain a second metadata policy engine or blanket-copy
 stream fields. It snapshots and supplies only stream-level HDR10+ side data,
 which the pinned FFmpeg version does not otherwise propagate, and only when a
 decoded frame has no frame-local value. A published frame therefore does not

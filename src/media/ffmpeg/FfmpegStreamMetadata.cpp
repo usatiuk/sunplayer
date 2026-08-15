@@ -140,7 +140,7 @@ std::optional<std::int64_t> ffmpegProvisionalDurationMicroseconds(AVFormatContex
     } else {
         result = positiveDurationMicroseconds(stream.duration, stream.time_base);
     }
-    qCDebug(sunroomLogMediaDecode).noquote()
+    qCDebug(sunplayerLogMediaDecode).noquote()
         << "event=media.duration_estimated"
         << "rawFormatUs=" + QString::number(formatContext.duration)
         << "formatStartUs=" + QString::number(formatContext.start_time)

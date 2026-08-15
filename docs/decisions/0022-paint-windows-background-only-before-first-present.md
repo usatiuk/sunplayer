@@ -9,12 +9,12 @@
 ## Context
 
 On Windows, showing the Qt-owned presentation window exposes its native client
-area before Sunroom can create and present the first QRhi swapchain frame.
+area before SunPlayer can create and present the first QRhi swapchain frame.
 Qt acknowledges the initial background-erase message without painting. The
 temporary DWM surface can therefore appear white even though the application
 palette, Player background, and final compositor are dark.
 
-Sunroom uses a D3D11 flip-model HWND for SDR and HDR presentation. GDI must not
+SunPlayer uses a D3D11 flip-model HWND for SDR and HDR presentation. GDI must not
 remain a second producer after the first successful DXGI presentation. The
 research and pinned-source evidence are recorded in
 [the Windows first-presentation note](../research/2026-08-09-windows-first-presentation-background.md).
@@ -31,7 +31,7 @@ The presentation engine owns the authoritative state. A successful
 surface creation begins a new pre-presentation interval; swapchain resize,
 output changes, and graphics-device recovery on the same surface do not.
 
-After that transition, Sunroom performs no GDI client painting on the HWND.
+After that transition, SunPlayer performs no GDI client painting on the HWND.
 The D3D11 swapchain remains the sole producer.
 
 ## Consequences

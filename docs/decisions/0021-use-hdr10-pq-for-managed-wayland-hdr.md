@@ -10,7 +10,7 @@
 
 ## Context
 
-Sunroom composites video, subtitles, and UI in linear sRGB, where `1.0` is
+SunPlayer composites video, subtitles, and UI in linear sRGB, where `1.0` is
 the active platform reference white. The final Linux presentation step must
 serialize that working value without changing its meaning.
 
@@ -33,16 +33,16 @@ HDR output, an SDR output, or multiple outputs. Preferred-description feedback
 is a rendering/efficiency hint, not a command to change the content encoding.
 
 Stock Qt binds color-management-v1 version 1 and does not expose image-
-description readiness or failure. Sunroom's accepted latest-only version-2
+description readiness or failure. SunPlayer's accepted latest-only version-2
 contract therefore cannot use Qt as the protocol-object owner.
 
 ## Decision
 
 When version 2, parametric descriptions, perceptual intent, named sRGB and
-BT.2020 primaries, gamma 2.2, and PQ are available, Sunroom owns the one
+BT.2020 primaries, gamma 2.2, and PQ are available, SunPlayer owns the one
 `wp_color_management_surface_v1`. It pre-creates and validates managed sRGB
 and BT.2020/PQ descriptions using `ready2`, leaves Qt's requested Wayland color
-space unset, and lets QRhi use Vulkan `PASS_THROUGH_EXT` while Sunroom owns the
+space unset, and lets QRhi use Vulkan `PASS_THROUGH_EXT` while SunPlayer owns the
 surface declaration.
 
 The presentation window starts and remains in managed HDR10 mode independent
@@ -69,7 +69,7 @@ swapchain format. Normal HDR/SDR display movement therefore preserves the
 `QWindow`, `wl_surface`, graphics device, and HDR10 swapchain.
 
 If the HDR10 format, render pass, initial swapchain creation, or later resize
-actually fails without device loss, Sunroom atomically rolls back to the
+actually fails without device loss, SunPlayer atomically rolls back to the
 complete managed-SDR tuple: gamma-2.2 image description, SDR swapchain, and
 gamma-2.2 final encoding. The protocol description is pending surface state
 and is sent immediately before presenting the first matching buffer, so WSI's
@@ -84,18 +84,18 @@ sRGB path remains the startup fallback.
 ## Consequences
 
 * Mutter and a future version-2 KWin use the same compositor-neutral path.
-  Sunroom contains no compositor-name checks.
+  SunPlayer contains no compositor-name checks.
 * A window spanning HDR and SDR monitors has one stable content encoding;
   dominant-output changes cannot cause presentation-mode flicker.
 * The compositor remains the final output tone/gamut mapper and calibration
-  owner. Sunroom does not apply `/80`, `referenceWhite / 80`, or display-peak
+  owner. SunPlayer does not apply `/80`, `referenceWhite / 80`, or display-peak
   scaling to the Linux working coordinate.
 * Linux uses nonlinear 10-bit presentation while all internal layers remain
   FP16 linear sRGB. Windows and macOS keep their existing extended-linear
   presentation paths.
 * The fixed final conversion is an output encoder, not display tone mapping.
   Libplacebo retains source interpretation and video rendering policy.
-* Sunroom assumes no HDR support from a version-1 global. Compatibility can be
+* SunPlayer assumes no HDR support from a version-1 global. Compatibility can be
   added later without changing the v2 ownership or rendering contract.
 
 ## Alternatives considered
@@ -109,13 +109,13 @@ would create unnecessary format churn and risk mismatched pixels and metadata.
 ### Force FP16 plus Vulkan `PASS_THROUGH`
 
 Rejected. Extended-linear values are encoding-valid, but Qt's declaration does
-not describe Sunroom's larger intended target volume consistently across the
+not describe SunPlayer's larger intended target volume consistently across the
 target compositors, and QRhi's public format check rejects the available pair.
 
 ### Let stock Qt own the color surface
 
 Rejected for the latest-only implementation. Qt binds version 1 and does not
-provide a public readiness/failure result. A narrow Sunroom-owned v2 object is
+provide a public readiness/failure result. A narrow SunPlayer-owned v2 object is
 the smallest boundary that can enforce the required protocol and fallback
 contract.
 

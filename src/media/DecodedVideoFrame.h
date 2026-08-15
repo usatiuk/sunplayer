@@ -102,7 +102,7 @@ struct VideoSignalDescription {
 
 // Immutable, reference-counted boundary between decoding, scheduling, and
 // frame import. The retained AVFrame owns or references the actual software
-// buffers or hardware surface; Sunroom never copies a native pointer out of
+// buffers or hardware surface; SunPlayer never copies a native pointer out of
 // it and pretends to own the underlying pixels.
 class DecodedVideoFrame final {
   public:

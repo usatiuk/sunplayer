@@ -1,6 +1,6 @@
 file = "sdr-bt709-mpegts-two-programs.ts"
 sha256 = "226362c45c587520e773f40174974112c96a95e551a95ca7f01dce707a4122a4"
-provenance = "Generated analytically for Sunroom; no external source media"
+provenance = "Generated analytically for SunPlayer; no external source media"
 purpose = "Two unrelated MPEG-TS programs for program-safe video and audio selection"
 generator = "FFmpeg 9.0-full_build-www.gyan.dev"
 license = "CC0-1.0"

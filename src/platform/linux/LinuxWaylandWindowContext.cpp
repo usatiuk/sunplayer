@@ -157,7 +157,7 @@ class ManagedImageDescription final : public QtWayland::wp_image_description_v1 
     void wp_image_description_v1_failed(std::uint32_t cause, QString const& message) override {
         Q_ASSERT(m_result == Result::Pending);
         m_result = Result::Failed;
-        qCWarning(sunroomLogPlatform).noquote() << "event=wayland.surface_description_failed"
+        qCWarning(sunplayerLogPlatform).noquote() << "event=wayland.surface_description_failed"
                                                 << "cause=" + QString::number(cause) << "detail=" + message;
     }
 
@@ -225,7 +225,7 @@ void roundtripOrFail(wl_display& display, char const* operation) {
     if (wl_display_roundtrip(&display) >= 0) {
         return;
     }
-    qCFatal(sunroomLogPlatform, "Wayland connection failed while %s (error %d)", operation,
+    qCFatal(sunplayerLogPlatform, "Wayland connection failed while %s (error %d)", operation,
             wl_display_get_error(&display));
 }
 
@@ -239,7 +239,7 @@ void waitForManagedDescriptions(wl_display& display, ManagedImageDescription& sd
         if (wl_display_dispatch(&display) >= 0) {
             continue;
         }
-        qCFatal(sunroomLogPlatform,
+        qCFatal(sunplayerLogPlatform,
                 "Wayland connection failed while waiting for managed surface "
                 "descriptions (error %d)",
                 wl_display_get_error(&display));
@@ -345,7 +345,7 @@ class PreferredDescriptionRequest final : public QtWayland::wp_image_description
 
   protected:
     void wp_image_description_v1_failed(std::uint32_t cause, QString const& message) override {
-        qCWarning(sunroomLogPlatform).noquote() << "event=wayland.preferred_description_failed"
+        qCWarning(sunplayerLogPlatform).noquote() << "event=wayland.preferred_description_failed"
                                                 << "cause=" + QString::number(cause) << "detail=" + message;
         m_completion(0, std::nullopt);
     }
@@ -446,7 +446,7 @@ struct LinuxWaylandWindowContext::NativeState final {
             clearNativeWindow();
             m_nativeWindow = m_window->nativeInterface<QNativeInterface::Private::QWaylandWindow>();
             if (!m_nativeWindow) {
-                qCFatal(sunroomLogPlatform, "The Wayland QPA did not expose the native window interface");
+                qCFatal(sunplayerLogPlatform, "The Wayland QPA did not expose the native window interface");
             }
             m_surfaceCreatedConnection =
                 connect(m_nativeWindow, &QNativeInterface::Private::QWaylandWindow::surfaceCreated, this,
@@ -510,7 +510,7 @@ struct LinuxWaylandWindowContext::NativeState final {
                     }
                     std::optional<DisplayState> const state = displayStateFromWaylandDescription(*description);
                     if (!state) {
-                        qCWarning(sunroomLogPlatform).noquote() << "event=wayland.preferred_description_invalid";
+                        qCWarning(sunplayerLogPlatform).noquote() << "event=wayland.preferred_description_invalid";
                         publish(DisplayState{});
                         return;
                     }
@@ -526,7 +526,7 @@ struct LinuxWaylandWindowContext::NativeState final {
             m_hasPublished = true;
             m_published = state;
             if (state.valid) {
-                qCInfo(sunroomLogPlatform).noquote()
+                qCInfo(sunplayerLogPlatform).noquote()
                     << "event=wayland.preferred_description"
                     << "referenceWhiteNits=" + QString::number(state.sdrWhiteNits)
                     << "minimumNits=" + QString::number(state.minLuminanceNits)
@@ -552,19 +552,19 @@ struct LinuxWaylandWindowContext::NativeState final {
     explicit NativeState(QGuiApplication& application) {
         auto* const native = application.nativeInterface<QNativeInterface::QWaylandApplication>();
         if (!native || !native->display()) {
-            qCFatal(sunroomLogPlatform, "The Wayland QPA did not expose its wl_display");
+            qCFatal(sunplayerLogPlatform, "The Wayland QPA did not expose its wl_display");
         }
 
         wl_display* const display = native->display();
         wl_registry* const registry = wl_display_get_registry(display);
         if (!registry) {
-            qCFatal(sunroomLogPlatform, "Could not create the Wayland capability registry");
+            qCFatal(sunplayerLogPlatform, "Could not create the Wayland capability registry");
         }
 
         RegistryInventory inventory;
         if (wl_registry_add_listener(registry, &registryListener, &inventory) < 0) {
             wl_registry_destroy(registry);
-            qCFatal(sunroomLogPlatform, "Could not observe Wayland globals");
+            qCFatal(sunplayerLogPlatform, "Could not observe Wayland globals");
         }
         roundtripOrFail(*display, "discovering color-management-v1");
 
@@ -617,7 +617,7 @@ struct LinuxWaylandWindowContext::NativeState final {
         waitForManagedDescriptions(display, *sdrDescription, hdrDescription.get());
 
         if (!sdrDescription->ready()) {
-            qCWarning(sunroomLogPlatform, "The compositor rejected the advertised managed-sRGB "
+            qCWarning(sunplayerLogPlatform, "The compositor rejected the advertised managed-sRGB "
                                           "description; using unmanaged SDR");
             capabilities.parametricDescriptions = false;
             sdrDescription.reset();
@@ -625,7 +625,7 @@ struct LinuxWaylandWindowContext::NativeState final {
             return;
         }
         if (hdrDescription && !hdrDescription->ready()) {
-            qCWarning(sunroomLogPlatform, "The compositor rejected the advertised BT.2020/PQ "
+            qCWarning(sunplayerLogPlatform, "The compositor rejected the advertised BT.2020/PQ "
                                           "description; disabling managed HDR");
             capabilities.pqTransfer = false;
             hdrDescription.reset();
@@ -659,7 +659,7 @@ void prepareLinuxWaylandPlatform() { qputenv("QT_QPA_PLATFORM", QByteArrayLitera
 
 LinuxWaylandWindowContext::LinuxWaylandWindowContext(QGuiApplication& application) {
     if (QGuiApplication::platformName() != QStringLiteral("wayland")) {
-        qCFatal(sunroomLogPlatform, "Sunroom requires native Wayland; Qt selected QPA '%s'",
+        qCFatal(sunplayerLogPlatform, "SunPlayer requires native Wayland; Qt selected QPA '%s'",
                 qPrintable(QGuiApplication::platformName()));
     }
 
@@ -673,16 +673,16 @@ LinuxWaylandWindowContext::LinuxWaylandWindowContext(QGuiApplication& applicatio
 
     QVersionNumber const supportedApi = m_vulkanInstance.supportedApiVersion();
     if (supportedApi < QVersionNumber(1, 3)) {
-        qCFatal(sunroomLogGraphics, "Sunroom requires Vulkan 1.3; the loader reports %s",
+        qCFatal(sunplayerLogGraphics, "SunPlayer requires Vulkan 1.3; the loader reports %s",
                 qPrintable(supportedApi.toString()));
     }
     m_vulkanInstance.setApiVersion(QVersionNumber(1, 3));
     m_vulkanInstance.setExtensions(QRhiVulkanInitParams::preferredInstanceExtensions());
     if (!m_vulkanInstance.create()) {
-        qCFatal(sunroomLogGraphics, "Could not create the Vulkan 1.3 instance");
+        qCFatal(sunplayerLogGraphics, "Could not create the Vulkan 1.3 instance");
     }
 
-    qCInfo(sunroomLogPlatform).noquote()
+    qCInfo(sunplayerLogPlatform).noquote()
         << "event=wayland.surface_contract"
         << "protocolVersion=" + QString::number(m_colorCapabilities.protocolVersion)
         << "mode=" + presentationModeName(m_surfaceSelection.presentationContract().mode)
@@ -700,7 +700,7 @@ void LinuxWaylandWindowContext::configureWindow(QWindow& window) {
     Q_ASSERT(!window.handle());
     Q_ASSERT(window.surfaceType() == QSurface::VulkanSurface);
 
-    // Sunroom owns the one mutable color-management-v1 declaration. QRhi's
+    // SunPlayer owns the one mutable color-management-v1 declaration. QRhi's
     // Wayland Vulkan path uses PASS_THROUGH for the corresponding buffers.
     QSurfaceFormat format = window.requestedFormat();
     format.setColorSpace(QColorSpace{});
@@ -708,7 +708,7 @@ void LinuxWaylandWindowContext::configureWindow(QWindow& window) {
     window.setVulkanInstance(&m_vulkanInstance);
     window.create();
     if (!window.handle()) {
-        qCFatal(sunroomLogPlatform, "Qt could not create the native Wayland window surface");
+        qCFatal(sunplayerLogPlatform, "Qt could not create the native Wayland window surface");
     }
     m_window = &window;
 }
@@ -749,7 +749,7 @@ void LinuxWaylandWindowContext::applyMode(QWindow& window, PresentationSurfaceMo
     Q_ASSERT(mode == PresentationSurfaceMode::ManagedGamma22Sdr || mode == PresentationSurfaceMode::ManagedHdr10Pq);
     m_nativeState->setDeclaredMode(mode);
 
-    qCInfo(sunroomLogPlatform).noquote() << "event=wayland.surface_transition"
+    qCInfo(sunplayerLogPlatform).noquote() << "event=wayland.surface_transition"
                                          << "mode=" + presentationModeName(mode) << "nativeSurface=preserved";
 }
 
@@ -758,7 +758,7 @@ void LinuxWaylandWindowContext::rejectHdrTarget(std::uint64_t graphicsDeviceGene
     m_hdrRejection = WaylandHdrRejection{
         .graphicsDeviceGeneration = graphicsDeviceGeneration,
     };
-    qCWarning(sunroomLogPlatform).noquote()
+    qCWarning(sunplayerLogPlatform).noquote()
         << "event=wayland.hdr_surface_rejected"
         << "deviceGeneration=" + QString::number(graphicsDeviceGeneration) << "reason=" + QString::fromUtf8(reason);
 }

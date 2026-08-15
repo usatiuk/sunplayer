@@ -2,14 +2,14 @@
 
 ## Status
 
-Sunroom integrates FFmpeg through one shared media boundary: the official
+SunPlayer integrates FFmpeg through one shared media boundary: the official
 vcpkg FFmpeg 8.1.2 package on Windows and macOS, and system FFmpeg 8.0.1 on
 Linux. All
 provide `avformat`, `avcodec`, core `avutil`, `swresample`, and zlib-backed
 Matroska track decompression. The Windows package includes D3D11VA, D3D12VA,
-DXVA2, and Media Foundation support. Sunroom exercises D3D11VA for supported
+DXVA2, and Media Foundation support. SunPlayer exercises D3D11VA for supported
 Windows video streams and keeps software decoding as an explicit fallback.
-The macOS package exposes VideoToolbox; Sunroom exercises H.264/NV12 and
+The macOS package exposes VideoToolbox; SunPlayer exercises H.264/NV12 and
 Main10 HEVC/P010 hardware decode and direct Metal-plane import on Apple
 Silicon.
 Linux currently uses the same production operation with software video decode;
@@ -142,7 +142,7 @@ The Windows and macOS vcpkg manifest requests:
 This deliberately excludes FFmpeg tools, `avfilter`, `avdevice`, `swscale`,
 Vulkan, vendor SDKs, and external codec libraries beyond zlib. zlib is required
 for Matroska track `ContentCompression`; it is not a second media reader or a
-Sunroom-authored codec path. Native FFmpeg demuxers and software decoders remain
+SunPlayer-authored codec path. Native FFmpeg demuxers and software decoders remain
 available. libplacebo owns video conversion and
 scaling; libswresample owns audio sample-format, rate, layout, and
 planar/interleaved conversion. Add codec libraries only for a documented
@@ -164,7 +164,7 @@ explicit codec-patent review where applicable.
 Linux discovers the corresponding system libraries with pkg-config and checks
 their accepted ABI-major ranges at configure and dependency-test time. It does
 not require the Windows package's disabled-Vulkan feature shape; system FFmpeg
-may expose VAAPI and DRM even though Sunroom does not yet consume that hardware
+may expose VAAPI and DRM even though SunPlayer does not yet consume that hardware
 path.
 
 ## Decoded-frame contract
@@ -174,7 +174,7 @@ of an FFmpeg decoder-pool texture or copy pixels by default. The retained frame
 keeps software planes, native surfaces, hardware contexts, and exact side data
 alive.
 
-The Sunroom wrapper snapshots:
+The SunPlayer wrapper snapshots:
 
 * Playback generation, decoder revision, and frame identity.
 * PTS, duration, and time base.
@@ -185,7 +185,7 @@ The Sunroom wrapper snapshots:
 The retained decoded frame is the authoritative color boundary. The supported
 FFmpeg builds already fill ordinary scalar and static side data from
 decoder/stream state.
-Sunroom therefore removed its blanket metadata copier. It snapshots only
+SunPlayer therefore removed its blanket metadata copier. It snapshots only
 global HDR10+ data that FFmpeg does not reliably propagate to every frame;
 missing HDR10+ is attached before the decoded frame is retained and handed to
 libplacebo. Effective sample
@@ -202,7 +202,7 @@ cases report `Unknown`. This is a read-only diagnostic classification, not a
 second metadata model or rendering policy.
 
 Embedded source ICC bytes remain alive through the retained `AVFrame` and are
-preserved and diagnosed. Before rendering, Sunroom clears both libplacebo ICC
+preserved and diagnosed. Before rendering, SunPlayer clears both libplacebo ICC
 representations on the render-local frame copy on every platform. This keeps
 the accepted no-source-ICC-transform policy independent of whether the linked
 libplacebo was built with LCMS support. Profile parsing and source-ICC rendering
@@ -244,7 +244,7 @@ VideoToolbox device/pixel-format support, and the intentionally minimal vcpkg
 feature shape.
 
 The decoded-frame unit test releases the originating `AVFrame` and verifies the
-Sunroom wrapper still owns valid software pixels and semantic snapshots.
+SunPlayer wrapper still owns valid software pixels and semantic snapshots.
 
 The first pipeline fixture is a pinned, hashed, lossless 4×4 PPM image. A
 second analytically generated fixture is a three-frame Matroska/FFV1 stream

@@ -61,7 +61,7 @@ resize zones are absent while maximized.
 
 Window buttons ask the system icon theme for symbolic minimize, maximize,
 restore, and close shapes, use the vendored Lucide glyphs as deterministic
-fallbacks, and always apply Sunroom's light foreground tint. The desktop theme
+fallbacks, and always apply SunPlayer's light foreground tint. The desktop theme
 does not choose color for the intentionally black application titlebar. Exact
 desktop decoration styling, button ordering, and external client-side shadows
 are not reconstructed. One muted, one-physical-pixel inner outline covers the

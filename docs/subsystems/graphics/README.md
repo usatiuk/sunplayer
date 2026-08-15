@@ -159,7 +159,7 @@ the device through its own `AVBufferRef`, while a published hardware
 
 On Linux, `LinuxWaylandWindowContext` first owns the `QVulkanInstance` and
 Qt-created native surface. QRhi selects and owns the Vulkan 1.3 physical-
-device/logical-device/graphics-queue domain. Sunroom verifies the selected
+device/logical-device/graphics-queue domain. SunPlayer verifies the selected
 device's required feature set and imports the same native handles into
 libplacebo as borrowed objects. Software FFmpeg frames use the shared importer;
 hardware decode capability reports unavailable until VAAPI/DRM PRIME is
@@ -378,19 +378,19 @@ On macOS, the engine selects `HDRExtendedSrgbLinear` when the active screen's
 potential EDR headroom exceeds `1.0` and QRhi reports that format supported;
 otherwise it selects SDR. EDR is display-referred extended-linear sRGB:
 component value `1.0` is current SDR white, values above it request available
-EDR headroom, and ColorSync owns the final display-profile conversion. Sunroom
+EDR headroom, and ColorSync owns the final display-profile conversion. SunPlayer
 does not infer an absolute SDR-white luminance from the relative AppKit values
 and does not add a second display ICC transform.
 
 Linux leaves Qt's requested Wayland color space unset. With the complete
-version-2 parametric/perceptual/sRGB/gamma-2.2 capability set, Sunroom owns one
+version-2 parametric/perceptual/sRGB/gamma-2.2 capability set, SunPlayer owns one
 color-management surface and a ready managed-sRGB description. Without that
-set, Sunroom emits exact piecewise sRGB into an unmanaged assumed-sRGB surface.
+set, SunPlayer emits exact piecewise sRGB into an unmanaged assumed-sRGB surface.
 Missing managed color is a normal SDR capability result, not a graphics
 failure or an X11 fallback.
 
 Named BT.2020 and PQ additionally select a stable managed HDR content surface.
-Sunroom applies a ready BT.2020/PQ description to the existing `wl_surface`,
+SunPlayer applies a ready BT.2020/PQ description to the existing `wl_surface`,
 requires QRhi's `HDR10` plus raw Vulkan RGB10A2/HDR10 and RGB10A2/pass-through
 pairs, and emits the matching final encoding. The surface stays HDR10 while
 moving across HDR and SDR outputs; preferred feedback updates target rendering
@@ -469,7 +469,7 @@ surface is worthwhile; it does not replace current headroom for tone mapping.
 
 On managed Wayland, preferred reference and target luminance are compositor-
 declared target values. Mutter currently publishes the PQ envelope maximum;
-another compositor may publish a more output-specific maximum. Sunroom trusts
+another compositor may publish a more output-specific maximum. SunPlayer trusts
 the reported value without compositor-name policy. These target changes can
 rerender video but do not change the stable BT.2020/PQ surface encoding.
 
@@ -523,14 +523,14 @@ infers a linear-target contrast ratio, so the adapter uses
 `PL_COLOR_HDR_BLACK` for an unknown or known-zero minimum.
 
 The texture's BT.709 primaries define its extended-linear RGB coordinate basis,
-not necessarily the physical target gamut. Sunroom does not yet propagate
+not necessarily the physical target gamut. SunPlayer does not yet propagate
 actual display primaries into libplacebo's separate target-gamut metadata, so
 the current target gamut is inferred as BT.709 and wide-gamut output is not yet
 claimed.
 
 Target gamut mapping is separate from monitor calibration. The Windows
 Advanced Color path relies on the OS to apply the active display profile once
-to the complete tagged composition. Sunroom does not apply display ICC inside
+to the complete tagged composition. SunPlayer does not apply display ICC inside
 the video renderer. Application-managed display ICC is deferred and would
 require a post-composition transform covering video, UI, and subtitles.
 
@@ -557,7 +557,7 @@ producer.
 ### Qt Quick layer
 
 Qt Quick renders a transparent, full-window RGBA16F texture through its normal
-depth-assisted 2D scene-graph path. Because Sunroom supplies a complete
+depth-assisted 2D scene-graph path. Because SunPlayer supplies a complete
 `QRhiRenderTarget`, it also supplies the matching depth/stencil buffer rather
 than expecting Qt to create an implicit attachment. The current final shader
 treats the color texture's RGB as premultiplied sRGB-encoded UI:

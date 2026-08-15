@@ -4,13 +4,13 @@ Status: Accepted implementation input
 
 ## Question
 
-What is the smallest GitHub Actions design that continuously proves Sunroom's
+What is the smallest GitHub Actions design that continuously proves SunPlayer's
 accepted Windows and native-Wayland Linux builds without pretending that a
 hosted virtual machine covers physical audio, hardware decode, or HDR output?
 
 The answer must preserve the project's existing dependency contracts:
 
-* Windows uses Qt 6.11.1, MSVC for Sunroom, and the project-local clang-cl
+* Windows uses Qt 6.11.1, MSVC for SunPlayer, and the project-local clang-cl
   vcpkg triplet for dependencies.
 * Linux uses Ubuntu 26.04 system Qt 6.10, FFmpeg 8, libplacebo, cubeb, libass,
   Vulkan, Wayland, VA-API, and DRM packages.
@@ -27,7 +27,7 @@ a public-preview runner, but preview images do not carry the same stability
 commitment as generally available images. A job container is supported on a
 Linux runner, and all run steps can use an explicitly selected shell. Running
 the Linux job in the official `ubuntu:26.04` image on `ubuntu-24.04` therefore
-keeps both the runner label and Sunroom's distribution ABI explicit.
+keeps both the runner label and SunPlayer's distribution ABI explicit.
 
 The pinned `windows-2022` image provides Visual Studio Enterprise 2022,
 MSVC/clang-cl, CMake, Ninja, Python, and a vcpkg checkout at `C:\vcpkg` through
@@ -105,7 +105,7 @@ test into an automatic skip.
 
 Standard GitHub-hosted Windows runners do not contractually provide the audio
 or GPU capabilities needed by the current default-device cubeb scenarios,
-D3D11 presentation tests, or required D3D11VA test. Sunroom's current D3D11
+D3D11 presentation tests, or required D3D11VA test. SunPlayer's current D3D11
 domain requests a hardware device and has no WARP path. Hosted Windows CI must
 therefore exclude tests carrying the existing `device` or `gpu` labels while
 continuing to run dependency, media, QML, and other deterministic shared

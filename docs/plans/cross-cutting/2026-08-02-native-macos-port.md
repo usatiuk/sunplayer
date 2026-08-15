@@ -43,7 +43,7 @@ Progress and evidence are tracked in the
   active target peak is `203 * currentEDRHeadroom` in libplacebo's virtual
   units. Absolute SDR-white nits remain unknown because macOS exposes the
   relative EDR headroom, not a measured physical SDR-white value.
-* Sunroom owns HDR tone mapping. Leave `CAMetalLayer.edrMetadata` unset and do
+* SunPlayer owns HDR tone mapping. Leave `CAMetalLayer.edrMetadata` unset and do
   not add an application display-ICC transform or reopen the output-gamut
   design during this port.
 
@@ -73,7 +73,7 @@ Progress and evidence are tracked in the
 * Reuse the existing bounded hardware-to-software restart. Do not silently
   download unsupported hardware frames on every frame.
 * Let cubeb select its normal macOS backend and open the system-default device.
-  Cubeb and macOS own ordinary route movement. Sunroom replaces the stream only
+  Cubeb and macOS own ordinary route movement. SunPlayer replaces the stream only
   after an actual error or demonstrated loss of progress; it does not add a
   CoreAudio route watcher or device picker.
 
@@ -170,4 +170,4 @@ one shared exposure reprobe noted by the latter was narrowed to macOS.
 
 The post-review Debug build succeeds and the complete registered suite passes
 26/26 in 25.43 seconds. A process check before and after the run found no
-pre-existing instance and no leaked Sunroom process.
+pre-existing instance and no leaked SunPlayer process.

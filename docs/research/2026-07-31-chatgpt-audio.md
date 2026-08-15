@@ -1,8 +1,8 @@
-# Sunroom audio architecture research
+# SunPlayer audio architecture research
 
 ## Recommendation
 
-Use **current upstream cubeb** as Sunroom’s production audio-device backend, pinned to an exact reviewed commit through a **project-local vcpkg overlay port**.
+Use **current upstream cubeb** as SunPlayer’s production audio-device backend, pinned to an exact reviewed commit through a **project-local vcpkg overlay port**.
 
 Use **FFmpeg libswresample** to normalize decoded audio into **native-endian interleaved float32 PCM** before it reaches the real-time boundary.
 
@@ -13,7 +13,7 @@ Keep only one narrow sink contract, with two implementations:
 
 Do not add a general backend/plugin framework yet.
 
-This is not “adding cubeb because it is convenient.” It is justified by one requirement that Qt does not currently satisfy cleanly: Sunroom wants the audio clock to represent the media position **actually reaching the listener**, including backend buffering and device latency. Cubeb exposes a playback-position API, approximate output latency, device-change notifications, default-device following, preroll, and explicit real-time callback rules as part of one cross-platform contract.
+This is not “adding cubeb because it is convenient.” It is justified by one requirement that Qt does not currently satisfy cleanly: SunPlayer wants the audio clock to represent the media position **actually reaching the listener**, including backend buffering and device latency. Cubeb exposes a playback-position API, approximate output latency, device-change notifications, default-device following, preroll, and explicit real-time callback rules as part of one cross-platform contract.
 
 One correction to my earlier interim conclusion: cubeb is not literally the only cross-platform library with useful timing primitives. PortAudio exposes callback DAC timestamps and output latency. It still loses overall because portable hotplug/default-device migration remains unfinished rather than part of its established API. ([PortAudio][1])
 
@@ -38,7 +38,7 @@ Qt is therefore a credible fallback if cubeb fails its build or device-recovery 
 | Option              | Presentation timing                                               | Devices and recovery                                                      | Cross-platform backend status                  | Integration cost                                         | Verdict                             |
 | ------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------- | ----------------------------------- |
 | **cubeb**           | Playback position plus approximate callback-to-audibility latency | Enumeration, default following, collection changes, stream device changes | Tier-1 WASAPI, Rust AudioUnit, Rust PulseAudio | Moderate: overlay port and Rust packaging on macOS/Linux | **Choose**                          |
-| **Qt QAudioSink**   | Processed/submitted duration, not promised audible position       | Good enumeration and change signals; application recreates/reanchors      | Strong, already in Sunroom                     | Lowest dependency cost                                   | Fallback                            |
+| **Qt QAudioSink**   | Processed/submitted duration, not promised audible position       | Good enumeration and change signals; application recreates/reanchors      | Strong, already in SunPlayer                     | Lowest dependency cost                                   | Fallback                            |
 | **PortAudio**       | Strong callback DAC time and output-latency primitives            | Portable hotplug/default migration is unfinished                          | Mature WASAPI/CoreAudio/ALSA/etc.              | Moderate                                                 | Reject for device-recovery boundary |
 | **miniaudio**       | No portable presented-position API found                          | Broad enumeration and automatic rerouting support                         | WASAPI/CoreAudio/Pulse/ALSA/JACK               | Extremely easy                                           | Reject for clock boundary           |
 | **SDL3**            | No portable presented-position API found                          | Good logical-device migration on unplug/default change                    | Broad and mature                               | Adds a large unrelated subsystem                         | Reject                              |
@@ -60,9 +60,9 @@ Its public API provides:
 * Software stream volume where supported.
 * A callback contract that prohibits blocking and treats a short callback return as final draining.
 
-On WASAPI, the current position implementation calculates a logical playback head from the total stream frames written minus the current downstream delay, then prevents that position from moving backwards. Its latency implementation uses `IAudioClient::GetStreamLatency`, with a fallback for Windows configurations returning zero. That makes cubeb position the primary clock observation; Sunroom must **not subtract cubeb latency again** from that position. Latency remains useful as a diagnostic and fallback input.
+On WASAPI, the current position implementation calculates a logical playback head from the total stream frames written minus the current downstream delay, then prevents that position from moving backwards. Its latency implementation uses `IAudioClient::GetStreamLatency`, with a fallback for Windows configurations returning zero. That makes cubeb position the primary clock observation; SunPlayer must **not subtract cubeb latency again** from that position. Latency remains useful as a diagnostic and fallback input.
 
-Cubeb follows Windows default-endpoint changes and handles session disconnection and endpoint invalidation internally. Sunroom should still treat those notifications as a clock discontinuity and own the higher-level freeze, preroll, re-anchor, and resume policy.
+Cubeb follows Windows default-endpoint changes and handles session disconnection and endpoint invalidation internally. SunPlayer should still treat those notifications as a clock discontinuity and own the higher-level freeze, preroll, re-anchor, and resume policy.
 
 Cubeb does not expose a normal cross-platform exclusive-mode contract. Its Windows `RAW` preference bypasses optional signal processing but does not mean exclusive access. That is desirable here: shared mode integrates with system volume, Bluetooth, notifications, and default-device migration. Exclusive output and encoded passthrough should wait.
 
@@ -70,7 +70,7 @@ Cubeb does not expose a normal cross-platform exclusive-mode contract. Its Windo
 
 The stock vcpkg cubeb port is dated September 26, 2023 and pins an old source snapshot. Its portfile does not enable the current Rust backends. Using that port unchanged would undermine the reason for selecting cubeb.
 
-Sunroom should maintain a small overlay port which:
+SunPlayer should maintain a small overlay port which:
 
 * Pins a reviewed cubeb commit.
 * Pins the CoreAudio and PulseAudio Rust submodule revisions.
@@ -85,7 +85,7 @@ Cubeb upstream supports MSVC and Clang generally, but I did not find an explicit
 
 ### Qt Multimedia
 
-Qt is the dependency-minimal choice because Sunroom already ships it. The Windows implementation uses event-driven WASAPI and an audio worker thread. Linux currently prefers PipeWire, with PulseAudio fallback and experimental ALSA support. Qt’s public API and maintenance guarantees are also much stronger than those of a small header-only library. ([Qt Documentation][3])
+Qt is the dependency-minimal choice because SunPlayer already ships it. The Windows implementation uses event-driven WASAPI and an audio worker thread. Linux currently prefers PipeWire, with PulseAudio fallback and experimental ALSA support. Qt’s public API and maintenance guarantees are also much stronger than those of a small header-only library. ([Qt Documentation][3])
 
 Its weaknesses for this project are:
 
@@ -95,7 +95,7 @@ Its weaknesses for this project are:
 * Device replacement still requires application-level recovery and clock policy.
 * Using private Qt backend APIs would be more fragile than using cubeb directly.
 
-Qt supports volume but Sunroom should implement mute and gain in its own callback anyway so the controlled sink and real sink have identical semantics.
+Qt supports volume but SunPlayer should implement mute and gain in its own callback anyway so the controlled sink and real sink have identical semantics.
 
 Licensing is the existing Qt Multimedia licensing model: commercial or LGPLv3/GPL options. Runtime deployment requires the Qt Multimedia module and its platform integration plugins. ([Qt Documentation][4])
 
@@ -103,7 +103,7 @@ Licensing is the existing Qt Multimedia licensing model: commercial or LGPLv3/GP
 
 PortAudio has a more sophisticated timing contract than Qt, miniaudio, or SDL. `PaStreamCallbackTimeInfo::outputBufferDacTime` reports the time when the first sample in a callback buffer should reach the DAC, and `PaStreamInfo::outputLatency` supplies expected output latency in the same timing model. ([PortAudio][1])
 
-However, PortAudio’s own hotplug documentation describes device notification and migration work on a separate hotplug branch. For Sunroom, device loss, Bluetooth reconnection, and default-device changes are core requirements rather than optional polish. That outweighs the good callback timing. ([GitHub][5])
+However, PortAudio’s own hotplug documentation describes device notification and migration work on a separate hotplug branch. For SunPlayer, device loss, Bluetooth reconnection, and default-device changes are core requirements rather than optional polish. That outweighs the good callback timing. ([GitHub][5])
 
 The current vcpkg port is PortAudio 19.7, MIT licensed, with optional ASIO support.
 
@@ -111,7 +111,7 @@ The current vcpkg port is PortAudio 19.7, MIT licensed, with optional ASIO suppo
 
 Miniaudio has excellent deployment characteristics: one source implementation, permissive licensing, broad native backends, enumeration, conversion, callback output, and backend-specific exclusive support. Its WASAPI and CoreAudio implementations can reroute default streams automatically. The current vcpkg package is 0.11.25 under MIT-0 or Unlicense.
 
-I found no public, portable API that gives Sunroom a latency-compensated presented sample position. Miniaudio’s clocks and node-graph time primarily represent engine processing, not a cross-platform promise of audibility. Its API is also still pre-1.0 and the project has documented planned structural changes for 0.12. ([Miniaudio][6])
+I found no public, portable API that gives SunPlayer a latency-compensated presented sample position. Miniaudio’s clocks and node-graph time primarily represent engine processing, not a cross-platform promise of audibility. Its API is also still pre-1.0 and the project has documented planned structural changes for 0.12. ([Miniaudio][6])
 
 It is an excellent choice for applications that merely need sound output. It is not the best fit for an audio-master video scheduler.
 
@@ -173,7 +173,7 @@ That is enough for cubeb and the controlled sink. There is no need for backend f
 
 ## libswresample and the internal PCM contract
 
-Sunroom should enable the `swresample` feature in its existing FFmpeg 8.1.2 vcpkg dependency. This is an additional FFmpeg component, not a separate third-party framework. The current vcpkg FFmpeg manifest exposes `swresample` directly.
+SunPlayer should enable the `swresample` feature in its existing FFmpeg 8.1.2 vcpkg dependency. This is an additional FFmpeg component, not a separate third-party framework. The current vcpkg FFmpeg manifest exposes `swresample` directly.
 
 ### Recommended sink-facing representation
 
@@ -249,7 +249,7 @@ The soundest model separates three concepts:
 
 1. **PCM media position:** where a sample belongs in the movie.
 2. **Backend stream position:** its sequential frame number in the current device epoch.
-3. **Monotonic observation time:** when Sunroom observed the backend position.
+3. **Monotonic observation time:** when SunPlayer observed the backend position.
 
 Let:
 
@@ -365,7 +365,7 @@ On default-device change, device loss, or Bluetooth reconnection:
 8. Preroll and obtain a trustworthy position observation.
 9. Resume only if `userPlayIntent == Playing`.
 
-Cubeb may internally follow default devices, but Sunroom should not assume that backend position remains continuous across every platform’s reconfiguration. The first real-device experiments should determine whether retaining the stream or explicitly recreating it yields cleaner epoch semantics.
+Cubeb may internally follow default devices, but SunPlayer should not assume that backend position remains continuous across every platform’s reconfiguration. The first real-device experiments should determine whether retaining the stream or explicitly recreating it yields cleaner epoch semantics.
 
 ### Sources without audio
 
@@ -551,7 +551,7 @@ Before integrating playback:
 * Run cubeb’s small playback/enumeration tests.
 * Verify default and explicit device opening.
 * Confirm no unexpected DLLs are introduced.
-* Establish the macOS and Linux Rust build process in CI, even if those platforms are not yet wired into Sunroom.
+* Establish the macOS and Linux Rust build process in CI, even if those platforms are not yet wired into SunPlayer.
 * Record licenses and Cargo transitive dependencies.
 
 Failure here should reopen Qt-plus-native-timing as the fallback. It should not silently fall back to the stale 2023 vcpkg package.
@@ -618,7 +618,7 @@ Add real WASAPI-through-cubeb testing:
 * Latency changes and callback jitter.
 * Long-duration drift against the controlled expected timeline.
 
-This stage determines whether cubeb’s automatic default-device reconfiguration can remain inside one stream or whether Sunroom should recreate the stream for every device epoch.
+This stage determines whether cubeb’s automatic default-device reconfiguration can remain inside one stream or whether SunPlayer should recreate the stream for every device epoch.
 
 ### Stage 3: macOS and Linux
 
@@ -750,7 +750,7 @@ These should not be part of the first audio milestone:
 
 ## Important unresolved experiments
 
-1. Does the pinned current cubeb revision build cleanly under Sunroom’s exact MSVC and clang-cl flags?
+1. Does the pinned current cubeb revision build cleanly under SunPlayer’s exact MSVC and clang-cl flags?
 2. Can the Rust CoreAudio backend be shipped with private APIs disabled without losing required timing or recovery behavior?
 3. Does the Rust Pulse backend report stable position and latency through both PulseAudio and PipeWire-Pulse during Bluetooth changes?
 4. Is cubeb’s stream position continuous and semantically useful across each backend’s automatic device reconfiguration?
@@ -759,7 +759,7 @@ These should not be part of the first audio milestone:
 7. How does QRhi’s swapchain path expose or obscure actual presentation timing on each platform?
 8. What physical A/V offset remains after scheduling against cubeb’s presented position?
 9. Which multichannel layouts require explicit downmix rather than direct output?
-10. At what underrun duration should Sunroom transition from short Hold silence to full buffering and stream restart?
+10. At what underrun duration should SunPlayer transition from short Hold silence to full buffering and stream restart?
 
 ## Strongest primary sources
 
@@ -793,7 +793,7 @@ Alternatives and native timing:
 * [PipeWire stream timing](https://pipewire.pages.freedesktop.org/pipewire/group__pw__stream.html)
 * [PipeWire PulseAudio compatibility](https://pipewire.pages.freedesktop.org/pipewire/page_module_protocol_pulse.html)
 
-The production architecture is therefore: **cubeb + libswresample + a preallocated PCM/metadata boundary + an explicit presented-frame-to-media mapping ledger**, with Qt remaining the application framework rather than the source of Sunroom’s audio master clock.
+The production architecture is therefore: **cubeb + libswresample + a preallocated PCM/metadata boundary + an explicit presented-frame-to-media mapping ledger**, with Qt remaining the application framework rather than the source of SunPlayer’s audio master clock.
 
 [1]: https://portaudio.com/docs/v19-doxydocs/structPaStreamCallbackTimeInfo.html "https://portaudio.com/docs/v19-doxydocs/structPaStreamCallbackTimeInfo.html"
 [2]: https://doc.qt.io/qt-6/qaudiosink.html "https://doc.qt.io/qt-6/qaudiosink.html"

@@ -4,7 +4,7 @@ Status: Complete
 
 ## Goal
 
-Ship selectable embedded text and bitmap subtitles through Sunroom's real
+Ship selectable embedded text and bitmap subtitles through SunPlayer's real
 single-pass playback and presentation paths.
 
 Completion means:
@@ -62,7 +62,7 @@ Selection is session state, not generation state. It survives seek, replay,
 hardware fallback, and graphics recovery restarts for the same media. Opening a
 different source or cancelling playback resets it to Off.
 
-Sunroom performs no subtitle-specific historical scan or preroll. After the
+SunPlayer performs no subtitle-specific historical scan or preroll. After the
 ordinary playback seek, the selected decoder consumes packets that naturally
 arrive. A text cue or bitmap composition that began earlier may be absent until
 the next update. That eventually-correct behavior is preferable to rereading a
@@ -299,7 +299,7 @@ than a golden image.
 
 After CLion has configured the manifest change:
 
-* Build `sunroom`, affected integration targets, QML lint, and the complete
+* Build `sunplayer`, affected integration targets, QML lint, and the complete
   configured build through CLion's bundled CMake.
 * Run registered tests only through CTest under the repository's required
   Visual Studio developer environment and staged runtime DLL policy.

@@ -13,7 +13,7 @@
 
 Earlier plans proposed several display-selection, capability, provider,
 topology, and asynchronous-query revisions, while the audio path deliberately
-prevented cubeb from migrating the default endpoint so Sunroom could eventually
+prevented cubeb from migrating the default endpoint so SunPlayer could eventually
 model every physical clock replacement explicitly.
 
 The implemented system is smaller than those plans. It already has one
@@ -25,13 +25,13 @@ imperfect platform capability data more precise. The fail-closed audio policy
 also duplicates migration already performed by cubeb and currently turns an
 ordinary device change into a terminal playback error.
 
-Sunroom needs persistent correctness and safe lifetimes. It does not need every
+SunPlayer needs persistent correctness and safe lifetimes. It does not need every
 transient display fact or acoustic sample around a route change to form one
 globally atomic transaction.
 
 ## Decision
 
-Sunroom keeps strict process identities only for:
+SunPlayer keeps strict process identities only for:
 
 * `playbackGeneration`, which rejects stale media work.
 * `graphicsDeviceGeneration`, which rejects resources from a destroyed GPU
@@ -73,24 +73,24 @@ marks that native surface configuration dirty and re-runs QRhi
 is unchanged. This restores the declared encoding without treating display
 identity as a video-cache revision or rebuilding the graphics device. Wayland
 will use the compositor's preferred surface description and its protocol
-identity. Sunroom does not introduce a shared display-topology transaction
+identity. SunPlayer does not introduce a shared display-topology transaction
 model or custom spanning-window authority.
 
 ### Audio changes
 
 Cubeb and the platform sound service own normal migration of a stream following
-the system default device. Sunroom opens the default output rather than
+the system default device. SunPlayer opens the default output rather than
 enumerating and pinning the current endpoint, does not disable cubeb device
 switching, and does not carry the fail-closed WASAPI reconfiguration patch.
 
 An `audioOutputEpoch` identifies one cubeb stream, not every native endpoint or
-client that cubeb may use internally. Sunroom continues to translate cubeb's
+client that cubeb may use internally. SunPlayer continues to translate cubeb's
 logical presented position through its compact media-versus-hold history. A
 backend-managed route change may cause a bounded audible gap or skip; V1 does
 not claim gapless or sample-perfect migration.
 
 If cubeb reports an error, stream creation fails, or real-device experiments
-demonstrate a persistent no-progress condition, Sunroom may perform one
+demonstrate a persistent no-progress condition, SunPlayer may perform one
 controlled application-level recreation. That operation freezes the last
 confident media time, creates a new output epoch, prerolls, reanchors the new
 position, and resumes only if current user intent still requests playback. It
@@ -122,7 +122,7 @@ Costs and limitations:
 * Backend-managed audio migration can skip audio already queued to an endpoint
   that disappears. The logical clock follows the surviving stream rather than
   claiming exact acoustic continuity.
-* Cubeb WASAPI has no successful stream-reconfiguration callback. Sunroom will
+* Cubeb WASAPI has no successful stream-reconfiguration callback. SunPlayer will
   not manufacture a per-migration epoch from unrelated collection events.
 * A no-progress watchdog is deferred until real devices demonstrate the need
   and establish a safe threshold.

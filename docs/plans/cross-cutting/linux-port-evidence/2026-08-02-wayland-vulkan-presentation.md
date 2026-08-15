@@ -41,31 +41,31 @@ complete against this implementation. The primary test/install trees plus the
 two complementary matrix trees are:
 
 ```sh
-cmake -S . -B /tmp/sunroom-linux-repro-debug -G Ninja \
+cmake -S . -B /tmp/sunplayer-linux-repro-debug -G Ninja \
   -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
-cmake --build /tmp/sunroom-linux-repro-debug --parallel 2
+cmake --build /tmp/sunplayer-linux-repro-debug --parallel 2
 
-cmake -S . -B /tmp/sunroom-linux-ship-release -G Ninja \
+cmake -S . -B /tmp/sunplayer-linux-ship-release -G Ninja \
   -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
-  -DCMAKE_INSTALL_PREFIX=/tmp/sunroom-linux-ship-install
-cmake --build /tmp/sunroom-linux-ship-release --parallel 2
-cmake --install /tmp/sunroom-linux-ship-release
+  -DCMAKE_INSTALL_PREFIX=/tmp/sunplayer-linux-ship-install
+cmake --build /tmp/sunplayer-linux-ship-release --parallel 2
+cmake --install /tmp/sunplayer-linux-ship-release
 
-cmake -S . -B /tmp/sunroom-linux-matrix-debug-off -G Ninja \
+cmake -S . -B /tmp/sunplayer-linux-matrix-debug-off -G Ninja \
   -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=OFF
-cmake --build /tmp/sunroom-linux-matrix-debug-off --parallel 2
+cmake --build /tmp/sunplayer-linux-matrix-debug-off --parallel 2
 
-cmake -S . -B /tmp/sunroom-linux-matrix-release-on -G Ninja \
+cmake -S . -B /tmp/sunplayer-linux-matrix-release-on -G Ninja \
   -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
-cmake --build /tmp/sunroom-linux-matrix-release-on --parallel 2
+cmake --build /tmp/sunplayer-linux-matrix-release-on --parallel 2
 ```
 
 All 24 registered Linux tests and both QML lint targets pass:
 
 ```sh
-ctest --test-dir /tmp/sunroom-linux-repro-debug \
+ctest --test-dir /tmp/sunplayer-linux-repro-debug \
   --output-on-failure --parallel 2
-cmake --build /tmp/sunroom-linux-repro-debug \
+cmake --build /tmp/sunplayer-linux-repro-debug \
   --target all_qmllint --parallel 2
 ```
 
@@ -79,12 +79,12 @@ case; its serial rerun passed, and the final parallel-two run passed 24/24.
 Release install and installed-module verification pass:
 
 ```sh
-cmake --install /tmp/sunroom-linux-ship-release
-/tmp/sunroom-linux-ship-install/bin/sunroom \
+cmake --install /tmp/sunplayer-linux-ship-release
+/tmp/sunplayer-linux-ship-install/bin/sunplayer \
   --verify-qml --no-log-file
 ```
 
-Linux keeps the Sunroom QML module embedded and resolves Qt Quick imports from
+Linux keeps the SunPlayer QML module embedded and resolves Qt Quick imports from
 the system installation. Windows retains the stricter verification that
 confines imports and plugins to its deployed application tree. `ldd` on the
 installed Linux executable resolves Qt, FFmpeg, libplacebo, libass, Vulkan,
@@ -99,7 +99,7 @@ the Khronos validation layer and synchronization validation enabled:
 ```sh
 VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation \
 VK_LAYER_VALIDATE_SYNC=1 \
-  /tmp/sunroom-linux-ship-install/bin/sunroom \
+  /tmp/sunplayer-linux-ship-install/bin/sunplayer \
   --fullscreen-smoke --no-log-file \
   tests/fixtures/media/sdr-bt709-ffv1-video-late-flac.mkv
 ```
@@ -132,7 +132,7 @@ surface from being repeatedly discarded when QRhi reports an extended-linear
 format that the selected Wayland declaration does not permit.
 
 Ubuntu's LCMS-enabled libplacebo would also have consumed an embedded source
-ICC profile even though Sunroom's accepted cross-platform policy defers source
+ICC profile even though SunPlayer's accepted cross-platform policy defers source
 ICC transforms. Rendering now clears both ICC representations on the temporary
 libplacebo frame copy on every platform while retaining the decoded profile
 bytes and diagnostics on the source frame.

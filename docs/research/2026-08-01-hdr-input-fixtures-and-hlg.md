@@ -4,7 +4,7 @@ Date: 2026-08-01
 
 ## Question
 
-How can Sunroom validate real FFmpeg/libplacebo input handling for HDR10/PQ,
+How can SunPlayer validate real FFmpeg/libplacebo input handling for HDR10/PQ,
 HLG, HDR10+, and Dolby Vision without copyrighted media, a second parser, or a
 custom HDR implementation, and what should V1 do about libplacebo's HLG target
 semantics?
@@ -20,12 +20,12 @@ semantics?
   checked in.
 * Libplacebo 7.360.1 currently receives a virtual destination maximum of
   `203 * physicalPeak / referenceWhite` so its normalized output range matches
-  Sunroom's display-relative working headroom.
+  SunPlayer's display-relative working headroom.
 
 ## Pinned library facts
 
 Libplacebo 7.360.1's default color-map parameters select spline tone mapping
-and perceptual gamut mapping. Sunroom currently disables inverse tone mapping,
+and perceptual gamut mapping. SunPlayer currently disables inverse tone mapping,
 peak detection, and dithering but inherits the first two choices from that
 default structure. The pinned source explicitly sets an HLG source's maximum
 luminance to an HDR destination's maximum during map inference, then uses that
@@ -80,7 +80,7 @@ Profile 8.1 RPU data from a small JSON configuration:
 * [FFmpeg HDR10+ side-data API](https://ffmpeg.org/doxygen/8.0/hdr__dynamic__metadata_8h.html)
 
 The validated Windows release artifacts are generation tools only and do not
-become Sunroom build or runtime dependencies:
+become SunPlayer build or runtime dependencies:
 
 | Tool | Release | SHA-256 |
 | --- | --- | --- |
@@ -89,7 +89,7 @@ become Sunroom build or runtime dependencies:
 
 ## V1 policy consequence
 
-Sunroom will keep the current display-relative HLG behavior for the first
+SunPlayer will keep the current display-relative HLG behavior for the first
 format-acceptance milestone and characterize it with production-boundary
 captures at multiple reference-white/headroom targets. It will not add a
 second HLG stage or patch libplacebo merely to create a separate physical-peak

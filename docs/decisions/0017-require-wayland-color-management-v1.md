@@ -14,7 +14,7 @@ This record preserves the earlier managed-only product decision. ADR 0018
 supersedes it after reconsidering whether absence of the optional protocol
 should prevent otherwise ordinary native-Wayland SDR playback. ADR 0021 also
 supersedes its historical Qt-owned FP16 managed-HDR design with the current
-Sunroom-owned version-2 HDR10/PQ path.
+SunPlayer-owned version-2 HDR10/PQ path.
 
 ADR 0015 selected native Wayland and allowed an unmanaged sRGB fallback when a
 Wayland compositor lacked color management. That fallback still creates a
@@ -31,7 +31,7 @@ presentation and a managed extended-linear surface for HDR presentation.
 ## Decision
 
 Linux V1 supports only native Wayland compositors exposing the
-color-management-v1 capabilities Sunroom uses:
+color-management-v1 capabilities SunPlayer uses:
 
 * the color-manager global and parametric image-description creation;
 * named sRGB primaries plus the `gamma22` and `ext_linear` transfer functions
@@ -39,7 +39,7 @@ color-management-v1 capabilities Sunroom uses:
 * perceptual rendering intent, which Qt uses when applying the description;
 * per-surface color-management ownership through Qt's Wayland integration; and
 * preferred surface-description feedback and immutable description
-  information used by Sunroom's display adapter.
+  information used by SunPlayer's display adapter.
 
 This is a capability contract, not a compositor brand or release-number
 allowlist. The implementation will report the exact missing capability and
@@ -47,19 +47,19 @@ fail during startup when the contract is unavailable. It will not run an
 unmanaged legacy-Wayland surface.
 
 Qt remains the sole owner of the color-management object attached to its
-`wl_surface`. An SDR monitor remains supported: Sunroom requests
-`QColorSpace::SRgb`, Qt declares sRGB primaries with `gamma22`, and Sunroom's
+`wl_surface`. An SDR monitor remains supported: SunPlayer requests
+`QColorSpace::SRgb`, Qt declares sRGB primaries with `gamma22`, and SunPlayer's
 final compositor emits the matching power-2.2 SDR encoding. When the output
-and Vulkan WSI support the HDR path, Sunroom requests
+and Vulkan WSI support the HDR path, SunPlayer requests
 `QColorSpace::SRgbLinear` and couples Qt's `ext_linear` declaration with the
 FP16 swapchain. Failure of that optional HDR transition recreates a managed
 gamma-2.2 SDR surface; it does not fall back to `UnmanagedSrgb`.
 
 Qt installs the description asynchronously after its private image-description
-object reports `ready`. Sunroom does not gate the first buffer or take over
+object reports `ready`. SunPlayer does not gate the first buffer or take over
 surface ownership to make this transient ordering exact; it reconciles the
 latest semantic presentation mode at a safe boundary. Qt does not expose
-failure of its private per-surface request through a public API. Sunroom treats
+failure of its private per-surface request through a public API. SunPlayer treats
 that rare path as an upstream defect covered by native integration evidence,
 not as a product state that justifies duplicated description logic, a second
 ownership model, or brittle log parsing.
@@ -101,10 +101,10 @@ and test behavior before the modern managed path is proven.
 
 Rejected. The modern protocol supports managed gamma-2.2 SDR presentation,
 and SDR monitors remain part of the intended Linux product behavior. Qt's
-declaration is specifically gamma 2.2, so Sunroom matches that steady-state
+declaration is specifically gamma 2.2, so SunPlayer matches that steady-state
 transfer.
 
 ### Name specific supported compositors or minimum release numbers
 
-Rejected. Protocol capability is the behavior Sunroom depends on; a brand or
+Rejected. Protocol capability is the behavior SunPlayer depends on; a brand or
 version allowlist is both less precise and more brittle.

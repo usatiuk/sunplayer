@@ -1,6 +1,6 @@
 file = "sdr-bt709-ffv1-playback.mkv"
 sha256 = "771e53aa2f15725d334bb7fcaecdb41cf69707ba2f21918e830a9abfd2dfe19d"
-provenance = "Generated analytically for Sunroom; no external source media"
+provenance = "Generated analytically for SunPlayer; no external source media"
 generator = "FFmpeg 8.1.2-full_build-www.gyan.dev"
 
 generation_command = """

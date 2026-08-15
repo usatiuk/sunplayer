@@ -15,7 +15,7 @@ monitor.
 
 Modern desktop color pipelines normally offer a managed presentation path:
 Windows Advanced Color, macOS ColorSync/EDR, and Wayland compositors supporting
-color-management-v1. Applying the display profile in Sunroom as well as in the
+color-management-v1. Applying the display profile in SunPlayer as well as in the
 OS would transform colors twice. Applying it in libplacebo before QRhi
 composition would calibrate only video.
 
@@ -23,10 +23,10 @@ composition would calibrate only video.
 
 The accepted presentation policy distinguishes two color-management modes:
 
-* `SystemManaged`: Sunroom declares the final surface encoding accurately and
+* `SystemManaged`: SunPlayer declares the final surface encoding accurately and
   relies on the OS/compositor to convert it through the active display profile
   and calibration exactly once.
-* `UnmanagedSrgb`: no trustworthy managed path is available, so Sunroom emits
+* `UnmanagedSrgb`: no trustworthy managed path is available, so SunPlayer emits
   SDR sRGB/Rec.709, assumes corresponding display behavior, restricts
   headroom to one unless independently proven, and reports low confidence.
 
@@ -71,7 +71,7 @@ libplacebo frame on every platform, as recorded in ADR 0012.
 
 * The ordinary modern path contains one display-calibration owner: the
   operating system or compositor.
-* Sunroom does not need an explicit display-ICC implementation for the first
+* SunPlayer does not need an explicit display-ICC implementation for the first
   correct HDR/color milestone.
 * Presentation state must expose the mode, surface encoding, calibration or
   presentation-description revision, and confidence.

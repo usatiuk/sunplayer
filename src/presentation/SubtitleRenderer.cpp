@@ -186,7 +186,7 @@ bool SubtitleRenderer::ensureTexture(QSize const& size) {
         fail(QStringLiteral("Could not allocate the subtitle texture"));
         return false;
     }
-    texture->setName(QByteArrayLiteral("Sunroom subtitle layer"));
+    texture->setName(QByteArrayLiteral("SunPlayer subtitle layer"));
     if (!texture->create()) {
         fail(QStringLiteral("Could not create the subtitle texture"));
         return false;

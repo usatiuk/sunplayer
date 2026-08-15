@@ -212,7 +212,7 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(FfmpegVideoDecodeRequest const&
         return fail(QStringLiteral("Video decode request is invalid"));
     }
 
-    qCDebug(sunroomLogMediaDecode).noquote()
+    qCDebug(sunplayerLogMediaDecode).noquote()
         << "event=decode.attempt_start"
         << "generation=" + QString::number(generation)
         << "targetUs=" + (request.start.targetPositionMicroseconds
@@ -244,7 +244,7 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(FfmpegVideoDecodeRequest const&
         return fail(QStringLiteral("Could not open media: %1").arg(ffmpegError(status)));
     }
     FormatContextPtr formatContext(rawFormatContext);
-    qCDebug(sunroomLogMediaIo).noquote() << "event=media.open_complete"
+    qCDebug(sunplayerLogMediaIo).noquote() << "event=media.open_complete"
                                          << "generation=" + QString::number(generation)
                                          << "elapsedMs=" + QString::number(operationTimer.elapsed())
                                          << "bytesRead=" + QString::number(ioBytesRead(*formatContext));
@@ -256,7 +256,7 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(FfmpegVideoDecodeRequest const&
         }
         return fail(QStringLiteral("Could not discover media streams: %1").arg(ffmpegError(status)));
     }
-    qCDebug(sunroomLogMediaIo).noquote() << "event=media.probe_complete"
+    qCDebug(sunplayerLogMediaIo).noquote() << "event=media.probe_complete"
                                          << "generation=" + QString::number(generation)
                                          << "elapsedMs=" + QString::number(operationTimer.elapsed())
                                          << "bytesRead=" + QString::number(ioBytesRead(*formatContext));
@@ -288,7 +288,7 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(FfmpegVideoDecodeRequest const&
             return fail(QStringLiteral("The requested video seek timestamp "
                                        "cannot be represented"));
         }
-        qCDebug(sunroomLogMediaIo).noquote()
+        qCDebug(sunplayerLogMediaIo).noquote()
             << "event=media.seek_request"
             << "generation=" + QString::number(generation) << "stream=" + QString::number(streamIndex)
             << "targetUs=" + QString::number(*request.start.targetPositionMicroseconds)
@@ -303,7 +303,7 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(FfmpegVideoDecodeRequest const&
                             .arg(*request.start.targetPositionMicroseconds / 1'000)
                             .arg(ffmpegError(status)));
         }
-        qCDebug(sunroomLogMediaIo).noquote()
+        qCDebug(sunplayerLogMediaIo).noquote()
             << "event=media.seek_complete"
             << "generation=" + QString::number(generation) << "elapsedMs=" + QString::number(operationTimer.elapsed())
             << "bytesRead=" + QString::number(ioBytesRead(*formatContext))
@@ -349,7 +349,7 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(FfmpegVideoDecodeRequest const&
                 continue;
             }
             if (firstSelectedPacket.exchange(false, std::memory_order_relaxed)) {
-                qCDebug(sunroomLogMediaIo).noquote()
+                qCDebug(sunplayerLogMediaIo).noquote()
                     << "event=demux.first_video_packet"
                     << "generation=" + QString::number(generation) << "pts=" + QString::number(packet->pts)
                     << "dts=" + QString::number(packet->dts) << "duration=" + QString::number(packet->duration)

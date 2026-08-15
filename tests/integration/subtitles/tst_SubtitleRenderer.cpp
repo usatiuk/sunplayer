@@ -121,7 +121,7 @@ void SubtitleRendererTest::rendersAssAndRestoresThePausedRoute() {
     QRhi& rhi = graphicsDevice->rhi();
     SubtitleRenderer renderer(rhi);
 
-    QFile font(QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/Ahem.ttf"));
+    QFile font(QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/Ahem.ttf"));
     QVERIFY(font.open(QIODevice::ReadOnly));
     QByteArray const header = QByteArrayLiteral("[Script Info]\n"
                                                 "ScriptType: v4.00+\n"

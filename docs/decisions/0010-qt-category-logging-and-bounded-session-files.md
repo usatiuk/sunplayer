@@ -5,7 +5,7 @@
 
 ## Context
 
-Sunroom crosses asynchronous media I/O, demux, decode, scheduling, rendering,
+SunPlayer crosses asynchronous media I/O, demux, decode, scheduling, rendering,
 presentation, and platform-event boundaries. UI counters and terminal error
 messages do not explain where an operation stalled or which playback
 generation produced an observation. The first large-network-file seek
@@ -21,7 +21,7 @@ per-frame records are expensive, and a player may run for hours.
 
 ## Decision
 
-Use `QLoggingCategory` and the `qC*` functions throughout Sunroom.
+Use `QLoggingCategory` and the `qC*` functions throughout SunPlayer.
 
 The application installs one small process-wide service around
 `qInstallMessageHandler`:
@@ -30,7 +30,7 @@ The application installs one small process-wide service around
 * A per-process session file is written by default beneath Qt's temporary
   directory.
 * Info, warning, critical, and fatal records are written normally.
-* Sunroom debug categories are disabled by default and enabled explicitly with
+* SunPlayer debug categories are disabled by default and enabled explicitly with
   `--debug-log` or Qt logging rules.
 * `--log-file <path>` selects an exact output path and `--no-log-file` disables
   the file sink.
@@ -64,7 +64,7 @@ Logs and current diagnostics snapshots have different roles:
 
 ## Consequences
 
-The default session file makes failures diagnosable even when Sunroom is
+The default session file makes failures diagnosable even when SunPlayer is
 started as a GUI executable without a terminal. Runtime category filtering
 keeps normal playback quiet, while an opt-in debug run can expose operation
 boundaries without rebuilding.

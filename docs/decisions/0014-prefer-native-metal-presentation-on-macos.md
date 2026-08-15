@@ -26,7 +26,7 @@ composition, EDR, and ColorSync surface declaration. Libplacebo uses Vulkan
 over MoltenVK as the video producer, with a narrow backend-owned Metal-texture
 interop path into the QRhi composition domain.
 
-Sunroom will not force QRhi Vulkan merely to share one graphics API if doing so
+SunPlayer will not force QRhi Vulkan merely to share one graphics API if doing so
 makes EDR declaration, ColorSync behavior, or energy characteristics less
 direct. A fully shared MoltenVK domain remains an evidence-driven alternative
 and may replace the interop path if experiments prove equivalent native EDR,
@@ -61,5 +61,5 @@ ColorSync presentation are stronger platform requirements than using one API.
 
 ### Add a custom Metal video renderer
 
-Rejected. Libplacebo remains the content renderer; Sunroom should solve the
+Rejected. Libplacebo remains the content renderer; SunPlayer should solve the
 narrow interop problem instead of duplicating its color pipeline.

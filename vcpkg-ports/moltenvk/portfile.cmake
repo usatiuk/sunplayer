@@ -1,7 +1,7 @@
 vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
 
 if(NOT VCPKG_TARGET_IS_OSX OR NOT VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
-    message(FATAL_ERROR "The Sunroom MoltenVK package supports arm64 macOS only")
+    message(FATAL_ERROR "The SunPlayer MoltenVK package supports arm64 macOS only")
 endif()
 
 vcpkg_download_distfile(ARCHIVE

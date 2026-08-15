@@ -12,5 +12,5 @@ subtitle_canvas = "320x180"
 [mux]
 tool = "MKVToolNix mkvmerge 100.0"
 source = "sdr-bt709-ffv1-pgs.mkv"
-command = "mkvmerge --deterministic sunroom-zlib-pgs-v1 --no-date --output <output> --compression 2:zlib <source>"
+command = "mkvmerge --deterministic sunplayer-zlib-pgs-v1 --no-date --output <output> --compression 2:zlib <source>"
 tool_sha256 = "5b9f0cf3c52a2f0d9e03e3b36413d42ad6ef455d8f4eeffb70a43e3b7df29c00"

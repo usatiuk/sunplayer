@@ -4,7 +4,7 @@ Date: 2026-08-02
 
 ## Question
 
-How should Sunroom provide an operable native Wayland window when Qt owns the
+How should SunPlayer provide an operable native Wayland window when Qt owns the
 toplevel and Vulkan presentation surface, Qt's built-in Wayland client-side
 decorations are unavailable for Vulkan, and some compositors do not provide
 server-side decorations?
@@ -21,7 +21,7 @@ Wayland, Vulkan/QRhi presentation, and one redirected Qt Quick scene. X11,
 XWayland, alternate presentation backends, and broad desktop emulation are out
 of scope.
 
-Sunroom's existing ownership is:
+SunPlayer's existing ownership is:
 
 ```text
 Qt PresentationWindow
@@ -144,7 +144,7 @@ minus, square, and copy glyphs follows that established boundary. The system
 theme supplies a glyph shape when available; `icon.source` supplies the
 bundled fallback.
 
-Sunroom's titlebar is deliberately black, independent of the desktop palette.
+SunPlayer's titlebar is deliberately black, independent of the desktop palette.
 The application must therefore tint both icon sources with its own light
 foreground. Asking for a hypothetical light icon variant or independently
 reading `SystemPalette.windowText` could select a dark glyph from a light

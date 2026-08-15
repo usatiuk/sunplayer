@@ -4,7 +4,7 @@ Date: 2026-08-02
 
 ## Question
 
-Why did a full-window QML outline disappear over Sunroom's titlebar and empty
+Why did a full-window QML outline disappear over SunPlayer's titlebar and empty
 page, while the same outline survived only beside active video or HDR Lab
 content, and what is the smallest correct fix?
 
@@ -18,7 +18,7 @@ target is used by the Windows D3D11 and Linux Vulkan presentation engines.
 The observed broken output was:
 
 ```text
-Sunroom                         _  □  ×
+SunPlayer                         _  □  ×
   no outline around the titlebar
 │                  video                  │  outline only beside active content
 └────────────────────────────────────────┘
@@ -28,13 +28,13 @@ The intended outline is one cohesive inner perimeter around the complete
 client area, including the top and both titlebar-side edges. It must remain
 visible with no media loaded and must not depend on the video viewport.
 
-The user identified the surviving content-side pixels as Sunroom's own chrome
+The user identified the surviving content-side pixels as SunPlayer's own chrome
 outline: its appearance changed with the chrome styling. No texture readback
 was made that would justify attributing those pixels to another render pass.
 
-## Exact Qt and Sunroom boundary
+## Exact Qt and SunPlayer boundary
 
-The inspected Ubuntu source packages are Qt 6.10.2. Sunroom constructs one
+The inspected Ubuntu source packages are Qt 6.10.2. SunPlayer constructs one
 `QRhiTextureRenderTarget` containing only an RGBA16F color attachment and gives
 that complete target to Qt through
 `QQuickRenderTarget::fromRhiRenderTarget()`.
@@ -56,7 +56,7 @@ This difference is material:
   opaque by Qt's rectangle material, so its stacking participates in that
   depth-assisted path.
 
-Sunroom was therefore supplying a render target incompatible with Qt Quick's
+SunPlayer was therefore supplying a render target incompatible with Qt Quick's
 normal renderer configuration. A high-z outline could be drawn first and then
 overwritten by the lower opaque titlebar or page because the attachment that
 enforces the ordering was absent. Which outline fragments survived could then
@@ -100,7 +100,7 @@ geometry is created.
 The attached QML `Screen.devicePixelRatio` is not authoritative for this
 redirected scene. `QQuickScreenAttached` follows the offscreen
 `QQuickWindow::screen()`, whereas `QQuickWindow::effectiveDevicePixelRatio()`
-uses `QQuickRenderControl::renderWindow()` and therefore Sunroom's native
+uses `QQuickRenderControl::renderWindow()` and therefore SunPlayer's native
 presentation window. The final implementation should pass the DPR already
 validated by `QuickUiLayer::ensureRenderTarget()` into the QML root. This
 keeps one render-target authority and adds no decoration-specific native
@@ -154,7 +154,7 @@ chrome module; it does not become a graphics-backend or compositor feature.
   duplicates fullscreen state, and conceals the incomplete Quick target.
 * **Disable Qt Quick's 2D depth path:** is a supported special configuration
   but reduces batching efficiency and diverges from Qt's official redirected-
-  QRhi example when Sunroom can provide the required attachment directly.
+  QRhi example when SunPlayer can provide the required attachment directly.
 * **Texture readback in production:** useful as a temporary discriminator, but
   not needed after the exact attachment change passed the real visual path.
   A permanent capture test would require a larger test seam than this fix.

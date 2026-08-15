@@ -97,7 +97,7 @@ deliver synchronous events.
 
 The window requests the factory-selected Direct3D, Metal, or Vulkan surface type,
 starts at 1100 × 760 logical pixels, has a 760 × 560 minimum, and uses the
-title `Sunroom`.
+title `SunPlayer`.
 
 Qt remains the sole Wayland `wl_surface`, xdg-toplevel, Vulkan surface, and
 managed-color surface owner. When the compositor does not advertise
