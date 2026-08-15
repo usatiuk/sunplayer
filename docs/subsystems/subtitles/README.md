@@ -80,8 +80,9 @@ rerender retained text events without changing decoded timing. Bitmap subtitle
 pixels and placement remain authored; only whole-layer scale/offset/opacity are
 reasonable future overrides.
 
-Subtitle white is working/reference white `1.0`, like ordinary UI and SDR
-white. Subtitles are composed after libplacebo has display-mapped video and
+Subtitle RGB is scaled to `0.8` in linear light while its authored alpha and
+edge coverage remain unchanged. Ordinary UI and SDR reference white remain
+`1.0`. Subtitles are composed after libplacebo has display-mapped video and
 before the one platform presentation conversion. The platform remains
 responsible for final display calibration.
 

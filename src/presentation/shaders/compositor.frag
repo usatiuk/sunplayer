@@ -64,14 +64,15 @@ vec3 linearToPq(vec3 value)
         vec3(m2));
 }
 
-vec3 compositeSrgbPremultiplied(vec3 background, vec4 layer)
+vec3 compositeSrgbPremultiplied(
+    vec3 background, vec4 layer, float brightness)
 {
     float alpha = clamp(layer.a, 0.0, 1.0);
     vec3 encodedStraight = alpha > 0.00001
         ? clamp(layer.rgb / alpha, 0.0, 1.0)
         : vec3(0.0);
     vec3 linear = srgbToLinear(encodedStraight);
-    return linear * alpha + background * (1.0 - alpha);
+    return linear * (brightness * alpha) + background * (1.0 - alpha);
 }
 
 void main()
@@ -87,9 +88,9 @@ void main()
     }
 
     color = compositeSrgbPremultiplied(
-        color, texture(subtitleTexture, displayUv));
+        color, texture(subtitleTexture, displayUv), 0.8);
     color = compositeSrgbPremultiplied(
-        color, texture(uiTexture, displayUv));
+        color, texture(uiTexture, displayUv), 1.0);
     color *= sdrScale;
     vec3 encodedColor = clamp(color, 0.0, 1.0);
     vec3 outputColor;

@@ -18,7 +18,7 @@ Completion means:
   authored canvas placement, replace behavior, and clear behavior.
 * Pause, seek, replay, close, rapid selection, and generation replacement cannot
   display stale subtitles.
-* Subtitle white maps to working/reference white `1.0` in SDR and HDR output.
+* Subtitle white maps to `0.8` of working/reference white in SDR and HDR output.
 * Audio/video playback remains valid when a subtitle stream is absent, malformed,
   unsupported, or disabled.
 * The source is never opened concurrently or parsed a second time for subtitles.
@@ -196,7 +196,7 @@ display-targeted linear video
     -> one platform presentation conversion
 ```
 
-Subtitle white is linear working value `1.0`. The subtitle layer is not passed
+Subtitle white is linear working value `0.8`. The subtitle layer is not passed
 through libplacebo, a PQ transfer, or another tone mapper. The first milestone
 treats ASS and bitmap RGB as SDR sRGB content; exact VSFilter color-mangling and
 subtitle/video-colorspace compatibility are documented gaps, not hidden shader

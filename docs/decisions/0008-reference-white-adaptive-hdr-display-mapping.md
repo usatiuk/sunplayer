@@ -2,7 +2,7 @@
 
 * Status: Accepted
 * Date: 2026-07-30
-* Scope amendment: 2026-08-01
+* Scope amendments: 2026-08-01, 2026-08-15
 
 ## Context
 
@@ -31,8 +31,9 @@ output remains in the fixed 203-nit coordinate system.
 Normal playback uses one shared, reference-white-anchored display-mapping
 policy:
 
-* SDR video white, HDR reference white, ordinary SDR UI white, and subtitle
-  white map to composition value `1.0`.
+* SDR video white, HDR reference white, and ordinary SDR UI white map to
+  composition value `1.0`; subtitle RGB is scaled to `0.8` in linear light
+  without changing authored alpha.
 * Composition value `1.0` means the active platform SDR/reference-white
   luminance.
 * Available highlight headroom is

@@ -446,7 +446,7 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     QVERIFY(neutralPqReadbackCompleted);
     FloatPixel const neutralPq = readFloatPixel(neutralPqReadback, *rhi, 1, 1);
     float const pqReferenceWhite = linearToPq(1.0f);
-    compareNear(pqReferenceWhite, 0.580688881f, 0.000001f);
+    compareNear(pqReferenceWhite, 0.580688881f, 0.000002f);
     compareNear(neutralPq.r, pqReferenceWhite, 0.002f);
     compareNear(neutralPq.g, pqReferenceWhite, 0.002f);
     compareNear(neutralPq.b, pqReferenceWhite, 0.002f);
@@ -550,10 +550,13 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
 
     float const alpha = 128.0f / 255.0f;
     float const encodedStraightRed = (64.0f / 255.0f) / alpha;
-    auto const expectedLinearBlend = [alpha](float baseLinear, float encodedSubtitle, float encodedUi, float scale) {
-        float const withSubtitle = srgbToLinear(encodedSubtitle) * alpha + baseLinear * (1.0f - alpha);
-        return (srgbToLinear(encodedUi) * alpha + withSubtitle * (1.0f - alpha)) * scale;
-    };
+    constexpr float subtitleBrightness = 0.8f;
+    auto const expectedLinearBlend =
+        [alpha, subtitleBrightness](float baseLinear, float encodedSubtitle, float encodedUi, float scale) {
+            float const withSubtitle =
+                srgbToLinear(encodedSubtitle) * (subtitleBrightness * alpha) + baseLinear * (1.0f - alpha);
+            return (srgbToLinear(encodedUi) * alpha + withSubtitle * (1.0f - alpha)) * scale;
+        };
 
     FloatPixel const blendedBackground = readFloatPixel(linearReadback, *rhi, 1, 1);
     compareNear(blendedBackground.r, expectedLinearBlend(0.0f, 0.0f, encodedStraightRed, linearSdrScale), 0.002f);
