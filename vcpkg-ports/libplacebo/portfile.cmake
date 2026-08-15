@@ -40,6 +40,8 @@ vcpkg_from_git(
     URL https://github.com/haasn/libplacebo.git
     REF cee9b076f2c63104ccfd497fa79c39a867293ec4
     HEAD_REF master
+    PATCHES
+        fix-win64-allocation-alignment.patch
 )
 
 # libplacebo carries these exact revisions as source submodules and imports

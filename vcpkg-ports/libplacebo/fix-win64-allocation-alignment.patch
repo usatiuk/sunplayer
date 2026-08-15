@@ -1,0 +1,42 @@
+diff --git a/src/pl_alloc.c b/src/pl_alloc.c
+index 5b90357a..554dd73c 100644
+--- a/src/pl_alloc.c
++++ b/src/pl_alloc.c
+@@ -28,7 +28,7 @@ struct header {
+     struct ext *ext;
+ 
+     // Pointer to actual data, for alignment purposes
+-    max_align_t data[];
++    alignas(PL_ALLOC_ALIGN) max_align_t data[];
+ };
+ 
+ // Lazily allocated, to save space for leaf allocations and allocations which
+@@ -42,6 +42,8 @@ struct ext {
+ };
+ 
+ #define PTR_OFFSET offsetof(struct header, data)
++_Static_assert(PTR_OFFSET % PL_ALLOC_ALIGN == 0,
++               "allocation payload must satisfy PL_ALLOC_ALIGN");
+ #define MAX_ALLOC (SIZE_MAX - PTR_OFFSET)
+ #define MINIMUM_CHILDREN 4
+ 
+diff --git a/src/pl_alloc.h b/src/pl_alloc.h
+index 7f46d53c..67d0493a 100644
+--- a/src/pl_alloc.h
++++ b/src/pl_alloc.h
+@@ -69,7 +69,14 @@ char *pl_strndup0(void *parent, const char *str, size_t size);
+ // `priv` at the address of `pub` + sizeof(pub), rounded up to the maximum
+ // alignment requirements.
+ 
+-#define PL_ALIGN_MEM(size) PL_ALIGN2(size, alignof(max_align_t))
++#if defined(_WIN64)
++// Win64 malloc is 16-byte aligned, but max_align_t is only 8-byte aligned.
++#define PL_ALLOC_ALIGN 16
++#else
++#define PL_ALLOC_ALIGN alignof(max_align_t)
++#endif
++
++#define PL_ALIGN_MEM(size) PL_ALIGN2(size, PL_ALLOC_ALIGN)
+ 
+ #define PL_PRIV(pub) \
+     (void *) ((uintptr_t) (pub) + PL_ALIGN_MEM(sizeof(*(pub))))

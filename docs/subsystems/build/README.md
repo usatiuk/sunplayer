@@ -140,6 +140,14 @@ enabled backend. The compiler and dependency experiments behind this choice
 are recorded in
 [the Windows dependency-build research note](../../research/2026-07-29-libplacebo-windows-dependency-build.md).
 
+The Windows overlay patches libplacebo's allocator to preserve 16-byte
+alignment in `NDEBUG` builds. Win64's `max_align_t` expresses only 8-byte
+alignment even though the CRT allocator provides 16-byte alignment and
+libplacebo's D3D11 pass structures require it. The patch applies that
+requirement consistently to allocator payloads and public/private object
+offsets, with a compile-time layout check; other platforms retain the upstream
+`max_align_t` alignment.
+
 The FFmpeg dependency uses the official registry port with `avcodec`,
 `avformat`, `swresample`, and `zlib`; `avutil` is core. zlib is required for
 Matroska tracks using `ContentCompression`, including real embedded PGS files.
