@@ -592,9 +592,20 @@ class AudioConverter final {
                 }
             }
         }
-        std::int64_t const effectiveFrameTime = frameTime ? *frameTime : *m_expectedNextMediaMicroseconds;
+        if (frame.nb_samples < 0 ||
+            m_inputFramesSinceAnchor >
+                static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max() - frame.nb_samples)) {
+            error = QStringLiteral("Decoded audio sample range is not representable");
+            return AudioConvertResult::Failed;
+        }
+        m_inputFramesSinceAnchor += static_cast<std::uint64_t>(frame.nb_samples);
+        // Container timestamps can be coarser than one decoded audio frame.
+        // Keep the first timestamp as the anchor and advance the continuous
+        // region by exact source sample count so timestamp quantization cannot
+        // become a synthetic gap.
         m_expectedNextMediaMicroseconds = checkedTimestampAdd(
-            effectiveFrameTime, av_rescale_q(frame.nb_samples, {1, frame.sample_rate}, AV_TIME_BASE_Q));
+            *m_anchorMediaMicroseconds,
+            av_rescale_q(static_cast<std::int64_t>(m_inputFramesSinceAnchor), {1, frame.sample_rate}, AV_TIME_BASE_Q));
         if (!m_expectedNextMediaMicroseconds) {
             error = QStringLiteral("Decoded audio timestamp range is not representable");
             return AudioConvertResult::Failed;
@@ -681,6 +692,7 @@ class AudioConverter final {
             return AudioConvertResult::Failed;
         }
         m_anchorMediaMicroseconds = nextFrameTimeMicroseconds;
+        m_inputFramesSinceAnchor = 0;
         m_convertedFrames = 0;
         return AudioConvertResult::Converted;
     }
@@ -894,6 +906,7 @@ class AudioConverter final {
     int m_inputSampleFormat = AV_SAMPLE_FMT_NONE;
     std::optional<std::int64_t> m_anchorMediaMicroseconds;
     std::optional<std::int64_t> m_expectedNextMediaMicroseconds;
+    std::uint64_t m_inputFramesSinceAnchor = 0;
     std::uint64_t m_convertedFrames = 0;
     std::uint64_t m_streamFrameIndex = 0;
     std::optional<std::int64_t> m_outputAnchorMediaMicroseconds;

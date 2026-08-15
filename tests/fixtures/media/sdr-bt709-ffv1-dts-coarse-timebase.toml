@@ -1,0 +1,26 @@
+file = "sdr-bt709-ffv1-dts-coarse-timebase.mkv"
+sha256 = "8d0f89d5fda470bbe8b121535b5abd831c084ddeadbe98226c91410e0a8a0173"
+provenance = "Generated analytically for Sunroom; no external source media"
+purpose = "DTS frames with millisecond timestamps whose quantization must not create synthetic audio gaps"
+generator = "FFmpeg 9.0-full_build-www.gyan.dev"
+license = "CC0-1.0"
+
+[generation]
+command = '''
+ffmpeg -hide_banner -loglevel error -nostdin -y -f lavfi -i "color=c=black:size=96x64:rate=4:duration=3,format=yuv420p,setparams=range=limited:color_primaries=bt709:color_trc=bt709:colorspace=bt709" -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=3" -map 0:v:0 -map 1:a:0 -af "asetnsamples=n=512:p=1,asetpts=PTS-if(eq(N\,7680)+eq(N\,19968)+eq(N\,33792)+eq(N\,46080)+eq(N\,59904)+eq(N\,68096)+eq(N\,80384)+eq(N\,94208)+eq(N\,99840)\,0.001/TB\,0)" -c:v ffv1 -level 3 -coder 1 -context 1 -g 1 -threads:v 1 -c:a dca -strict -2 -b:a 768k -ar 48000 -ac 6 -fflags +bitexact -flags:v +bitexact -flags:a +bitexact -map_metadata -1 sdr-bt709-ffv1-dts-coarse-timebase.mkv
+'''
+
+[expected]
+container = "matroska"
+duration_microseconds = 3008000
+video_codec = "ffv1"
+video_frame_count = 12
+audio_codec = "dts"
+audio_time_base = "1/1000"
+audio_sample_rate = 48000
+audio_channel_count = 6
+decoded_audio_frames = 282
+output_audio_frames = 144384
+
+[coverage]
+features = ["coarse-audio-time-base", "timestamp-quantization", "continuous-source-sample-timeline"]
