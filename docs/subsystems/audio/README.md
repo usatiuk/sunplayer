@@ -223,17 +223,6 @@ default-route migration while its monotonic logical position continues through
 the existing media/hold ledger. A disappearing endpoint may still cause an
 audible gap or skip; V1 does not claim gapless device migration.
 
-Within each continuous decoded-audio region, the first valid timestamp anchors
-the media position and cumulative source sample count advances the expected
-position. Later decoded timestamps classify real overlaps and forward gaps;
-they do not repeatedly re-anchor the sample timeline. This distinction keeps
-coarse container time bases, such as millisecond Matroska timestamps around
-512-sample DTS frames, from turning ordinary timestamp quantization into
-synthetic silence or overlap. A real forward gap still flushes libswresample,
-publishes source silence, and establishes a new sample-count anchor. A real
-overlap outside the bounded timestamp tolerance remains a terminal decode
-error before conflicting PCM reaches the sink.
-
 A later bounded recovery slice handles actual cubeb error or demonstrated
 no-progress by freezing the last confident media time, recreating only the
 audio stream as a new output epoch, prerolling, and resuming according to
@@ -251,11 +240,6 @@ The checked-in `sdr-bt709-ffv1-flac-sync.mkv` fixture contains lossless FFV1
 video flashes and matching FLAC impulses on a nonzero container timeline. Its
 manifest pins the hash, generation command, source format, resampled format,
 expected frame count, and marker positions.
-
-The checked-in `sdr-bt709-ffv1-dts-coarse-timebase.mkv` fixture reproduces a
-real DTS remux's millisecond timestamp quantization around continuous
-512-sample, 48 kHz frames. Full decode proves the source sample timeline stays
-continuous without weakening real gap or overlap rejection.
 
 The integration scenarios invoke the real FFmpeg media operation across
 both decoders, libswresample conversion and drain, shared timestamp

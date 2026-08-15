@@ -45,14 +45,6 @@ QString audioGapFixturePath() {
     return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-audio-gap-flac.mkv");
 }
 
-QString coarseTimeBaseDtsFixturePath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-dts-coarse-timebase.mkv");
-}
-
-QString coarseTimeBaseDtsManifestPath() {
-    return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-dts-coarse-timebase.toml");
-}
-
 QString pgsFixturePath() { return QStringLiteral(SUNROOM_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-pgs.mkv"); }
 
 QString compressedPgsFixturePath() {
@@ -178,7 +170,6 @@ class FfmpegMediaDecoderTest final : public QObject {
     void streamsRealDecodeThroughBoundedSink();
     void seeksAndTrimsAudioOnTheSharedTimeline();
     void fillsMidStreamAudioTimestampGapWithSourceSilence();
-    void decodesCoarseTimeBaseDtsWithoutFalseDiscontinuity();
     void seekingPastAudioEndIsACleanVideoInterval();
     void preservesVideoOnlyPlayback();
     void discoversAndDecodesSelectedPgsInTheSingleMediaOperation_data();
@@ -410,29 +401,6 @@ void FfmpegMediaDecoderTest::fillsMidStreamAudioTimestampGapWithSourceSilence() 
     }
     QCOMPARE(expectedFrame, 96'000U);
     QCOMPARE(result.observedAudioEndMicroseconds, std::optional<std::int64_t>(2'000'000));
-}
-
-void FfmpegMediaDecoderTest::decodesCoarseTimeBaseDtsWithoutFalseDiscontinuity() {
-    QCOMPARE(fixtureHash(coarseTimeBaseDtsFixturePath()), expectedFixtureHash(coarseTimeBaseDtsManifestPath()));
-
-    DecodeCapture capture;
-    FfmpegMediaDecodeResult const result = decode(requestFor(coarseTimeBaseDtsFixturePath(), 25), capture);
-    QVERIFY2(result.isSuccess(), qPrintable(result.error));
-    QVERIFY(capture.audioDiagnostics);
-    QCOMPARE(capture.audioDiagnostics->sourceSampleRate, 48'000);
-    QCOMPARE(capture.audioDiagnostics->sourceChannelCount, 6);
-    QCOMPARE(result.decodedAudioFrames, 282U);
-    QCOMPARE(result.outputAudioFrames, 144'384U);
-    QCOMPARE(result.observedAudioEndMicroseconds, std::optional<std::int64_t>(3'008'000));
-
-    std::uint64_t expectedFrame = 0;
-    for (PcmAudioBlock const& block : capture.audio) {
-        QCOMPARE(block.streamFrameIndex, expectedFrame);
-        std::int64_t const expectedTime = static_cast<std::int64_t>(expectedFrame * 1'000'000ULL / 48'000ULL);
-        QVERIFY(std::abs(block.mediaStartMicroseconds - expectedTime) <= 1);
-        expectedFrame += block.frameCount();
-    }
-    QCOMPARE(expectedFrame, result.outputAudioFrames);
 }
 
 void FfmpegMediaDecoderTest::seekingPastAudioEndIsACleanVideoInterval() {

@@ -408,11 +408,6 @@ Initial additions should be narrowly tied to milestones:
   zero-output audio after a seek, clock handoff after drain, complete leading
   source silence, due-first-video scheduling, startup liveness, and midstream
   discontinuity handling.
-* A deterministic Matroska/FFV1+DTS fixture reproduces millisecond container
-  timestamp quantization around continuous 512-sample, 48 kHz audio frames.
-  Full production decode verifies that cumulative source samples remain the
-  canonical position inside a continuous region while genuine timestamp gaps
-  and overlaps retain their existing fail-fast behavior.
 * Four deterministic, four-frame Main10 HEVC elementary streams cover
   BT.2020 limited-range static HDR10/PQ with explicit mastering and content-
   light metadata, HLG, a two-scene HDR10+ sequence, and Dolby Vision Profile
