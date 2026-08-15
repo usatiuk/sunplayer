@@ -19,7 +19,7 @@ pressed backgrounds. The player and compositor background is pure black.
 After the transport finishes its idle fade during uninterrupted playback, the
 cursor hides over an available video frame and returns with the controls on
 the next pointer movement. It remains visible when no frame is ready or while
-the controls, menu, sliders, or statistics panel need interaction.
+the controls, menu, sliders, or playback-details panel need interaction.
 Its position/duration timeline performs seek through the session's
 generation-scoped restart boundary and previews the selected time while the
 scrubber is pressed. Session-lifetime volume and mute remain wired to the
@@ -161,11 +161,20 @@ visible but disabled. Explicit user play intent means Buffering still offers
 Pause and a pause made during an interruption cannot be mistaken for automatic
 playback.
 
-Queue/frame counters plus audio-clock, PCM-occupancy, and underrun information
-live in an optional upper-right playback-statistics panel toggled from the
-transport menu. Diagnostics no longer occupy permanent space around the movie.
-Video/audio track changes and subtitle changes all use their implemented
-session commands rather than QML-owned playback state.
+An optional scrollable upper-right playback-details panel groups media, video,
+audio, subtitles, output, and performance. It shows the selected track labels;
+source sample rate and subtitle text/bitmap kind where known; decoded
+resolution, nominal frame rate, pixel format, bit depth, primaries, transfer,
+and range; decode and fallback paths; the active presentation mode; and the
+existing queue/frame, audio-clock, PCM-occupancy, and underrun counters.
+Source dynamic range and presentation are deliberately separate: a Dolby
+Vision, HDR10+, HDR10, HLG, or generic PQ source can truthfully report that it
+is mapped to an SDR presentation, while SDR content can be shown through an
+HDR or extended-range presentation surface. Incomplete evidence is labeled
+`Unknown` or `PQ HDR`, not promoted to a branded format. Diagnostics remain
+optional and do not occupy permanent space around the movie. Video/audio track
+changes and subtitle changes all use their implemented session commands rather
+than QML-owned playback state.
 
 ## HDR Lab and diagnostics
 
@@ -198,9 +207,9 @@ Hardware-frame imports remain separately diagnosed rather than making every
 path look “zero-copy.”
 
 Player is the default page and HDR Lab remains reachable through Player's
-overflow menu or empty state. Reusable read-only pipeline diagnostics appear in
-the optional Player statistics panel, but HDR Lab controls do not become
-ordinary player preferences.
+overflow menu or empty state. Reusable read-only source, presentation, and
+pipeline diagnostics appear in the optional Player details panel, but HDR Lab
+controls do not become ordinary player preferences.
 
 ## Verification
 
@@ -210,8 +219,9 @@ QML shell through the same initial-property contract, resizes it, and verifies
 that active-page geometry and visibility reach `VideoViewportState`. It also
 verifies Empty/Opening/Ready/Error visibility, cancel/retry/close and
 play/pause command wiring, Player/HDR-Lab route and viewport selection, the
-optional statistics panel, and the diagnostic renderer switch's default and
-source binding. Source/router coverage verifies that the diagnostic route
+optional details panel with selected video/audio/subtitle, source signal,
+presentation, and performance text, plus the diagnostic renderer switch's
+default and source binding. Source/router coverage verifies that the diagnostic route
 retains its 16:9 input geometry, and the component test verifies the HDR Lab's
 opaque black panel backgrounds. It explicitly covers `Ready` before `hasFrame`: playback chrome
 and the viewport remain active while the preparing state is visible, then the

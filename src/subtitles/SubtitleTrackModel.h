@@ -5,8 +5,6 @@
 #include <QAbstractListModel>
 
 #include "media/MediaStreamTypes.h"
-#include "subtitles/SubtitleTypes.h"
-
 class SubtitleTrackModel final : public QAbstractListModel {
     Q_OBJECT
 
@@ -28,14 +26,9 @@ class SubtitleTrackModel final : public QAbstractListModel {
     void setSelectedStreamIndex(int streamIndex);
     int selectedStreamIndex() const;
     bool canSelect(int streamIndex) const;
+    EmbeddedMediaStreamDescriptor const* track(int streamIndex) const;
 
   private:
-    struct Entry {
-        QString label;
-        int streamIndex = -1;
-        bool enabled = true;
-    };
-
-    std::vector<Entry> m_entries;
+    std::vector<EmbeddedMediaStreamDescriptor> m_tracks;
     int m_selectedStreamIndex = -1;
 };

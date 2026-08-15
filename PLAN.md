@@ -84,7 +84,9 @@ playback:
 * A thin QML application shell defaults to a video-first Player page and keeps
   the retained HDR Lab reachable from Player's empty state or overflow menu.
   Player publishes a full-page video viewport with a transient transport island
-  and optional playback-statistics panel; HDR Lab has one return action. The
+  and optional grouped playback-details panel. The panel separates selected
+  source tracks and conservative SDR/HDR classification from presentation mode
+  and live performance counters; HDR Lab has one return action. The
   active page publishes generic root-coordinate viewport geometry with explicit
   visibility. HDR Lab uses libplacebo by default and can select the retained
   procedural QRhi producer for diagnostic comparison; that switch is not a
@@ -466,7 +468,7 @@ Documentation: `docs/subsystems/subtitles/`
 * [ ] General source-buffering presentation
 * [x] Initial F11/Escape fullscreen shortcuts beyond Space play/pause
 * [ ] Minimal settings surface
-* [x] Playback-pipeline diagnostics view
+* [x] Selected-track, source-signal, presentation, and playback-pipeline details view
 
 Documentation: `docs/subsystems/ui/`
 

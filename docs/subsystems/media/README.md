@@ -22,7 +22,9 @@ resolves optional requested video/audio stream indexes strictly, and
 continuously emits immutable media values. Stream indexes belong only to that
 opened demuxer; they are not persisted as media identities. When a container
 defines programs, the selectable video/audio set stays inside the selected
-video's program so unrelated timelines are not mixed.
+video's program so unrelated timelines are not mixed. Track descriptors retain
+the source language, title, codec, dispositions, audio sample rate and channel
+layout, and text/bitmap subtitle kind needed by selection and playback details.
 `decodeFirstVideoFrame()` is now only a focused-test
 adapter over that same implementation, so hardware negotiation, metadata,
 timestamp, EOF, and fallback behavior do not diverge.
@@ -190,6 +192,14 @@ libplacebo. Effective sample
 aspect ratio prefers the decoded frame and then the snapshotted stream/codec
 default while those contexts remain alive. Published frames do not retain or
 expose mutable format, stream, or decoder contexts.
+
+The playback-details classifier derives one current display value directly
+from that retained frame. Dolby Vision and HDR10+ side data take precedence,
+HLG follows the decoded transfer characteristic, and `HDR10` requires BT.2020,
+PQ, and populated typed mastering or content-light side data. PQ without that
+typed evidence remains `PQ HDR`; known SDR transfers report `SDR`; all other
+cases report `Unknown`. This is a read-only diagnostic classification, not a
+second metadata model or rendering policy.
 
 Embedded source ICC bytes remain alive through the retained `AVFrame` and are
 preserved and diagnosed. Before rendering, Sunroom clears both libplacebo ICC

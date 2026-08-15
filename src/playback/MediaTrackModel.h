@@ -26,6 +26,7 @@ class MediaTrackModel final : public QAbstractListModel {
 
     void setTracks(std::vector<EmbeddedMediaStreamDescriptor> tracks);
     bool canSelect(int streamIndex) const;
+    EmbeddedMediaStreamDescriptor const* track(int streamIndex) const;
     std::optional<std::int64_t> endMicroseconds(int streamIndex) const;
 
   private:

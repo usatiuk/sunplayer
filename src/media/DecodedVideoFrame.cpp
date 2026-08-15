@@ -7,8 +7,11 @@
 
 extern "C" {
 #include <libavutil/display.h>
+#include <libavutil/dovi_meta.h>
 #include <libavutil/frame.h>
+#include <libavutil/hdr_dynamic_metadata.h>
 #include <libavutil/hwcontext.h>
+#include <libavutil/mastering_display_metadata.h>
 #include <libavutil/mathematics.h>
 #include <libavutil/pixdesc.h>
 }
@@ -84,6 +87,57 @@ bool checkedVisibleSize(AVFrame const& frame, QMargins& crop, QSize& visibleSize
     };
     return !visibleSize.isEmpty();
 }
+
+template <typename T> T const* sideDataPayload(AVFrame const& frame, AVFrameSideDataType type) {
+    AVFrameSideData const* const sideData = av_frame_get_side_data(&frame, type);
+    return sideData && sideData->size >= sizeof(T) ? reinterpret_cast<T const*>(sideData->data) : nullptr;
+}
+
+bool hasValidMasteringMetadata(AVFrame const& frame) {
+    AVMasteringDisplayMetadata const* const metadata =
+        sideDataPayload<AVMasteringDisplayMetadata>(frame, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA);
+    return metadata && (metadata->has_primaries || metadata->has_luminance);
+}
+
+bool hasValidContentLightMetadata(AVFrame const& frame) {
+    AVContentLightMetadata const* const metadata =
+        sideDataPayload<AVContentLightMetadata>(frame, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
+    return metadata && (metadata->MaxCLL > 0 || metadata->MaxFALL > 0);
+}
+
+bool hasValidHdr10PlusMetadata(AVFrame const& frame) {
+    AVDynamicHDRPlus const* const metadata = sideDataPayload<AVDynamicHDRPlus>(frame, AV_FRAME_DATA_DYNAMIC_HDR_PLUS);
+    return metadata && metadata->itu_t_t35_country_code == 0xb5 && metadata->num_windows >= 1 &&
+           metadata->num_windows <= 3;
+}
+
+bool hasValidDolbyVisionMetadata(AVFrame const& frame) {
+    AVFrameSideData const* const sideData = av_frame_get_side_data(&frame, AV_FRAME_DATA_DOVI_METADATA);
+    if (!sideData || sideData->size < sizeof(AVDOVIMetadata)) {
+        return false;
+    }
+    auto const* const metadata = reinterpret_cast<AVDOVIMetadata const*>(sideData->data);
+    return metadata->header_offset >= sizeof(AVDOVIMetadata) && metadata->header_offset <= sideData->size &&
+           sizeof(AVDOVIRpuDataHeader) <= sideData->size - metadata->header_offset;
+}
+
+bool isKnownSdrTransfer(AVColorTransferCharacteristic transfer) {
+    switch (transfer) {
+    case AVCOL_TRC_BT709:
+    case AVCOL_TRC_GAMMA22:
+    case AVCOL_TRC_GAMMA28:
+    case AVCOL_TRC_SMPTE170M:
+    case AVCOL_TRC_SMPTE240M:
+    case AVCOL_TRC_IEC61966_2_1:
+    case AVCOL_TRC_IEC61966_2_4:
+    case AVCOL_TRC_BT1361_ECG:
+    case AVCOL_TRC_BT2020_10:
+    case AVCOL_TRC_BT2020_12:
+        return true;
+    default:
+        return false;
+    }
+}
 } // namespace
 
 bool VideoFrameRational::isValid() const { return numerator > 0 && denominator > 0; }
@@ -139,6 +193,25 @@ QString VideoSignalDescription::summary() const {
                           "retained FFmpeg-decoded AVFrame")
         .arg(colorPrimaries, transferFunction, QString::number(componentDepth), matrixCoefficients, colorRange,
              chromaLocation);
+}
+
+VideoDynamicRange DecodedVideoFrame::dynamicRange() const {
+    Q_ASSERT(m_frame);
+    if (hasValidDolbyVisionMetadata(*m_frame)) {
+        return VideoDynamicRange::DolbyVision;
+    }
+    if (hasValidHdr10PlusMetadata(*m_frame)) {
+        return VideoDynamicRange::Hdr10Plus;
+    }
+    if (m_frame->color_trc == AVCOL_TRC_ARIB_STD_B67) {
+        return VideoDynamicRange::Hlg;
+    }
+    if (m_frame->color_trc == AVCOL_TRC_SMPTE2084) {
+        bool const staticHdrMetadata = hasValidMasteringMetadata(*m_frame) || hasValidContentLightMetadata(*m_frame);
+        return m_frame->color_primaries == AVCOL_PRI_BT2020 && staticHdrMetadata ? VideoDynamicRange::Hdr10
+                                                                                 : VideoDynamicRange::Pq;
+    }
+    return isKnownSdrTransfer(m_frame->color_trc) ? VideoDynamicRange::Sdr : VideoDynamicRange::Unknown;
 }
 
 std::shared_ptr<DecodedVideoFrame const>

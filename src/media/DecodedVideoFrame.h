@@ -61,6 +61,16 @@ enum class VideoFrameStorageKind {
     OtherHardwareSurface,
 };
 
+enum class VideoDynamicRange {
+    Unknown,
+    Sdr,
+    Pq,
+    Hdr10,
+    Hdr10Plus,
+    Hlg,
+    DolbyVision,
+};
+
 struct VideoFrameStorageDescription {
     VideoFrameStorageKind kind = VideoFrameStorageKind::SoftwarePlanes;
     QString hardwareFormat;
@@ -75,6 +85,8 @@ struct VideoFrameStorageDescription {
 // Small diagnostic snapshot of the decoded signal. The retained AVFrame is
 // authoritative for color fields and side data consumed by libplacebo.
 struct VideoSignalDescription {
+    bool operator==(VideoSignalDescription const&) const = default;
+
     QString pixelFormat;
     QString colorPrimaries;
     QString transferFunction;
@@ -109,6 +121,7 @@ class DecodedVideoFrame final {
     VideoFrameGeometry const& geometry() const;
     VideoFrameStorageDescription const& storage() const;
     VideoSignalDescription const& signal() const;
+    VideoDynamicRange dynamicRange() const;
     AVFrame const& ffmpegFrame() const;
 
   private:

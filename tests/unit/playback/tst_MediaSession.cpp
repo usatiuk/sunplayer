@@ -213,6 +213,10 @@ void MediaSessionTest::opensRealMediaOffThread() {
     QVERIFY(session.hardwareFallbackReason().isEmpty());
     QVERIFY(!session.containerFormat().isEmpty());
     QVERIFY(session.videoSummary().contains(QStringLiteral("yuv420p")));
+    QVERIFY(session.videoSummary().contains(QStringLiteral("fps")));
+    QCOMPARE(session.videoDynamicRange(), QStringLiteral("SDR"));
+    QVERIFY(!session.videoHdr());
+    QVERIFY(session.videoSignalSummary().contains(QStringLiteral("BT.709 primaries")));
     QCOMPARE(session.videoSource().currentFrame()->identity().playbackGeneration, session.playbackGeneration());
 }
 
@@ -360,6 +364,7 @@ void MediaSessionTest::embeddedSubtitleSelectionUsesPlaybackGeneration() {
         },
         10'000));
     QCOMPARE(session.selectedSubtitleStreamIndex(), -1);
+    QCOMPARE(session.selectedSubtitleTrackSummary(), QStringLiteral("Off"));
     session.pause();
 
     std::uint64_t const initialGeneration = session.playbackGeneration();
@@ -375,6 +380,8 @@ void MediaSessionTest::embeddedSubtitleSelectionUsesPlaybackGeneration() {
                    !snapshot.state.events->empty();
         },
         10'000));
+    QVERIFY(session.selectedSubtitleTrackSummary().contains(QStringLiteral("English - Styled Ahem")));
+    QVERIFY(session.selectedSubtitleTrackSummary().contains(QStringLiteral("ass · text")));
     QVERIFY(!session.playing());
 
     std::uint64_t const selectedGeneration = session.playbackGeneration();
@@ -388,6 +395,7 @@ void MediaSessionTest::embeddedSubtitleSelectionUsesPlaybackGeneration() {
 
     session.selectSubtitleStream(-1);
     QCOMPARE(session.selectedSubtitleStreamIndex(), -1);
+    QCOMPARE(session.selectedSubtitleTrackSummary(), QStringLiteral("Off"));
     QVERIFY(!session.subtitlePresentationSnapshot(std::chrono::steady_clock::now()).state.isEnabled());
     QVERIFY(waitUntil(
         [&] {
@@ -461,6 +469,9 @@ void MediaSessionTest::embeddedMediaTrackSelectionUsesPlaybackGeneration() {
         10'000));
     QCOMPARE(session.selectedVideoStreamIndex(), 2);
     QCOMPARE(session.selectedAudioStreamIndex(), 3);
+    QVERIFY(session.selectedVideoTrackSummary().contains(QStringLiteral("Czech - Light")));
+    QVERIFY(session.selectedAudioTrackSummary().contains(QStringLiteral("Czech - Negative")));
+    QVERIFY(session.selectedAudioTrackSummary().contains(QStringLiteral("48 kHz")));
     QCOMPARE(currentLuma(), 235);
     ControlledAudioRender rendered = renderFreshAudio();
     QVERIFY(rendered.frames != 0);

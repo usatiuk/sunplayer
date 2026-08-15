@@ -41,19 +41,20 @@ void MediaTrackModel::setTracks(std::vector<EmbeddedMediaStreamDescriptor> track
 }
 
 bool MediaTrackModel::canSelect(int streamIndex) const {
-    for (EmbeddedMediaStreamDescriptor const& track : m_tracks) {
-        if (track.streamIndex == streamIndex) {
-            return track.supported;
+    EmbeddedMediaStreamDescriptor const* const selected = track(streamIndex);
+    return selected && selected->supported;
+}
+
+EmbeddedMediaStreamDescriptor const* MediaTrackModel::track(int streamIndex) const {
+    for (EmbeddedMediaStreamDescriptor const& candidate : m_tracks) {
+        if (candidate.streamIndex == streamIndex) {
+            return &candidate;
         }
     }
-    return false;
+    return nullptr;
 }
 
 std::optional<std::int64_t> MediaTrackModel::endMicroseconds(int streamIndex) const {
-    for (EmbeddedMediaStreamDescriptor const& track : m_tracks) {
-        if (track.streamIndex == streamIndex) {
-            return track.endMicroseconds;
-        }
-    }
-    return std::nullopt;
+    EmbeddedMediaStreamDescriptor const* const selected = track(streamIndex);
+    return selected ? selected->endMicroseconds : std::nullopt;
 }

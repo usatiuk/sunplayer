@@ -10,6 +10,7 @@ VideoPage {
     objectName: "playerPage"
 
     required property MediaSession session
+    required property PresentationOutputState outputState
     required property WindowCommands windowCommands
 
     signal hdrLabRequested
@@ -20,7 +21,7 @@ VideoPage {
         sessionReady && session.hasFrame
     readonly property bool sessionActive:
         sessionReady || session.seeking
-    property bool showPlaybackStatistics: false
+    property bool showPlaybackDetails: false
     property bool controlsVisibleByActivity: true
     property point lastPointerPosition: Qt.point(-1, -1)
     readonly property bool controlsPinned:
@@ -29,7 +30,7 @@ VideoPage {
         || session.seeking
         || session.playbackInterruption !== MediaSession.None
         || transportMenu.visible
-        || statisticsHover.hovered
+        || detailsHover.hovered
         || seekSlider.pressed
         || volumeSlider.pressed
     readonly property bool controlsShouldShow:
@@ -88,6 +89,24 @@ VideoPage {
         default:
             return qsTr("Playing")
         }
+    }
+
+    function presentationSummary() {
+        if (outputState.swapChainFormat.length === 0
+                || outputState.swapChainFormat === "Unavailable") {
+            return qsTr("Presentation details unavailable")
+        }
+        let mode
+        if (outputState.hdrPresentationActive) {
+            mode = outputState.displayHdrEnabled
+                ? qsTr("HDR presentation active")
+                : qsTr("Extended-range presentation active")
+        } else if (session.videoHdr) {
+            mode = qsTr("HDR source mapped to SDR presentation")
+        } else {
+            mode = qsTr("SDR presentation")
+        }
+        return qsTr("%1 · %2").arg(mode).arg(outputState.swapChainFormat)
     }
 
     function revealControls() {
@@ -227,6 +246,15 @@ VideoPage {
                 NumberAnimation { duration: 90 }
             }
         }
+    }
+
+    component DetailsSectionTitle: Label {
+        Layout.fillWidth: true
+        topPadding: 5
+        color: "#d6d9e0"
+        font.pixelSize: 11
+        font.weight: Font.DemiBold
+        font.capitalization: Font.AllUppercase
     }
 
     FileDialog {
@@ -423,8 +451,8 @@ VideoPage {
     }
 
     Rectangle {
-        id: statisticsPanel
-        objectName: "playbackStatisticsPanel"
+        id: detailsPanel
+        objectName: "playbackDetailsPanel"
 
         anchors {
             right: parent.right
@@ -432,9 +460,10 @@ VideoPage {
             margins: 20
         }
         z: 20
-        visible: root.showPlaybackStatistics && root.sessionActive
-        width: Math.min(340, Math.max(250, root.width - 40))
-        height: statisticsLayout.implicitHeight + 24
+        visible: root.showPlaybackDetails && root.sessionActive
+        width: Math.min(400, Math.max(280, root.width - 40))
+        height: Math.min(detailsLayout.implicitHeight + 24,
+                         Math.max(1, root.height - 40))
         radius: 14
         color: Qt.rgba(12 / 255, 14 / 255, 18 / 255, 0.86)
         border.color: Qt.rgba(1, 1, 1, 0.16)
@@ -445,106 +474,208 @@ VideoPage {
         }
 
         HoverHandler {
-            id: statisticsHover
+            id: detailsHover
         }
 
-        ColumnLayout {
-            id: statisticsLayout
+        Flickable {
+            id: detailsFlickable
 
             anchors {
                 fill: parent
                 margins: 12
             }
-            spacing: 4
+            contentWidth: width
+            contentHeight: detailsLayout.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            ScrollBar.vertical: ScrollBar {}
 
-            RowLayout {
-                Layout.fillWidth: true
+            ColumnLayout {
+                id: detailsLayout
+
+                width: detailsFlickable.width
+                spacing: 4
+
+                RowLayout {
+                    Layout.fillWidth: true
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Playback details")
+                        color: "white"
+                        font.weight: Font.DemiBold
+                    }
+
+                    IslandButton {
+                        objectName: "closePlaybackDetailsButton"
+                        iconSource: "icons/lucide/x.svg"
+                        text: qsTr("Close playback details")
+                        onClicked: root.showPlaybackDetails = false
+                    }
+                }
 
                 Label {
                     Layout.fillWidth: true
-                    text: qsTr("Playback statistics")
-                    color: "white"
-                    font.weight: Font.DemiBold
+                    text: root.session.displayName
+                    color: "#d6d9e0"
+                    elide: Text.ElideMiddle
                 }
 
-                IslandButton {
-                    objectName: "closeStatisticsButton"
-                    iconSource: "icons/lucide/x.svg"
-                    text: qsTr("Close playback statistics")
-                    onClicked: root.showPlaybackStatistics = false
+                DetailsSectionTitle {
+                    text: qsTr("Media")
                 }
-            }
 
-            Label {
-                Layout.fillWidth: true
-                text: root.session.displayName
-                color: "#d6d9e0"
-                elide: Text.ElideMiddle
-            }
+                Label {
+                    objectName: "playbackStateLabel"
+                    Layout.fillWidth: true
+                    text: root.session.containerFormat.length > 0
+                        ? qsTr("%1 · %2 · %3")
+                            .arg(root.playbackStateText())
+                            .arg(root.session.containerFormat)
+                            .arg(root.formatTime(root.session.durationMilliseconds))
+                        : qsTr("%1 · %2")
+                            .arg(root.playbackStateText())
+                            .arg(root.formatTime(root.session.durationMilliseconds))
+                    color: "#afb4bf"
+                    wrapMode: Text.Wrap
+                }
 
-            Label {
-                objectName: "playbackStateLabel"
-                Layout.fillWidth: true
-                text: qsTr("%1 · %2")
-                    .arg(root.playbackStateText())
-                    .arg(root.session.videoSummary)
-                color: "#afb4bf"
-                elide: Text.ElideRight
-            }
+                DetailsSectionTitle {
+                    text: qsTr("Video")
+                }
 
-            Label {
-                Layout.fillWidth: true
-                text: qsTr("%1 · %2")
-                    .arg(root.session.decoderName)
-                    .arg(root.session.decodePath)
-                color: "#8f96a3"
-                elide: Text.ElideRight
-            }
+                Label {
+                    objectName: "selectedVideoDetailsLabel"
+                    Layout.fillWidth: true
+                    text: root.session.selectedVideoTrackSummary
+                    color: "#afb4bf"
+                    wrapMode: Text.Wrap
+                }
 
-            Label {
-                Layout.fillWidth: true
-                visible: root.session.hardwareFallbackReason.length > 0
-                text: qsTr("Hardware fallback: %1")
-                    .arg(root.session.hardwareFallbackReason)
-                color: "#d7ae68"
-                elide: Text.ElideRight
-            }
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("%1 · %2")
+                        .arg(root.session.videoDynamicRange)
+                        .arg(root.session.videoSummary)
+                    color: "#afb4bf"
+                    wrapMode: Text.Wrap
+                }
 
-            Label {
-                Layout.fillWidth: true
-                text: qsTr("%1 decoded · %2 selected · %3 dropped · %4 queued")
-                    .arg(root.session.decodedVideoFrames)
-                    .arg(root.session.selectedVideoFrames)
-                    .arg(root.session.droppedVideoFrames)
-                    .arg(root.session.queuedVideoFrames)
-                color: "#8f96a3"
-                wrapMode: Text.Wrap
-            }
+                Label {
+                    objectName: "videoSignalDetailsLabel"
+                    Layout.fillWidth: true
+                    visible: text.length > 0
+                    text: root.session.videoSignalSummary
+                    color: "#8f96a3"
+                    wrapMode: Text.Wrap
+                }
 
-            Label {
-                objectName: "audioDiagnosticsLabel"
-                Layout.fillWidth: true
-                visible: root.session.hasAudioOutput
-                text: qsTr("%1 · %2 · %3 ms PCM · %4 underrun frames")
-                    .arg(root.session.audioBackend)
-                    .arg(root.clockSourceText(
-                        root.session.mediaClockSource))
-                    .arg(root.session.audioQueuedMilliseconds)
-                    .arg(root.session.audioUnderrunFrames)
-                color: root.session.audioClockReliable
-                    ? "#8f96a3"
-                    : "#d7ae68"
-                wrapMode: Text.Wrap
-            }
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("%1 · %2")
+                        .arg(root.session.decoderName)
+                        .arg(root.session.decodePath)
+                    color: "#8f96a3"
+                    wrapMode: Text.Wrap
+                }
 
-            Label {
-                objectName: "subtitleDiagnosticsLabel"
-                Layout.fillWidth: true
-                visible: root.session.subtitleError.length > 0
-                text: qsTr("Subtitles: %1")
-                    .arg(root.session.subtitleError)
-                color: "#d7ae68"
-                wrapMode: Text.Wrap
+                Label {
+                    Layout.fillWidth: true
+                    visible: root.session.hardwareFallbackReason.length > 0
+                    text: qsTr("Hardware fallback: %1")
+                        .arg(root.session.hardwareFallbackReason)
+                    color: "#d7ae68"
+                    wrapMode: Text.Wrap
+                }
+
+                DetailsSectionTitle {
+                    text: qsTr("Audio")
+                }
+
+                Label {
+                    objectName: "selectedAudioDetailsLabel"
+                    Layout.fillWidth: true
+                    text: root.session.selectedAudioTrackSummary.length > 0
+                        ? root.session.selectedAudioTrackSummary
+                        : qsTr("No audio track")
+                    color: "#afb4bf"
+                    wrapMode: Text.Wrap
+                }
+
+                DetailsSectionTitle {
+                    text: qsTr("Subtitles")
+                }
+
+                Label {
+                    objectName: "selectedSubtitleDetailsLabel"
+                    Layout.fillWidth: true
+                    text: root.session.selectedSubtitleTrackSummary
+                    color: "#afb4bf"
+                    wrapMode: Text.Wrap
+                }
+
+                Label {
+                    objectName: "subtitleDiagnosticsLabel"
+                    Layout.fillWidth: true
+                    visible: root.session.subtitleError.length > 0
+                    text: qsTr("Subtitles: %1")
+                        .arg(root.session.subtitleError)
+                    color: "#d7ae68"
+                    wrapMode: Text.Wrap
+                }
+
+                DetailsSectionTitle {
+                    text: qsTr("Output")
+                }
+
+                Label {
+                    objectName: "outputDetailsLabel"
+                    Layout.fillWidth: true
+                    text: root.presentationSummary()
+                    color: "#afb4bf"
+                    wrapMode: Text.Wrap
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    visible: root.outputState.videoColorPolicy.length > 0
+                        && root.outputState.videoColorPolicy !== "Unavailable"
+                    text: root.outputState.videoColorPolicy
+                    color: "#8f96a3"
+                    wrapMode: Text.Wrap
+                }
+
+                DetailsSectionTitle {
+                    text: qsTr("Performance")
+                }
+
+                Label {
+                    objectName: "videoPerformanceDetailsLabel"
+                    Layout.fillWidth: true
+                    text: qsTr("%1 decoded · %2 selected · %3 dropped · %4 queued")
+                        .arg(root.session.decodedVideoFrames)
+                        .arg(root.session.selectedVideoFrames)
+                        .arg(root.session.droppedVideoFrames)
+                        .arg(root.session.queuedVideoFrames)
+                    color: "#8f96a3"
+                    wrapMode: Text.Wrap
+                }
+
+                Label {
+                    objectName: "audioDiagnosticsLabel"
+                    Layout.fillWidth: true
+                    visible: root.session.hasAudioOutput
+                    text: qsTr("%1 · %2 · %3 ms PCM · %4 underrun frames")
+                        .arg(root.session.audioBackend)
+                        .arg(root.clockSourceText(
+                            root.session.mediaClockSource))
+                        .arg(root.session.audioQueuedMilliseconds)
+                        .arg(root.session.audioUnderrunFrames)
+                    color: root.session.audioClockReliable
+                        ? "#8f96a3"
+                        : "#d7ae68"
+                    wrapMode: Text.Wrap
+                }
             }
         }
     }
@@ -761,12 +892,12 @@ VideoPage {
             }
 
             MenuItem {
-                objectName: "statisticsMenuItem"
-                text: qsTr("Show playback statistics")
+                objectName: "playbackDetailsMenuItem"
+                text: qsTr("Show playback details")
                 checkable: true
-                checked: root.showPlaybackStatistics
+                checked: root.showPlaybackDetails
                 onClicked:
-                    root.showPlaybackStatistics = !root.showPlaybackStatistics
+                    root.showPlaybackDetails = !root.showPlaybackDetails
             }
 
             Menu {

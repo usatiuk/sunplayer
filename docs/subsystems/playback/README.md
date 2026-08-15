@@ -72,6 +72,13 @@ to FFmpeg's normal initial selection. If the current position is beyond a
 selected video's declared endpoint, the restart is clamped to that track's
 last representable instant.
 
+The QML-facing session resolves selected video/audio/subtitle summaries from
+those canonical track models instead of retaining a second selected-track
+snapshot. It combines the selected descriptor with current decoded-frame
+signal facts and nominal frame duration for the optional playback-details
+panel. These diagnostics are eventually consistent during generation
+replacement and never alter track selection, timing, or rendering policy.
+
 Early ordinary-playback frames remain queued, due frames are selected only at
 the presentation boundary, and if several frames are due only the newest is
 published while earlier due frames are counted as dropped. Decoder wakeups

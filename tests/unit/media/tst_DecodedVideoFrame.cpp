@@ -1,13 +1,18 @@
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 
 #include <QtTest>
 
 extern "C" {
 #include <libavutil/buffer.h>
 #include <libavutil/display.h>
+#include <libavutil/dovi_meta.h>
 #include <libavutil/frame.h>
+#include <libavutil/hdr_dynamic_metadata.h>
 #include <libavutil/hwcontext.h>
+#include <libavutil/mastering_display_metadata.h>
+#include <libavutil/mem.h>
 #include <libavutil/pixfmt.h>
 }
 
@@ -31,6 +36,8 @@ class DecodedVideoFrameTest final : public QObject {
     void retainsSoftwareStorageAndSnapshotsSemantics();
     void describesHardwareFromItsSoftwarePlanes();
     void rejectsInvalidIdentityAndCrop();
+    void classifiesDynamicRange_data();
+    void classifiesDynamicRange();
 };
 
 void DecodedVideoFrameTest::retainsSoftwareStorageAndSnapshotsSemantics() {
@@ -94,6 +101,7 @@ void DecodedVideoFrameTest::retainsSoftwareStorageAndSnapshotsSemantics() {
     QCOMPARE(frame->signal().transferFunction, QStringLiteral("iec61966-2-1"));
     QCOMPARE(frame->signal().matrixCoefficients, QStringLiteral("gbr"));
     QCOMPARE(frame->signal().colorRange, QStringLiteral("pc"));
+    QCOMPARE(frame->dynamicRange(), VideoDynamicRange::Sdr);
     QCOMPARE(frame->ffmpegFrame().data[0][0], 0x5a);
     QVERIFY(av_frame_get_side_data(&frame->ffmpegFrame(), AV_FRAME_DATA_DISPLAYMATRIX));
 }
@@ -177,6 +185,156 @@ void DecodedVideoFrameTest::rejectsInvalidIdentityAndCrop() {
                                       },
                                       {1, 25}, std::nullopt, &error));
     QVERIFY(error.contains(QStringLiteral("geometry")));
+    av_frame_free(&source);
+}
+
+void DecodedVideoFrameTest::classifiesDynamicRange_data() {
+    QTest::addColumn<int>("primaries");
+    QTest::addColumn<int>("transfer");
+    QTest::addColumn<int>("sideData");
+    QTest::addColumn<int>("expected");
+
+    constexpr int mastering = 1 << 0;
+    constexpr int hdr10Plus = 1 << 1;
+    constexpr int dolbyVision = 1 << 2;
+    constexpr int emptyMastering = 1 << 3;
+    constexpr int truncatedHdr10Plus = 1 << 4;
+    constexpr int rawDolbyVision = 1 << 5;
+    constexpr int contentLight = 1 << 6;
+    constexpr int emptyContentLight = 1 << 7;
+    constexpr int truncatedDolbyVision = 1 << 8;
+    constexpr int emptyDolbyVision = 1 << 9;
+    QTest::newRow("unknown") << static_cast<int>(AVCOL_PRI_UNSPECIFIED) << static_cast<int>(AVCOL_TRC_UNSPECIFIED) << 0
+                             << static_cast<int>(VideoDynamicRange::Unknown);
+    QTest::newRow("sdr") << static_cast<int>(AVCOL_PRI_BT709) << static_cast<int>(AVCOL_TRC_BT709) << 0
+                         << static_cast<int>(VideoDynamicRange::Sdr);
+    QTest::newRow("generic-pq") << static_cast<int>(AVCOL_PRI_BT2020) << static_cast<int>(AVCOL_TRC_SMPTE2084) << 0
+                                << static_cast<int>(VideoDynamicRange::Pq);
+    QTest::newRow("hdr10") << static_cast<int>(AVCOL_PRI_BT2020) << static_cast<int>(AVCOL_TRC_SMPTE2084) << mastering
+                           << static_cast<int>(VideoDynamicRange::Hdr10);
+    QTest::newRow("hdr10-content-light") << static_cast<int>(AVCOL_PRI_BT2020) << static_cast<int>(AVCOL_TRC_SMPTE2084)
+                                         << contentLight << static_cast<int>(VideoDynamicRange::Hdr10);
+    QTest::newRow("empty-mastering-is-generic-pq")
+        << static_cast<int>(AVCOL_PRI_BT2020) << static_cast<int>(AVCOL_TRC_SMPTE2084) << emptyMastering
+        << static_cast<int>(VideoDynamicRange::Pq);
+    QTest::newRow("empty-content-light-is-generic-pq")
+        << static_cast<int>(AVCOL_PRI_BT2020) << static_cast<int>(AVCOL_TRC_SMPTE2084) << emptyContentLight
+        << static_cast<int>(VideoDynamicRange::Pq);
+    QTest::newRow("hdr10-plus") << static_cast<int>(AVCOL_PRI_BT2020) << static_cast<int>(AVCOL_TRC_SMPTE2084)
+                                << hdr10Plus << static_cast<int>(VideoDynamicRange::Hdr10Plus);
+    QTest::newRow("truncated-hdr10-plus-is-generic-pq")
+        << static_cast<int>(AVCOL_PRI_BT2020) << static_cast<int>(AVCOL_TRC_SMPTE2084) << truncatedHdr10Plus
+        << static_cast<int>(VideoDynamicRange::Pq);
+    QTest::newRow("hlg") << static_cast<int>(AVCOL_PRI_BT2020) << static_cast<int>(AVCOL_TRC_ARIB_STD_B67) << 0
+                         << static_cast<int>(VideoDynamicRange::Hlg);
+    QTest::newRow("dolby-vision-precedence")
+        << static_cast<int>(AVCOL_PRI_BT2020) << static_cast<int>(AVCOL_TRC_SMPTE2084) << (hdr10Plus | dolbyVision)
+        << static_cast<int>(VideoDynamicRange::DolbyVision);
+    QTest::newRow("raw-dolby-vision-is-generic-pq")
+        << static_cast<int>(AVCOL_PRI_BT2020) << static_cast<int>(AVCOL_TRC_SMPTE2084) << rawDolbyVision
+        << static_cast<int>(VideoDynamicRange::Pq);
+    QTest::newRow("truncated-dolby-vision-is-generic-pq")
+        << static_cast<int>(AVCOL_PRI_BT2020) << static_cast<int>(AVCOL_TRC_SMPTE2084) << truncatedDolbyVision
+        << static_cast<int>(VideoDynamicRange::Pq);
+    QTest::newRow("empty-dolby-vision-is-generic-pq")
+        << static_cast<int>(AVCOL_PRI_BT2020) << static_cast<int>(AVCOL_TRC_SMPTE2084) << emptyDolbyVision
+        << static_cast<int>(VideoDynamicRange::Pq);
+}
+
+void DecodedVideoFrameTest::classifiesDynamicRange() {
+    QFETCH(int, primaries);
+    QFETCH(int, transfer);
+    QFETCH(int, sideData);
+    QFETCH(int, expected);
+
+    AVFrame* source = av_frame_alloc();
+    QVERIFY(source);
+    source->format = AV_PIX_FMT_RGB24;
+    source->width = 2;
+    source->height = 2;
+    source->color_primaries = static_cast<AVColorPrimaries>(primaries);
+    source->color_trc = static_cast<AVColorTransferCharacteristic>(transfer);
+    source->colorspace = AVCOL_SPC_RGB;
+    source->color_range = AVCOL_RANGE_JPEG;
+    source->chroma_location = AVCHROMA_LOC_UNSPECIFIED;
+    QVERIFY(av_frame_get_buffer(source, 0) >= 0);
+
+    if (sideData & (1 << 0)) {
+        AVFrameSideData* const mastering = av_frame_new_side_data(source, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA,
+                                                                  sizeof(AVMasteringDisplayMetadata));
+        QVERIFY(mastering);
+        std::memset(mastering->data, 0, mastering->size);
+        auto* const metadata = reinterpret_cast<AVMasteringDisplayMetadata*>(mastering->data);
+        metadata->has_luminance = 1;
+        metadata->min_luminance = {1, 1'000};
+        metadata->max_luminance = {1'000, 1};
+    }
+    if (sideData & (1 << 1)) {
+        AVFrameSideData* const hdr10Plus =
+            av_frame_new_side_data(source, AV_FRAME_DATA_DYNAMIC_HDR_PLUS, sizeof(AVDynamicHDRPlus));
+        QVERIFY(hdr10Plus);
+        std::memset(hdr10Plus->data, 0, hdr10Plus->size);
+        auto* const metadata = reinterpret_cast<AVDynamicHDRPlus*>(hdr10Plus->data);
+        metadata->itu_t_t35_country_code = 0xb5;
+        metadata->application_version = 1;
+        metadata->num_windows = 1;
+    }
+    if (sideData & (1 << 2)) {
+        std::size_t metadataSize = 0;
+        AVDOVIMetadata* const metadata = av_dovi_metadata_alloc(&metadataSize);
+        QVERIFY(metadata);
+        AVFrameSideData* const dolbyVision = av_frame_new_side_data(source, AV_FRAME_DATA_DOVI_METADATA, metadataSize);
+        QVERIFY(dolbyVision);
+        std::memcpy(dolbyVision->data, metadata, metadataSize);
+        av_free(metadata);
+    }
+    if (sideData & (1 << 3)) {
+        AVFrameSideData* const mastering = av_frame_new_side_data(source, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA,
+                                                                  sizeof(AVMasteringDisplayMetadata));
+        QVERIFY(mastering);
+        std::memset(mastering->data, 0, mastering->size);
+    }
+    if (sideData & (1 << 4)) {
+        QVERIFY(av_frame_new_side_data(source, AV_FRAME_DATA_DYNAMIC_HDR_PLUS, 1));
+    }
+    if (sideData & (1 << 5)) {
+        QVERIFY(av_frame_new_side_data(source, AV_FRAME_DATA_DOVI_RPU_BUFFER, 1));
+    }
+    if (sideData & (1 << 6)) {
+        AVFrameSideData* const contentLight =
+            av_frame_new_side_data(source, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL, sizeof(AVContentLightMetadata));
+        QVERIFY(contentLight);
+        std::memset(contentLight->data, 0, contentLight->size);
+        auto* const metadata = reinterpret_cast<AVContentLightMetadata*>(contentLight->data);
+        metadata->MaxCLL = 1'000;
+        metadata->MaxFALL = 400;
+    }
+    if (sideData & (1 << 7)) {
+        AVFrameSideData* const contentLight =
+            av_frame_new_side_data(source, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL, sizeof(AVContentLightMetadata));
+        QVERIFY(contentLight);
+        std::memset(contentLight->data, 0, contentLight->size);
+    }
+    if (sideData & (1 << 8)) {
+        QVERIFY(av_frame_new_side_data(source, AV_FRAME_DATA_DOVI_METADATA, 1));
+    }
+    if (sideData & (1 << 9)) {
+        AVFrameSideData* const dolbyVision =
+            av_frame_new_side_data(source, AV_FRAME_DATA_DOVI_METADATA, sizeof(AVDOVIMetadata));
+        QVERIFY(dolbyVision);
+        std::memset(dolbyVision->data, 0, dolbyVision->size);
+    }
+
+    QString error;
+    std::shared_ptr<DecodedVideoFrame const> const frame = DecodedVideoFrame::clone(*source,
+                                                                                    {
+                                                                                        .playbackGeneration = 1,
+                                                                                        .decoderRevision = 1,
+                                                                                        .frameId = 1,
+                                                                                    },
+                                                                                    {1, 24}, std::nullopt, &error);
+    QVERIFY2(frame, qPrintable(error));
+    QCOMPARE(static_cast<int>(frame->dynamicRange()), expected);
     av_frame_free(&source);
 }
 

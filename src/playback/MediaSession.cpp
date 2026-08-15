@@ -7,7 +7,9 @@
 #include <utility>
 
 #include <QFileInfo>
+#include <QLocale>
 #include <QMetaObject>
+#include <QStringList>
 #include <QThread>
 
 #include "audio/CubebAudioSink.h"
@@ -26,6 +28,85 @@ FfmpegMediaDecodeResult decodeMedia(FfmpegMediaDecodeRequest const& request, Ffm
 }
 
 std::shared_ptr<AudioSink> createAudioSink() { return std::make_shared<CubebAudioSink>(); }
+
+QString dynamicRangeName(VideoDynamicRange range) {
+    switch (range) {
+    case VideoDynamicRange::Sdr:
+        return MediaSession::tr("SDR");
+    case VideoDynamicRange::Pq:
+        return MediaSession::tr("PQ HDR");
+    case VideoDynamicRange::Hdr10:
+        return MediaSession::tr("HDR10");
+    case VideoDynamicRange::Hdr10Plus:
+        return MediaSession::tr("HDR10+");
+    case VideoDynamicRange::Hlg:
+        return MediaSession::tr("HLG");
+    case VideoDynamicRange::DolbyVision:
+        return MediaSession::tr("Dolby Vision");
+    case VideoDynamicRange::Unknown:
+        return MediaSession::tr("Unknown");
+    }
+    return {};
+}
+
+bool isHdr(VideoDynamicRange range) {
+    return range == VideoDynamicRange::Pq || range == VideoDynamicRange::Hdr10 ||
+           range == VideoDynamicRange::Hdr10Plus || range == VideoDynamicRange::Hlg ||
+           range == VideoDynamicRange::DolbyVision;
+}
+
+QString colorName(QString const& name) {
+    if (name == QStringLiteral("bt709")) {
+        return QStringLiteral("BT.709");
+    }
+    if (name == QStringLiteral("bt2020")) {
+        return QStringLiteral("BT.2020");
+    }
+    if (name == QStringLiteral("smpte2084")) {
+        return QStringLiteral("PQ");
+    }
+    if (name == QStringLiteral("arib-std-b67")) {
+        return QStringLiteral("HLG");
+    }
+    if (name == QStringLiteral("iec61966-2-1")) {
+        return QStringLiteral("sRGB");
+    }
+    return name;
+}
+
+QString rangeName(QString const& range) {
+    if (range == QStringLiteral("tv")) {
+        return MediaSession::tr("limited");
+    }
+    if (range == QStringLiteral("pc")) {
+        return MediaSession::tr("full");
+    }
+    return range;
+}
+
+QString sampleRateName(int sampleRate) {
+    if (sampleRate <= 0) {
+        return {};
+    }
+    int const decimals = sampleRate % 1'000 == 0 ? 0 : 1;
+    return MediaSession::tr("%1 kHz").arg(QLocale().toString(sampleRate / 1'000.0, 'f', decimals));
+}
+
+QString frameRateName(std::optional<std::int64_t> nominalFrameDurationMicroseconds) {
+    if (!nominalFrameDurationMicroseconds || *nominalFrameDurationMicroseconds <= 0) {
+        return {};
+    }
+    double const framesPerSecond = 1'000'000.0 / static_cast<double>(*nominalFrameDurationMicroseconds);
+    QString rate = QLocale().toString(framesPerSecond, 'f', 3);
+    QString const decimal = QLocale().decimalPoint();
+    while (rate.endsWith(QLatin1Char('0'))) {
+        rate.chop(1);
+    }
+    if (rate.endsWith(decimal)) {
+        rate.chop(1);
+    }
+    return MediaSession::tr("%1 fps").arg(rate);
+}
 } // namespace
 
 MediaSession::MediaSession(VideoTargetReadback readback, QObject* parent)
@@ -87,6 +168,63 @@ QString MediaSession::decodePath() const { return m_decodePath; }
 QString MediaSession::hardwareFallbackReason() const { return m_hardwareFallbackReason; }
 
 QString MediaSession::videoSummary() const { return m_videoSummary; }
+
+QString MediaSession::selectedVideoTrackSummary() const {
+    EmbeddedMediaStreamDescriptor const* const track = m_videoTracks.track(m_selectedVideoStreamIndex);
+    return track ? track->label : QString{};
+}
+
+QString MediaSession::videoDynamicRange() const {
+    std::shared_ptr<DecodedVideoFrame const> const frame = m_videoSource.currentFrame();
+    return dynamicRangeName(frame ? frame->dynamicRange() : VideoDynamicRange::Unknown);
+}
+
+bool MediaSession::videoHdr() const {
+    std::shared_ptr<DecodedVideoFrame const> const frame = m_videoSource.currentFrame();
+    return frame && isHdr(frame->dynamicRange());
+}
+
+QString MediaSession::videoSignalSummary() const {
+    std::shared_ptr<DecodedVideoFrame const> const frame = m_videoSource.currentFrame();
+    if (!frame) {
+        return {};
+    }
+    VideoSignalDescription const& signal = frame->signal();
+    return tr("%1 primaries · %2 transfer · %3 range")
+        .arg(colorName(signal.colorPrimaries), colorName(signal.transferFunction), rangeName(signal.colorRange));
+}
+
+QString MediaSession::selectedAudioTrackSummary() const {
+    EmbeddedMediaStreamDescriptor const* const track = m_audioTracks.track(m_selectedAudioStreamIndex);
+    if (!track) {
+        return {};
+    }
+    QString const sampleRate = sampleRateName(track->sampleRate);
+    return sampleRate.isEmpty() ? track->label : tr("%1 · %2").arg(track->label, sampleRate);
+}
+
+QString MediaSession::selectedSubtitleTrackSummary() const {
+    if (m_selectedSubtitleStreamIndex < 0) {
+        return tr("Off");
+    }
+    EmbeddedMediaStreamDescriptor const* const track = m_subtitleTracks.track(m_selectedSubtitleStreamIndex);
+    if (!track) {
+        return {};
+    }
+    QString kind;
+    switch (track->subtitleKind) {
+    case SubtitleStreamKind::Text:
+        kind = tr("text");
+        break;
+    case SubtitleStreamKind::Bitmap:
+        kind = tr("bitmap");
+        break;
+    case SubtitleStreamKind::Unknown:
+        kind = tr("unknown type");
+        break;
+    }
+    return tr("%1 · %2 · %3").arg(track->label, track->codec, kind);
+}
 
 bool MediaSession::hasFrame() const { return static_cast<bool>(m_videoSource.currentFrame()); }
 
@@ -481,8 +619,7 @@ void MediaSession::selectVideoStream(int streamIndex) {
 void MediaSession::selectAudioStream(int streamIndex) {
     Q_ASSERT(QThread::currentThread() == thread());
     if (!m_audioSink || (m_state != State::Opening && m_state != State::Ready) ||
-        streamIndex == m_selectedAudioStreamIndex ||
-        !m_audioTracks.canSelect(streamIndex)) {
+        streamIndex == m_selectedAudioStreamIndex || !m_audioTracks.canSelect(streamIndex)) {
         return;
     }
     std::int64_t const position = m_state == State::Opening
@@ -1477,21 +1614,35 @@ bool MediaSession::enterReady(std::chrono::steady_clock::time_point now) {
     return true;
 }
 
-void MediaSession::updateVideoSummary(QueuedVideoFrame const& frame) {
+bool MediaSession::updateVideoSummary(QueuedVideoFrame const& frame) {
     // Per-frame diagnostics may carry the provisional open-time duration.
     // Decode-path details can change after hardware negotiation, but the
     // finalized session timeline belongs to completeDecode()/enterReady().
+    bool const diagnosticsChanged = m_containerFormat != frame.diagnostics.containerFormat ||
+                                    m_decoderName != frame.diagnostics.decoderName ||
+                                    m_decodePath != frame.diagnostics.decodePath ||
+                                    m_hardwareFallbackReason != frame.diagnostics.hardwareFallbackReason;
+    VideoFrameGeometry const& geometry = frame.frame->geometry();
+    VideoSignalDescription const& signal = frame.frame->signal();
+    QStringList summaryParts{
+        tr("%1×%2").arg(geometry.visibleSize.width()).arg(geometry.visibleSize.height()),
+    };
+    QString const frameRate = frameRateName(frame.diagnostics.nominalFrameDurationMicroseconds);
+    if (!frameRate.isEmpty()) {
+        summaryParts.push_back(frameRate);
+    }
+    summaryParts.push_back(signal.pixelFormat);
+    summaryParts.push_back(tr("%1-bit").arg(signal.componentDepth));
+    QString const summary = summaryParts.join(QStringLiteral(" · "));
+    std::shared_ptr<DecodedVideoFrame const> const current = m_videoSource.currentFrame();
+    bool const changed = diagnosticsChanged || summary != m_videoSummary || !current || current->signal() != signal ||
+                         current->dynamicRange() != frame.frame->dynamicRange();
     m_containerFormat = frame.diagnostics.containerFormat;
     m_decoderName = frame.diagnostics.decoderName;
     m_decodePath = frame.diagnostics.decodePath;
     m_hardwareFallbackReason = frame.diagnostics.hardwareFallbackReason;
-    VideoFrameGeometry const& geometry = frame.frame->geometry();
-    VideoSignalDescription const& signal = frame.frame->signal();
-    m_videoSummary = tr("%1×%2 · %3 · %4-bit")
-                         .arg(geometry.visibleSize.width())
-                         .arg(geometry.visibleSize.height())
-                         .arg(signal.pixelFormat)
-                         .arg(signal.componentDepth);
+    m_videoSummary = summary;
+    return changed;
 }
 
 void MediaSession::monitorPlayback() {
@@ -1533,8 +1684,9 @@ MediaSession::selectFrameForPresentation(std::chrono::steady_clock::time_point n
     VideoFrameSelection selection = m_frameScheduler.selectForPresentation(
         m_frameQueue, m_playbackGeneration, clock, playbackInputDrained, m_durationMicroseconds);
     bool const firstPublishedFrame = selection.frame && !m_videoSource.currentFrame();
+    bool videoDetailsChanged = false;
     if (selection.frame) {
-        updateVideoSummary(*selection.frame);
+        videoDetailsChanged = updateVideoSummary(*selection.frame);
         m_droppedFrameCount += selection.droppedFrames;
         ++m_selectedFrameCount;
     }
@@ -1550,7 +1702,8 @@ MediaSession::selectFrameForPresentation(std::chrono::steady_clock::time_point n
 
     if (selection.frame) {
         m_pendingPublicationGeneration = m_playbackGeneration;
-        m_sessionNotificationPending = enteredReady || firstPublishedFrame || selection.reachedEnd;
+        m_sessionNotificationPending =
+            enteredReady || firstPublishedFrame || selection.reachedEnd || videoDetailsChanged;
         m_playbackMetricsNotificationPending = true;
     } else if (selection.reachedEnd || enteredReady) {
         emit sessionChanged();

@@ -227,6 +227,12 @@ class ShellTestPresentationOutputState final : public QObject {
 
     Q_INVOKABLE void reprobePresentation() {}
 
+    void setPresentation(QString swapChainFormat, bool displayHdrEnabled, bool hdrPresentationActive) {
+        m_swapChainFormat = std::move(swapChainFormat);
+        m_displayHdrEnabled = displayHdrEnabled;
+        m_hdrPresentationActive = hdrPresentationActive;
+    }
+
   private:
     QString m_screenName = QStringLiteral("Test display");
     QString m_graphicsApi = QStringLiteral("Test RHI");
@@ -323,6 +329,12 @@ class ShellTestMediaSession final : public QObject {
     Q_PROPERTY(QString decodePath MEMBER m_decodePath NOTIFY sessionChanged)
     Q_PROPERTY(QString hardwareFallbackReason MEMBER m_hardwareFallbackReason NOTIFY sessionChanged)
     Q_PROPERTY(QString videoSummary MEMBER m_videoSummary NOTIFY sessionChanged)
+    Q_PROPERTY(QString selectedVideoTrackSummary READ selectedVideoTrackSummary NOTIFY mediaTracksChanged)
+    Q_PROPERTY(QString videoDynamicRange MEMBER m_videoDynamicRange NOTIFY sessionChanged)
+    Q_PROPERTY(bool videoHdr MEMBER m_videoHdr NOTIFY sessionChanged)
+    Q_PROPERTY(QString videoSignalSummary MEMBER m_videoSignalSummary NOTIFY sessionChanged)
+    Q_PROPERTY(QString selectedAudioTrackSummary READ selectedAudioTrackSummary NOTIFY mediaTracksChanged)
+    Q_PROPERTY(QString selectedSubtitleTrackSummary READ selectedSubtitleTrackSummary NOTIFY subtitleChanged)
     Q_PROPERTY(bool hasFrame READ hasFrame NOTIFY sessionChanged)
     Q_PROPERTY(bool playing READ playing NOTIFY sessionChanged)
     Q_PROPERTY(bool playRequested READ playRequested NOTIFY sessionChanged)
@@ -402,13 +414,32 @@ class ShellTestMediaSession final : public QObject {
     QAbstractItemModel* audioTracks() { return &m_audioTracks; }
     int selectedVideoStreamIndex() const { return m_selectedVideoStreamIndex; }
     int selectedAudioStreamIndex() const { return m_selectedAudioStreamIndex; }
+    QString selectedVideoTrackSummary() const {
+        return m_selectedVideoStreamIndex == 0 ? QStringLiteral("English - Dark (ffv1, 96x64)")
+                                               : QStringLiteral("Czech - Light (ffv1, 96x64, Default)");
+    }
+    QString selectedAudioTrackSummary() const {
+        return m_selectedAudioStreamIndex == 1 ? QStringLiteral("English - Positive (flac, mono) · 48 kHz")
+                                               : QStringLiteral("Czech - Negative (flac, mono, Default) · 48 kHz");
+    }
     QAbstractItemModel* subtitleTracks() { return &m_subtitleTracks; }
     int selectedSubtitleStreamIndex() const { return m_selectedSubtitleStreamIndex; }
+    QString selectedSubtitleTrackSummary() const {
+        if (m_selectedSubtitleStreamIndex == 2) {
+            return QStringLiteral("English — Styled Ahem · ass · text");
+        }
+        if (m_selectedSubtitleStreamIndex == 3) {
+            return QStringLiteral("Czech — Plain Czech (SDH) · subrip · text");
+        }
+        return QStringLiteral("Off");
+    }
     int openCount() const { return m_openCount; }
     int cancelCount() const { return m_cancelCount; }
     int retryCount() const { return m_retryCount; }
     int seekCount() const { return m_seekCount; }
     qlonglong lastSeekMilliseconds() const { return m_lastSeekMilliseconds; }
+
+    void setVideoHdr(bool videoHdr) { m_videoHdr = videoHdr; }
 
     void setState(State state, bool hasFrame = false) {
         m_state = state;
@@ -421,7 +452,9 @@ class ShellTestMediaSession final : public QObject {
             m_displayName = QStringLiteral("test-video.mkv");
             m_decoderName = QStringLiteral("ffv1");
             m_decodePath = QStringLiteral("Software");
-            m_videoSummary = QStringLiteral("96×64 · yuv420p · 8-bit");
+            m_videoSummary = QStringLiteral("96×64 · 4 fps · yuv420p · 8-bit");
+            m_videoDynamicRange = QStringLiteral("SDR");
+            m_videoSignalSummary = QStringLiteral("BT.709 primaries · BT.709 transfer · limited range");
             m_seekable = true;
             m_durationMilliseconds = 65'000;
         }
@@ -555,6 +588,9 @@ class ShellTestMediaSession final : public QObject {
     QString m_decodePath;
     QString m_hardwareFallbackReason;
     QString m_videoSummary;
+    QString m_videoDynamicRange = QStringLiteral("Unknown");
+    bool m_videoHdr = false;
+    QString m_videoSignalSummary;
     int m_openCount = 0;
     int m_cancelCount = 0;
     int m_retryCount = 0;

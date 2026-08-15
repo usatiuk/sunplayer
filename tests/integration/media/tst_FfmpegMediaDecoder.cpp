@@ -289,6 +289,8 @@ void FfmpegMediaDecoderTest::selectsEmbeddedVideoAndAudioTracks() {
     QCOMPARE(selection.videoTracks[1].language, QStringLiteral("ces"));
     QVERIFY(selection.videoTracks[1].isDefault);
     QCOMPARE(selection.audioTracks[0].title, QStringLiteral("Positive"));
+    QCOMPARE(selection.audioTracks[0].channelLayout, QStringLiteral("mono"));
+    QCOMPARE(selection.audioTracks[0].sampleRate, 48'000);
     QVERIFY(selection.audioTracks[1].isDefault);
     QVERIFY(std::ranges::all_of(selection.videoTracks, &EmbeddedMediaStreamDescriptor::supported));
     QVERIFY(std::ranges::all_of(selection.audioTracks, &EmbeddedMediaStreamDescriptor::supported));
@@ -699,6 +701,7 @@ void FfmpegMediaDecoderTest::discoversAndDecodesSelectedPgsInTheSingleMediaOpera
     QCOMPARE(tracks.size(), 1U);
     QCOMPARE(tracks.front().streamIndex, 2);
     QCOMPARE(tracks.front().codec, QStringLiteral("hdmv_pgs_subtitle"));
+    QCOMPARE(tracks.front().subtitleKind, SubtitleStreamKind::Bitmap);
     QVERIFY(tracks.front().supported);
     QVERIFY(configuration);
     QCOMPARE(configuration->playbackGeneration, 31U);
@@ -779,9 +782,11 @@ void FfmpegMediaDecoderTest::discoversTextTracksFontsAndFfmpegAssConversion() {
     QCOMPARE(ass.tracks[0].language, QStringLiteral("eng"));
     QCOMPARE(ass.tracks[0].title, QStringLiteral("Styled Ahem"));
     QCOMPARE(ass.tracks[0].label, QStringLiteral("English - Styled Ahem"));
+    QCOMPARE(ass.tracks[0].subtitleKind, SubtitleStreamKind::Text);
     QCOMPARE(ass.tracks[1].streamIndex, 3);
     QCOMPARE(ass.tracks[1].language, QStringLiteral("ces"));
     QCOMPARE(ass.tracks[1].label, QStringLiteral("Czech - Plain Czech (SDH)"));
+    QCOMPARE(ass.tracks[1].subtitleKind, SubtitleStreamKind::Text);
     QVERIFY(ass.tracks[1].isHearingImpaired);
     QVERIFY(ass.configuration);
     QCOMPARE(ass.configuration->codec, QStringLiteral("ass"));

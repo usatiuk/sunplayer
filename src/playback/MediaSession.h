@@ -42,6 +42,12 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     Q_PROPERTY(QString decodePath READ decodePath NOTIFY sessionChanged)
     Q_PROPERTY(QString hardwareFallbackReason READ hardwareFallbackReason NOTIFY sessionChanged)
     Q_PROPERTY(QString videoSummary READ videoSummary NOTIFY sessionChanged)
+    Q_PROPERTY(QString selectedVideoTrackSummary READ selectedVideoTrackSummary NOTIFY mediaTracksChanged)
+    Q_PROPERTY(QString videoDynamicRange READ videoDynamicRange NOTIFY sessionChanged)
+    Q_PROPERTY(bool videoHdr READ videoHdr NOTIFY sessionChanged)
+    Q_PROPERTY(QString videoSignalSummary READ videoSignalSummary NOTIFY sessionChanged)
+    Q_PROPERTY(QString selectedAudioTrackSummary READ selectedAudioTrackSummary NOTIFY mediaTracksChanged)
+    Q_PROPERTY(QString selectedSubtitleTrackSummary READ selectedSubtitleTrackSummary NOTIFY subtitleChanged)
     Q_PROPERTY(bool hasFrame READ hasFrame NOTIFY sessionChanged)
     Q_PROPERTY(bool playing READ playing NOTIFY sessionChanged)
     Q_PROPERTY(bool playRequested READ playRequested NOTIFY sessionChanged)
@@ -117,6 +123,12 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     QString decodePath() const;
     QString hardwareFallbackReason() const;
     QString videoSummary() const;
+    QString selectedVideoTrackSummary() const;
+    QString videoDynamicRange() const;
+    bool videoHdr() const;
+    QString videoSignalSummary() const;
+    QString selectedAudioTrackSummary() const;
+    QString selectedSubtitleTrackSummary() const;
     bool hasFrame() const;
     bool playing() const;
     bool playRequested() const;
@@ -224,7 +236,7 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     bool currentGenerationStreamsDiscovered() const;
     std::optional<FfmpegVideoStreamDiagnostics> currentGenerationInitialVideoDiagnostics() const;
     bool enterReady(std::chrono::steady_clock::time_point now);
-    void updateVideoSummary(QueuedVideoFrame const& frame);
+    bool updateVideoSummary(QueuedVideoFrame const& frame);
     void monitorPlayback();
     void resetMediaTracks();
 

@@ -155,6 +155,15 @@ bool programContainsStream(AVProgram const* program, int streamIndex) {
     return false;
 }
 
+QString channelLayoutName(AVChannelLayout const& layout) {
+    if (layout.nb_channels <= 0) {
+        return {};
+    }
+    char description[64]{};
+    return av_channel_layout_describe(&layout, description, sizeof(description)) >= 0 ? QString::fromUtf8(description)
+                                                                                      : QString{};
+}
+
 QString mediaTrackLabel(AVStream const& stream, AVMediaType type, int ordinal) {
     QString const languageTag = metadataValue(stream.metadata, "language");
     QString language = languageTag;
@@ -180,10 +189,10 @@ QString mediaTrackLabel(AVStream const& stream, AVMediaType type, int ordinal) {
     QStringList details{QString::fromLatin1(avcodec_get_name(stream.codecpar->codec_id))};
     if (type == AVMEDIA_TYPE_VIDEO && stream.codecpar->width > 0 && stream.codecpar->height > 0) {
         details.push_back(QStringLiteral("%1x%2").arg(stream.codecpar->width).arg(stream.codecpar->height));
-    } else if (type == AVMEDIA_TYPE_AUDIO && stream.codecpar->ch_layout.nb_channels > 0) {
-        char channelLayout[64]{};
-        if (av_channel_layout_describe(&stream.codecpar->ch_layout, channelLayout, sizeof(channelLayout)) >= 0) {
-            details.push_back(QString::fromUtf8(channelLayout));
+    } else if (type == AVMEDIA_TYPE_AUDIO) {
+        QString const channelLayout = channelLayoutName(stream.codecpar->ch_layout);
+        if (!channelLayout.isEmpty()) {
+            details.push_back(channelLayout);
         }
     }
     if (stream.disposition & AV_DISPOSITION_DEFAULT) {
@@ -215,12 +224,16 @@ std::vector<EmbeddedMediaStreamDescriptor> discoverMediaTracks(AVFormatContext& 
         AVCodec const* decoder = nullptr;
         int const resolved =
             av_find_best_stream(&formatContext, type, static_cast<int>(index), selectedVideoIndex, &decoder, 0);
+        QString const channelLayout =
+            type == AVMEDIA_TYPE_AUDIO ? channelLayoutName(stream.codecpar->ch_layout) : QString{};
         tracks.push_back({
             .streamIndex = static_cast<int>(index),
             .label = mediaTrackLabel(stream, type, ordinal),
             .language = metadataValue(stream.metadata, "language"),
             .title = metadataValue(stream.metadata, "title"),
             .codec = QString::fromLatin1(avcodec_get_name(stream.codecpar->codec_id)),
+            .channelLayout = channelLayout,
+            .sampleRate = type == AVMEDIA_TYPE_AUDIO ? stream.codecpar->sample_rate : 0,
             .isDefault = static_cast<bool>(stream.disposition & AV_DISPOSITION_DEFAULT),
             .isForced = static_cast<bool>(stream.disposition & AV_DISPOSITION_FORCED),
             .isHearingImpaired = static_cast<bool>(stream.disposition & AV_DISPOSITION_HEARING_IMPAIRED),
@@ -282,12 +295,18 @@ std::vector<EmbeddedMediaStreamDescriptor> discoverSubtitleTracks(AVFormatContex
         }
         ++ordinal;
         AVCodec const* decoder = avcodec_find_decoder(stream.codecpar->codec_id);
+        AVCodecDescriptor const* codecDescriptor = avcodec_descriptor_get(stream.codecpar->codec_id);
+        SubtitleStreamKind const kind =
+            codecDescriptor && codecDescriptor->props & AV_CODEC_PROP_TEXT_SUB     ? SubtitleStreamKind::Text
+            : codecDescriptor && codecDescriptor->props & AV_CODEC_PROP_BITMAP_SUB ? SubtitleStreamKind::Bitmap
+                                                                                   : SubtitleStreamKind::Unknown;
         tracks.push_back({
             .streamIndex = static_cast<int>(index),
             .label = subtitleTrackLabel(stream, ordinal),
             .language = metadataValue(stream.metadata, "language"),
             .title = metadataValue(stream.metadata, "title"),
             .codec = QString::fromLatin1(avcodec_get_name(stream.codecpar->codec_id)),
+            .subtitleKind = kind,
             .isDefault = static_cast<bool>(stream.disposition & AV_DISPOSITION_DEFAULT),
             .isForced = static_cast<bool>(stream.disposition & AV_DISPOSITION_FORCED),
             .isHearingImpaired = static_cast<bool>(stream.disposition & AV_DISPOSITION_HEARING_IMPAIRED),

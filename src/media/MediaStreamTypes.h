@@ -5,6 +5,12 @@
 
 #include <QString>
 
+enum class SubtitleStreamKind {
+    Unknown,
+    Text,
+    Bitmap,
+};
+
 // A stream discovered inside the currently opened media container. The index
 // is scoped to that one demuxer and is not a persistent track identity.
 struct EmbeddedMediaStreamDescriptor {
@@ -13,6 +19,9 @@ struct EmbeddedMediaStreamDescriptor {
     QString language;
     QString title;
     QString codec;
+    QString channelLayout;
+    int sampleRate = 0;
+    SubtitleStreamKind subtitleKind = SubtitleStreamKind::Unknown;
     bool isDefault = false;
     bool isForced = false;
     bool isHearingImpaired = false;

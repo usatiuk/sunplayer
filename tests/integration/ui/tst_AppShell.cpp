@@ -134,7 +134,17 @@ void AppShellTest::publishesActiveViewport() {
     QObject* const volumeSlider = rootItem->findChild<QObject*>(QStringLiteral("volumeSlider"));
     QObject* const audioDiagnosticsLabel = rootItem->findChild<QObject*>(QStringLiteral("audioDiagnosticsLabel"));
     QObject* const playbackStateLabel = rootItem->findChild<QObject*>(QStringLiteral("playbackStateLabel"));
-    QObject* const statisticsMenuItem = rootItem->findChild<QObject*>(QStringLiteral("statisticsMenuItem"));
+    QObject* const playbackDetailsMenuItem = rootItem->findChild<QObject*>(QStringLiteral("playbackDetailsMenuItem"));
+    QObject* const selectedVideoDetailsLabel =
+        rootItem->findChild<QObject*>(QStringLiteral("selectedVideoDetailsLabel"));
+    QObject* const videoSignalDetailsLabel = rootItem->findChild<QObject*>(QStringLiteral("videoSignalDetailsLabel"));
+    QObject* const selectedAudioDetailsLabel =
+        rootItem->findChild<QObject*>(QStringLiteral("selectedAudioDetailsLabel"));
+    QObject* const selectedSubtitleDetailsLabel =
+        rootItem->findChild<QObject*>(QStringLiteral("selectedSubtitleDetailsLabel"));
+    QObject* const outputDetailsLabel = rootItem->findChild<QObject*>(QStringLiteral("outputDetailsLabel"));
+    QObject* const videoPerformanceDetailsLabel =
+        rootItem->findChild<QObject*>(QStringLiteral("videoPerformanceDetailsLabel"));
     QObject* const moreButton = rootItem->findChild<QObject*>(QStringLiteral("moreButton"));
     QObject* const transportMenu = rootItem->findChild<QObject*>(QStringLiteral("transportMenu"));
     QObject* const videoTrackMenu = rootItem->findChild<QObject*>(QStringLiteral("videoTrackMenu"));
@@ -145,8 +155,9 @@ void AppShellTest::publishesActiveViewport() {
     QObject* const subtitleOffItem = rootItem->findChild<QObject*>(QStringLiteral("subtitleTrack_-1"));
     QObject* const subtitleEnglishItem = rootItem->findChild<QObject*>(QStringLiteral("subtitleTrack_2"));
     QObject* const hdrLabMenuItem = rootItem->findChild<QObject*>(QStringLiteral("hdrLabMenuItem"));
-    QObject* const closeStatisticsButton = rootItem->findChild<QObject*>(QStringLiteral("closeStatisticsButton"));
-    QObject* const statisticsPanel = rootItem->findChild<QObject*>(QStringLiteral("playbackStatisticsPanel"));
+    QObject* const closePlaybackDetailsButton =
+        rootItem->findChild<QObject*>(QStringLiteral("closePlaybackDetailsButton"));
+    QObject* const playbackDetailsPanel = rootItem->findChild<QObject*>(QStringLiteral("playbackDetailsPanel"));
     QQuickItem* const transportIsland = rootItem->findChild<QQuickItem*>(QStringLiteral("transportIsland"));
     QObject* const seekBackwardButton = rootItem->findChild<QObject*>(QStringLiteral("seekBackwardButton"));
     QObject* const seekForwardButton = rootItem->findChild<QObject*>(QStringLiteral("seekForwardButton"));
@@ -183,7 +194,13 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(volumeSlider);
     QVERIFY(audioDiagnosticsLabel);
     QVERIFY(playbackStateLabel);
-    QVERIFY(statisticsMenuItem);
+    QVERIFY(playbackDetailsMenuItem);
+    QVERIFY(selectedVideoDetailsLabel);
+    QVERIFY(videoSignalDetailsLabel);
+    QVERIFY(selectedAudioDetailsLabel);
+    QVERIFY(selectedSubtitleDetailsLabel);
+    QVERIFY(outputDetailsLabel);
+    QVERIFY(videoPerformanceDetailsLabel);
     QVERIFY(moreButton);
     QVERIFY(transportMenu);
     QVERIFY(videoTrackMenu);
@@ -194,8 +211,8 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(subtitleOffItem);
     QVERIFY(subtitleEnglishItem);
     QVERIFY(hdrLabMenuItem);
-    QVERIFY(closeStatisticsButton);
-    QVERIFY(statisticsPanel);
+    QVERIFY(closePlaybackDetailsButton);
+    QVERIFY(playbackDetailsPanel);
     QVERIFY(transportIsland);
     QVERIFY(seekBackwardButton);
     QVERIFY(seekForwardButton);
@@ -351,18 +368,43 @@ void AppShellTest::publishesActiveViewport() {
     QCOMPARE(centerY(*seekBackwardButtonItem), centerY(*playPauseButtonItem));
     QCOMPARE(centerY(*seekForwardButtonItem), centerY(*playPauseButtonItem));
     QVERIFY(playPauseButtonIcon->property("source").toUrl().path().endsWith(QStringLiteral("/pause.svg")));
-    QVERIFY(!statisticsPanel->property("visible").toBool());
-    QVERIFY(QMetaObject::invokeMethod(statisticsMenuItem, "clicked", Qt::DirectConnection));
-    QTRY_VERIFY(statisticsPanel->property("visible").toBool());
+    QVERIFY(!playbackDetailsPanel->property("visible").toBool());
+    QVERIFY(QMetaObject::invokeMethod(playbackDetailsMenuItem, "clicked", Qt::DirectConnection));
+    QTRY_VERIFY(playbackDetailsPanel->property("visible").toBool());
     QTRY_VERIFY(audioDiagnosticsLabel->property("visible").toBool());
+    QVERIFY(selectedVideoDetailsLabel->property("text").toString().contains(QStringLiteral("Czech - Light")));
+    QVERIFY(videoSignalDetailsLabel->property("text").toString().contains(QStringLiteral("BT.709 primaries")));
+    QVERIFY(selectedAudioDetailsLabel->property("text").toString().contains(QStringLiteral("48 kHz")));
+    QCOMPARE(selectedSubtitleDetailsLabel->property("text").toString(), QStringLiteral("Off"));
+    QVERIFY(outputDetailsLabel->property("text").toString().contains(QStringLiteral("SDR presentation")));
+    QVERIFY(outputDetailsLabel->property("text").toString().contains(QStringLiteral("Test swapchain")));
+    QVERIFY(videoPerformanceDetailsLabel->property("text").toString().contains(QStringLiteral("3 decoded")));
+    auto const presentationSummary = [&] {
+        QVariant result;
+        return QMetaObject::invokeMethod(playerPage, "presentationSummary", Qt::DirectConnection,
+                                         Q_RETURN_ARG(QVariant, result))
+                   ? result.toString()
+                   : QString{};
+    };
+    mediaSession.setVideoHdr(true);
+    QCOMPARE(presentationSummary(), QStringLiteral("HDR source mapped to SDR presentation · Test swapchain"));
+    outputState.setPresentation(QStringLiteral("HDR10 / BT.2020 PQ"), true, true);
+    QCOMPARE(presentationSummary(), QStringLiteral("HDR presentation active · HDR10 / BT.2020 PQ"));
+    outputState.setPresentation(QStringLiteral("scRGB / extended linear sRGB"), false, true);
+    QCOMPARE(presentationSummary(),
+             QStringLiteral("Extended-range presentation active · scRGB / extended linear sRGB"));
+    outputState.setPresentation(QStringLiteral("Unavailable"), false, false);
+    QCOMPARE(presentationSummary(), QStringLiteral("Presentation details unavailable"));
+    mediaSession.setVideoHdr(false);
+    outputState.setPresentation(QStringLiteral("Test swapchain"), false, false);
     windowCommands.reset();
-    QPoint const statisticsCenter = qobject_cast<QQuickItem*>(statisticsPanel)
-                                        ->mapToScene({
-                                            statisticsPanel->property("width").toDouble() * 0.5,
-                                            statisticsPanel->property("height").toDouble() * 0.5,
-                                        })
-                                        .toPoint();
-    QTest::mouseDClick(&quickWindow, Qt::LeftButton, Qt::NoModifier, statisticsCenter);
+    QPoint const detailsCenter = qobject_cast<QQuickItem*>(playbackDetailsPanel)
+                                     ->mapToScene({
+                                         playbackDetailsPanel->property("width").toDouble() * 0.5,
+                                         playbackDetailsPanel->property("height").toDouble() * 0.5,
+                                     })
+                                     .toPoint();
+    QTest::mouseDClick(&quickWindow, Qt::LeftButton, Qt::NoModifier, detailsCenter);
     QCOMPARE(windowCommands.toggleCount(), 0);
     QVERIFY(audioDiagnosticsLabel->property("text").toString().contains(QStringLiteral("controlled")));
     QTRY_COMPARE(volumeSlider->property("value").toDouble(), mediaSession.volume());
@@ -388,8 +430,8 @@ void AppShellTest::publishesActiveViewport() {
     QTest::mouseRelease(&quickWindow, Qt::LeftButton, Qt::NoModifier, volumeDestination.toPoint());
     QTRY_VERIFY(mediaSession.volume() > 0.7);
     QTRY_COMPARE(volumeSlider->property("value").toDouble(), mediaSession.volume());
-    QVERIFY(QMetaObject::invokeMethod(closeStatisticsButton, "clicked", Qt::DirectConnection));
-    QTRY_VERIFY(!statisticsPanel->property("visible").toBool());
+    QVERIFY(QMetaObject::invokeMethod(closePlaybackDetailsButton, "clicked", Qt::DirectConnection));
+    QTRY_VERIFY(!playbackDetailsPanel->property("visible").toBool());
     QVERIFY(QMetaObject::invokeMethod(transportMenu, "open", Qt::DirectConnection));
     QTRY_VERIFY(transportMenu->property("visible").toBool());
     QTRY_VERIFY(windowCommands.windowShortcutsBlocked());
@@ -397,17 +439,21 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(QMetaObject::invokeMethod(videoDarkItem, "triggered", Qt::DirectConnection));
     QTRY_COMPARE(mediaSession.selectedVideoStreamIndex(), 0);
     QTRY_VERIFY(videoDarkItem->property("checked").toBool());
+    QTRY_VERIFY(selectedVideoDetailsLabel->property("text").toString().contains(QStringLiteral("English - Dark")));
     QCOMPARE(mediaSession.selectedAudioStreamIndex(), 3);
     QVERIFY(QMetaObject::invokeMethod(audioPositiveItem, "triggered", Qt::DirectConnection));
     QTRY_COMPARE(mediaSession.selectedAudioStreamIndex(), 1);
     QTRY_VERIFY(audioPositiveItem->property("checked").toBool());
+    QTRY_VERIFY(selectedAudioDetailsLabel->property("text").toString().contains(QStringLiteral("English - Positive")));
     QCOMPARE(mediaSession.selectedSubtitleStreamIndex(), -1);
     QVERIFY(QMetaObject::invokeMethod(subtitleEnglishItem, "triggered", Qt::DirectConnection));
     QTRY_COMPARE(mediaSession.selectedSubtitleStreamIndex(), 2);
     QTRY_VERIFY(subtitleEnglishItem->property("checked").toBool());
+    QTRY_VERIFY(selectedSubtitleDetailsLabel->property("text").toString().contains(QStringLiteral("ass · text")));
     QVERIFY(QMetaObject::invokeMethod(subtitleOffItem, "triggered", Qt::DirectConnection));
     QTRY_COMPARE(mediaSession.selectedSubtitleStreamIndex(), -1);
     QTRY_VERIFY(subtitleOffItem->property("checked").toBool());
+    QTRY_COMPARE(selectedSubtitleDetailsLabel->property("text").toString(), QStringLiteral("Off"));
     QTest::keyClick(&quickWindow, Qt::Key_Escape);
     QTRY_VERIFY(!transportMenu->property("visible").toBool());
     QTRY_VERIFY(!windowCommands.windowShortcutsBlocked());

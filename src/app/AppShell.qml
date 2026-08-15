@@ -75,6 +75,7 @@ Item {
             id: playerPage
 
             session: root.mediaSession
+            outputState: root.presentationOutput
             windowCommands: root.windowCommands
             onHdrLabRequested: root.currentPage = 1
         }

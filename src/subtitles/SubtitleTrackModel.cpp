@@ -1,33 +1,32 @@
 #include "subtitles/SubtitleTrackModel.h"
 
+#include <algorithm>
 #include <utility>
 
-SubtitleTrackModel::SubtitleTrackModel(QObject* parent) : QAbstractListModel(parent) {
-    m_entries.push_back({
-        .label = QStringLiteral("Off"),
-        .streamIndex = -1,
-    });
-}
+SubtitleTrackModel::SubtitleTrackModel(QObject* parent) : QAbstractListModel(parent) {}
 
 int SubtitleTrackModel::rowCount(QModelIndex const& parent) const {
-    return parent.isValid() ? 0 : static_cast<int>(m_entries.size());
+    return parent.isValid() ? 0 : static_cast<int>(m_tracks.size()) + 1;
 }
 
 QVariant SubtitleTrackModel::data(QModelIndex const& index, int role) const {
-    if (!index.isValid() || index.row() < 0 || index.row() >= static_cast<int>(m_entries.size())) {
+    if (!index.isValid() || index.row() < 0 || index.row() >= rowCount()) {
         return {};
     }
-    Entry const& entry = m_entries[static_cast<std::size_t>(index.row())];
+    bool const off = index.row() == 0;
+    EmbeddedMediaStreamDescriptor const* const track =
+        off ? nullptr : &m_tracks[static_cast<std::size_t>(index.row() - 1)];
+    int const streamIndex = track ? track->streamIndex : -1;
     switch (role) {
     case Qt::DisplayRole:
     case LabelRole:
-        return entry.label;
+        return track ? track->label : QStringLiteral("Off");
     case StreamIndexRole:
-        return entry.streamIndex;
+        return streamIndex;
     case SelectedRole:
-        return entry.streamIndex == m_selectedStreamIndex;
+        return streamIndex == m_selectedStreamIndex;
     case EnabledRole:
-        return entry.enabled;
+        return !track || track->supported;
     default:
         return {};
     }
@@ -44,21 +43,8 @@ QHash<int, QByteArray> SubtitleTrackModel::roleNames() const {
 
 void SubtitleTrackModel::setTracks(std::vector<EmbeddedMediaStreamDescriptor> tracks, int selectedStreamIndex) {
     beginResetModel();
-    m_entries.clear();
-    m_entries.push_back({
-        .label = QStringLiteral("Off"),
-        .streamIndex = -1,
-    });
-    for (EmbeddedMediaStreamDescriptor& track : tracks) {
-        if (!track.isValid()) {
-            continue;
-        }
-        m_entries.push_back({
-            .label = std::move(track.label),
-            .streamIndex = track.streamIndex,
-            .enabled = track.supported,
-        });
-    }
+    std::erase_if(tracks, [](EmbeddedMediaStreamDescriptor const& track) { return !track.isValid(); });
+    m_tracks = std::move(tracks);
     m_selectedStreamIndex = selectedStreamIndex;
     endResetModel();
 }
@@ -69,8 +55,8 @@ void SubtitleTrackModel::setSelectedStreamIndex(int streamIndex) {
     }
     int const previous = m_selectedStreamIndex;
     m_selectedStreamIndex = streamIndex;
-    for (int row = 0; row < static_cast<int>(m_entries.size()); ++row) {
-        int const candidate = m_entries[static_cast<std::size_t>(row)].streamIndex;
+    for (int row = 0; row < rowCount(); ++row) {
+        int const candidate = row == 0 ? -1 : m_tracks[static_cast<std::size_t>(row - 1)].streamIndex;
         if (candidate == previous || candidate == streamIndex) {
             QModelIndex const changed = index(row, 0);
             emit dataChanged(changed, changed, {SelectedRole});
@@ -81,10 +67,18 @@ void SubtitleTrackModel::setSelectedStreamIndex(int streamIndex) {
 int SubtitleTrackModel::selectedStreamIndex() const { return m_selectedStreamIndex; }
 
 bool SubtitleTrackModel::canSelect(int streamIndex) const {
-    for (Entry const& entry : m_entries) {
-        if (entry.streamIndex == streamIndex) {
-            return entry.enabled;
+    if (streamIndex == -1) {
+        return true;
+    }
+    EmbeddedMediaStreamDescriptor const* const selected = track(streamIndex);
+    return selected && selected->supported;
+}
+
+EmbeddedMediaStreamDescriptor const* SubtitleTrackModel::track(int streamIndex) const {
+    for (EmbeddedMediaStreamDescriptor const& candidate : m_tracks) {
+        if (candidate.streamIndex == streamIndex) {
+            return &candidate;
         }
     }
-    return false;
+    return nullptr;
 }
