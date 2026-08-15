@@ -360,6 +360,9 @@ jobs:
           cmake --install "%RUNNER_TEMP%\sunroom-windows-release" --config Release --prefix "%RUNNER_TEMP%\sunroom-windows-artifact"
           if errorlevel 1 exit /b %errorlevel%
           if not exist "%RUNNER_TEMP%\sunroom-windows-artifact\bin\qt.conf" exit /b 1
+          if exist "%RUNNER_TEMP%\sunroom-windows-artifact\bin\d3dcompiler_*.dll" exit /b 1
+          if exist "%RUNNER_TEMP%\sunroom-windows-artifact\bin\dxcompiler*.dll" exit /b 1
+          if exist "%RUNNER_TEMP%\sunroom-windows-artifact\bin\dxil*.dll" exit /b 1
           "%RUNNER_TEMP%\sunroom-windows-artifact\bin\sunroom.exe" --verify-qml
           if errorlevel 1 exit /b %errorlevel%
 

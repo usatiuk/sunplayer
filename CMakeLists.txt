@@ -610,6 +610,8 @@ if (WIN32)
                     --no-compiler-runtime
                     --no-translations
                     --no-opengl-sw
+                    --no-system-d3d-compiler
+                    --no-system-dxc-compiler
                     "$<TARGET_FILE:sunroom>"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/qt.conf"
@@ -654,6 +656,9 @@ if (WIN32)
             OUTPUT_SCRIPT deploy_script
             NO_TRANSLATIONS
             NO_UNSUPPORTED_PLATFORM_ERROR
+            DEPLOY_TOOL_OPTIONS
+            --no-system-d3d-compiler
+            --no-system-dxc-compiler
     )
     install(SCRIPT ${deploy_script})
 endif ()

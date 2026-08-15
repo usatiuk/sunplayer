@@ -259,6 +259,15 @@ the current Qt deployment step with:
 * Compiler-runtime deployment on Windows.
 * No translation deployment.
 * No unsupported-platform configuration error.
+* No app-local D3D or DXC shader-compiler deployment.
+
+Sunroom's Windows backend is D3D11-only. Qt 6.11 supports Windows 10 1809 or
+newer, where `d3dcompiler_47.dll` is an operating-system component. Both Qt's
+D3D11 QRhi path and libplacebo prefer that serviced System32 copy; Sunroom does
+not expose Qt's D3D12/Shader Model 6 path that would use the separately
+distributed `dxcompiler.dll` and `dxil.dll`. The deployment flags therefore
+exclude all three redundant app-local copies instead of deleting them after
+staging.
 
 The Qt deployment script generates the Windows install tree's relative
 `bin/qt.conf`. After a successful hosted Windows Debug build, lint, and
@@ -268,7 +277,8 @@ import directory from `QLibraryInfo`, so the same boundary follows the build
 tree's local `qt.conf` and Qt's standard install layout without duplicating
 either path. Trusted push and manual-dispatch runs then upload that complete
 Release install tree as a seven-day `sunroom-windows-release-<commit>` developer
-artifact; pull requests do not publish contributor-built executables. Qt's
+artifact; pull requests do not publish contributor-built executables. CI also
+rejects an install tree containing the excluded D3D or DXC compiler DLLs. Qt's
 deployment helper supplies the supported MSVC compiler-runtime payload. The
 bundle is not an installer or clean-machine packaging claim.
 
