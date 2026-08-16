@@ -202,9 +202,15 @@ the test solely for initial CI.
 
 Linux hosted CI uses lavapipe and a Pulse null sink. A VAAPI/DRM PRIME hardware
 runner, an HDR/display lab, and physical-audio/default-route scenarios remain
-separate future lanes. Packaging/release workflows remain deferred until
-packaging is defined. The short-lived Windows Release developer artifact does not
-close installer, redistribution, licensing, or clean-machine verification work.
+separate future lanes. The
+[active MSIX/Store plan](plans/process/2026-08-16-microsoft-store-msix-packaging.md)
+now has a pinned and locally validated `winapp` pipeline, reviewed manifest and
+branding inputs, signed-development lifecycle, unsigned Store output, package
+inventory, and explicit manual CI path. Public release remains deferred pending
+Partner Center identity, an approved public version, redistribution approval,
+clean-machine/package-floor coverage, Partner certification, and controlled
+Store acquisition. The short-lived Windows Release developer artifact does not
+close those licensing, certification, or clean-machine verification gates.
 Until those obligations are resolved, it is project-internal development output
 and is not approved as a public binary distribution or release.
 macOS CI remains deferred until its bundle/deployment contract and useful

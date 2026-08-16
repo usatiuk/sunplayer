@@ -441,6 +441,15 @@ qt_add_executable(sunplayer
         src/video/ActiveVideoSource.h
 )
 
+if (WIN32)
+    configure_file(
+            packaging/windows/SunPlayer.rc.in
+            ${CMAKE_CURRENT_BINARY_DIR}/SunPlayer.rc
+            @ONLY
+    )
+    target_sources(sunplayer PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/SunPlayer.rc)
+endif ()
+
 if (APPLE)
     target_sources(sunplayer PRIVATE
             src/platform/macos/MacDisplayStateProvider.h
@@ -637,6 +646,17 @@ endif ()
 
 include(GNUInstallDirs)
 
+if (WIN32)
+    # Store and portable installs need the compiler runtime app-locally. Let
+    # CMake select the runtime that belongs to the compiler used for this
+    # build; the packaging layer then consumes the install tree unchanged.
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION ${CMAKE_INSTALL_BINDIR})
+    include(InstallRequiredSystemLibraries)
+    if (NOT CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
+        message(FATAL_ERROR "No Visual C++ runtime libraries were found for the Windows install tree")
+    endif ()
+endif ()
+
 install(TARGETS sunplayer
         BUNDLE DESTINATION .
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -659,11 +679,13 @@ if (WIN32)
     qt_generate_deploy_qml_app_script(
             TARGET sunplayer
             OUTPUT_SCRIPT deploy_script
+            NO_COMPILER_RUNTIME
             NO_TRANSLATIONS
             NO_UNSUPPORTED_PLATFORM_ERROR
             DEPLOY_TOOL_OPTIONS
             --no-system-d3d-compiler
             --no-system-dxc-compiler
+            --skip-plugin-types qmltooling
     )
     install(SCRIPT ${deploy_script})
 endif ()

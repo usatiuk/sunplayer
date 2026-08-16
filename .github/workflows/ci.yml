@@ -6,6 +6,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      store_package:
+        description: Build an unsigned Microsoft Store MSIX
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -374,3 +380,28 @@ jobs:
           path: ${{ runner.temp }}\sunplayer-windows-artifact
           if-no-files-found: error
           retention-days: 7
+
+      - name: Package unsigned Microsoft Store MSIX
+        if: github.event_name == 'workflow_dispatch' && inputs.store_package
+        shell: pwsh
+        run: |
+          & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Launch-VsDevShell.ps1" `
+            -Arch amd64 `
+            -HostArch amd64 `
+            -SkipAutomaticLocation
+          & .\packaging\windows\Pack-WindowsStore.ps1 `
+            -Mode Store `
+            -InstallPrefix "$env:RUNNER_TEMP\sunplayer-windows-artifact" `
+            -OutputDirectory "$env:RUNNER_TEMP\sunplayer-windows-store" `
+            -BootstrapWinApp
+
+      - name: Upload Microsoft Store package
+        if: github.event_name == 'workflow_dispatch' && inputs.store_package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sunplayer-microsoft-store-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}\sunplayer-windows-store\*.msix
+            ${{ runner.temp }}\sunplayer-windows-store\evidence
+          if-no-files-found: error
+          retention-days: 14

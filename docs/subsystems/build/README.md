@@ -278,9 +278,14 @@ tree's local `qt.conf` and Qt's standard install layout without duplicating
 either path. Trusted push and manual-dispatch runs then upload that complete
 Release install tree as a seven-day `sunplayer-windows-release-<commit>` developer
 artifact; pull requests do not publish contributor-built executables. CI also
-rejects an install tree containing the excluded D3D or DXC compiler DLLs. Qt's
-deployment helper supplies the supported MSVC compiler-runtime payload. The
-bundle is not an installer or clean-machine packaging claim.
+rejects an install tree containing the excluded D3D or DXC compiler DLLs.
+CMake's `InstallRequiredSystemLibraries` selects and installs the x64 Visual C++
+runtime that belongs to the compiler used for the build, while Qt deployment is
+configured with `NO_COMPILER_RUNTIME`. The same self-contained install tree is
+therefore authoritative for developer artifacts and MSIX packaging; the
+packaging stage neither replaces nor supplements its runtime closure. The
+seven-day developer bundle remains neither an installer nor a clean-machine
+packaging claim.
 
 Build-tree application and test targets use vcpkg's app-local walker and CMake's
 `TARGET_RUNTIME_DLLS`; the install path uses vcpkg's corresponding
@@ -298,12 +303,32 @@ not yet define:
   codec licensing/patent policy for FFmpeg and libass.
 * A complete third-party notice and source-offer workflow for shipped
   libplacebo and other LGPL components.
-* Windows installer or portable layout.
+* A non-Store Windows installer or portable layout.
 * macOS signing, notarization, and bundle policy.
 * Wayland Linux package formats and compositor/runtime requirements. X11 and
   XWayland compatibility are not packaging targets.
 * Runtime feature and dependency-version reporting.
 * Clean-machine package verification.
+
+The implemented Windows Store direction keeps this install tree as the package
+boundary. `packaging/windows/Pack-WindowsStore.ps1` feeds it to pinned Microsoft
+`winapp` 0.6.0 and Windows SDK BuildTools 10.0.28000.2526, producing loose test
+identity, signed development, or unsigned x64 medium-integrity Store MSIX
+output. The
+[research note](../../research/2026-08-16-windows-msix-store-packaging.md) and
+[active release plan](../../plans/process/2026-08-16-microsoft-store-msix-packaging.md)
+record the trust, identity, signing, feature-scope, and verification decisions.
+The script copies rather than mutates the install tree, materializes the reviewed
+manifest, runs direct and packaged QML checks, generates and validates PRI
+resource indexing, unpacks every MSIX, validates its x64 manifest, runtime and
+inventory policy, and emits hashes plus toolchain evidence. The existing CI
+workflow adds one explicit manual Store-packaging switch and uploads only the
+unsigned MSIX and evidence; it has no Store credentials and does not submit or
+publish. Stable Partner identity comes only from reviewed
+`StoreIdentity.json`; package version comes only from the CMake project version.
+Actual release is gated on those source values and the public-distribution
+obligations above. Partner Center certification is authoritative. AppContainer
+and shell file associations remain deliberately outside the first package.
 
 ## Testing integration
 
@@ -392,9 +417,12 @@ checkout credentials, and pins actions by full commit SHA. Trusted main pushes
 and manual dispatches upload the verified Windows Release install tree for seven
 days; pull requests stage and probe the same tree without uploading it. The
 workflow does not publish releases and does not cache build trees, the shared
-in-job `vcpkg_installed` tree, downloads, artifacts, or credentials. Until the
-new Release path succeeds in a hosted run, it is implemented and locally
-reviewed configuration rather than a claim that hosted packaging passes.
+in-job `vcpkg_installed` tree, downloads, artifacts, or credentials. One
+explicit manual-dispatch switch can bootstrap the hash-pinned `winapp` CLI,
+package the same Release install tree using the reviewed source identity and
+version, and retain the unsigned MSIX plus evidence for fourteen days. Until
+that path succeeds in a hosted run, it is implemented and locally reviewed
+configuration rather than a claim that hosted packaging passes.
 
 The short-lived artifact is project-internal developer output. It is not an
 approved public binary distribution: complete third-party notice,

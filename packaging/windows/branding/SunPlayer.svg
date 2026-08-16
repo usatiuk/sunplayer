@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+  <title id="title">SunPlayer</title>
+  <desc id="description">A golden sun and white play symbol on a dark rounded square.</desc>
+  <rect x="64" y="64" width="896" height="896" rx="208" fill="#111827"/>
+  <g fill="#F59E0B">
+    <rect x="472" y="132" width="80" height="136" rx="40"/>
+    <rect x="472" y="756" width="80" height="136" rx="40"/>
+    <rect x="756" y="472" width="136" height="80" rx="40"/>
+    <rect x="132" y="472" width="136" height="80" rx="40"/>
+    <rect x="700" y="204" width="80" height="136" rx="40" transform="rotate(45 740 272)"/>
+    <rect x="244" y="684" width="80" height="136" rx="40" transform="rotate(45 284 752)"/>
+    <rect x="684" y="700" width="136" height="80" rx="40" transform="rotate(45 752 740)"/>
+    <rect x="204" y="244" width="136" height="80" rx="40" transform="rotate(45 272 284)"/>
+    <circle cx="512" cy="512" r="244"/>
+  </g>
+  <path d="M459 382c-22-13-49 3-49 29v202c0 26 27 42 49 29l176-101c22-13 22-45 0-58L459 382z" fill="#FFFFFF"/>
+</svg>
