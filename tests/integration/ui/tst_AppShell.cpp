@@ -548,6 +548,13 @@ void AppShellTest::publishesActiveViewport() {
                  std::min<qlonglong>(mediaSession.durationMilliseconds(),
                                      std::max<qlonglong>(0, seekedPosition - 10'000) + 10'000));
 
+    mediaSession.setTimeline(30'000, 65'000, true);
+    emit windowCommands.relativeSeekRequested(-10'000);
+    QTRY_COMPARE(mediaSession.lastSeekMilliseconds(), 20'000);
+    mediaSession.setTimeline(30'000, 65'000, true);
+    emit windowCommands.relativeSeekRequested(10'000);
+    QTRY_COMPARE(mediaSession.lastSeekMilliseconds(), 40'000);
+
     mediaSession.setTimeline(5'000, 65'000, true);
     QVERIFY(QMetaObject::invokeMethod(seekBackwardButton, "clicked", Qt::DirectConnection));
     QTRY_COMPARE(mediaSession.lastSeekMilliseconds(), 0);

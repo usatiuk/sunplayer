@@ -277,9 +277,13 @@ void PresentationWindow::forwardMouseEvent(QMouseEvent& event) {
     }
 }
 
+bool PresentationWindow::playerShortcutContextActive() const {
+    return !m_windowShortcutsBlocked && m_activeVideoSource->route() == ActiveVideoSource::Route::Player;
+}
+
 bool PresentationWindow::playbackShortcutEnabled() const {
-    return !m_windowShortcutsBlocked && m_activeVideoSource->route() == ActiveVideoSource::Route::Player &&
-           m_mediaSession->state() == MediaSession::State::Ready && !m_mediaSession->seeking();
+    return playerShortcutContextActive() && m_mediaSession->state() == MediaSession::State::Ready &&
+           !m_mediaSession->seeking();
 }
 
 void PresentationWindow::togglePlayback() {
@@ -318,14 +322,26 @@ void PresentationWindow::keyPressEvent(QKeyEvent* event) {
         event->accept();
         return;
     }
+    bool const isRelativeSeekKey = (event->key() == Qt::Key_Left || event->key() == Qt::Key_Right) &&
+                                   event->modifiers() == Qt::NoModifier;
+    if (isRelativeSeekKey && playerShortcutContextActive()) {
+        if (!event->isAutoRepeat()) {
+            emit relativeSeekRequested(event->key() == Qt::Key_Left ? -10'000 : 10'000);
+        }
+        event->accept();
+        return;
+    }
     if (QQuickWindow* quickWindow = m_engine->quickWindow()) {
         QCoreApplication::sendEvent(quickWindow, event);
     }
 }
 
 void PresentationWindow::keyReleaseEvent(QKeyEvent* event) {
+    bool const isRelativeSeekKey = (event->key() == Qt::Key_Left || event->key() == Qt::Key_Right) &&
+                                   event->modifiers() == Qt::NoModifier;
     if (event->key() == Qt::Key_F11 || (event->key() == Qt::Key_Escape && !m_windowShortcutsBlocked) ||
-        (event->key() == Qt::Key_Space && playbackShortcutEnabled())) {
+        (event->key() == Qt::Key_Space && playbackShortcutEnabled()) ||
+        (isRelativeSeekKey && playerShortcutContextActive())) {
         event->accept();
         return;
     }

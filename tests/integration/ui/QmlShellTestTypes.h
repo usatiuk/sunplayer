@@ -206,6 +206,7 @@ class ShellTestWindowCommands final : public QWindow {
   signals:
     void otherDisplayBlankingAvailableChanged();
     void blankOtherDisplaysInFullscreenChanged();
+    void relativeSeekRequested(qlonglong milliseconds);
 
   private:
     ShellTestWindowChromeController m_windowChrome;

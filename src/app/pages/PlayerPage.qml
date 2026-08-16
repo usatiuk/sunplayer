@@ -46,6 +46,14 @@ VideoPage {
     videoViewportVisible:
         visible && sessionReady
 
+    Connections {
+        target: root.windowCommands
+
+        function onRelativeSeekRequested(milliseconds) {
+            root.seekBy(milliseconds)
+        }
+    }
+
     function formatTime(milliseconds) {
         if (milliseconds < 0)
             return "--:--"

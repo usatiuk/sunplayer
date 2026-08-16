@@ -30,9 +30,11 @@ persisted checked action to blank every other display while Player is
 fullscreen. It is hidden and its stored value remains unapplied on other
 platforms for now.
 
-The native presentation window handles non-repeating `F11`/`Escape` and gated
-Space play/pause because the redirected Quick window is not the active native
-shortcut target. `F11` toggles Qt-managed fullscreen from either page. A
+The native presentation window handles non-repeating `F11`/`Escape`, gated
+Space play/pause, and unmodified Left/Right ten-second seeks because the
+redirected Quick window is not the active native shortcut target. Relative
+seek requests reuse the Player page action used by the transport buttons.
+`F11` toggles Qt-managed fullscreen from either page. A
 left-button
 double-click on active Player video background does the same; one accepting
 area behind each floating island prevents labels and dead panel space from

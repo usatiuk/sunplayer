@@ -54,6 +54,7 @@ class PresentationWindow : public QWindow {
   signals:
     void videoFramePresented(qulonglong contentRevision);
     void blankOtherDisplaysInFullscreenChanged();
+    void relativeSeekRequested(qlonglong milliseconds);
 
   protected:
     void exposeEvent(QExposeEvent* event) override;
@@ -83,6 +84,7 @@ class PresentationWindow : public QWindow {
     void applyCursorVisibility();
     void updateOtherDisplayBlanking();
     void forwardMouseEvent(QMouseEvent& event);
+    bool playerShortcutContextActive() const;
     bool playbackShortcutEnabled() const;
     void togglePlayback();
 
