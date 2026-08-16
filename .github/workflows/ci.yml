@@ -374,3 +374,46 @@ jobs:
           path: ${{ runner.temp }}\sunplayer-windows-artifact
           if-no-files-found: error
           retention-days: 7
+
+      - name: Set up winapp
+        uses: microsoft/setup-WinAppCli@b93bbddc1f7abc061ca0d3a8119e3a0c7dd71495 # v0.2
+        with:
+          version: v0.6.0
+
+      - name: Verify winapp
+        shell: pwsh
+        run: |
+          $winapp = (Get-Command winapp -CommandType Application -ErrorAction Stop).Source
+          $expected = @{
+            'libSkiaSharp.dll' = '9A0D95E8CAAA852C70D085AF6A40A744242172AD9EA3FD6BC7599875A8A1DBCD'
+            'winapp.exe' = '0AA2A43086AD07C7FDC35C94ECCA0A586E815B1AB46E9B3109D73123E9190C90'
+            'winapp.pdb' = '56E7B951A0A6F9969A21C764C4E1A39BA29DBC056DF2AE3B9A77CBD727A052A7'
+          }
+          $entries = @(Get-ChildItem -LiteralPath (Split-Path $winapp) -Force)
+          $nameDifference = Compare-Object @($expected.Keys | Sort-Object) @($entries.Name | Sort-Object)
+          if ($nameDifference -or ($entries | Where-Object PSIsContainer)) {
+            throw "Unexpected contents in the winapp v0.6.0 release archive."
+          }
+          foreach ($file in $entries) {
+            $actual = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+            if ($actual -ne $expected[$file.Name]) {
+              throw "winapp v0.6.0 hash mismatch for $($file.Name)."
+            }
+          }
+
+      - name: Package unsigned development MSIX
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b %errorlevel%
+          pwsh -NoLogo -NoProfile -File packaging\windows\Package-WindowsStore.ps1 -InstallPrefix "%RUNNER_TEMP%\sunplayer-windows-artifact" -Output "%RUNNER_TEMP%\SunPlayerDevelopment.msix" -PackageVersion 1.0.0.0 -IdentityName SunPlayerDevelopment -Publisher "CN=SunPlayerDevelopment" -PublisherDisplayName "SunPlayer Development"
+          if errorlevel 1 exit /b %errorlevel%
+
+      - name: Upload unsigned development MSIX
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sunplayer-windows-msix-${{ github.sha }}
+          path: ${{ runner.temp }}\SunPlayerDevelopment.msix
+          if-no-files-found: error
+          retention-days: 7

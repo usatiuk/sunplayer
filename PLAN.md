@@ -537,6 +537,8 @@ Documentation: `docs/TESTING.md` and `docs/subsystems/testing/`
 * [x] Cross-platform libplacebo dependency configurations
 * [x] Reproducible x64 MSIX construction from the CMake install tree through
   the reviewed manifest/assets and Microsoft `winapp`
+* [x] Trusted Windows CI runs publish the verified Release tree and unsigned
+  development-identity MSIX as separate seven-day artifacts
 * [ ] Partner Center identity, redistribution approval, clean-machine package
   verification, certification, and controlled Store release
 * [ ] macOS packaging

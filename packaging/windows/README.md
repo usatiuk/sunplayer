@@ -5,14 +5,17 @@ SunPlayer packages the self-contained Windows tree produced by
 `winapp` owns manifest processing, PRI generation, architecture stamping,
 packing, and optional signing.
 
-Install the tested CLI once:
+For local packaging, install the tested CLI once:
 
 ```powershell
 winget install --exact --id Microsoft.WinAppCli --version 0.6.0
 ```
 
-The repository does not download or install packaging tools. `winapp.yaml`
-pins the SDK BuildTools used by the installed CLI.
+The packaging script does not download or install tools. `winapp.yaml` pins
+the SDK BuildTools used by the installed CLI. GitHub Actions provisions the
+same CLI version with Microsoft's commit-pinned setup action and verifies the
+downloaded release files against reviewed SHA-256 digests before invoking the
+script.
 
 ## Build the package input
 
@@ -46,6 +49,16 @@ The wrapper only materializes those four values into the reviewed manifest and
 calls `winapp package`. It does not deploy dependencies, install tools, unpack
 the result, or duplicate Microsoft package validation. The Store package is
 unsigned; Partner Center signs it after certification.
+
+## CI package artifact
+
+Every Windows CI run packages the verified Release install tree with the
+unsigned `SunPlayerDevelopment` identity, so pull requests exercise the complete
+packaging boundary. Trusted main pushes and manual workflow runs additionally
+upload the MSIX for seven days. No certificates or secrets are involved. This
+is development evidence, not a Store-submittable package; the three identity
+values and version must be replaced with the reserved Partner Center values for
+a Store release.
 
 ## Local signed package
 

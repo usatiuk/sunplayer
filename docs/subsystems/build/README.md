@@ -275,13 +275,10 @@ deterministic test subset, CI builds and installs a separate Release
 application and runs its `--verify-qml` probe. That probe obtains its deployed
 import directory from `QLibraryInfo`, so the same boundary follows the build
 tree's local `qt.conf` and Qt's standard install layout without duplicating
-either path. Trusted push and manual-dispatch runs then upload that complete
-Release install tree as a seven-day `sunplayer-windows-release-<commit>` developer
-artifact; pull requests do not publish contributor-built executables. CI also
-rejects an install tree containing the excluded D3D or DXC compiler DLLs. CMake
-installs the matching MSVC runtime app-locally and Qt deployment skips its
-separate redistributable installer. The bundle is not an installer or
-clean-machine packaging claim.
+either path. The complete Release install tree is the authoritative input for
+both CI artifacts described below. CI rejects a tree containing the excluded
+D3D or DXC compiler DLLs. CMake installs the matching MSVC runtime app-locally
+and Qt deployment skips its separate redistributable installer.
 
 Build-tree application and test targets use vcpkg's app-local walker and CMake's
 `TARGET_RUNTIME_DLLS`; the install path uses vcpkg's corresponding
@@ -310,7 +307,7 @@ The Store package path stays on this install boundary. The small
 `packaging/windows/Package-WindowsStore.ps1` entry point substitutes the four
 release-specific manifest values and calls the installed Microsoft `winapp`
 CLI. `winapp` owns PRI generation, architecture stamping, optional signing, and
-MSIX creation. The project does not download packaging tools or duplicate
+MSIX creation. The packaging script does not download tools or duplicate
 MakeAppx/Partner Center validation.
 
 ## Testing integration
@@ -396,16 +393,20 @@ hosted software subset is deferred while the complete test remains dedicated-
 machine coverage.
 
 The workflow requests only read-only repository contents, disables persisted
-checkout credentials, and pins actions by full commit SHA. Trusted main pushes
-and manual dispatches upload the verified Windows Release install tree for seven
-days; pull requests stage and probe the same tree without uploading it. The
-workflow does not publish releases and does not cache build trees, the shared
-in-job `vcpkg_installed` tree, downloads, artifacts, or credentials. Until the
-new Release path succeeds in a hosted run, it is implemented and locally
-reviewed configuration rather than a claim that hosted packaging passes.
+checkout credentials, and pins actions by full commit SHA. Every event stages,
+probes, and packages the Release tree with the unsigned
+`SunPlayerDevelopment` identity. Trusted main pushes and manual dispatches
+upload that tree and MSIX as separate seven-day artifacts; pull requests upload
+neither. Microsoft's pinned setup action provides `winapp` v0.6.0, and CI
+checks every file in that release archive against a reviewed SHA-256 digest
+before execution. The packaging script remains installation-free. The workflow
+does not publish releases and does not cache build trees, the shared in-job
+`vcpkg_installed` tree, downloads, artifacts, or credentials. Until the new
+Release path succeeds in a hosted run, it is implemented and locally reviewed
+configuration rather than a claim that hosted packaging passes.
 
-The short-lived artifact is project-internal developer output. It is not an
-approved public binary distribution: complete third-party notice,
+The short-lived artifacts are project-internal developer output. They are not
+approved for public binary distribution: complete third-party notice,
 corresponding-source, codec-policy, and redistribution work remains deferred.
 
 ## Verification
