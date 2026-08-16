@@ -9,6 +9,12 @@ qt_add_executable(sunplayer_application_log_tests
         unit/diagnostics/tst_ApplicationLog.cpp
 )
 
+qt_add_executable(sunplayer_application_settings_tests
+        unit/app/tst_ApplicationSettings.cpp
+        ../src/app/ApplicationSettings.cpp
+        ../src/app/ApplicationSettings.h
+)
+
 qt_add_executable(sunplayer_controlled_audio_sink_tests
         unit/audio/tst_ControlledAudioSink.cpp
 )
@@ -223,6 +229,11 @@ target_include_directories(sunplayer_application_log_tests
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
 )
 
+target_include_directories(sunplayer_application_settings_tests
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+)
+
 target_include_directories(sunplayer_controlled_audio_sink_tests
         PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
@@ -298,6 +309,12 @@ target_link_libraries(sunplayer_presentation_target_tests
 )
 
 target_link_libraries(sunplayer_application_log_tests
+        PRIVATE
+        Qt6::Test
+        sunplayer_diagnostics
+)
+
+target_link_libraries(sunplayer_application_settings_tests
         PRIVATE
         Qt6::Test
         sunplayer_diagnostics
@@ -467,6 +484,7 @@ if (WIN32)
     foreach (test_target IN ITEMS
             sunplayer_presentation_target_tests
             sunplayer_application_log_tests
+            sunplayer_application_settings_tests
             sunplayer_controlled_audio_sink_tests
             sunplayer_audio_output_ledger_tests
             sunplayer_realtime_pcm_queue_tests
@@ -507,6 +525,11 @@ add_test(
 add_test(
         NAME application-log
         COMMAND sunplayer_application_log_tests
+)
+
+add_test(
+        NAME application-settings
+        COMMAND sunplayer_application_settings_tests
 )
 
 add_test(
@@ -661,6 +684,7 @@ endif ()
 set_tests_properties(
         presentation-target
         application-log
+        application-settings
         rendered-video-surface
         video-viewport
         video-presentation-geometry

@@ -7,10 +7,11 @@ macOS, and native-Wayland host with a thin QML `AppShell`, default Player
 page, and retained HDR Lab. It establishes
 startup, object ownership, native presentation events, redirected Qt Quick
 input, the active video-viewport boundary, and asynchronous continuous local
-audio/video playback with a position/duration seek timeline. It does not yet
-provide drag-and-drop, persistent settings, general
-structured errors, or a user-facing support-report interface. It now installs
-the shared Qt category logger and bounded session-file sink.
+audio/video playback with a position/duration seek timeline. Playback volume
+and the supported fullscreen display-blanking option persist across normal
+restarts. It does not yet provide drag-and-drop, general structured errors, or
+a user-facing support-report interface. It now installs the shared Qt category
+logger and bounded session-file sink.
 
 Graphics details belong to
 [../graphics/README.md](../graphics/README.md). The current diagnostic QML is
@@ -34,14 +35,17 @@ Startup currently:
 
 1. On Linux, fixes `QT_QPA_PLATFORM=wayland` before creating Qt application
    state. XCB and XWayland are not fallback paths.
-2. Creates `QGuiApplication`, parses command-line options, and installs the
-   application logger.
-3. Asks `GraphicsBackendFactory` to configure Qt Quick for D3D11 on Windows,
+2. Creates `QGuiApplication`, establishes the stable `usatiuk` / `SunPlayer`
+   settings identity, parses command-line options, and installs the application
+   logger.
+3. Constructs one `ApplicationSettings` adapter over Qt's native user store.
+   Real-window smoke modes use a temporary explicit INI store instead.
+4. Asks `GraphicsBackendFactory` to configure Qt Quick for D3D11 on Windows,
    Metal on macOS, or Vulkan on Linux.
-4. Installs one dark application palette used by the interface.
-5. On Linux, inventories optional Wayland color/decorations capabilities and
+5. Installs one dark application palette used by the interface.
+6. On Linux, inventories optional Wayland color/decorations capabilities and
    creates the window-scoped `QVulkanInstance`.
-6. Constructs and shows one `PresentationWindow`, then enters the event loop.
+7. Constructs and shows one `PresentationWindow`, then enters the event loop.
    On Windows, native background erase paints black until that surface's first
    successful QRhi presentation; D3D owns the client area from then on.
 
@@ -56,8 +60,7 @@ hiding. These are test scenarios, not a general remote-control interface. The
 fullscreen scenario is registered on Windows and run explicitly, non-gating,
 on Linux. One clean direct run passes on macOS, but it is not registered while
 live-desktop AppKit automation remains sensitive to concurrent input. There is no full
-command-line model,
-single-instance policy, recent-file state, settings store, or application
+command-line model, single-instance policy, recent-file state, or application
 service container.
 
 Application logging is installed after `QGuiApplication` construction and
@@ -70,8 +73,13 @@ remain available. Detailed policy and the observability roadmap live in
 
 ## Window ownership
 
-`PresentationWindow` is the current composition root. Its platform-neutral
-state owns:
+`main()` is the top-level composition root. It owns one `ApplicationSettings`
+adapter that outlives the presentation window and performs its final
+synchronization during orderly shutdown. The adapter owns persistence and
+validation but no mirrored observable state.
+
+`PresentationWindow` composes the window-scoped runtime graph. Its
+platform-neutral state owns:
 
 * `PresentationOutputState`.
 * `PresentationSettings`.
@@ -155,14 +163,14 @@ fullscreen restores normal or maximized state without custom geometry, native
 window-style edits, display-mode switching, or exclusive fullscreen. Existing
 Qt resize, exposure, surface, and QRhi paths handle the asynchronous change.
 
-On Windows, a session-only QML command can ask `PresentationWindow` to blank
-the other displays whenever it is fullscreen. The window then owns one opaque
-black `QRasterWindow` per other `QScreen`; each is frameless, non-focusable,
-and tied to the presentation window without an always-on-top hint. The set is
-destroyed on fullscreen exit or when the command is disabled and rebuilt from
-Qt's current screen list after movement or hotplug. The same code uses only
-public Qt window APIs, but the capability remains hidden on macOS and Wayland
-until those native behaviors are validated.
+On Windows, a persisted QML command can ask `PresentationWindow` to blank the
+other displays whenever it is fullscreen. The window then owns one opaque black
+`QRasterWindow` per other `QScreen`; each is frameless, non-focusable, and tied
+to the presentation window without an always-on-top hint. The set is destroyed
+on fullscreen exit or when the command is disabled and rebuilt from Qt's
+current screen list after movement or hotplug. The same code uses only public
+Qt window APIs, but the capability and stored value remain unapplied on macOS
+and Wayland until those native behaviors are validated.
 
 The current forwarding is incomplete for a player shell. Touch, tablet, input
 methods, accessibility, drag-and-drop, and file-open events remain deferred.
@@ -190,10 +198,27 @@ source-specific state and producer choice out of the presentation engine.
 HDR Lab. QML selects only the semantic Player/Diagnostics route; it never sees
 native textures, producers, or backends.
 
-None of these values are persisted. They should not be grown into the final
-player settings indiscriminately: player preferences, playback-session state,
-presentation policy, and short-lived diagnostic controls have different
-lifetimes.
+`ApplicationSettings` persists only playback volume and the supported
+fullscreen display-blanking preference. It default-constructs `QSettings` in
+user-scoped native format, so Qt selects the Windows registry, macOS
+preferences, or an XDG configuration file without platform-specific storage
+code in SunPlayer. Organization and system fallbacks are disabled.
+
+Stored values are validated before the existing runtime owners receive them:
+finite volume in `[0, 1]` goes to `MediaSession`, while display blanking is
+applied only where the window exposes that capability. Those owners remain the
+live sources of truth; their existing change signals write individual keys
+back to the adapter. Missing or invalid values retain product defaults, and a
+corrupt or inaccessible store produces one bounded warning without preventing
+playback. `QSettings` batches ordinary writes and is explicitly synchronized
+on orderly shutdown.
+
+The application smoke modes retain a `QTemporaryDir` for the complete lifetime
+of an explicit INI-backed adapter, so verification neither reads nor changes a
+developer's native preferences. Mute, current media and position, track
+selection, window geometry/state, current page, and HDR Lab controls remain
+unpersisted. Player preferences, playback-session state, presentation policy,
+and short-lived diagnostic controls keep deliberately different lifetimes.
 
 ## Errors and recovery
 
@@ -215,6 +240,18 @@ Introduce these with the playback and recovery slices that supply their real
 state rather than as an empty global framework.
 
 ## Verification
+
+The focused `application-settings` Qt Test uses only explicit INI files under
+`QTemporaryDir`. It covers missing defaults, typed round trips, preservation of
+unknown and independently written keys, strict value rejection, corrupt-file
+recovery, deterministic access failure, and bounded warning behavior without
+reading or modifying the host's native store.
+
+The real fullscreen smoke pre-seeds its temporary store before window
+construction, verifies restored volume and capability-gated display blanking,
+drives the writable volume property used by QML, and verifies both later
+per-key writes. On unsupported platforms it also proves that the stored enabled
+blanking value remains intact rather than being applied or overwritten.
 
 Viewport, active-source routing, and media-session lifecycle have focused Qt
 Test targets. A Qt Quick component target verifies root initial-property

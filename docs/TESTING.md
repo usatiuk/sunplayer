@@ -310,7 +310,25 @@ video and audio-clock presentation through both fullscreen transitions. Both
 report a process result and exit. Keep these modes small until scenarios need
 shared interactive command/event orchestration.
 
-The Player component scenario also checks the session-only other-display
+All three real-window verification modes select an explicit INI settings file
+inside a retained `QTemporaryDir`. The directory outlives final settings
+synchronization, and the scenarios neither inherit nor modify the user's
+native registry, macOS preferences, or XDG configuration.
+
+The focused `application-settings` Qt Test also uses only temporary explicit
+INI files. It covers missing defaults, valid round trips after recreation,
+portable boolean representations, malformed/non-finite/out-of-range values,
+corrupt input, deterministic access failure, warning deduplication, unknown-key
+preservation, and independent per-key writes. It deliberately does not assert
+Qt-owned registry, preferences, or XDG paths.
+
+Fullscreen smoke pre-seeds that isolated store before constructing the real
+window. It verifies restored volume and capability-gated blanking, changes the
+same writable volume property used by QML, exercises blanking changes, and
+re-reads the store to prove per-key write-through. Where blanking is
+unavailable, the enabled stored value must remain unapplied and unmodified.
+
+The Player component scenario also checks the persisted other-display
 blanking menu command through a supported-capability window fake. It proves
 visibility and checked-state/property wiring, not native multi-monitor
 placement. The registered Windows fullscreen smoke enables the option and

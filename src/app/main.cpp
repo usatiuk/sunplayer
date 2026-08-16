@@ -18,10 +18,12 @@
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QStyleHints>
+#include <QTemporaryDir>
 #include <QTimer>
 #include <QUrl>
 #include <qpa/qwindowsysteminterface.h>
 
+#include "app/ApplicationSettings.h"
 #include "app/PresentationWindow.h"
 #include "diagnostics/ApplicationLog.h"
 #include "diagnostics/LogCategories.h"
@@ -85,6 +87,9 @@ bool verifyInitialWindowBackground(PresentationWindow& window) {
 #endif
 
 namespace {
+constexpr qreal fullscreenSmokeStoredVolume = 0.37;
+constexpr qreal fullscreenSmokeChangedVolume = 0.62;
+
 void sendKeyClick(PresentationWindow& window, Qt::Key key) {
     QKeyEvent press(QEvent::KeyPress, key, Qt::NoModifier);
     QCoreApplication::sendEvent(&window, &press);
@@ -160,7 +165,8 @@ struct FullscreenSmokeState {
     bool blankingDisableCycleCompleted = false;
 };
 
-void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& window) {
+void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& window,
+                                  ApplicationSettings& applicationSettings) {
     auto state = std::make_shared<FullscreenSmokeState>();
     auto* const deadline = new QTimer(&app);
     auto* const poll = new QTimer(&app);
@@ -188,10 +194,10 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
         std::fflush(stderr);
         app.exit(EXIT_FAILURE);
     });
-    QObject::connect(poll, &QTimer::timeout, &app, [&app, &window, state, deadline, poll] {
+    QObject::connect(poll, &QTimer::timeout, &app, [&app, &window, &applicationSettings, state, deadline, poll] {
         if (window.mediaSession().state() == MediaSession::State::Error) {
             qCCritical(sunplayerLogApplication).noquote() << "event=application.fullscreen_smoke_failed"
-                                                        << "error=" + window.mediaSession().errorMessage();
+                                                          << "error=" + window.mediaSession().errorMessage();
             QByteArray const error = window.mediaSession().errorMessage().toUtf8();
             std::fprintf(stderr, "SunPlayer fullscreen smoke media failure: %s\n", error.constData());
             std::fflush(stderr);
@@ -274,7 +280,7 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
             sendAutoRepeatKeyPress(window, Qt::Key_F11);
             if (window.windowState() != Qt::WindowNoState) {
                 qCCritical(sunplayerLogApplication).noquote() << "event=application.fullscreen_smoke_failed"
-                                                            << "reason=repeated_f11_changed_state";
+                                                              << "reason=repeated_f11_changed_state";
                 std::fprintf(stderr,
                              "SunPlayer fullscreen smoke failed: "
                              "repeated F11 changed state to %d\n",
@@ -288,7 +294,7 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
             sendKeyClick(window, Qt::Key_Escape);
             if (window.windowState() != Qt::WindowNoState) {
                 qCCritical(sunplayerLogApplication).noquote() << "event=application.fullscreen_smoke_failed"
-                                                            << "reason=windowed_escape_changed_state";
+                                                              << "reason=windowed_escape_changed_state";
                 std::fprintf(stderr,
                              "SunPlayer fullscreen smoke failed: "
                              "windowed Escape changed state to %d\n",
@@ -357,6 +363,20 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
                 return;
             }
             window.setBlankOtherDisplaysInFullscreen(false);
+            ApplicationSettings::Values const persistedSettings = applicationSettings.load();
+            bool const expectedPersistedBlanking = !window.otherDisplayBlankingAvailable();
+            if (!persistedSettings.volume || !qFuzzyCompare(*persistedSettings.volume, fullscreenSmokeChangedVolume) ||
+                !persistedSettings.blankOtherDisplaysInFullscreen ||
+                *persistedSettings.blankOtherDisplaysInFullscreen != expectedPersistedBlanking) {
+                qCCritical(sunplayerLogApplication).noquote() << "event=application.fullscreen_smoke_failed"
+                                                              << "reason=settings_write_through_failed";
+                std::fprintf(stderr, "SunPlayer fullscreen smoke settings write-through failed\n");
+                std::fflush(stderr);
+                deadline->stop();
+                poll->stop();
+                app.exit(EXIT_FAILURE);
+                return;
+            }
             qCInfo(sunplayerLogApplication).noquote()
                 << "event=application.fullscreen_smoke_complete"
                 << "audioBackend=" + window.mediaSession().audioBackend()
@@ -397,6 +417,7 @@ int main(int argc, char* argv[]) {
 #endif
     QGuiApplication app(argc, argv);
     app.styleHints()->setColorScheme(Qt::ColorScheme::Dark);
+    QCoreApplication::setOrganizationName(QStringLiteral("usatiuk"));
     QCoreApplication::setApplicationName(QStringLiteral("SunPlayer"));
     QCoreApplication::setApplicationVersion(QStringLiteral(SUNPLAYER_VERSION));
 
@@ -455,7 +476,8 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
     if (parser.isSet(fullscreenSmokeOption) && positionalArguments.size() != 1) {
-        qCCritical(sunplayerLogApplication).noquote() << "--fullscreen-smoke requires exactly one positional media file.";
+        qCCritical(sunplayerLogApplication).noquote()
+            << "--fullscreen-smoke requires exactly one positional media file.";
         return EXIT_FAILURE;
     }
 #ifdef Q_OS_WIN
@@ -492,7 +514,7 @@ int main(int argc, char* argv[]) {
                    (applicationLog->filePath().isEmpty() ? QStringLiteral("disabled") : QStringLiteral("enabled"));
         if (!applicationLog->filePath().isEmpty()) {
             qCDebug(sunplayerLogApplication).noquote() << "event=application.log_file"
-                                                     << "path=" + applicationLog->filePath();
+                                                       << "path=" + applicationLog->filePath();
         }
     }
 
@@ -541,14 +563,59 @@ int main(int argc, char* argv[]) {
         return EXIT_SUCCESS;
     }
 
+    bool isolatedSettingsRequested = parser.isSet(playbackSmokeOption) || parser.isSet(fullscreenSmokeOption);
+#ifdef Q_OS_WIN
+    isolatedSettingsRequested = isolatedSettingsRequested || parser.isSet(verifyInitialBackgroundOption);
+#endif
+    std::unique_ptr<QTemporaryDir> isolatedSettingsDirectory;
+    std::unique_ptr<ApplicationSettings> applicationSettings;
+    if (isolatedSettingsRequested) {
+        isolatedSettingsDirectory = std::make_unique<QTemporaryDir>();
+        if (!isolatedSettingsDirectory->isValid()) {
+            qCCritical(sunplayerLogApplication).noquote()
+                << "Could not create isolated application settings:" << isolatedSettingsDirectory->errorString();
+            return EXIT_FAILURE;
+        }
+        applicationSettings =
+            std::make_unique<ApplicationSettings>(isolatedSettingsDirectory->filePath(QStringLiteral("settings.ini")));
+    } else {
+        applicationSettings = std::make_unique<ApplicationSettings>();
+    }
+    if (parser.isSet(fullscreenSmokeOption)) {
+        applicationSettings->setVolume(fullscreenSmokeStoredVolume);
+        applicationSettings->setBlankOtherDisplaysInFullscreen(true);
+        applicationSettings->sync();
+    }
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, &app,
+                     [&applicationSettings] { applicationSettings->sync(); });
+
     GraphicsBackendFactory::configureQtQuick();
 
 #ifdef Q_OS_LINUX
     LinuxWaylandWindowContext windowContext(app);
-    PresentationWindow window(windowContext);
+    PresentationWindow window(*applicationSettings, windowContext);
 #else
-    PresentationWindow window;
+    PresentationWindow window(*applicationSettings);
 #endif
+    if (parser.isSet(fullscreenSmokeOption)) {
+        bool const expectedRestoredBlanking = window.otherDisplayBlankingAvailable();
+        if (!qFuzzyCompare(window.mediaSession().volume(), fullscreenSmokeStoredVolume) ||
+            window.blankOtherDisplaysInFullscreen() != expectedRestoredBlanking) {
+            qCCritical(sunplayerLogApplication).noquote() << "event=application.fullscreen_smoke_failed"
+                                                          << "reason=settings_restore_failed";
+            return EXIT_FAILURE;
+        }
+
+        // Drive the setter behind the same writable property used by QML.
+        window.mediaSession().setVolume(fullscreenSmokeChangedVolume);
+        ApplicationSettings::Values const persistedSettings = applicationSettings->load();
+        if (!persistedSettings.volume || !qFuzzyCompare(*persistedSettings.volume, fullscreenSmokeChangedVolume) ||
+            !persistedSettings.blankOtherDisplaysInFullscreen || !*persistedSettings.blankOtherDisplaysInFullscreen) {
+            qCCritical(sunplayerLogApplication).noquote() << "event=application.fullscreen_smoke_failed"
+                                                          << "reason=volume_write_through_failed";
+            return EXIT_FAILURE;
+        }
+    }
 #ifdef Q_OS_WIN
     if (parser.isSet(verifyInitialBackgroundOption)) {
         return verifyInitialWindowBackground(window) ? EXIT_SUCCESS : EXIT_FAILURE;
@@ -652,12 +719,12 @@ int main(int argc, char* argv[]) {
         playbackSmokePoll.start();
     }
     if (parser.isSet(fullscreenSmokeOption)) {
-        startFullscreenSmokeScenario(app, window);
+        startFullscreenSmokeScenario(app, window, *applicationSettings);
     }
     window.show();
 
     int const exitCode = app.exec();
     qCInfo(sunplayerLogApplication).noquote() << "event=application.stop"
-                                            << "exitCode=" + QString::number(exitCode);
+                                              << "exitCode=" + QString::number(exitCode);
     return exitCode;
 }

@@ -22,13 +22,13 @@ the next pointer movement. It remains visible when no frame is ready or while
 the controls, menu, sliders, or playback-details panel need interaction.
 Its position/duration timeline performs seek through the session's
 generation-scoped restart boundary and previews the selected time while the
-scrubber is pressed. Session-lifetime volume and mute remain wired to the
-audio-output boundary. The overflow menu exposes checked video, audio, and
+scrubber is pressed. Persisted volume and session-lifetime mute remain wired to
+the audio-output boundary. The overflow menu exposes checked video, audio, and
 subtitle track lists backed by the session's observable selection state;
 unsupported embedded streams are disabled. On Windows, the same menu has a
-session-only checked action to blank every other display while Player is
-fullscreen. It is hidden on other platforms for now and creates no persistent
-preference.
+persisted checked action to blank every other display while Player is
+fullscreen. It is hidden and its stored value remains unapplied on other
+platforms for now.
 
 The native presentation window handles non-repeating `F11`/`Escape` and gated
 Space play/pause because the redirected Quick window is not the active native
@@ -120,8 +120,10 @@ error state in page-local properties.
 The current seam exposes `Empty`, `Opening`, `Ready`, and `Error`; playing,
 paused, ended, seekable, and seeking state; integer-millisecond position and
 duration; and open, cancel, retry, close, play/pause, replay, and seek
-behavior. It also exposes session-lifetime volume/mute plus a low-rate typed
-audio diagnostic view; mute preserves volume and audio-clock progression.
+behavior. It also exposes persisted volume, session-lifetime mute, and a
+low-rate typed audio diagnostic view; mute preserves volume and audio-clock
+progression. The runtime session remains the canonical source of truth while
+the application boundary restores and records the volume preference.
 Expand it with working behavior rather than adding disconnected controls.
 
 ## Video viewport

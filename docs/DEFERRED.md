@@ -286,9 +286,10 @@ Volume and mute now apply at the output boundary without changing audio-clock
 progression, and `MediaSession` exposes the active clock, PCM queue, submitted
 and presented frames, and underrun count through a typed low-rate snapshot.
 The visible Player summary currently renders the clock, backend, PCM queue,
-and underruns. It still lacks click-free gain ramps, persistence, audio-track
-selection, and a general diagnostics view. WSLg system-cubeb output and its
-advancing clock are validated; native PulseAudio/PipeWire-Pulse switching and
+and underruns. Volume now persists while mute remains session-lifetime state.
+It still lacks click-free gain ramps and a general diagnostics view. WSLg
+system-cubeb output and its advancing clock are validated; native
+PulseAudio/PipeWire-Pulse switching and
 recovery and acoustic output, physical speaker-to-display A/V measurement, and
 live macOS default-route movement remain unvalidated. macOS AudioUnit sink and
 production playback checks pass on the available Apple M2 host, where playback

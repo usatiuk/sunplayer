@@ -20,6 +20,7 @@
 #include <qt_windows.h>
 #endif
 
+#include "app/ApplicationSettings.h"
 #include "app/PresentationSettings.h"
 #include "app/VideoViewportState.h"
 #include "diagnostics/LogCategories.h"
@@ -57,12 +58,15 @@ class OtherDisplayBlankingWindow final : public QRasterWindow {
 } // namespace
 
 #ifdef Q_OS_LINUX
-PresentationWindow::PresentationWindow(LinuxWaylandWindowContext& windowContext)
-    : m_windowChrome(*this, windowContext.requiresClientSideDecorations()), m_windowContext(windowContext) {
+PresentationWindow::PresentationWindow(ApplicationSettings& applicationSettings,
+                                       LinuxWaylandWindowContext& windowContext)
+    : m_applicationSettings(applicationSettings), m_windowChrome(*this, windowContext.requiresClientSideDecorations()),
+      m_windowContext(windowContext) {
     initialize(windowContext.surfaceSelection().presentationContract(), windowContext.takeDisplayStateProvider(nullptr),
                &windowContext);
 #else
-PresentationWindow::PresentationWindow() : m_windowChrome(*this, false) {
+PresentationWindow::PresentationWindow(ApplicationSettings& applicationSettings)
+    : m_applicationSettings(applicationSettings), m_windowChrome(*this, false) {
     initialize(PresentationSurfaceContract{}, {}, nullptr);
 #endif
 }
@@ -82,6 +86,17 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
     m_settings = std::make_unique<PresentationSettings>(nullptr);
     m_diagnosticVideoSource = std::make_unique<DiagnosticVideoSource>(VideoTargetReadback::Disabled);
     m_mediaSession = std::make_unique<MediaSession>(VideoTargetReadback::Disabled);
+    ApplicationSettings::Values const storedSettings = m_applicationSettings.load();
+    if (storedSettings.volume) {
+        m_mediaSession->setVolume(*storedSettings.volume);
+    }
+    if (storedSettings.blankOtherDisplaysInFullscreen && otherDisplayBlankingAvailable()) {
+        setBlankOtherDisplaysInFullscreen(*storedSettings.blankOtherDisplaysInFullscreen);
+    }
+    connect(m_mediaSession.get(), &MediaSession::volumeChanged, this,
+            [this] { m_applicationSettings.setVolume(m_mediaSession->volume()); });
+    connect(this, &PresentationWindow::blankOtherDisplaysInFullscreenChanged, this,
+            [this] { m_applicationSettings.setBlankOtherDisplaysInFullscreen(m_blankOtherDisplaysInFullscreen); });
     m_activeVideoSource = std::make_unique<ActiveVideoSource>(m_mediaSession->videoSource(), *m_diagnosticVideoSource);
     m_videoViewport = std::make_unique<VideoViewportState>(nullptr);
     m_engine = std::make_unique<RhiPresentationEngine>(*this, *m_outputState, *m_settings, *m_activeVideoSource,
@@ -131,6 +146,8 @@ PresentationWindow::~PresentationWindow() {
 }
 
 void PresentationWindow::openMedia(QUrl const& url) { m_mediaSession->openMedia(url); }
+
+MediaSession& PresentationWindow::mediaSession() { return *m_mediaSession; }
 
 MediaSession const& PresentationWindow::mediaSession() const { return *m_mediaSession; }
 

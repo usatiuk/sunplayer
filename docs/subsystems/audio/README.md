@@ -45,8 +45,10 @@ service own normal system-default route migration inside one cubeb-stream
 epoch. SunPlayer continues to own media/hold mapping, user intent, and explicit
 re-anchoring only when the cubeb stream itself must be recreated.
 
-Volume is a session-lifetime value from zero to one. Mute selects zero effective
-gain without changing that remembered value. Both controls operate after PCM
+Volume is a persisted player preference from zero to one; `MediaSession`
+remains its canonical live owner and the application settings boundary restores
+and records it. Mute remains session-lifetime state and selects zero effective
+gain without changing the remembered volume. Both controls operate after PCM
 queueing, so they affect already-buffered audio immediately while submitted and
 presented cursors continue unchanged. They are not implemented by pausing the
 device, dropping samples, or changing the media clock. A later measured slice

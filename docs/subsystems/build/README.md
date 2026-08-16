@@ -402,12 +402,14 @@ corresponding-source, codec-policy, and redistribution work remains deferred.
 
 ## Verification
 
-The complete Debug build and all 28 registered CTest cases pass in the current
-Windows/MSVC/Ninja environment after initializing the Visual Studio developer
-environment. The dependency graph is built under the project-local clang-cl
-triplet; the SunPlayer executable remains MSVC-built. This includes the cubeb
-ABI/backend check, FFmpeg libswresample boundary, one-pass synchronized decode,
-bounded controlled sink, real D3D11VA decode/import, and GPU compositor tests.
+The current Windows CMake tree registers 30 CTest cases. On 2026-08-16 the
+complete Debug build, all 23 non-device/non-GPU tests, and the real two-display
+fullscreen scenario pass in the Windows/MSVC/Ninja environment after
+initializing the Visual Studio developer environment. Earlier dedicated runs
+cover the cubeb ABI/backend check, FFmpeg libswresample boundary, one-pass
+synchronized decode, bounded controlled sink, real D3D11VA decode/import, and
+GPU compositor tests. The dependency graph is built under the project-local
+clang-cl triplet; the SunPlayer executable remains MSVC-built.
 A bounded application scenario additionally opens an audio-first fixture in
 the built executable and observes live default-device clock progress plus two
 distinct video revisions reaching the swapchain before automatic exit.
@@ -420,8 +422,10 @@ Qt runtime available; the harness terminated the process after four seconds
 without user interaction.
 
 On Ubuntu 26.04 under WSL, clean Debug and Release builds pass with system
-dependencies. All 26 registered Linux tests and QML lint pass, including the
-system-cubeb sink, real application audio-first playback, shared embedded-
+dependencies. The last validated tree passed all 26 then-registered Linux tests
+and QML lint; the current tree registers 27 after adding the platform-neutral
+application-settings test and awaits a new Linux run. Existing evidence includes
+the system-cubeb sink, real application audio-first playback, shared embedded-
 subtitle behavior, system libass rendering, exact Wayland SDR surface
 selection, application-chrome layout behavior, and packaged-QML verification.
 The final gamma-2.2 pixel readback remains in the Windows-only compositor
@@ -442,16 +446,17 @@ advances its cubeb-backed A/V clock. Native PulseAudio/PipeWire-Pulse route
 changes, native GPU behavior, VAAPI/DRM PRIME, managed gamma-2.2 compositor
 declaration, HDR, and physical displays remain open.
 The Windows build and application runtime were user-confirmed after the cross-
-platform change. A fresh full 28-test Windows rerun remains an explicit
-regression gate.
+platform change. A fresh full 30-test Windows rerun remains an explicit
+regression gate beyond this slice's 23 non-device/non-GPU tests and focused
+two-display fullscreen scenario.
 
 On the Apple M2/macOS 26 host, Debug and clean Release source builds succeed
 with tests enabled, and QML lint plus focused Metal, SDR/HDR, VideoToolbox,
-subtitle, audio, seek, and production application scenarios pass. One full
-Debug run passed 25 of 26 tests; the lone media-session seek failure did not
-reproduce in ten isolated reruns, a complete executable rerun, or CTest's
-failed-test rerun. A final post-review full run remains the development-build
-gate. The Release executable itself declares macOS 13, but cached vcpkg static
-archives were built for the newer host target; rebuilding and validating the
+subtitle, audio, seek, and production application scenarios pass. The prior
+final Debug tree passed all 26 then-registered tests; the current tree registers
+27 after adding the platform-neutral application-settings test, and its macOS
+rerun remains pending. The Release executable itself declares macOS 13, but
+cached vcpkg static archives were built for the newer host target; rebuilding
+and validating the
 complete dependency graph for macOS 13 is intentionally deferred to packaging,
 and no release-support claim is made from that binary.

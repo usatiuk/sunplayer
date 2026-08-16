@@ -66,7 +66,7 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 
 ## Current implementation status
 
-As of 2026-08-09, the repository contains Windows D3D11, Apple-Silicon macOS
+As of 2026-08-16, the repository contains Windows D3D11, Apple-Silicon macOS
 Metal, and native-Wayland Vulkan presentation paths plus continuous local-file
 playback:
 
@@ -91,6 +91,11 @@ playback:
   visibility. HDR Lab uses libplacebo by default and can select the retained
   procedural QRhi producer for diagnostic comparison; that switch is not a
   playback fallback or player preference.
+* A narrow application settings boundary restores and records playback volume
+  and the supported fullscreen display-blanking preference through Qt's native
+  per-user store. Runtime owners remain canonical, application smoke modes use
+  isolated temporary stores, and mute and playback-session state remain
+  unpersisted.
 * Both diagnostic producers render the same grayscale, color-spectrum, and
   stepped pattern through the shared source, producer, and target lifecycle
   contracts. The QRhi implementation uses its temporary diagnostic shader.
@@ -254,8 +259,8 @@ playback:
   zero output copies/transfers, and tolerant agreement with the software-decode
   result.
 
-Physical audio-device replacement, general source buffering, drag-and-drop, and
-persistence are not integrated. Embedded subtitle discovery, selection,
+Physical audio-device replacement, general source buffering, and drag-and-drop
+are not integrated. Embedded subtitle discovery, selection,
 FFmpeg decode, libass/bitmap rendering, and final composition are integrated.
 CTest/Qt Test coverage exists for pure
 presentation-target policy, video-viewport state, the real QML shell's
@@ -297,7 +302,7 @@ tooling.
 
 * [x] Basic application and presentation-window lifecycle for the current
   Windows diagnostic shell
-* [ ] Settings and persistence
+* [x] Initial player settings and persistence
 * [x] Local file dialog and optional positional command-line open
 * [ ] Drag-and-drop and platform file associations
 * [ ] Top-level logging and non-media error integration
@@ -427,7 +432,7 @@ Documentation: `docs/subsystems/video-rendering/`
 * [x] Real-time-safe Windows, macOS, and Linux cubeb callback and default-route
   lifecycle
 * [x] Production session output and presented-audio master clock
-* [x] Session-lifetime volume and mute at the audio-output boundary
+* [x] Persisted volume and session-lifetime mute at the audio-output boundary
 * [x] Delegate ordinary default-device switching to cubeb's null-device stream
 * [ ] Device-error recovery and native route-change validation
 
@@ -463,7 +468,7 @@ Documentation: `docs/subsystems/subtitles/`
 * [x] Subtitle-track selection
 * [x] Volume and mute
 * [x] Fullscreen
-* [x] Session-only Windows fullscreen blanking of other displays
+* [x] Persistent Windows fullscreen blanking of other displays
 * [x] Continuous video loading and media error presentation
 * [x] Initial audio-buffering status presentation
 * [ ] General source-buffering presentation

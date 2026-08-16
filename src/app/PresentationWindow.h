@@ -11,6 +11,7 @@
 #include "presentation/PresentationSurfaceContract.h"
 
 class DisplayStateProvider;
+class ApplicationSettings;
 
 #ifdef Q_OS_LINUX
 class LinuxWaylandWindowContext;
@@ -28,13 +29,14 @@ class PresentationWindow : public QWindow {
 
   public:
 #ifdef Q_OS_LINUX
-    explicit PresentationWindow(LinuxWaylandWindowContext& windowContext);
+    PresentationWindow(ApplicationSettings& applicationSettings, LinuxWaylandWindowContext& windowContext);
 #else
-    PresentationWindow();
+    explicit PresentationWindow(ApplicationSettings& applicationSettings);
 #endif
     ~PresentationWindow() override;
 
     void openMedia(QUrl const& url);
+    class MediaSession& mediaSession();
     const class MediaSession& mediaSession() const;
 
     Q_INVOKABLE void toggleFullscreen();
@@ -84,6 +86,7 @@ class PresentationWindow : public QWindow {
     bool playbackShortcutEnabled() const;
     void togglePlayback();
 
+    ApplicationSettings& m_applicationSettings;
     std::unique_ptr<class PresentationOutputState> m_outputState;
     std::unique_ptr<class PresentationSettings> m_settings;
     std::unique_ptr<class DiagnosticVideoSource> m_diagnosticVideoSource;

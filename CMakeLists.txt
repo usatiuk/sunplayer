@@ -415,6 +415,8 @@ qt_add_executable(sunplayer
         src/playback/VideoFrameQueue.h
         src/playback/VideoFrameScheduler.cpp
         src/playback/VideoFrameScheduler.h
+        src/app/ApplicationSettings.cpp
+        src/app/ApplicationSettings.h
         src/app/main.cpp
         src/app/PresentationSettings.cpp
         src/app/PresentationSettings.h

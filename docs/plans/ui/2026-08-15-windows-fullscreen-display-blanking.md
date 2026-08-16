@@ -71,6 +71,14 @@ native validation.
 * Always-on-top behavior or preventing another application from covering a
   blackout window after an explicit task switch.
 
+## Later follow-up
+
+The later
+[persistent player settings plan](../application/2026-08-16-persistent-player-settings.md)
+supersedes this plan's persistence deferral: the existing checked command is
+now restored across normal restarts. The original platform capability and
+multi-display validation boundaries remain unchanged.
+
 ## Research sources
 
 * [QGuiApplication screen enumeration and hotplug signals](https://doc.qt.io/qt-6/qguiapplication.html)
