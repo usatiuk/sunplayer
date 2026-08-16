@@ -41,6 +41,11 @@ Makefile
 .qmlcache/
 .qmlls.ini
 
+# Local Windows packages and development certificates
+*.cer
+*.msix
+*.pfx
+
 # OS metadata and logs
 .DS_Store
 Thumbs.db

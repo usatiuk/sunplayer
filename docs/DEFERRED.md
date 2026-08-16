@@ -202,9 +202,10 @@ the test solely for initial CI.
 
 Linux hosted CI uses lavapipe and a Pulse null sink. A VAAPI/DRM PRIME hardware
 runner, an HDR/display lab, and physical-audio/default-route scenarios remain
-separate future lanes. Packaging/release workflows remain deferred until
-packaging is defined. The short-lived Windows Release developer artifact does not
-close installer, redistribution, licensing, or clean-machine verification work.
+separate future lanes. Windows now has a narrow CMake-install-to-MSIX path using
+Microsoft `winapp`; Partner Center identity, redistribution/licensing approval,
+clean-machine verification, certification, and Store release remain deferred.
+The short-lived Windows Release developer artifact does not close those gates.
 Until those obligations are resolved, it is project-internal development output
 and is not approved as a public binary distribution or release.
 macOS CI remains deferred until its bundle/deployment contract and useful

@@ -1,0 +1,3 @@
+packages:
+  - name: Microsoft.Windows.SDK.BuildTools
+    version: 10.0.28000.2526

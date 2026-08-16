@@ -637,6 +637,13 @@ endif ()
 
 include(GNUInstallDirs)
 
+if (WIN32)
+    # MSIX needs the compiler runtime app-locally. Select the runtime from the
+    # toolset used for this build and keep packaging out of dependency closure.
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION ${CMAKE_INSTALL_BINDIR})
+    include(InstallRequiredSystemLibraries)
+endif ()
+
 install(TARGETS sunplayer
         BUNDLE DESTINATION .
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -659,11 +666,13 @@ if (WIN32)
     qt_generate_deploy_qml_app_script(
             TARGET sunplayer
             OUTPUT_SCRIPT deploy_script
+            NO_COMPILER_RUNTIME
             NO_TRANSLATIONS
             NO_UNSUPPORTED_PLATFORM_ERROR
             DEPLOY_TOOL_OPTIONS
             --no-system-d3d-compiler
             --no-system-dxc-compiler
+            --skip-plugin-types qmltooling
     )
     install(SCRIPT ${deploy_script})
 endif ()

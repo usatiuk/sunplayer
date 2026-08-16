@@ -535,7 +535,10 @@ Documentation: `docs/TESTING.md` and `docs/subsystems/testing/`
 * [x] Root-level Windows/Linux GitHub Actions build, QML-lint, and
   capability-honest CTest workflow configured; first hosted run pending
 * [x] Cross-platform libplacebo dependency configurations
-* [ ] Windows packaging
+* [x] Reproducible x64 MSIX construction from the CMake install tree through
+  the reviewed manifest/assets and Microsoft `winapp`
+* [ ] Partner Center identity, redistribution approval, clean-machine package
+  verification, certification, and controlled Store release
 * [ ] macOS packaging
 * [ ] Wayland Linux packaging and runtime requirements
 * [ ] Runtime capability reporting for optional dependency features

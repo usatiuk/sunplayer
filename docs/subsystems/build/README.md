@@ -278,9 +278,10 @@ tree's local `qt.conf` and Qt's standard install layout without duplicating
 either path. Trusted push and manual-dispatch runs then upload that complete
 Release install tree as a seven-day `sunplayer-windows-release-<commit>` developer
 artifact; pull requests do not publish contributor-built executables. CI also
-rejects an install tree containing the excluded D3D or DXC compiler DLLs. Qt's
-deployment helper supplies the supported MSVC compiler-runtime payload. The
-bundle is not an installer or clean-machine packaging claim.
+rejects an install tree containing the excluded D3D or DXC compiler DLLs. CMake
+installs the matching MSVC runtime app-locally and Qt deployment skips its
+separate redistributable installer. The bundle is not an installer or
+clean-machine packaging claim.
 
 Build-tree application and test targets use vcpkg's app-local walker and CMake's
 `TARGET_RUNTIME_DLLS`; the install path uses vcpkg's corresponding
@@ -298,12 +299,19 @@ not yet define:
   codec licensing/patent policy for FFmpeg and libass.
 * A complete third-party notice and source-offer workflow for shipped
   libplacebo and other LGPL components.
-* Windows installer or portable layout.
+* A non-Store Windows installer or portable layout.
 * macOS signing, notarization, and bundle policy.
 * Wayland Linux package formats and compositor/runtime requirements. X11 and
   XWayland compatibility are not packaging targets.
 * Runtime feature and dependency-version reporting.
 * Clean-machine package verification.
+
+The Store package path stays on this install boundary. The small
+`packaging/windows/Package-WindowsStore.ps1` entry point substitutes the four
+release-specific manifest values and calls the installed Microsoft `winapp`
+CLI. `winapp` owns PRI generation, architecture stamping, optional signing, and
+MSIX creation. The project does not download packaging tools or duplicate
+MakeAppx/Partner Center validation.
 
 ## Testing integration
 
