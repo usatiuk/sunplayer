@@ -535,12 +535,7 @@ Documentation: `docs/TESTING.md` and `docs/subsystems/testing/`
 * [x] Root-level Windows/Linux GitHub Actions build, QML-lint, and
   capability-honest CTest workflow configured; first hosted run pending
 * [x] Cross-platform libplacebo dependency configurations
-* [x] Reproducible x64 Microsoft Store MSIX build pipeline with pinned tools,
-  reviewed manifest/assets, local signed lifecycle, unsigned artifact evidence,
-  and manual trusted CI entry point
-  ([active MSIX/Store plan](docs/plans/process/2026-08-16-microsoft-store-msix-packaging.md))
-* [ ] First Partner Center submission, clean-machine/package-floor matrix,
-  certification, and controlled Store acquisition
+* [ ] Windows packaging
 * [ ] macOS packaging
 * [ ] Wayland Linux packaging and runtime requirements
 * [ ] Runtime capability reporting for optional dependency features

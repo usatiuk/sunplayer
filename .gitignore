@@ -41,17 +41,6 @@ Makefile
 .qmlcache/
 .qmlls.ini
 
-# Windows package outputs and local signing material
-*.appx
-*.appxbundle
-*.appxsym
-*.appxupload
-*.cer
-*.msix
-*.msixbundle
-*.msixupload
-*.pfx
-
 # OS metadata and logs
 .DS_Store
 Thumbs.db

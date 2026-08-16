@@ -79,11 +79,8 @@ synchronization, or cross-device roaming contract.
 The same default `QSettings` code applies to an unpackaged executable and a
 future Microsoft Store MSIX; Windows owns any applicable per-package HKCU
 virtualization. The packaging slice must keep package identity stable and
-validate packaged restart, upgrade, and uninstall behavior. SunPlayer has no
-supported public unpackaged Windows distribution, so this creates no migration
-contract for developer registry state. Revisit that only if a public
-unpackaged distribution ships before the Store package. Do not request
-`unvirtualizedResources` merely for these private preferences.
+validate upgrade, uninstall, and unpackaged-to-packaged migration behavior. Do
+not request `unvirtualizedResources` merely for these private preferences.
 
 ### Ownership and lifecycle
 
@@ -177,8 +174,7 @@ unchanged.
   available in the application log.
 * Custom behavior for MSIX registry virtualization, cross-installation
   synchronization, or survival after complete package uninstall. The Store
-  packaging slice owns manifest identity, update, and uninstall-lifecycle
-  validation.
+  packaging slice owns manifest identity and migration validation.
 
 ## Implementation slices
 
@@ -241,11 +237,10 @@ real fullscreen transition. These checks validate SunPlayer's native settings
 identity and lifecycle without re-testing Qt's registry, CFPreferences, or XDG
 implementation details.
 
-Before the first Store submission, extend the installed-package check beyond
-the now-validated stable-identity install/update/cold-launch/uninstall lifecycle:
-change both persisted values through the packaged application, relaunch, update,
-and record the clean uninstall/reinstall result. That is packaging evidence,
-not a second settings implementation.
+When MSIX packaging is introduced, add an installed-package check that covers
+first launch after the unpackaged build, a package update with stable identity,
+and a clean uninstall/reinstall expectation. That is packaging evidence, not a
+second settings implementation.
 
 ## Documentation impact
 
@@ -301,5 +296,5 @@ the affected build and tests repeated.
 
 New native macOS and Wayland executions and manual cold-start checks remain
 platform evidence to collect; the implementation contains no alternate backend
-or platform storage branch. The active MSIX plan still owns packaged settings
-mutation/relaunch and clean uninstall/reinstall evidence before Store release.
+or platform storage branch. Future MSIX packaging still owns installed-package
+identity and migration validation.
