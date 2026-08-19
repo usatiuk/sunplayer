@@ -236,6 +236,8 @@ class ShellTestPresentationOutputState final : public QObject {
     Q_PROPERTY(QString videoFallbackReason MEMBER m_videoFallbackReason CONSTANT)
     Q_PROPERTY(qreal devicePixelRatio MEMBER m_devicePixelRatio CONSTANT)
     Q_PROPERTY(qreal refreshRate MEMBER m_refreshRate CONSTANT)
+    Q_PROPERTY(QString displayColorMode MEMBER m_displayColorMode CONSTANT)
+    Q_PROPERTY(QString targetGamut MEMBER m_targetGamut CONSTANT)
     Q_PROPERTY(bool displayHdrEnabled MEMBER m_displayHdrEnabled CONSTANT)
     Q_PROPERTY(bool hdrPresentationActive MEMBER m_hdrPresentationActive CONSTANT)
     Q_PROPERTY(bool sceneReferred MEMBER m_sceneReferred CONSTANT)
@@ -267,14 +269,21 @@ class ShellTestPresentationOutputState final : public QObject {
     QString m_swapChainFormat = QStringLiteral("Test swapchain");
     QString m_videoSurfaceFormat = QStringLiteral("Test surface");
     QString m_videoSurfaceProducer = QStringLiteral("Test producer");
-    QString m_videoColorPolicy = QStringLiteral("Test color policy");
-    QString m_videoInputPath = QStringLiteral("Test input");
-    QString m_videoOutputPath = QStringLiteral("Test path");
-    QString m_videoSynchronization = QStringLiteral("Test synchronization");
-    QString m_videoCopySummary = QStringLiteral("No copies");
+    QString m_videoColorPolicy = QStringLiteral(
+        "libplacebo spline tone mapping · perceptual gamut mapping · no inverse mapping · peak detection off · "
+        "dithering off");
+    QString m_videoInputPath = QStringLiteral("Fixed-size persistent software input");
+    QString m_videoOutputPath = QStringLiteral("Direct wrapped RGBA16F target");
+    QString m_videoSynchronization = QStringLiteral("QRhi external command synchronization");
+    QString m_videoCopySummary = QStringLiteral(
+        "0 input CPU transfers per input frame · 0 input GPU copies per input frame · 0 output GPU copies · 0 "
+        "output CPU transfers per render");
     QString m_videoFallbackReason;
     qreal m_devicePixelRatio = 1.0;
     qreal m_refreshRate = 60.0;
+    QString m_displayColorMode = QStringLiteral("Standard dynamic range");
+    QString m_targetGamut = QStringLiteral(
+        "Native target xy · R 0.6800,0.3200 · G 0.2650,0.6900 · B 0.1500,0.0600 · W 0.3127,0.3290");
     bool m_displayHdrEnabled = false;
     bool m_hdrPresentationActive = false;
     bool m_sceneReferred = false;
@@ -336,7 +345,7 @@ class ShellTestDiagnosticVideoSource final : public QObject {
     void rendererChanged();
 
   private:
-    float m_sourcePeakHeadroom = 1.0f;
+    float m_sourcePeakHeadroom = 2.0f;
     bool m_toneMappingEnabled = true;
     bool m_animatePattern = false;
     bool m_useLibplacebo = true;

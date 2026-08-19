@@ -31,6 +31,15 @@ RenderedVideoSurfaceState canonicalState() {
     state.contentRevision = 13;
     return state;
 }
+
+ColorPrimaries displayP3Primaries() {
+    return {
+        .red = {0.680f, 0.320f},
+        .green = {0.265f, 0.690f},
+        .blue = {0.150f, 0.060f},
+        .white = {0.3127f, 0.3290f},
+    };
+}
 } // namespace
 
 class RenderedVideoSurfaceTest final : public QObject {
@@ -47,6 +56,7 @@ class RenderedVideoSurfaceTest final : public QObject {
     void canonicalDescriptionIsValid();
     void descriptionRequiresCompleteSemantics();
     void descriptionRequiresFiniteLuminance();
+    void descriptionRequiresValidTargetPrimaries();
     void stateRequiresNonzeroIdentities();
     void equalSemanticStateIsReusableAcrossNativeChanges();
     void lifecycleAndContentChangesInvalidate();
@@ -150,6 +160,32 @@ void RenderedVideoSurfaceTest::descriptionRequiresFiniteLuminance() {
     }
 }
 
+void RenderedVideoSurfaceTest::descriptionRequiresValidTargetPrimaries() {
+    {
+        auto description = canonicalDescription();
+        description.targetPrimariesKnown = true;
+        QVERIFY(!description.isValid());
+    }
+    {
+        auto description = canonicalDescription();
+        description.targetPrimariesKnown = true;
+        description.targetPrimaries = displayP3Primaries();
+        QVERIFY(description.isValid());
+    }
+    {
+        auto description = canonicalDescription();
+        description.targetPrimaries = displayP3Primaries();
+        QVERIFY(!description.isValid());
+    }
+    {
+        auto description = canonicalDescription();
+        description.targetPrimariesKnown = true;
+        description.targetPrimaries = displayP3Primaries();
+        description.targetPrimaries.white = {0.9f, 0.05f};
+        QVERIFY(!description.isValid());
+    }
+}
+
 void RenderedVideoSurfaceTest::stateRequiresNonzeroIdentities() {
     {
         auto state = canonicalState();
@@ -217,6 +253,13 @@ void RenderedVideoSurfaceTest::semanticChangesInvalidate() {
     {
         auto requested = canonicalState();
         requested.description.targetPeakHeadroom = 3.0f;
+        QVERIFY(!completed.isReusableFor(requested));
+    }
+    {
+        auto requested = canonicalState();
+        requested.description.targetPrimariesKnown = true;
+        requested.description.targetPrimaries = displayP3Primaries();
+        QVERIFY(requested.isValid());
         QVERIFY(!completed.isReusableFor(requested));
     }
 }

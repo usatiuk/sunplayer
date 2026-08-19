@@ -38,6 +38,8 @@ struct PresentationTarget {
 
     bool hdrPresentationActive = false;
     bool sceneReferred = false;
+    bool targetPrimariesKnown = false;
+    ColorPrimaries targetPrimaries;
     bool sdrWhiteKnown = false;
     bool luminanceKnown = false;
     float sdrWhiteNits = 0.0f;

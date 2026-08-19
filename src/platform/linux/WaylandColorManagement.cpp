@@ -5,18 +5,6 @@
 
 #include <QStringList>
 
-namespace {
-bool validChromaticity(WaylandChromaticity const& point) {
-    return std::isfinite(point.x) && std::isfinite(point.y) && point.x >= 0.0f && point.y > 0.0f && point.x <= 1.0f &&
-           point.y <= 1.0f && point.x + point.y <= 1.0f;
-}
-
-float triangleAreaTwice(WaylandColorPrimaries const& primaries) {
-    return (primaries.green.x - primaries.red.x) * (primaries.blue.y - primaries.red.y) -
-           (primaries.green.y - primaries.red.y) * (primaries.blue.x - primaries.red.x);
-}
-} // namespace
-
 bool WaylandColorManagementCapabilities::supportsManagedSdr() const {
     return protocolAdvertised && protocolVersion >= requiredProtocolVersion && inventoryComplete &&
            parametricDescriptions && perceptualIntent && namedSrgbPrimaries && gamma22Transfer;
@@ -24,11 +12,6 @@ bool WaylandColorManagementCapabilities::supportsManagedSdr() const {
 
 bool WaylandColorManagementCapabilities::supportsManagedHdr10() const {
     return supportsManagedSdr() && namedBt2020Primaries && pqTransfer;
-}
-
-bool WaylandColorPrimaries::isValid() const {
-    return validChromaticity(red) && validChromaticity(green) && validChromaticity(blue) && validChromaticity(white) &&
-           std::abs(triangleAreaTwice(*this)) > 1.0e-6f;
 }
 
 bool WaylandPreferredDescription::isCompleteAndValid() const {
@@ -50,7 +33,11 @@ std::optional<DisplayState> displayStateFromWaylandDescription(WaylandPreferredD
     float const headroom = std::max(1.0f, description.targetMaximumLuminanceNits / description.referenceWhiteNits);
     DisplayState state;
     state.valid = true;
-    state.hdrActive = headroom > 1.0f;
+    state.colorMode = headroom > 1.0f ? DisplayColorMode::HighDynamicRange
+                                      : DisplayColorMode::StandardDynamicRange;
+    state.luminanceBehavior = DisplayLuminanceBehavior::DisplayReferred;
+    state.sdrWhiteKnown = true;
+    state.luminanceKnown = true;
     state.sdrWhiteNits = description.referenceWhiteNits;
     state.minLuminanceNits = description.targetMinimumLuminanceNits;
     state.maxLuminanceNits = description.targetMaximumLuminanceNits;

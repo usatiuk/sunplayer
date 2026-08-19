@@ -100,10 +100,20 @@ void AppShellTest::publishesActiveViewport() {
     QObject* const rendererSwitch = rootItem->findChild<QObject*>(QStringLiteral("videoRendererSwitch"));
     QObject* const hdrLabHeaderPanel = rootItem->findChild<QObject*>(QStringLiteral("hdrLabHeaderPanel"));
     QObject* const hdrLabOutputPanel = rootItem->findChild<QObject*>(QStringLiteral("hdrLabOutputPanel"));
+    QQuickItem* const hdrLabDiagnosticScroll =
+        rootItem->findChild<QQuickItem*>(QStringLiteral("hdrLabDiagnosticScroll"));
+    QQuickItem* const hdrLabReprobeButton = rootItem->findChild<QQuickItem*>(QStringLiteral("hdrLabReprobeButton"));
+    QObject* const hdrLabSourcePeakSlider =
+        rootItem->findChild<QObject*>(QStringLiteral("hdrLabSourcePeakSlider"));
+    QObject* const hdrLabSourcePeakLabel = rootItem->findChild<QObject*>(QStringLiteral("hdrLabSourcePeakLabel"));
     QObject* const hdrLabFooterPanel = rootItem->findChild<QObject*>(QStringLiteral("hdrLabFooterPanel"));
     QVERIFY(rendererSwitch);
     QVERIFY(hdrLabHeaderPanel);
     QVERIFY(hdrLabOutputPanel);
+    QVERIFY(hdrLabDiagnosticScroll);
+    QVERIFY(hdrLabReprobeButton);
+    QVERIFY(hdrLabSourcePeakSlider);
+    QVERIFY(hdrLabSourcePeakLabel);
     QVERIFY(hdrLabFooterPanel);
     QObject* const emptyState = rootItem->findChild<QObject*>(QStringLiteral("emptyState"));
     QObject* const playerPage = rootItem->findChild<QObject*>(QStringLiteral("playerPage"));
@@ -238,6 +248,9 @@ void AppShellTest::publishesActiveViewport() {
     QCOMPARE(hdrLabHeaderPanel->property("color").value<QColor>(), QColor(Qt::black));
     QCOMPARE(hdrLabOutputPanel->property("color").value<QColor>(), QColor(Qt::black));
     QCOMPARE(hdrLabFooterPanel->property("color").value<QColor>(), QColor(Qt::black));
+    QCOMPARE(videoSource.property("sourcePeakHeadroom").toReal(), 2.0);
+    QCOMPARE(hdrLabSourcePeakSlider->property("to").toReal(), 10.0);
+    QVERIFY(hdrLabSourcePeakLabel->property("text").toString().contains(QStringLiteral("2.0× 203-nit")));
     QCOMPARE(activeVideoSource.route(), ShellTestActiveVideoSource::Route::Player);
 
     QQuickWindow quickWindow;
@@ -278,6 +291,26 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(!seekSlider->property("visible").toBool());
     QVERIFY(QMetaObject::invokeMethod(emptyHdrLabButton, "clicked", Qt::DirectConnection));
     QTRY_COMPARE(activeVideoSource.route(), ShellTestActiveVideoSource::Route::Diagnostics);
+    rootItem->setSize({760.0, 560.0});
+    quickWindow.resize(760, 560);
+    QQuickItem* const hdrLabOutputPanelItem = qobject_cast<QQuickItem*>(hdrLabOutputPanel);
+    QVERIFY(hdrLabOutputPanelItem);
+    QTRY_VERIFY(hdrLabOutputPanelItem->x() >= 0.0);
+    QTRY_VERIFY(hdrLabOutputPanelItem->y() >= 0.0);
+    QTRY_VERIFY(hdrLabOutputPanelItem->x() + hdrLabOutputPanelItem->width() <= rootItem->width());
+    QTRY_VERIFY(hdrLabOutputPanelItem->y() + hdrLabOutputPanelItem->height() <= rootItem->height());
+    rootItem->setSize({760.0, 360.0});
+    quickWindow.resize(760, 360);
+    QTRY_VERIFY(hdrLabDiagnosticScroll->property("contentHeight").toReal() > hdrLabDiagnosticScroll->height());
+    qreal const diagnosticMaximumY =
+        hdrLabDiagnosticScroll->property("contentHeight").toReal() - hdrLabDiagnosticScroll->height();
+    QVERIFY(hdrLabDiagnosticScroll->setProperty("contentY", diagnosticMaximumY));
+    QTRY_VERIFY(hdrLabReprobeButton->mapToItem(hdrLabDiagnosticScroll, QPointF()).y() >= 0.0);
+    QTRY_VERIFY(hdrLabReprobeButton->mapToItem(hdrLabDiagnosticScroll, QPointF()).y() +
+                    hdrLabReprobeButton->height() <=
+                hdrLabDiagnosticScroll->height());
+    rootItem->setSize({1100.0, 760.0});
+    quickWindow.resize(1100, 760);
     QVERIFY(QMetaObject::invokeMethod(backToPlayerButton, "clicked", Qt::DirectConnection));
     QTRY_COMPARE(activeVideoSource.route(), ShellTestActiveVideoSource::Route::Player);
 

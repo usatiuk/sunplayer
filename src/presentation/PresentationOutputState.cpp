@@ -45,7 +45,39 @@ QString PresentationOutputState::videoCopySummary() const { return m_backendStat
 QString PresentationOutputState::videoFallbackReason() const { return m_backendState.videoFallbackReason; }
 qreal PresentationOutputState::devicePixelRatio() const { return m_dpr; }
 qreal PresentationOutputState::refreshRate() const { return m_refreshRate; }
-bool PresentationOutputState::displayHdrEnabled() const { return m_state.valid && m_state.hdrActive; }
+QString PresentationOutputState::displayColorMode() const {
+    if (!m_state.valid) {
+        return tr("Display color state unavailable");
+    }
+    switch (m_state.colorMode) {
+    case DisplayColorMode::StandardDynamicRange:
+        return tr("Standard dynamic range");
+    case DisplayColorMode::WideColorGamut:
+        return tr("Wide color gamut");
+    case DisplayColorMode::HighDynamicRange:
+        return tr("HDR / extended range");
+    }
+    Q_UNREACHABLE_RETURN(QString{});
+}
+QString PresentationOutputState::targetGamut() const {
+    PresentationTarget const target = presentationTarget();
+    if (!target.targetPrimariesKnown) {
+        return tr("BT.709 / sRGB target");
+    }
+    ColorPrimaries const& primaries = target.targetPrimaries;
+    return tr("Native target xy · R %1,%2 · G %3,%4 · B %5,%6 · W %7,%8")
+        .arg(primaries.red.x, 0, 'f', 4)
+        .arg(primaries.red.y, 0, 'f', 4)
+        .arg(primaries.green.x, 0, 'f', 4)
+        .arg(primaries.green.y, 0, 'f', 4)
+        .arg(primaries.blue.x, 0, 'f', 4)
+        .arg(primaries.blue.y, 0, 'f', 4)
+        .arg(primaries.white.x, 0, 'f', 4)
+        .arg(primaries.white.y, 0, 'f', 4);
+}
+bool PresentationOutputState::displayHdrEnabled() const {
+    return m_state.valid && m_state.colorMode == DisplayColorMode::HighDynamicRange;
+}
 bool PresentationOutputState::hdrPresentationActive() const { return presentationTarget().hdrPresentationActive; }
 bool PresentationOutputState::sceneReferred() const { return presentationTarget().sceneReferred; }
 bool PresentationOutputState::sdrWhiteKnown() const { return presentationTarget().sdrWhiteKnown; }
@@ -111,7 +143,7 @@ void PresentationOutputState::applyDisplayState(DisplayState const& state) {
     if (m_state == state) {
         return;
     }
-    bool const presentationModeChanged = m_state.valid != state.valid || m_state.hdrActive != state.hdrActive;
+    bool const presentationModeChanged = m_state.valid != state.valid || m_state.colorMode != state.colorMode;
     m_state = state;
     if (presentationModeChanged) {
         emit outputCharacteristicsChanged();

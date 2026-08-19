@@ -198,17 +198,18 @@ void RhiPresentationEngine::renderFrame() {
     }
 
     if (!videoRect.isEmpty()) {
-        float const requestedTargetPeak = m_settings.automaticTargetPeak() ? m_outputState.effectiveTargetHeadroom()
+        PresentationTarget const presentationTarget = m_outputState.presentationTarget();
+        float const requestedTargetPeak = m_settings.automaticTargetPeak() ? presentationTarget.effectiveTargetHeadroom
                                                                            : m_settings.manualTargetHeadroom();
         float const targetPeak = m_surfaceContract.constrainTargetHeadroom(requestedTargetPeak);
         Q_ASSERT(std::isfinite(targetPeak) && targetPeak >= 1.0f);
-        float const referenceWhiteNits =
-            m_outputState.sdrWhiteKnown() ? m_outputState.sdrWhiteNits() : scRgbReferenceWhiteNits;
+        float const referenceWhiteNits = presentationTarget.sdrWhiteKnown ? presentationTarget.sdrWhiteNits
+                                                                          : scRgbReferenceWhiteNits;
         Q_ASSERT(std::isfinite(referenceWhiteNits) && referenceWhiteNits > 0.0f);
-        bool const targetMinimumLuminanceKnown = m_outputState.luminanceKnown();
+        bool const targetMinimumLuminanceKnown = presentationTarget.luminanceKnown;
         float const targetMinimumLuminanceNits =
             targetMinimumLuminanceKnown
-                ? std::clamp(m_outputState.minLuminanceNits(), 0.0f, referenceWhiteNits * targetPeak)
+                ? std::clamp(presentationTarget.minLuminanceNits, 0.0f, referenceWhiteNits * targetPeak)
                 : 0.0f;
 
         requestedSurface.emplace();
@@ -221,6 +222,8 @@ void RhiPresentationEngine::renderFrame() {
         requestedSurface->description.targetMinimumLuminanceKnown = targetMinimumLuminanceKnown;
         requestedSurface->description.targetMinimumLuminanceNits = targetMinimumLuminanceNits;
         requestedSurface->description.targetPeakHeadroom = targetPeak;
+        requestedSurface->description.targetPrimariesKnown = presentationTarget.targetPrimariesKnown;
+        requestedSurface->description.targetPrimaries = presentationTarget.targetPrimaries;
         requestedSurface->graphicsDeviceGeneration = m_graphicsDevice->generation();
         requestedSurface->contentRevision = m_videoSource.contentRevision();
         Q_ASSERT(requestedSurface->isValid());
@@ -798,10 +801,16 @@ void RhiPresentationEngine::updateBackendState() {
 #if defined(Q_OS_MACOS) || defined(Q_OS_LINUX)
         state.luminanceKnown = false;
 #else
-        state.luminanceKnown =
-            std::isfinite(info.limits.luminanceInNits.maxLuminance) && info.limits.luminanceInNits.maxLuminance > 0.0f;
-        state.minLuminanceNits = nonNegativeOrZero(info.limits.luminanceInNits.minLuminance, "minimum luminance");
-        state.maxLuminanceNits = nonNegativeOrZero(info.limits.luminanceInNits.maxLuminance, "maximum luminance");
+        float const rawMinimumNits = info.limits.luminanceInNits.minLuminance;
+        float const rawMaximumNits = info.limits.luminanceInNits.maxLuminance;
+        state.luminanceKnown = isValidDisplayLuminanceRange(rawMinimumNits, rawMaximumNits);
+        state.minLuminanceNits = nonNegativeOrZero(rawMinimumNits, "minimum luminance");
+        state.maxLuminanceNits = nonNegativeOrZero(rawMaximumNits, "maximum luminance");
+        if (std::isfinite(rawMinimumNits) && rawMinimumNits >= 0.0f && std::isfinite(rawMaximumNits) &&
+            rawMaximumNits >= 0.0f && rawMinimumNits > rawMaximumNits) {
+            qCWarning(sunplayerLogPresentation,
+                      "QRhi reported minimum luminance above maximum luminance; treating the range as unknown");
+        }
 #endif
     } else {
         state.currentHeadroom =

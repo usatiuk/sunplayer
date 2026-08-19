@@ -32,6 +32,8 @@ class PresentationOutputState final : public QObject {
     Q_PROPERTY(QString videoFallbackReason READ videoFallbackReason NOTIFY stateChanged)
     Q_PROPERTY(qreal devicePixelRatio READ devicePixelRatio NOTIFY stateChanged)
     Q_PROPERTY(qreal refreshRate READ refreshRate NOTIFY stateChanged)
+    Q_PROPERTY(QString displayColorMode READ displayColorMode NOTIFY stateChanged)
+    Q_PROPERTY(QString targetGamut READ targetGamut NOTIFY stateChanged)
     Q_PROPERTY(bool displayHdrEnabled READ displayHdrEnabled NOTIFY stateChanged)
     Q_PROPERTY(bool hdrPresentationActive READ hdrPresentationActive NOTIFY stateChanged)
     Q_PROPERTY(bool sceneReferred READ sceneReferred NOTIFY stateChanged)
@@ -66,6 +68,8 @@ class PresentationOutputState final : public QObject {
     QString videoFallbackReason() const;
     qreal devicePixelRatio() const;
     qreal refreshRate() const;
+    QString displayColorMode() const;
+    QString targetGamut() const;
     bool displayHdrEnabled() const;
     bool hdrPresentationActive() const;
     bool sceneReferred() const;
@@ -78,6 +82,7 @@ class PresentationOutputState final : public QObject {
     float potentialHeadroom() const;
     float effectiveTargetHeadroom() const;
     float sdrScale() const;
+    PresentationTarget presentationTarget() const;
 
     Q_INVOKABLE void reprobePresentation();
     void setBackendState(PresentationBackendState const& state);
@@ -90,7 +95,6 @@ class PresentationOutputState final : public QObject {
     void attachScreen(QScreen* screen);
     void updateMetrics();
     void applyDisplayState(DisplayState const& state);
-    PresentationTarget presentationTarget() const;
 
     QPointer<QWindow> m_window;
     QPointer<QScreen> m_screen;

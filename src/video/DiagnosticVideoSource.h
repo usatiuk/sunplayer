@@ -54,7 +54,7 @@ class DiagnosticVideoSource final : public RenderedVideoSource {
     VideoProducerApi m_producerApi;
     VideoTargetReadback m_readback;
     QSize m_inputFrameSize;
-    float m_sourcePeakHeadroom = 12.5f;
+    float m_sourcePeakHeadroom = 2.0f;
     float m_phase = 0.0f;
     bool m_toneMappingEnabled = true;
     bool m_animatePattern = true;

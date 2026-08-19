@@ -70,11 +70,14 @@ BT.2020 SDR, full-range, 12-bit, chroma-location, contradictory-metadata, and
 dynamic-HDR profile coverage remains deferred. None of those gaps justifies a
 parallel source parser, decoder, or color pipeline.
 
-SunPlayer also does not yet propagate actual target display primaries to
-libplacebo. The extended-linear BT.709 surface can encode wide-gamut
-chromaticities, but the current unset `target.color.hdr.prim` is inferred as a
-BT.709 target gamut. Platform target-gamut observation and shared propagation
-are required before claiming wide-gamut output.
+Windows Advanced Color now propagates validated native display primaries to
+libplacebo separately from the extended-linear BT.709 coordinate basis, with a
+BT.709 fallback when the native target is unavailable or invalid. A real D3D11
+renderer-boundary capture proves that unknown targets use that fallback and
+that a P3 target preserves the intended signed Display-P3-red coordinates and
+neutral white before OS presentation. Physical Windows gamut verification and
+target-gamut population from macOS and Wayland remain deferred, so the project
+does not yet make a cross-platform or measured wide-gamut-output claim.
 
 Track under graphics milestone 5 and the active testing plan.
 

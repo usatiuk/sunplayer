@@ -124,13 +124,13 @@ playback:
   combines it with the UI, and presents extended-linear sRGB/scRGB when
   available, with an SDR fallback. It can also compose UI without an active
   video layer.
-* Qt screen state, QRhi swapchain HDR information, and an initial WinRT
-  Advanced Color observer feed a shared presentation snapshot and diagnostic
-  UI. Live Advanced Color changes already update SDR white and luminance;
-  material target changes rerender a paused frame. ADR 0016's latest semantic
-  target reconciliation is implemented: the rendered surface has no display
-  revision surrogate, and native screen identity alone no longer recreates the
-  swapchain.
+* Qt screen state, QRhi swapchain HDR information, and a WinRT Advanced Color
+  observer feed a shared presentation snapshot and diagnostic UI. Live
+  Advanced Color changes update Standard/WCG/HDR mode, validated native target
+  primaries, SDR white, and luminance; material target changes rerender a
+  paused frame. ADR 0016's latest semantic target reconciliation is
+  implemented: the rendered surface has no display revision surrogate, and
+  native screen identity alone no longer recreates the swapchain.
 * Diagnostics distinguish the producer input path and its CPU transfers from
   output-target GPU copies, output CPU transfers, synchronization, and fallback
   reason.
@@ -284,9 +284,11 @@ presented-audio clock progress. The QML component scenario separately protects
 the ready-without-frame viewport invariant. Playback-owned coarse selection
 also drains bounded video queues when the window or active page does not
 request rendering. Broader whole-application command/error scenarios, SDR/HDR
-range and profile coverage, actual display gamut propagation,
+range and profile coverage, macOS/Wayland target-gamut population,
 P010/P012/P016 capture, cross-platform hardware import, and physical-output
-validation do not yet exist.
+validation do not yet exist. Windows Advanced Color target-gamut observation
+and policy propagation are implemented; the policy is unit-covered, and the
+renderer's target-gamut boundary is capture-tested before OS presentation.
 
 Playback exposes normalized position/duration and seeking through a
 generation-scoped, keyframe-anchored decoder restart shared by user seek,
@@ -413,7 +415,8 @@ Documentation: `docs/subsystems/graphics/`
 * [x] Analytic reference-white-adaptive SDR/static-PQ display mapping without
   a post-map video scale
 * [x] Real FFmpeg-decoded static-PQ fixture and retained-metadata validation
-* [ ] Actual display-gamut propagation
+* [ ] Actual display-gamut propagation (Windows Advanced Color implemented;
+  macOS and Wayland population plus physical verification remain)
 * [x] HLG target-response validation through the shared FFmpeg/libplacebo
   path, without a SunPlayer-authored HLG pipeline
 * [x] Production FFmpeg/libplacebo mapping acceptance, validation, and

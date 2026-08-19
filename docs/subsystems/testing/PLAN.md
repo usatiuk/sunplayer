@@ -27,7 +27,7 @@ to run.
   * [x] Unknown luminance and SDR-white fallback.
   * [x] Current, potential, and effective headroom.
   * [ ] `SystemManaged` versus `UnmanagedSrgb` ownership.
-  * [ ] HDR scene-referred versus SDR Advanced Color/WCG display-referred
+  * [x] HDR scene-referred versus SDR Advanced Color/WCG display-referred
     output coordinates.
   * [ ] Exactly one display-calibration owner and presentation-only profile
     revisions that do not unnecessarily invalidate rendered video.
@@ -118,6 +118,10 @@ Implement alongside graphics milestone 1:
   generation and assert the producer emits the typed software-retry failure.
 * [x] Capture the display-targeted video surface and final composition for the
   analytic libplacebo path.
+* [x] Keep the surface in linear BT.709 coordinates while supplying a separate
+  raw target gamut; prove a tagged Display-P3 red retains signed extended
+  coordinates for a P3 target, maps inside BT.709 for the unknown-target
+  fallback, and does not tint D65 white.
 * [x] Capture-validate reference-white normalization for SDR at 80, 100, and
   203 nits.
 * [x] Move one fixed 1000-nit analytic PQ signal across 80-, 100-, and 203-nit

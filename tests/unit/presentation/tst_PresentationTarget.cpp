@@ -6,6 +6,17 @@
 #include <qt_windows.h>
 #endif
 
+namespace {
+ColorPrimaries displayP3Primaries() {
+    return {
+        .red = {0.680f, 0.320f},
+        .green = {0.265f, 0.690f},
+        .blue = {0.150f, 0.060f},
+        .white = {0.3127f, 0.3290f},
+    };
+}
+} // namespace
+
 class PresentationTargetTest final : public QObject {
     Q_OBJECT
 
@@ -29,7 +40,7 @@ void PresentationTargetTest::calculation_data() {
     {
         DisplayState display;
         display.valid = true;
-        display.hdrActive = true;
+        display.colorMode = DisplayColorMode::HighDynamicRange;
         display.sdrWhiteNits = 240.0f;
         display.minLuminanceNits = 0.01f;
         display.maxLuminanceNits = 1200.0f;
@@ -75,10 +86,15 @@ void PresentationTargetTest::calculation_data() {
     {
         DisplayState display;
         display.valid = true;
-        display.hdrActive = true;
+        display.colorMode = DisplayColorMode::HighDynamicRange;
+        display.luminanceBehavior = DisplayLuminanceBehavior::SceneReferred;
+        display.sdrWhiteKnown = true;
+        display.luminanceKnown = true;
         display.sdrWhiteNits = 200.0f;
         display.minLuminanceNits = 0.02f;
         display.maxLuminanceNits = 1200.0f;
+        display.targetPrimariesKnown = true;
+        display.targetPrimaries = displayP3Primaries();
 
         PresentationBackendState backend;
         backend.hdrPresentationActive = true;
@@ -94,6 +110,8 @@ void PresentationTargetTest::calculation_data() {
         PresentationTarget expected;
         expected.hdrPresentationActive = true;
         expected.sceneReferred = true;
+        expected.targetPrimariesKnown = true;
+        expected.targetPrimaries = displayP3Primaries();
         expected.sdrWhiteKnown = true;
         expected.luminanceKnown = true;
         expected.sdrWhiteNits = 200.0f;
@@ -110,10 +128,12 @@ void PresentationTargetTest::calculation_data() {
     {
         DisplayState display;
         display.valid = true;
-        display.hdrActive = false;
+        display.colorMode = DisplayColorMode::StandardDynamicRange;
         display.sdrWhiteNits = 250.0f;
         display.minLuminanceNits = 0.01f;
         display.maxLuminanceNits = 2000.0f;
+        display.targetPrimariesKnown = true;
+        display.targetPrimaries = displayP3Primaries();
 
         PresentationBackendState backend;
         backend.hdrPresentationActive = true;
@@ -141,6 +161,56 @@ void PresentationTargetTest::calculation_data() {
     }
 
     {
+        DisplayState display;
+        display.valid = true;
+        display.colorMode = DisplayColorMode::WideColorGamut;
+        display.luminanceBehavior = DisplayLuminanceBehavior::DisplayReferred;
+        display.targetPrimariesKnown = true;
+        display.targetPrimaries = displayP3Primaries();
+        display.sdrWhiteNits = 160.0f;
+        display.minLuminanceNits = 0.1f;
+        display.maxLuminanceNits = 400.0f;
+
+        PresentationBackendState backend;
+        backend.hdrPresentationActive = true;
+        backend.sceneReferred = true;
+        backend.sdrWhiteKnown = true;
+        backend.sdrWhiteNits = 80.0f;
+        backend.currentHeadroom = 4.0f;
+        backend.potentialHeadroom = 4.0f;
+
+        PresentationTarget expected;
+        expected.hdrPresentationActive = true;
+        expected.targetPrimariesKnown = true;
+        expected.targetPrimaries = displayP3Primaries();
+        expected.currentHeadroom = 1.0f;
+        expected.potentialHeadroom = 1.0f;
+        expected.effectiveTargetHeadroom = 1.0f;
+        expected.sdrScale = 1.0f;
+
+        QTest::newRow("windows-wide-gamut-is-display-referred") << display << backend << expected;
+    }
+
+    {
+        DisplayState display;
+        display.valid = true;
+        display.colorMode = DisplayColorMode::HighDynamicRange;
+        display.luminanceBehavior = DisplayLuminanceBehavior::SceneReferred;
+
+        PresentationBackendState backend;
+        backend.hdrPresentationActive = true;
+        backend.sceneReferred = false;
+        backend.currentHeadroom = 4.0f;
+        backend.potentialHeadroom = 8.0f;
+
+        PresentationTarget expected;
+        expected.hdrPresentationActive = true;
+        expected.sceneReferred = true;
+
+        QTest::newRow("scene-referred-display-rejects-display-referred-headroom") << display << backend << expected;
+    }
+
+    {
         PresentationBackendState backend;
         backend.hdrPresentationActive = true;
         backend.sceneReferred = true;
@@ -160,7 +230,9 @@ void PresentationTargetTest::calculation_data() {
     {
         DisplayState display;
         display.valid = true;
-        display.hdrActive = true;
+        display.colorMode = DisplayColorMode::HighDynamicRange;
+        display.luminanceBehavior = DisplayLuminanceBehavior::SceneReferred;
+        display.sdrWhiteKnown = true;
         display.sdrWhiteNits = 160.0f;
 
         PresentationBackendState backend;
@@ -203,7 +275,8 @@ void PresentationTargetTest::calculation_data() {
     {
         DisplayState display;
         display.valid = true;
-        display.hdrActive = true;
+        display.colorMode = DisplayColorMode::HighDynamicRange;
+        display.luminanceBehavior = DisplayLuminanceBehavior::DisplayReferred;
         display.currentHeadroom = 3.5f;
         display.potentialHeadroom = 5.0f;
 
@@ -225,7 +298,10 @@ void PresentationTargetTest::calculation_data() {
     {
         DisplayState display;
         display.valid = true;
-        display.hdrActive = true;
+        display.colorMode = DisplayColorMode::HighDynamicRange;
+        display.luminanceBehavior = DisplayLuminanceBehavior::DisplayReferred;
+        display.sdrWhiteKnown = true;
+        display.luminanceKnown = true;
         display.sdrWhiteNits = 200.0f;
         display.minLuminanceNits = 0.001f;
         display.maxLuminanceNits = 1000.0f;
@@ -254,7 +330,10 @@ void PresentationTargetTest::calculation_data() {
     {
         DisplayState display;
         display.valid = true;
-        display.hdrActive = false;
+        display.colorMode = DisplayColorMode::StandardDynamicRange;
+        display.luminanceBehavior = DisplayLuminanceBehavior::DisplayReferred;
+        display.sdrWhiteKnown = true;
+        display.luminanceKnown = true;
         display.sdrWhiteNits = 162.0f;
         display.minLuminanceNits = 0.2f;
         display.maxLuminanceNits = 162.0f;
@@ -291,6 +370,8 @@ void PresentationTargetTest::calculation() {
 
     QCOMPARE(actual.hdrPresentationActive, expected.hdrPresentationActive);
     QCOMPARE(actual.sceneReferred, expected.sceneReferred);
+    QCOMPARE(actual.targetPrimariesKnown, expected.targetPrimariesKnown);
+    QVERIFY(actual.targetPrimaries == expected.targetPrimaries);
     QCOMPARE(actual.sdrWhiteKnown, expected.sdrWhiteKnown);
     QCOMPARE(actual.luminanceKnown, expected.luminanceKnown);
     QCOMPARE(actual.sdrWhiteNits, expected.sdrWhiteNits);

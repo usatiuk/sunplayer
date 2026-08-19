@@ -131,8 +131,9 @@ Costs and limitations:
 * The destination luminance numbers are virtual coordinates derived from
   libplacebo's fixed 203-nit normalization, not literal physical target nits.
   This adapter behavior must remain documented and capture-tested.
-* SunPlayer does not yet supply actual target display primaries, so the current
-  libplacebo target gamut is inferred as BT.709.
+* Windows Advanced Color supplies actual target display primaries separately
+  from the BT.709/scRGB coordinate basis. Unknown targets still fall back to a
+  BT.709 gamut; macOS and Wayland target-gamut population remain open.
 * The virtual target is not assumed valid as a universal HDR construction. In
   libplacebo 7.360.1 the HDR destination `max_luma` becomes the HLG source's
   physical target peak for OOTF inference; a virtual maximum can therefore

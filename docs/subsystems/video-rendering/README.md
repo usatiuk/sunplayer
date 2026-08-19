@@ -131,6 +131,20 @@ the producer currently expresses headroom as
 bridge for those inputs. Source pixels and HDR-transfer metadata remain
 unchanged, and no custom pre-output multiplier runs after tone mapping.
 
+The surface remains linear BT.709/sRGB coordinates even for a wide-gamut
+target. Its separate optional raw target primaries describe the usable display
+gamut to libplacebo. Windows Advanced Color supplies validated native RGB
+primaries and white point for HDR and WCG; an unavailable or invalid target
+falls back conservatively to BT.709. This separation lets negative and
+greater-than-one scRGB components represent colors outside BT.709 without
+mislabeling the surface coordinates.
+
+The shared display snapshot keeps the platform's color-mode label separate
+from its display- versus scene-referred luminance behavior and per-field known
+state. Windows can therefore retain raw WCG capability values without making
+that Windows-specific interpretation a rule for future macOS or Wayland gamut
+providers.
+
 The renderer explicitly selects libplacebo 7.360.1's spline tone mapper and
 perceptual gamut mapper, disables inverse tone mapping, and passes null peak-
 detection and dithering parameters. The same stable policy description is
@@ -210,11 +224,16 @@ Neither one reinterprets source video metadata or tone-maps the video again.
 
 Windows display adaptation is already live. The provider binds WinRT
 `DisplayInformation` to the native window, listens for
-`AdvancedColorInfoChanged`, and publishes HDR mode, SDR white, minimum
-luminance, and maximum luminance. QRhi swapchain HDR information supplies a
-fallback. The current implementation also reacts to `QScreen` changes and a
-manual reprobe by refreshing the cached window-bound observer and marking the
-output characteristics dirty.
+`AdvancedColorInfoChanged`, and publishes the actual Standard/WCG/HDR mode,
+validated native primaries and white point for managed modes, SDR white,
+minimum luminance, and maximum luminance. QRhi swapchain HDR information
+supplies a fallback. HDR remains scene-referred and uses the existing `W/80`
+final scRGB scale. WCG is display-referred: native target gamut, one-times
+luminance headroom, and no `W/80` scale. Reported WCG luminance remains raw
+capability data rather than being misrepresented as a known current physical
+white. The implementation also reacts to `QScreen` changes and a manual
+reprobe by refreshing the cached window-bound observer and marking the output
+characteristics dirty.
 
 [ADR 0016](../../decisions/0016-reconcile-output-changes-semantically.md)
 is implemented. The HWND-bound `DisplayInformation` remains the Windows
@@ -227,10 +246,10 @@ when the desired format differs.
 
 Stable DisplayConfig/DXGI identity, greatest-intersection selection, topology
 generations, per-field confidence, and a general asynchronous query pipeline
-are not required for correctness. Raw output identity, target primaries, and
-peak/full-frame capability values may be added as diagnostics or policy inputs
-when a concrete renderer decision needs them. Topology, HDR, movement, and
-sleep/wake events only need to converge to the newest semantic target.
+are not required for correctness. Raw output identity and full-frame peak may
+be added as diagnostics or policy inputs when a concrete renderer decision
+needs them. Topology, Advanced Color mode, movement, and sleep/wake events only
+need to converge to the newest semantic target.
 
 ## Platform backends
 
@@ -329,8 +348,9 @@ compares representative pixels against the software decode. The Linux suite
 verifies system libplacebo's required Vulkan/shader capabilities and builds the
 production QRhi-owned Vulkan target; a WSLg llvmpipe smoke exercises software
 decode, direct rendering, composition, swapchain presentation, and teardown.
-Physical display correctness, physical HLG/dynamic-HDR target accuracy, actual
-display-gamut propagation, P010/P012/P016 capture, general display-matrix
+Physical display correctness, physical Windows gamut verification,
+physical HLG/dynamic-HDR target accuracy, macOS/Wayland target-gamut
+propagation, P010/P012/P016 capture, general display-matrix
 rotation, physical macOS EDR output above SDR white and unlike-display
 transitions, native-GPU Linux Vulkan coverage, and the broader Vulkan
 resize/surface-recreation synchronization matrix remain unproven.

@@ -11,7 +11,8 @@ bool RenderedVideoSurfaceDescription::isValid() const {
            std::isfinite(targetPeakHeadroom) && targetPeakHeadroom >= 1.0f &&
            (targetMinimumLuminanceKnown ? targetMinimumLuminanceNits >= 0.0f &&
                                               targetMinimumLuminanceNits <= referenceWhiteNits * targetPeakHeadroom
-                                        : targetMinimumLuminanceNits == 0.0f);
+                                        : targetMinimumLuminanceNits == 0.0f) &&
+           (targetPrimariesKnown ? targetPrimaries.isValid() : targetPrimaries == ColorPrimaries{});
 }
 
 bool RenderedVideoSurfaceState::isValid() const {

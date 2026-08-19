@@ -32,6 +32,15 @@ float virtualTargetMinimumNits(RenderedVideoSurfaceDescription const& descriptio
     return std::max(PL_COLOR_HDR_BLACK,
                     PL_COLOR_SDR_WHITE * description.targetMinimumLuminanceNits / description.referenceWhiteNits);
 }
+
+pl_raw_primaries rawPrimaries(ColorPrimaries const& primaries) {
+    return {
+        .red = {primaries.red.x, primaries.red.y},
+        .green = {primaries.green.x, primaries.green.y},
+        .blue = {primaries.blue.x, primaries.blue.y},
+        .white = {primaries.white.x, primaries.white.y},
+    };
+}
 } // namespace
 
 LibplaceboRenderContext::LibplaceboRenderContext(LibplaceboGraphicsContext const& graphics) {
@@ -88,8 +97,15 @@ bool LibplaceboRenderContext::render(pl_frame const& source, pl_tex targetTextur
     target.num_planes = 1;
     configurePlane(target.planes[0], targetTexture);
     configureRgbRepresentation(target.repr);
+    // SunPlayer's FP16 composition surface always uses linear BT.709
+    // coordinates. Raw target primaries are a separate physical gamut
+    // boundary and must not change that coordinate basis.
     target.color.primaries = PL_COLOR_PRIM_BT_709;
     target.color.transfer = PL_COLOR_TRC_LINEAR;
+    target.color.hdr.prim = targetDescription.targetPrimariesKnown
+                                ? rawPrimaries(targetDescription.targetPrimaries)
+                                : *pl_raw_primaries_get(PL_COLOR_PRIM_BT_709);
+    Q_ASSERT(pl_primaries_valid(&target.color.hdr.prim));
     // libplacebo writes linear values in a fixed coordinate system where
     // 1.0 means 203 nits. Describe the display target in that coordinate
     // system so its numerical output instead means 1.0 = active SDR white:

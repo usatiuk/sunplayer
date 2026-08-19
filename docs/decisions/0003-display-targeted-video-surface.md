@@ -47,9 +47,10 @@ device. A completed surface records:
 
 * The graphics-device generation.
 * The producer-content revision.
-* Its pixel size and every semantic target value that affects rendering,
-  currently reference white, target minimum-luminance value and known state,
-  target headroom, and fixed color semantics.
+* Its pixel size and every semantic target value that affects rendering:
+  reference white, target minimum-luminance value and known state, target
+  headroom, optional validated raw target primaries, and fixed coordinate
+  semantics.
 
 Reuse requires an exact match of that semantic state. A separate display
 revision is deliberately absent: an event or native display identity change

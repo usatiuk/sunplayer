@@ -427,6 +427,7 @@ qt_add_executable(sunplayer
         src/app/VideoViewportState.h
         src/app/windowchrome/WindowChromeController.cpp
         src/app/windowchrome/WindowChromeController.h
+        src/platform/ColorPrimaries.h
         src/platform/DisplayState.h
         src/platform/DisplayStateProvider.cpp
         src/platform/DisplayStateProvider.h
@@ -457,6 +458,8 @@ endif ()
 
 if (WIN32)
     target_sources(sunplayer PRIVATE
+            src/platform/windows/WindowsDisplayStateProvider.cpp
+            src/platform/windows/WindowsDisplayStateProvider.h
             src/platform/windows/WindowsPlaybackPowerInhibitor.cpp
     )
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")

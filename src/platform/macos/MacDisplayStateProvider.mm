@@ -85,7 +85,9 @@ public:
             headroomOrOne(
                 screen.maximumPotentialExtendedDynamicRangeColorComponentValue,
                 "potential EDR headroom"));
-        state.hdrActive = state.potentialHeadroom > 1.0f;
+        state.colorMode = state.potentialHeadroom > 1.0f ? DisplayColorMode::HighDynamicRange
+                                                         : DisplayColorMode::StandardDynamicRange;
+        state.luminanceBehavior = DisplayLuminanceBehavior::DisplayReferred;
         emit stateChanged(state);
     }
 

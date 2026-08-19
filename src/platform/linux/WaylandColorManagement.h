@@ -26,23 +26,8 @@ struct WaylandColorManagementCapabilities {
     bool supportsManagedHdr10() const;
 };
 
-struct WaylandChromaticity {
-    bool operator==(WaylandChromaticity const&) const = default;
-
-    float x = 0.0f;
-    float y = 0.0f;
-};
-
-struct WaylandColorPrimaries {
-    bool operator==(WaylandColorPrimaries const&) const = default;
-
-    WaylandChromaticity red;
-    WaylandChromaticity green;
-    WaylandChromaticity blue;
-    WaylandChromaticity white;
-
-    bool isValid() const;
-};
+using WaylandChromaticity = ColorChromaticity;
+using WaylandColorPrimaries = ColorPrimaries;
 
 enum class WaylandTransferFunction {
     Unknown,

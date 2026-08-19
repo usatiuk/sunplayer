@@ -156,12 +156,13 @@ This is not a greenfield display observer. The current implementation already:
 
 * [x] Caches an HWND-bound WinRT `DisplayInformation` and observes
   `AdvancedColorInfoChanged`.
-* [x] Publishes active HDR mode, SDR white, minimum luminance, and maximum
-  luminance, with QRhi swapchain HDR information as a fallback.
+* [x] Publishes active Standard/WCG/HDR mode, managed-mode native primaries,
+  SDR white, minimum luminance, and maximum luminance, with QRhi swapchain HDR
+  information as a fallback.
 * [x] Reacts to `QWindow::screenChanged` and refreshes the cached window-bound
   display observer.
 * [x] Rerenders a paused target-dependent frame when the detected reference
-  white or headroom changes.
+  white, headroom, or target gamut changes.
 
 The accepted design treats native events as hints and the latest semantic
 `PresentationTarget` as truth. Windows' HWND-bound `DisplayInformation` already
@@ -202,8 +203,10 @@ and [ADR 0016](../../decisions/0016-reconcile-output-changes-semantically.md).
 
 ## Stage 3: Target gamut and composition verification
 
-* [ ] Supply trusted display/target primaries separately from the extended
-  BT.709/scRGB coordinate basis used by the RGBA16F surface.
+* [x] Supply trusted Windows Advanced Color target primaries separately from
+  the extended BT.709/scRGB coordinate basis used by the RGBA16F surface. The
+  shared contract is provider-neutral; macOS and Wayland population remain
+  separate platform work.
 * [ ] Prove that negative and greater-than-one components survive libplacebo,
   QRhi composition, and the selected swapchain.
 * [ ] Verify Qt Quick and a synthetic subtitle-style layer enter the final

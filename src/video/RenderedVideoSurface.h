@@ -4,6 +4,8 @@
 
 #include <QSize>
 
+#include "platform/ColorPrimaries.h"
+
 // Pure contract shared by a rendered-video producer and the final compositor.
 enum class RenderedVideoPixelFormat {
     Unknown,
@@ -42,6 +44,8 @@ struct RenderedVideoSurfaceDescription {
     bool targetMinimumLuminanceKnown = false;
     float targetMinimumLuminanceNits = 0.0f;
     float targetPeakHeadroom = 0.0f;
+    bool targetPrimariesKnown = false;
+    ColorPrimaries targetPrimaries;
 
     bool isValid() const;
 };

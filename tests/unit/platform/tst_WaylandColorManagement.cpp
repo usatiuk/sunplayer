@@ -125,7 +125,10 @@ void WaylandColorManagementTest::completePreferredDescriptionPublishesDisplaySta
 
     QVERIFY(display.has_value());
     QVERIFY(display->valid);
-    QVERIFY(display->hdrActive);
+    QCOMPARE(display->colorMode, DisplayColorMode::HighDynamicRange);
+    QCOMPARE(display->luminanceBehavior, DisplayLuminanceBehavior::DisplayReferred);
+    QVERIFY(display->sdrWhiteKnown);
+    QVERIFY(display->luminanceKnown);
     QCOMPARE(display->sdrWhiteNits, 200.0f);
     QCOMPARE(display->minLuminanceNits, 0.001f);
     QCOMPARE(display->maxLuminanceNits, 1000.0f);
@@ -141,7 +144,7 @@ void WaylandColorManagementTest::referenceWhiteEqualsTargetMaximumIsSdr() {
 
     QVERIFY(display.has_value());
     QVERIFY(display->valid);
-    QVERIFY(!display->hdrActive);
+    QCOMPARE(display->colorMode, DisplayColorMode::StandardDynamicRange);
     QCOMPARE(display->currentHeadroom, 1.0f);
     QCOMPARE(display->potentialHeadroom, 1.0f);
 }

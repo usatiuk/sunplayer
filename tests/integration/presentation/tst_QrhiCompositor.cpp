@@ -3,10 +3,12 @@
 #include <cmath>
 #include <cstring>
 #include <memory>
+#include <optional>
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QtCore/qfloat16.h>
+#include <QtCore/qscopeguard.h>
 #include <QtTest>
 #include <libplacebo/colorspace.h>
 #include <rhi/qrhi.h>
@@ -18,6 +20,8 @@
 #include "video/LibplaceboDiagnosticVideoProducer.h"
 #include "video/RenderedVideoProducer.h"
 #include "video/RenderedVideoSurface.h"
+#include "video/VideoTargetInterop.h"
+#include "video/libplacebo/LibplaceboRenderContext.h"
 
 #ifdef Q_OS_WIN
 #include <qt_windows.h>
@@ -47,6 +51,24 @@ struct BytePixel {
     int b = 0;
     int a = 0;
 };
+
+ColorPrimaries bt709Primaries() {
+    return {
+        .red = {0.640f, 0.330f},
+        .green = {0.300f, 0.600f},
+        .blue = {0.150f, 0.060f},
+        .white = {0.3127f, 0.3290f},
+    };
+}
+
+ColorPrimaries displayP3Primaries() {
+    return {
+        .red = {0.680f, 0.320f},
+        .green = {0.265f, 0.690f},
+        .blue = {0.150f, 0.060f},
+        .white = {0.3127f, 0.3290f},
+    };
+}
 
 RenderedVideoSurfaceState surfaceState() {
     RenderedVideoSurfaceState state;
@@ -193,6 +215,7 @@ class QrhiCompositorTest final : public QObject {
   private slots:
     void realD3d11ProducerAndCompositionReadback();
     void libplaceboD3d11SurfaceAndCompositionReadback();
+    void libplaceboTargetGamutBoundary();
     void libplaceboAnimatedDiagnosticThroughput();
 };
 
@@ -1053,6 +1076,155 @@ void QrhiCompositorTest::libplaceboD3d11SurfaceAndCompositionReadback() {
     compareNear(switchedComposition.r, switchedSurface.r * parameters.sdrScale, 0.03f);
     compareNear(switchedComposition.g, switchedSurface.g * parameters.sdrScale, 0.03f);
     compareNear(switchedComposition.b, switchedSurface.b * parameters.sdrScale, 0.03f);
+#endif
+}
+
+void QrhiCompositorTest::libplaceboTargetGamutBoundary() {
+#ifndef Q_OS_WIN
+    QSKIP("The current libplacebo integration is Windows D3D11");
+#else
+    std::unique_ptr<GraphicsDeviceDomain> graphicsDevice = GraphicsBackendFactory::createDeviceDomain();
+    QVERIFY2(graphicsDevice, "Could not create the shared QRhi/libplacebo D3D11 domain");
+    LibplaceboGraphicsContext const& graphics = graphicsDevice->libplaceboContext();
+    QVERIFY(graphics.isValid());
+
+    std::unique_ptr<VideoTargetInterop> target = graphicsDevice->createVideoTarget({
+        .producerApi = VideoProducerApi::Libplacebo,
+        .readback = VideoTargetReadback::Enabled,
+    });
+    QVERIFY(target);
+
+    RenderedVideoSurfaceDescription description = surfaceState().description;
+    description.pixelSize = {2, 1};
+    description.referenceWhiteNits = PL_COLOR_SDR_WHITE;
+    description.targetMinimumLuminanceKnown = false;
+    description.targetMinimumLuminanceNits = 0.0f;
+    description.targetPeakHeadroom = 1.0f;
+
+    pl_fmt const sourceFormat = pl_find_named_fmt(graphics.gpu, "rgba32f");
+    QVERIFY(sourceFormat);
+    pl_tex_params sourceParameters{};
+    sourceParameters.w = 2;
+    sourceParameters.h = 1;
+    sourceParameters.format = sourceFormat;
+    sourceParameters.sampleable = true;
+    sourceParameters.host_writable = true;
+    pl_tex sourceTexture = pl_tex_create(graphics.gpu, &sourceParameters);
+    QVERIFY(sourceTexture);
+    auto const releaseSource = qScopeGuard([&] { pl_tex_destroy(graphics.gpu, &sourceTexture); });
+
+    std::array<float, 8> sourcePixels{
+        1.0f, 0.0f, 0.0f, 1.0f,
+        1.0f, 1.0f, 1.0f, 1.0f,
+    };
+    pl_frame source{};
+    source.num_planes = 1;
+    source.planes[0].texture = sourceTexture;
+    source.planes[0].components = 4;
+    source.planes[0].component_mapping[0] = 0;
+    source.planes[0].component_mapping[1] = 1;
+    source.planes[0].component_mapping[2] = 2;
+    source.planes[0].component_mapping[3] = 3;
+    source.repr = pl_color_repr_rgb;
+    source.repr.alpha = PL_ALPHA_INDEPENDENT;
+    source.color = pl_color_space_srgb;
+    source.color.primaries = PL_COLOR_PRIM_DISPLAY_P3;
+    source.color.hdr.prim = *pl_raw_primaries_get(PL_COLOR_PRIM_DISPLAY_P3);
+    source.crop = {0.0f, 0.0f, 2.0f, 1.0f};
+
+    LibplaceboRenderContext renderContext(graphics);
+    QVERIFY(renderContext.isValid());
+    QRhi& rhi = graphicsDevice->rhi();
+
+    struct Capture {
+        FloatPixel red;
+        FloatPixel white;
+    };
+    auto const capture = [&](std::optional<ColorPrimaries> targetPrimaries, Capture& result) -> QString {
+        description.targetPrimariesKnown = targetPrimaries.has_value();
+        description.targetPrimaries = targetPrimaries.value_or(ColorPrimaries{});
+        VideoTargetUpdate const targetUpdate = target->ensureTarget(description);
+        if (targetUpdate == VideoTargetUpdate::Unavailable || targetUpdate == VideoTargetUpdate::DeviceLost) {
+            return QStringLiteral("Could not provision the libplacebo gamut target");
+        }
+
+        QRhiCommandBuffer* commandBuffer = nullptr;
+        if (rhi.beginOffscreenFrame(&commandBuffer) != QRhi::FrameOpSuccess || !commandBuffer) {
+            return QStringLiteral("Could not begin the gamut capture frame");
+        }
+        if (target->beginProducerAccess(*commandBuffer) != VideoOperationResult::Ready) {
+            rhi.endOffscreenFrame(QRhi::SkipPresent);
+            target->submissionAborted();
+            return QStringLiteral("Could not begin libplacebo target access");
+        }
+
+        pl_tex_transfer_params upload{};
+        upload.tex = sourceTexture;
+        upload.row_pitch = 2 * 4 * sizeof(float);
+        upload.ptr = sourcePixels.data();
+        QString renderError;
+        bool const rendered = pl_tex_upload(graphics.gpu, &upload) &&
+                              renderContext.render(source, target->libplaceboRenderTarget(), description, false,
+                                                   &renderError);
+        VideoOperationResult const endResult = target->endProducerAccess(*commandBuffer);
+        if (!rendered || endResult != VideoOperationResult::Ready ||
+            target->prepareForComposition(*commandBuffer) != VideoOperationResult::Ready) {
+            rhi.endOffscreenFrame(QRhi::SkipPresent);
+            target->submissionAborted();
+            return renderError.isEmpty() ? QStringLiteral("Could not render the gamut capture") : renderError;
+        }
+
+        bool completed = false;
+        QRhiReadbackResult readback;
+        readback.completed = [&completed] { completed = true; };
+        QRhiResourceUpdateBatch* updates = rhi.nextResourceUpdateBatch();
+        updates->readBackTexture(QRhiReadbackDescription(&target->textureForComposition()), &readback);
+        commandBuffer->resourceUpdate(updates);
+        QRhi::FrameOpResult const frameResult = rhi.endOffscreenFrame();
+        if (frameResult != QRhi::FrameOpSuccess) {
+            target->submissionAborted();
+            return QStringLiteral("Could not submit the gamut capture frame");
+        }
+        target->submissionAccepted();
+        if (!completed || readback.format != QRhiTexture::RGBA16F) {
+            return QStringLiteral("Could not read the gamut capture");
+        }
+
+        result.red = readFloatPixel(readback, rhi, 0, 0);
+        result.white = readFloatPixel(readback, rhi, 1, 0);
+        return {};
+    };
+
+    Capture fallback;
+    QString const fallbackError = capture(std::nullopt, fallback);
+    QVERIFY2(fallbackError.isEmpty(), qPrintable(fallbackError));
+    Capture explicitBt709;
+    QString const explicitBt709Error = capture(bt709Primaries(), explicitBt709);
+    QVERIFY2(explicitBt709Error.isEmpty(), qPrintable(explicitBt709Error));
+    Capture displayP3;
+    QString const displayP3Error = capture(displayP3Primaries(), displayP3);
+    QVERIFY2(displayP3Error.isEmpty(), qPrintable(displayP3Error));
+
+    QVERIFY(fallback.red.r >= -0.01f && fallback.red.r <= 1.01f);
+    QVERIFY(fallback.red.g >= -0.01f && fallback.red.g <= 1.01f);
+    QVERIFY(fallback.red.b >= -0.01f && fallback.red.b <= 1.01f);
+    compareNear(fallback.red.r, explicitBt709.red.r, 0.005f);
+    compareNear(fallback.red.g, explicitBt709.red.g, 0.005f);
+    compareNear(fallback.red.b, explicitBt709.red.b, 0.005f);
+    compareNear(fallback.red.a, explicitBt709.red.a, 0.005f);
+    QVERIFY(displayP3.red.r > 1.10f);
+    QVERIFY(displayP3.red.g < -0.02f);
+    QVERIFY(displayP3.red.b < -0.005f);
+    QVERIFY(displayP3.red.r > fallback.red.r + 0.10f);
+    compareNear(displayP3.red.r, 1.22494f, 0.02f);
+    compareNear(displayP3.red.g, -0.04206f, 0.01f);
+    compareNear(displayP3.red.b, -0.01964f, 0.01f);
+    for (FloatPixel const neutral : {fallback.white, explicitBt709.white, displayP3.white}) {
+        compareNear(neutral.r, 1.0f, 0.005f);
+        compareNear(neutral.g, 1.0f, 0.005f);
+        compareNear(neutral.b, 1.0f, 0.005f);
+        compareNear(neutral.a, 1.0f, 0.005f);
+    }
 #endif
 }
 

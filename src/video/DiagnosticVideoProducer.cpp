@@ -18,11 +18,11 @@ namespace {
 struct alignas(16) DiagnosticVideoParameters {
     // Source values are multiples of the 203-nit HDR reference white. Target
     // values are multiples of the active display's SDR/reference white.
-    float sourcePeak = 12.5f;
-    float targetPeak = 1.0f;
-    float phase = 0.0f;
-    float toneMappingEnabled = 1.0f;
-    float canonicalYFlip = 0.0f;
+    float sourcePeak;
+    float targetPeak;
+    float phase;
+    float toneMappingEnabled;
+    float canonicalYFlip;
     std::array<float, 3> padding{};
 };
 
@@ -88,12 +88,13 @@ VideoOperationResult DiagnosticVideoProducer::render(QRhiCommandBuffer& commandB
     Q_ASSERT(m_pipeline);
     Q_ASSERT(!m_pendingState);
 
-    DiagnosticVideoParameters parameters;
-    parameters.sourcePeak = m_source.sourcePeakHeadroom();
-    parameters.targetPeak = requestedState.description.targetPeakHeadroom;
-    parameters.phase = m_source.phase();
-    parameters.toneMappingEnabled = m_source.toneMappingEnabled() ? 1.0f : 0.0f;
-    parameters.canonicalYFlip = m_rhi.isYUpInNDC() != m_rhi.isYUpInFramebuffer() ? 1.0f : 0.0f;
+    DiagnosticVideoParameters const parameters{
+        .sourcePeak = m_source.sourcePeakHeadroom(),
+        .targetPeak = requestedState.description.targetPeakHeadroom,
+        .phase = m_source.phase(),
+        .toneMappingEnabled = m_source.toneMappingEnabled() ? 1.0f : 0.0f,
+        .canonicalYFlip = m_rhi.isYUpInNDC() != m_rhi.isYUpInFramebuffer() ? 1.0f : 0.0f,
+    };
 
     QSize const pixelSize = requestedState.description.pixelSize;
     QRhiTextureRenderTarget* const renderTarget = m_target->qrhiRenderTarget();
