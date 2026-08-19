@@ -26,6 +26,7 @@
 #include "diagnostics/LogCategories.h"
 #include "graphics/GraphicsBackendFactory.h"
 #include "platform/DisplayStateProvider.h"
+#include "platform/PlaybackPowerInhibitor.h"
 #include "playback/MediaSession.h"
 #include "presentation/PresentationOutputState.h"
 #include "presentation/RhiPresentationEngine.h"
@@ -86,6 +87,9 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
     m_settings = std::make_unique<PresentationSettings>(nullptr);
     m_diagnosticVideoSource = std::make_unique<DiagnosticVideoSource>(VideoTargetReadback::Disabled);
     m_mediaSession = std::make_unique<MediaSession>(VideoTargetReadback::Disabled);
+    m_playbackPowerInhibitor = createPlaybackPowerInhibitor();
+    connect(m_mediaSession.get(), &MediaSession::sessionChanged, this,
+            [this] { m_playbackPowerInhibitor->reconcile(*m_mediaSession); });
     ApplicationSettings::Values const storedSettings = m_applicationSettings.load();
     if (storedSettings.volume) {
         m_mediaSession->setVolume(*storedSettings.volume);

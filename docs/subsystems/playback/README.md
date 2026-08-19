@@ -174,7 +174,8 @@ exposes `playRequested` independently of its interruption:
 * User pause freezes the clock until the user resumes.
 * A sustained output hold enters `Buffering`, not `Paused`.
 * `playing` becomes false while Buffering, while `playRequested` preserves the
-  user's intent and keeps the low-rate playback monitor active.
+  user's intent and keeps the low-rate playback monitor and application-owned
+  playback power inhibition active.
 * Video presentation and media-clock advancement stop during Buffering, and
   the source stops advertising continuous-frame demand.
 * Pause intent is recorded before the fallible sink observation and remains

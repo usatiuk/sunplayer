@@ -200,9 +200,9 @@ must rebuild and runtime-test redirected Quick rendering, swapchain HDR state,
 texture and shader resources, surface loss, and device recovery.
 
 On Linux the corresponding contract is Qt `>=6.10,<6.11` and additionally
-requires `Qt6::WaylandClientPrivate` plus Qt's Wayland scanner tools. Private
-Base, Declarative, and Wayland targets therefore resolve from one distro Qt
-family. Qt's standard protocol generator compiles the system
+requires `Qt6::DBus`, `Qt6::WaylandClientPrivate`, and Qt's Wayland scanner
+tools. Private Base, Declarative, and Wayland targets therefore resolve from
+one distro Qt family. Qt's standard protocol generator compiles the system
 color-management-v1 XML into the production Linux capability inventory and
 the focused dependency boundary.
 

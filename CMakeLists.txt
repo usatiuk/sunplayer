@@ -144,6 +144,7 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
             QuickControls2
             QuickDialogs2
             ShaderTools
+            DBus
             WaylandClientPrivate
             WaylandScannerTools
     )
@@ -429,6 +430,8 @@ qt_add_executable(sunplayer
         src/platform/DisplayState.h
         src/platform/DisplayStateProvider.cpp
         src/platform/DisplayStateProvider.h
+        src/platform/PlaybackPowerInhibitor.cpp
+        src/platform/PlaybackPowerInhibitor.h
         src/presentation/PresentationOutputState.cpp
         src/presentation/PresentationOutputState.h
         src/presentation/PresentationTarget.cpp
@@ -445,9 +448,20 @@ if (APPLE)
     target_sources(sunplayer PRIVATE
             src/platform/macos/MacDisplayStateProvider.h
             src/platform/macos/MacDisplayStateProvider.mm
+            src/platform/macos/MacPlaybackPowerInhibitor.mm
     )
     target_compile_options(sunplayer PRIVATE
             $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>
+    )
+endif ()
+
+if (WIN32)
+    target_sources(sunplayer PRIVATE
+            src/platform/windows/WindowsPlaybackPowerInhibitor.cpp
+    )
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_sources(sunplayer PRIVATE
+            src/platform/linux/LinuxPlaybackPowerInhibitor.cpp
     )
 endif ()
 
@@ -569,6 +583,7 @@ target_link_libraries(sunplayer
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_libraries(sunplayer PRIVATE
+            Qt6::DBus
             sunplayer_linux_platform
     )
 endif ()

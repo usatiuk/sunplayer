@@ -78,6 +78,8 @@ qt_add_executable(sunplayer_media_session_tests
         ../src/playback/VideoFrameQueue.h
         ../src/playback/VideoFrameScheduler.cpp
         ../src/playback/VideoFrameScheduler.h
+        ../src/platform/PlaybackPowerInhibitor.cpp
+        ../src/platform/PlaybackPowerInhibitor.h
 )
 
 qt_add_executable(sunplayer_video_frame_queue_tests

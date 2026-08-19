@@ -10,6 +10,7 @@
 #include <QCryptographicHash>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QList>
 #include <QSignalSpy>
 #include <QtTest>
 
@@ -23,6 +24,7 @@ extern "C" {
 
 #include "audio/ControlledAudioSink.h"
 #include "media/DecodedVideoFrame.h"
+#include "platform/PlaybackPowerInhibitor.h"
 #include "playback/MediaSession.h"
 
 namespace {
@@ -128,6 +130,14 @@ struct OperationGate {
         wake.notify_all();
     }
 };
+
+class RecordingPlaybackPowerInhibitor final : public PlaybackPowerInhibitor {
+  public:
+    QList<bool> transitions;
+
+  protected:
+    void setActive(bool active) override { transitions.append(active); }
+};
 } // namespace
 
 class MediaSessionTest final : public QObject {
@@ -153,6 +163,7 @@ class MediaSessionTest final : public QObject {
     void embeddedSubtitleSelectionUsesPlaybackGeneration();
     void audioOutputFailureBecomesSessionError();
     void sustainedAudioUnderrunEntersBuffering();
+    void playbackPowerInhibitionFollowsActiveIntent();
     void unavailableAudioClockBecomesSessionError();
     void unanchoredAudioOutputEpochBecomesSessionError();
     void readyNotificationCanCancelWithoutRepublishing();
@@ -956,6 +967,8 @@ void MediaSessionTest::sustainedAudioUnderrunEntersBuffering() {
             return decodeMediaFrames(request, videoSink, audioOutput, streamSink, stopToken);
         },
         audioSink);
+    RecordingPlaybackPowerInhibitor inhibitor;
+    connect(&session, &MediaSession::sessionChanged, &session, [&] { inhibitor.reconcile(session); });
 
     session.openMedia(QUrl::fromLocalFile(synchronizedFixturePath()));
     QElapsedTimer timer;
@@ -994,6 +1007,7 @@ void MediaSessionTest::sustainedAudioUnderrunEntersBuffering() {
     QCOMPARE(session.state(), MediaSession::State::Ready);
     QVERIFY(session.playRequested());
     QVERIFY(!session.playing());
+    QCOMPARE(inhibitor.transitions, QList<bool>{true});
     QVERIFY(!session.videoSource().wantsContinuousFrames());
     QCOMPARE(session.positionMilliseconds(), positionBefore);
     QVERIFY(session.videoSource().currentFrame());
@@ -1003,10 +1017,12 @@ void MediaSessionTest::sustainedAudioUnderrunEntersBuffering() {
     session.pause();
     QVERIFY(!session.playRequested());
     QVERIFY(!session.playing());
+    QCOMPARE(inhibitor.transitions, (QList<bool>{true, false}));
     QCOMPARE(session.playbackInterruption(), MediaSession::PlaybackInterruption::Buffering);
     QVERIFY(!session.videoSource().wantsContinuousFrames());
 
     session.play();
+    QCOMPARE(inhibitor.transitions, (QList<bool>{true, false, true}));
     QCOMPARE(session.playbackInterruption(), MediaSession::PlaybackInterruption::Buffering);
     QTRY_VERIFY_WITH_TIMEOUT(audioSink->bufferedFrames() != 0, 1'000);
     ControlledAudioRender const resumed = audioSink->render(257);
@@ -1018,6 +1034,49 @@ void MediaSessionTest::sustainedAudioUnderrunEntersBuffering() {
     QCOMPARE(session.mediaClockSource(), MediaSession::MediaClockSource::PresentedAudio);
     QVERIFY(session.videoSource().wantsContinuousFrames());
     QVERIFY(session.positionMilliseconds() > positionBefore);
+}
+
+void MediaSessionTest::playbackPowerInhibitionFollowsActiveIntent() {
+    MediaSession session(VideoTargetReadback::Disabled);
+    RecordingPlaybackPowerInhibitor inhibitor;
+    connect(&session, &MediaSession::sessionChanged, &session, [&] { inhibitor.reconcile(session); });
+    inhibitor.reconcile(session);
+    QVERIFY(inhibitor.transitions.isEmpty());
+
+    session.openMedia(QUrl::fromLocalFile(playbackFixturePath()));
+    QCOMPARE(session.state(), MediaSession::State::Opening);
+    QCOMPARE(inhibitor.transitions, QList<bool>{true});
+
+    QTRY_COMPARE_WITH_TIMEOUT(session.state(), MediaSession::State::Ready, 5'000);
+    QCOMPARE(inhibitor.transitions, QList<bool>{true});
+
+    session.pause();
+    QCOMPARE(inhibitor.transitions, (QList<bool>{true, false}));
+    session.seekToMilliseconds(500);
+    QCOMPARE(session.state(), MediaSession::State::Opening);
+    QCOMPARE(inhibitor.transitions, (QList<bool>{true, false}));
+    QTRY_COMPARE_WITH_TIMEOUT(session.state(), MediaSession::State::Ready, 5'000);
+
+    session.play();
+    QCOMPARE(inhibitor.transitions, (QList<bool>{true, false, true}));
+    session.seekToMilliseconds(1'000);
+    QCOMPARE(session.state(), MediaSession::State::Opening);
+    QCOMPARE(inhibitor.transitions, (QList<bool>{true, false, true}));
+    QTRY_COMPARE_WITH_TIMEOUT(session.state(), MediaSession::State::Ready, 5'000);
+
+    QVERIFY(session.videoSource().reportPresentationFailure({
+        .kind = VideoFailureKind::General,
+        .reason = QStringLiteral("Injected power-policy failure transition"),
+    }));
+    QCOMPARE(session.state(), MediaSession::State::Error);
+    QCOMPARE(inhibitor.transitions, (QList<bool>{true, false, true, false}));
+
+    session.openMedia(QUrl::fromLocalFile(playbackFixturePath()));
+    QCOMPARE(inhibitor.transitions, (QList<bool>{true, false, true, false, true}));
+    session.cancel();
+    QCOMPARE(session.state(), MediaSession::State::Empty);
+    QVERIFY(session.playRequested());
+    QCOMPARE(inhibitor.transitions, (QList<bool>{true, false, true, false, true, false}));
 }
 
 void MediaSessionTest::unavailableAudioClockBecomesSessionError() {

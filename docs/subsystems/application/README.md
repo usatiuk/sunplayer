@@ -9,8 +9,9 @@ startup, object ownership, native presentation events, redirected Qt Quick
 input, the active video-viewport boundary, and asynchronous continuous local
 audio/video playback with a position/duration seek timeline. Playback volume
 and the supported fullscreen display-blanking option persist across normal
-restarts. It does not yet provide drag-and-drop, general structured errors, or
-a user-facing support-report interface. It now installs the shared Qt category
+restarts. Active playback automatically inhibits display idle and idle system
+sleep. It does not yet provide drag-and-drop, general structured errors, or a
+user-facing support-report interface. It now installs the shared Qt category
 logger and bounded session-file sink.
 
 Graphics details belong to
@@ -85,6 +86,7 @@ platform-neutral state owns:
 * `PresentationSettings`.
 * `DiagnosticVideoSource`.
 * `MediaSession`.
+* `PlaybackPowerInhibitor`.
 * `ActiveVideoSource`.
 * `VideoViewportState`.
 * `RhiPresentationEngine`.
@@ -102,6 +104,17 @@ window context destroy the Vulkan instance.
 On Windows and macOS, the graphics engine is created before display observation attaches
 to the native window because attachment may create the platform window and
 deliver synchronous events.
+
+`PlaybackPowerInhibitor` is a narrow, best-effort platform boundary. It acquires
+one display-idle and idle-system-sleep inhibition while a media session is
+`Opening` or `Ready` with active play intent, including buffering and playing
+seek/recovery transitions. Pause, paused seeking, end, cancel, close, and error
+release it. Reconciliation is latest-value and idempotent; the application does
+not mirror playback state or treat a platform inhibition failure as a playback
+failure. Windows uses paired display/system `PowerSetRequest` assertions, macOS
+uses one `NSProcessInfo` user-initiated activity with display idle disabled, and
+Linux asynchronously requests the XDG Desktop Portal `Suspend | Idle`
+inhibition. Explicit user sleep actions remain operating-system policy.
 
 The window requests the factory-selected Direct3D, Metal, or Vulkan surface type,
 starts at 1100 × 760 logical pixels, has a 760 × 560 minimum, and uses the
@@ -261,6 +274,17 @@ handoff, all four initial Player states, cancel/retry/close command wiring,
 Player/HDR-Lab route selection, and active-page viewport publication.
 It also verifies the other-display blanking command's availability and
 checked-state binding through the QML window-command boundary.
+The media-session target also drives the production playback-power policy
+through a recording adapter. It verifies one acquire across opening, ready,
+buffering, and playing seeks; release across pause, paused seeks, error, and
+cancel; and reacquisition on resume or replacement playback. Native assertion
+visibility remains a platform check: use `powercfg /requests` on Windows,
+`pmset -g assertions` on macOS, and the desktop portal/session diagnostics on
+Linux while moving between play and pause.
+The 2026-08-18 Windows production playback run logged successful paired power-
+request acquisition and release at media end. Administrator-only assertion
+enumeration and pause/close-while-playing release remain manual checks, as do
+the macOS and native GNOME/KDE portal boundaries.
 The current Player executable has a registered no-window mode that loads its
 packaged QML module with production type registrations. A Windows-only native
 message probe verifies that the real presentation window paints its initial
