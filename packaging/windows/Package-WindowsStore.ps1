@@ -6,6 +6,7 @@ param(
     [Parameter(Mandatory = $true)] [string]$IdentityName,
     [Parameter(Mandatory = $true)] [string]$Publisher,
     [Parameter(Mandatory = $true)] [string]$PublisherDisplayName,
+    [string]$DisplayName = "SunPlayer",
     [string]$CertificatePath,
     [string]$CertificatePassword
 )
@@ -40,6 +41,7 @@ $manifest = (Get-Content -LiteralPath $template -Raw).
     Replace("@IDENTITY_NAME@", [System.Security.SecurityElement]::Escape($IdentityName)).
     Replace("@PUBLISHER@", [System.Security.SecurityElement]::Escape($Publisher)).
     Replace("@PUBLISHER_DISPLAY_NAME@", [System.Security.SecurityElement]::Escape($PublisherDisplayName)).
+    Replace("@DISPLAY_NAME@", [System.Security.SecurityElement]::Escape($DisplayName)).
     Replace("@PACKAGE_VERSION@", [System.Security.SecurityElement]::Escape($PackageVersion))
 
 try {

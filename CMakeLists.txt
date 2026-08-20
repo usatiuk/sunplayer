@@ -693,4 +693,21 @@ if (WIN32)
             --skip-plugin-types qmltooling
     )
     install(SCRIPT ${deploy_script})
+
+    set(sunplayer_development_root
+            "${CMAKE_CURRENT_BINARY_DIR}/sunplayer-development")
+    add_custom_target(sunplayer_run_with_identity
+            COMMAND ${CMAKE_COMMAND} -E rm -rf
+                    "${sunplayer_development_root}/install"
+            COMMAND ${CMAKE_COMMAND} --install "${CMAKE_BINARY_DIR}"
+                    --config "$<CONFIG>"
+                    --prefix "${sunplayer_development_root}/install"
+            COMMAND pwsh -NoLogo -NoProfile -File
+                    "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/Run-WindowsDevelopment.ps1"
+                    -InstallPrefix "${sunplayer_development_root}/install"
+                    -OutputAppxDirectory "${sunplayer_development_root}/AppX"
+            DEPENDS sunplayer
+            USES_TERMINAL
+            VERBATIM
+    )
 endif ()

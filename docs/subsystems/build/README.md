@@ -310,6 +310,16 @@ CLI. `winapp` owns PRI generation, architecture stamping, optional signing, and
 MSIX creation. The packaging script does not download tools or duplicate
 MakeAppx/Partner Center validation.
 
+For package-identity development, the Windows-only
+`sunplayer_run_with_identity` target installs the active configuration into an
+isolated build-tree prefix and passes that curated tree to `winapp run` with
+the development identity. WinApp owns loose-layout synchronization,
+registration, and AUMID activation. This path needs Developer Mode but no
+certificate, uses the shell-visible name `SunPlayer (Dev)`, and remains
+distinct from construction and installation of the real MSIX. Its separate
+package identity permits side-by-side installation with the future Store
+package.
+
 ## Testing integration
 
 CTest and Qt Test are configured only under `BUILD_TESTING`, keeping test-only

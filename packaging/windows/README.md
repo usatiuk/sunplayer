@@ -17,6 +17,34 @@ same CLI version with Microsoft's commit-pinned setup action and verifies the
 downloaded release files against reviewed SHA-256 digests before invoking the
 script.
 
+## Run with development package identity
+
+The Windows-only `sunplayer_run_with_identity` target installs the active
+build configuration into an isolated build-tree directory, registers that
+tree as a loose development package, and launches SunPlayer:
+
+```powershell
+cmake --build build --target sunplayer_run_with_identity
+```
+
+This uses `winapp run`, so it requires Windows Developer Mode but does not
+require a signing certificate or an elevated terminal. Re-running the target
+refreshes the registered `SunPlayerDevelopment` layout while preserving its
+application data. Windows displays it as `SunPlayer (Dev)`, and its separate
+package identity allows it to coexist with the eventual Store package. The
+target returns after launching the application. It exercises package identity
+and activation, but it does not construct or install an MSIX and therefore
+does not replace the signed package flow below.
+
+The development registration remains after SunPlayer exits. Remove it from
+the generated layout directory before installing a signed development MSIX:
+
+```powershell
+Push-Location .\build\sunplayer-development\AppX
+winapp unregister
+Pop-Location
+```
+
 ## Build the package input
 
 Run from a Visual Studio developer PowerShell and use an absolute install

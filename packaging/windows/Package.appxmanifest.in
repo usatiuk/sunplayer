@@ -12,7 +12,7 @@
     Version="@PACKAGE_VERSION@" />
 
   <Properties>
-    <DisplayName>SunPlayer</DisplayName>
+    <DisplayName>@DISPLAY_NAME@</DisplayName>
     <PublisherDisplayName>@PUBLISHER_DISPLAY_NAME@</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -34,7 +34,7 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
-        DisplayName="SunPlayer"
+        DisplayName="@DISPLAY_NAME@"
         Description="A focused modern video player"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\MedTile.png"
