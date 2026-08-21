@@ -345,6 +345,8 @@ add_library(sunplayer_video_pipeline STATIC
         src/video/VideoTargetInterop.h
         src/video/VideoFailure.h
         src/video/libplacebo/LibplaceboFfmpegInterop.c
+        src/video/libplacebo/LibplaceboColorPolicy.cpp
+        src/video/libplacebo/LibplaceboColorPolicy.h
         src/video/libplacebo/LibplaceboFrameImporter.cpp
         src/video/libplacebo/LibplaceboFrameImporter.h
         src/video/libplacebo/LibplaceboRenderContext.cpp

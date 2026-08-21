@@ -55,6 +55,10 @@ qt_add_executable(sunplayer_decoded_video_frame_tests
         unit/media/tst_DecodedVideoFrame.cpp
 )
 
+qt_add_executable(sunplayer_libplacebo_color_policy_tests
+        unit/video/tst_LibplaceboColorPolicy.cpp
+)
+
 qt_add_executable(sunplayer_ffmpeg_video_timeline_tests
         unit/media/tst_FfmpegVideoTimeline.cpp
 )
@@ -369,6 +373,12 @@ target_link_libraries(sunplayer_decoded_video_frame_tests
         sunplayer_ffmpeg
 )
 
+target_link_libraries(sunplayer_libplacebo_color_policy_tests
+        PRIVATE
+        Qt6::Test
+        sunplayer_video_pipeline
+)
+
 target_link_libraries(sunplayer_ffmpeg_video_timeline_tests
         PRIVATE
         Qt6::Test
@@ -494,6 +504,7 @@ if (WIN32)
             sunplayer_rendered_video_surface_tests
             sunplayer_video_viewport_tests
             sunplayer_video_presentation_geometry_tests
+            sunplayer_libplacebo_color_policy_tests
             sunplayer_ffmpeg_video_timeline_tests
             sunplayer_ffmpeg_packet_router_tests
             sunplayer_subtitle_source_tests
@@ -567,6 +578,11 @@ add_test(
 add_test(
         NAME decoded-video-frame
         COMMAND sunplayer_decoded_video_frame_tests
+)
+
+add_test(
+        NAME libplacebo-color-policy
+        COMMAND sunplayer_libplacebo_color_policy_tests
 )
 
 add_test(
@@ -691,6 +707,7 @@ set_tests_properties(
         video-viewport
         video-presentation-geometry
         decoded-video-frame
+        libplacebo-color-policy
         ffmpeg-video-timeline
         video-frame-queue
         active-video-source

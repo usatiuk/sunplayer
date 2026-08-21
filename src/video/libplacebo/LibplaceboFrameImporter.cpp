@@ -110,7 +110,7 @@ LibplaceboFrameImporter::~LibplaceboFrameImporter() {
 }
 
 std::unique_ptr<LibplaceboFrameImporter::Mapping> LibplaceboFrameImporter::map(DecodedVideoFrame const& frame,
-                                                                               QString* error) {
+                                                                               bool mapDolbyVision, QString* error) {
     Q_ASSERT(!m_mappingActive);
     if (error) {
         error->clear();
@@ -128,8 +128,8 @@ std::unique_ptr<LibplaceboFrameImporter::Mapping> LibplaceboFrameImporter::map(D
     if (frame.storage().kind != VideoFrameStorageKind::SoftwarePlanes) {
         QString hardwareError;
         VideoFrameImportFailure hardwareFailure = VideoFrameImportFailure::NativeHardwareImportUnavailable;
-        if (m_hardwareImporter &&
-            m_hardwareImporter->map(frame, m_mappedFrame, m_lastDiagnostics, hardwareFailure, &hardwareError)) {
+        if (m_hardwareImporter && m_hardwareImporter->map(frame, mapDolbyVision, m_mappedFrame, m_lastDiagnostics,
+                                                          hardwareFailure, &hardwareError)) {
             m_mappingActive = true;
             m_hardwareMapping = true;
             ++m_successfulImportCount;
@@ -155,7 +155,7 @@ std::unique_ptr<LibplaceboFrameImporter::Mapping> LibplaceboFrameImporter::map(D
     pl_avframe_params parameters{};
     parameters.frame = &avFrame;
     parameters.tex = m_softwareTextures.data();
-    parameters.map_dovi = true;
+    parameters.map_dovi = mapDolbyVision;
     if (!pl_map_avframe_ex(m_gpu, &m_mappedFrame, &parameters)) {
         return unavailable(frame, QStringLiteral("Libplacebo could not map decoded software frame"),
                            VideoFrameImportFailure::General, error);

@@ -12,6 +12,7 @@
 
 extern "C" {
 #include <libavcodec/avcodec.h>
+#include <libavutil/dovi_meta.h>
 #include <libavutil/error.h>
 #include <libavutil/hwcontext.h>
 }
@@ -85,6 +86,25 @@ QByteArray streamHdr10PlusMetadata(AVCodecParameters const& parameters) {
         }
     }
     return {};
+}
+
+std::optional<bool> dolbyVisionBaseIsHdr10Compatible(AVCodecParameters const& parameters) {
+    AVPacketSideData const* const sideData =
+        av_packet_side_data_get(parameters.coded_side_data, parameters.nb_coded_side_data, AV_PKT_DATA_DOVI_CONF);
+    if (!sideData || sideData->size < sizeof(AVDOVIDecoderConfigurationRecord)) {
+        return std::nullopt;
+    }
+
+    auto const* const configuration = reinterpret_cast<AVDOVIDecoderConfigurationRecord const*>(sideData->data);
+    bool const flagsValid = configuration->rpu_present_flag <= 1 && configuration->el_present_flag <= 1 &&
+                            configuration->bl_present_flag <= 1;
+    if (configuration->dv_version_major != 1 || !flagsValid || configuration->dv_profile == 0) {
+        return std::nullopt;
+    }
+
+    return configuration->dv_profile == 8 && configuration->rpu_present_flag == 1 &&
+           configuration->el_present_flag == 0 && configuration->bl_present_flag == 1 &&
+           configuration->dv_bl_signal_compatibility_id == 1;
 }
 
 bool attachStreamHdr10PlusMetadata(AVFrame& frame, QByteArray const& metadata) {
@@ -227,6 +247,7 @@ decodeFfmpegVideoPackets(FfmpegVideoDecodeRequest const& request, AVCodec const&
     std::uint64_t nextFrameId = request.firstFrameIdentity.frameId;
     ObservedVideoRange observedVideoRange;
     QByteArray const hdr10PlusMetadata = streamHdr10PlusMetadata(streamParameters);
+    std::optional<bool> const hdr10CompatibleDolbyBase = dolbyVisionBaseIsHdr10Compatible(streamParameters);
 
     auto const drainDecoder = [&](bool flushing) -> DrainResult {
         while (true) {
@@ -278,7 +299,7 @@ decodeFfmpegVideoPackets(FfmpegVideoDecodeRequest const& request, AVCodec const&
             }
             std::shared_ptr<DecodedVideoFrame const> decoded = DecodedVideoFrame::clone(
                 *frame, identity, streamTimeBase, hardwareFrame ? hardwareState.graphicsDeviceGeneration : std::nullopt,
-                &frameError);
+                hdr10CompatibleDolbyBase, &frameError);
             av_frame_unref(frame.get());
             if (!decoded) {
                 result.error = frameError;

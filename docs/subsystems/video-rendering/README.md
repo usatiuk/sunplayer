@@ -145,16 +145,33 @@ state. Windows can therefore retain raw WCG capability values without making
 that Windows-specific interpretation a rule for future macOS or Wayland gamut
 providers.
 
-The renderer explicitly selects libplacebo 7.360.1's spline tone mapper and
-perceptual gamut mapper, disables inverse tone mapping, and passes null peak-
-detection and dithering parameters. The same stable policy description is
-published in diagnostics. Null peak detection means there is no smoothed
-measured-peak state affecting playback today, so open and seek do not need a
-no-op renderer reset. If a later evidence-backed quality profile enables
-temporal peak detection or frame mixing, open, seek, track change, and
-generation replacement must flush that source-temporal state without
-destroying the persistent renderer. A target-only rerender is not a source
-discontinuity.
+Decoded playback uses the shared metadata-first policy accepted in
+[ADR 0023](../../decisions/0023-use-metadata-first-hdr-to-sdr-policy.md). For a
+PQ source targeting SDR/WCG, it validates and selects one coherent source
+family: supported one-window HDR10+ OOTFs use libplacebo's ST 2094-40 EETF;
+HDR10+ scene values, static MaxCLL/mastering range, and mapped Dolby L1/source
+range use libplacebo's generalized BT.2446A EETF. Metadata-less PQ uses an
+explicit, diagnosed 1,000-nit compatibility maximum. A mapped Dolby image is
+never combined with HDR10+ or static values from its base representation.
+
+A proven Profile 8.1 HDR10-compatible base carrying a supported HDR10+ OOTF
+can be selected coherently for an SDR/WCG target. That one-bit representation
+choice is stable for the playback generation and participates in imported-
+frame reuse, so moving a paused frame between HDR and SDR targets remaps it.
+Unknown compatibility remains on the existing mapped-Dolby path. Pinned
+libplacebo's unsupported zero-anchor and local-window OOTFs are diagnosed and
+fall back within the already selected metadata family.
+
+SDR, HLG, and HDR-target behavior retain the existing clip/spline paths.
+Perceptual gamut mapping remains selected for every path. Inverse mapping,
+peak detection, and dithering remain disabled, and the exact decision and
+fallback provenance are published through existing diagnostics. Null peak
+detection means there is no smoothed measured-peak state affecting playback,
+so open and seek do not need a no-op renderer reset. If a later
+evidence-backed quality profile enables temporal peak detection or frame
+mixing, open, seek, track change, and generation replacement must flush that
+source-temporal state without destroying the persistent renderer. A
+target-only rerender is not a source discontinuity.
 
 Static PQ has an analytical target-response oracle. A real HLG fixture also
 confirms that libplacebo 7.360.1 changes the captured OOTF response when
@@ -170,8 +187,10 @@ enhancement-layer residual processing.
 
 The importer reports the decoded transfer name, whether a usable HDR10+ scene-
 luminance subset is present on the mapped frame, and whether libplacebo mapped
-parsed Dolby Vision metadata. It inspects the retained and mapped frames
-directly. These diagnostics are best-effort and may settle on a later frame;
+parsed Dolby Vision metadata. The producer additionally reports the selected
+operator, metadata provenance, unsupported source guidance, and explicit
+fallback. It inspects the retained and mapped frames directly. These
+diagnostics are best-effort and may settle on a later frame;
 playback does not build a parallel dynamic-metadata state machine
 merely to make every transient diagnostic snapshot atomic. Deterministic real
 HEVC fixtures now prove HLG rendering, two frame-local HDR10+ scenes, and a

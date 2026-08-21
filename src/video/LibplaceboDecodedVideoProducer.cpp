@@ -91,19 +91,29 @@ VideoOperationResult LibplaceboDecodedVideoProducer::render(QRhiCommandBuffer& c
 
     QString renderError;
     VideoFrameImportFailure importFailure = VideoFrameImportFailure::None;
-    if (!m_mapping || m_mappedSourceFrame != frame) {
+    bool const mapDolbyVision = m_colorPolicy.shouldMapDolbyVision(*frame, requestedState.description);
+    if (!m_mapping || m_mappedSourceFrame != frame || m_mappingMapsDolbyVision != mapDolbyVision) {
         m_mapping.reset();
         m_mappedSourceFrame.reset();
-        m_mapping = m_importer->map(*frame, &renderError);
+        m_mappingMapsDolbyVision = false;
+        m_colorPolicyDescription.clear();
+        m_mapping = m_importer->map(*frame, mapDolbyVision, &renderError);
         if (m_mapping) {
             m_mappedSourceFrame = frame;
+            m_mappingMapsDolbyVision = mapDolbyVision;
         } else {
             importFailure = m_importer->lastDiagnostics().failure;
         }
     }
 
-    bool const rendered = m_mapping && m_renderContext->render(m_mapping->frame(), m_target->libplaceboRenderTarget(),
-                                                               requestedState.description, true, &renderError);
+    bool rendered = false;
+    if (m_mapping) {
+        LibplaceboColorPolicyDecision const colorPolicy =
+            m_colorPolicy.resolve(*frame, m_mapping->frame(), requestedState.description);
+        m_colorPolicyDescription = colorPolicy.description();
+        rendered = m_renderContext->renderDecoded(m_mapping->frame(), m_target->libplaceboRenderTarget(),
+                                                  requestedState.description, colorPolicy, &renderError);
+    }
 
     VideoOperationResult const endResult = m_target->endProducerAccess(commandBuffer);
     if (endResult == VideoOperationResult::DeviceLost || deviceLost()) {
@@ -165,7 +175,8 @@ std::uint64_t LibplaceboDecodedVideoProducer::compositionTextureRevision() const
 RenderedVideoProducerDiagnostics LibplaceboDecodedVideoProducer::diagnostics() const {
     RenderedVideoProducerDiagnostics result;
     result.producerName = QStringLiteral("FFmpeg decoded frame via libplacebo");
-    result.colorPolicy = LibplaceboRenderContext::policyDescription(true);
+    result.colorPolicy = m_colorPolicyDescription.isEmpty() ? LibplaceboRenderContext::policyDescription(true)
+                                                            : m_colorPolicyDescription;
 
     if (m_importer && m_importer->lastDiagnostics().isValid()) {
         VideoFrameImportDiagnostics const& input = m_importer->lastDiagnostics();

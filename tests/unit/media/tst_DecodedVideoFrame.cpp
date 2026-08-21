@@ -71,7 +71,8 @@ void DecodedVideoFrameTest::retainsSoftwareStorageAndSnapshotsSemantics() {
                                                                                         .decoderRevision = 4,
                                                                                         .frameId = 5,
                                                                                     },
-                                                                                    {1, 25}, std::nullopt, &error);
+                                                                                    {1, 25}, std::nullopt, true,
+                                                                                    &error);
     QVERIFY2(frame, qPrintable(error));
     QVERIFY(error.isEmpty());
 
@@ -102,6 +103,7 @@ void DecodedVideoFrameTest::retainsSoftwareStorageAndSnapshotsSemantics() {
     QCOMPARE(frame->signal().matrixCoefficients, QStringLiteral("gbr"));
     QCOMPARE(frame->signal().colorRange, QStringLiteral("pc"));
     QCOMPARE(frame->dynamicRange(), VideoDynamicRange::Sdr);
+    QCOMPARE(frame->dolbyVisionBaseIsHdr10Compatible(), std::optional<bool>(true));
     QCOMPARE(frame->ffmpegFrame().data[0][0], 0x5a);
     QVERIFY(av_frame_get_side_data(&frame->ffmpegFrame(), AV_FRAME_DATA_DISPLAYMATRIX));
 }
@@ -130,7 +132,7 @@ void DecodedVideoFrameTest::describesHardwareFromItsSoftwarePlanes() {
                                                                                         .decoderRevision = 2,
                                                                                         .frameId = 3,
                                                                                     },
-                                                                                    {1, 24}, 9, &error);
+                                                                                    {1, 24}, 9, std::nullopt, &error);
     QVERIFY2(frame, qPrintable(error));
     av_frame_free(&source);
 
@@ -153,7 +155,7 @@ void DecodedVideoFrameTest::describesHardwareFromItsSoftwarePlanes() {
                                           .decoderRevision = 2,
                                           .frameId = 4,
                                       },
-                                      {1, 24}, 9, &error));
+                                      {1, 24}, 9, std::nullopt, &error));
     QVERIFY(error.contains(QStringLiteral("software-plane")));
     av_frame_free(&missingContext);
 }
@@ -174,7 +176,7 @@ void DecodedVideoFrameTest::rejectsInvalidIdentityAndCrop() {
                                           .decoderRevision = 1,
                                           .frameId = 0,
                                       },
-                                      {1, 25}, std::nullopt, &error));
+                                      {1, 25}, std::nullopt, std::nullopt, &error));
     QVERIFY(error.contains(QStringLiteral("identity")));
 
     QVERIFY(!DecodedVideoFrame::clone(*source,
@@ -183,7 +185,7 @@ void DecodedVideoFrameTest::rejectsInvalidIdentityAndCrop() {
                                           .decoderRevision = 1,
                                           .frameId = 1,
                                       },
-                                      {1, 25}, std::nullopt, &error));
+                                      {1, 25}, std::nullopt, std::nullopt, &error));
     QVERIFY(error.contains(QStringLiteral("geometry")));
     av_frame_free(&source);
 }
@@ -204,6 +206,7 @@ void DecodedVideoFrameTest::classifiesDynamicRange_data() {
     constexpr int emptyContentLight = 1 << 7;
     constexpr int truncatedDolbyVision = 1 << 8;
     constexpr int emptyDolbyVision = 1 << 9;
+    constexpr int parsedHdr10Plus = 1 << 10;
     QTest::newRow("unknown") << static_cast<int>(AVCOL_PRI_UNSPECIFIED) << static_cast<int>(AVCOL_TRC_UNSPECIFIED) << 0
                              << static_cast<int>(VideoDynamicRange::Unknown);
     QTest::newRow("sdr") << static_cast<int>(AVCOL_PRI_BT709) << static_cast<int>(AVCOL_TRC_BT709) << 0
@@ -222,6 +225,9 @@ void DecodedVideoFrameTest::classifiesDynamicRange_data() {
         << static_cast<int>(VideoDynamicRange::Pq);
     QTest::newRow("hdr10-plus") << static_cast<int>(AVCOL_PRI_BT2020) << static_cast<int>(AVCOL_TRC_SMPTE2084)
                                 << hdr10Plus << static_cast<int>(VideoDynamicRange::Hdr10Plus);
+    QTest::newRow("decoder-parsed-hdr10-plus")
+        << static_cast<int>(AVCOL_PRI_BT2020) << static_cast<int>(AVCOL_TRC_SMPTE2084) << parsedHdr10Plus
+        << static_cast<int>(VideoDynamicRange::Hdr10Plus);
     QTest::newRow("truncated-hdr10-plus-is-generic-pq")
         << static_cast<int>(AVCOL_PRI_BT2020) << static_cast<int>(AVCOL_TRC_SMPTE2084) << truncatedHdr10Plus
         << static_cast<int>(VideoDynamicRange::Pq);
@@ -269,13 +275,13 @@ void DecodedVideoFrameTest::classifiesDynamicRange() {
         metadata->min_luminance = {1, 1'000};
         metadata->max_luminance = {1'000, 1};
     }
-    if (sideData & (1 << 1)) {
+    if (sideData & ((1 << 1) | (1 << 10))) {
         AVFrameSideData* const hdr10Plus =
             av_frame_new_side_data(source, AV_FRAME_DATA_DYNAMIC_HDR_PLUS, sizeof(AVDynamicHDRPlus));
         QVERIFY(hdr10Plus);
         std::memset(hdr10Plus->data, 0, hdr10Plus->size);
         auto* const metadata = reinterpret_cast<AVDynamicHDRPlus*>(hdr10Plus->data);
-        metadata->itu_t_t35_country_code = 0xb5;
+        metadata->itu_t_t35_country_code = sideData & (1 << 1) ? 0xb5 : 0;
         metadata->application_version = 1;
         metadata->num_windows = 1;
     }
@@ -332,7 +338,8 @@ void DecodedVideoFrameTest::classifiesDynamicRange() {
                                                                                         .decoderRevision = 1,
                                                                                         .frameId = 1,
                                                                                     },
-                                                                                    {1, 24}, std::nullopt, &error);
+                                                                                    {1, 24}, std::nullopt, std::nullopt,
+                                                                                    &error);
     QVERIFY2(frame, qPrintable(error));
     QCOMPARE(static_cast<int>(frame->dynamicRange()), expected);
     av_frame_free(&source);

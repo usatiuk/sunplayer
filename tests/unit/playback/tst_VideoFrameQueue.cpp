@@ -50,7 +50,8 @@ std::shared_ptr<DecodedVideoFrame const> makeFrame(std::uint64_t generation, std
                                                                                   .decoderRevision = 1,
                                                                                   .frameId = frameId,
                                                                               },
-                                                                              {1, 4}, std::nullopt, &error);
+                                                                              {1, 4}, std::nullopt, std::nullopt,
+                                                                              &error);
     av_frame_free(&source);
     if (!frame) {
         qFatal("Could not clone the test video frame: %s", qPrintable(error));

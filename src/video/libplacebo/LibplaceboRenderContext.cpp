@@ -1,6 +1,7 @@
 #include "video/libplacebo/LibplaceboRenderContext.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include <QtCore/qassert.h>
 #include <libplacebo/colorspace.h>
@@ -65,6 +66,24 @@ QString LibplaceboRenderContext::policyDescription(bool toneMappingEnabled) {
 bool LibplaceboRenderContext::render(pl_frame const& source, pl_tex targetTexture,
                                      RenderedVideoSurfaceDescription const& targetDescription, bool toneMappingEnabled,
                                      QString* error) {
+    return renderWithPolicy(source, targetTexture, targetDescription,
+                            toneMappingEnabled ? LibplaceboToneMappingFunction::Spline
+                                               : LibplaceboToneMappingFunction::Clip,
+                            PL_HDR_METADATA_ANY, std::nullopt, error);
+}
+
+bool LibplaceboRenderContext::renderDecoded(pl_frame const& source, pl_tex targetTexture,
+                                            RenderedVideoSurfaceDescription const& targetDescription,
+                                            LibplaceboColorPolicyDecision const& colorPolicy, QString* error) {
+    return renderWithPolicy(source, targetTexture, targetDescription, colorPolicy.toneMapping, colorPolicy.metadata,
+                            colorPolicy.effectiveSourceMaximumNits, error);
+}
+
+bool LibplaceboRenderContext::renderWithPolicy(pl_frame const& source, pl_tex targetTexture,
+                                               RenderedVideoSurfaceDescription const& targetDescription,
+                                               LibplaceboToneMappingFunction toneMapping,
+                                               enum pl_hdr_metadata_type metadata,
+                                               std::optional<float> effectiveSourceMaximumNits, QString* error) {
     Q_ASSERT(isValid());
     Q_ASSERT(targetTexture);
     Q_ASSERT(targetDescription.isValid());
@@ -78,6 +97,13 @@ bool LibplaceboRenderContext::render(pl_frame const& source, pl_tex targetTextur
     // LCMS-enabled system build cannot silently change cross-platform output.
     effectiveSource.icc = nullptr;
     effectiveSource.profile = {};
+    if (effectiveSourceMaximumNits) {
+        effectiveSource.color.hdr.max_luma = *effectiveSourceMaximumNits;
+        if (!std::isfinite(effectiveSource.color.hdr.min_luma) || effectiveSource.color.hdr.min_luma <= 0.0f ||
+            effectiveSource.color.hdr.min_luma > *effectiveSourceMaximumNits) {
+            effectiveSource.color.hdr.min_luma = PL_COLOR_HDR_BLACK;
+        }
+    }
     pl_color_space_infer(&effectiveSource.color);
     if (!pl_color_transfer_is_hdr(effectiveSource.color.transfer)) {
         // SDR transfer functions describe a relative signal even when a
@@ -102,9 +128,8 @@ bool LibplaceboRenderContext::render(pl_frame const& source, pl_tex targetTextur
     // boundary and must not change that coordinate basis.
     target.color.primaries = PL_COLOR_PRIM_BT_709;
     target.color.transfer = PL_COLOR_TRC_LINEAR;
-    target.color.hdr.prim = targetDescription.targetPrimariesKnown
-                                ? rawPrimaries(targetDescription.targetPrimaries)
-                                : *pl_raw_primaries_get(PL_COLOR_PRIM_BT_709);
+    target.color.hdr.prim = targetDescription.targetPrimariesKnown ? rawPrimaries(targetDescription.targetPrimaries)
+                                                                   : *pl_raw_primaries_get(PL_COLOR_PRIM_BT_709);
     Q_ASSERT(pl_primaries_valid(&target.color.hdr.prim));
     // libplacebo writes linear values in a fixed coordinate system where
     // 1.0 means 203 nits. Describe the display target in that coordinate
@@ -127,7 +152,21 @@ bool LibplaceboRenderContext::render(pl_frame const& source, pl_tex targetTextur
 
     pl_color_map_params colorMap = pl_color_map_default_params;
     colorMap.gamut_mapping = &pl_gamut_map_perceptual;
-    colorMap.tone_mapping_function = toneMappingEnabled ? &pl_tone_map_spline : &pl_tone_map_clip;
+    switch (toneMapping) {
+    case LibplaceboToneMappingFunction::Clip:
+        colorMap.tone_mapping_function = &pl_tone_map_clip;
+        break;
+    case LibplaceboToneMappingFunction::Spline:
+        colorMap.tone_mapping_function = &pl_tone_map_spline;
+        break;
+    case LibplaceboToneMappingFunction::Bt2446a:
+        colorMap.tone_mapping_function = &pl_tone_map_bt2446a;
+        break;
+    case LibplaceboToneMappingFunction::St2094_40:
+        colorMap.tone_mapping_function = &pl_tone_map_st2094_40;
+        break;
+    }
+    colorMap.metadata = metadata;
     colorMap.inverse_tone_mapping = false;
     pl_render_params parameters = pl_render_default_params;
     parameters.color_map_params = &colorMap;

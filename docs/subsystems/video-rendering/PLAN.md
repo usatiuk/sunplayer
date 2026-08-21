@@ -43,8 +43,8 @@ format correctness or emitted luminance.
 
 ## Stage 1: FFmpeg/libplacebo format acceptance and target integration (complete)
 
-This completed milestone keeps FFmpeg and libplacebo
-remain responsible for decoding, source transfer interpretation, dynamic HDR
+This completed milestone keeps FFmpeg and libplacebo responsible for decoding,
+source transfer interpretation, dynamic HDR
 metadata, tone mapping, and gamut mapping. SunPlayer does not implement separate
 SDR, PQ, HLG, HDR10+, or Dolby Vision pipelines. Its work is to preserve the
 library inputs, describe the display target without contradictory units, and
@@ -75,17 +75,27 @@ reject a source the libraries can already show.
 
 ### One display-target integration
 
-The renderer explicitly selects libplacebo 7.360.1's spline tone mapper and
-perceptual gamut mapper and disables inverse tone mapping, peak detection, and
-dithering. The resulting policy identity is visible in HDR Lab and protected
-at the production capture boundary. This freezes today's appearance without
-enabling another processing stage or prematurely adding quality presets.
+The renderer selects a shared, metadata-first libplacebo policy. SDR, HLG, and
+HDR-target paths retain their established behavior; PQ-to-SDR/WCG dispatches
+supported HDR10+ OOTFs, coherent dynamic/static metadata, and a diagnosed
+missing-metadata fallback through existing libplacebo operators. Perceptual
+gamut mapping remains common, while inverse tone mapping, peak detection, and
+dithering remain disabled. The resulting decision is visible in HDR Lab and
+protected at the production capture boundary without adding another processing
+stage or a quality-preset surface.
 
-* [x] Explicitly select libplacebo spline tone mapping and perceptual gamut
-  mapping, keep inverse tone mapping disabled, keep peak detection disabled,
-  and keep dithering disabled for the RGBA16F target. Report this initial
-  policy in diagnostics so a future library upgrade cannot silently redefine
-  playback.
+* [x] Select spline only for the retained HLG/HDR-target paths. For
+  PQ-to-SDR/WCG, use pinned-representable HDR10+ OOTFs through ST 2094-40 and
+  other coherent dynamic/static ranges through libplacebo's generalized
+  BT.2446A EETF. Use an explicit, diagnosed 1,000-nit maximum only when the
+  selected representation has no usable maximum.
+* [x] Keep perceptual gamut mapping, inverse tone mapping off, peak detection
+  off, and dithering off for the RGBA16F target. Report the exact operator,
+  metadata provenance, unsupported guidance, and fallback in diagnostics.
+* [x] Keep Dolby and HDR10-compatible base metadata coherent. Retain the
+  narrow typed Profile 8.1 compatibility fact, latch a supported HDR10+ base
+  choice per playback generation for SDR/WCG, and include it in importer-cache
+  reuse so a paused HDR/SDR target transition remaps the frame.
 * [x] Do not add a no-op source-discontinuity hook while peak detection and
   other source-temporal renderer features are disabled. If one is enabled,
   open, seek, track change, and generation replacement must reset its state;
@@ -109,7 +119,8 @@ enabling another processing stage or prematurely adding quality presets.
   targeted-system-display luminance, and supply the current physical display
   peak separately through the libplacebo destination.
 * [x] Report whether libplacebo applied Dolby Vision reshaping or displayed the
-  decoder's base-layer result. Do not parse Dolby Vision profiles or implement
+  decoder's proven HDR10-compatible base-layer result. Parse only the typed
+  decoder configuration needed for that narrow choice; do not implement
   missing trims/residual processing in SunPlayer.
 
 ### Production-boundary acceptance matrix
@@ -126,21 +137,26 @@ enabling another processing stage or prematurely adding quality presets.
   rather than repeated for every source format.
 * [x] Assert hashes, decoded signal facts, static mastering/content-light
   metadata, the explicit color policy, finite/monotonic/bounded captures,
-  static-PQ analytical values, two HLG target responses, frame-local HDR10+
-  scene progression, and mapped Dolby Vision reshaping. Existing tests retain
-  target-only rerender, final Windows scaling, and real inter-frame seek
-  coverage; temporal-state reset is intentionally absent while temporal
-  renderer features are off.
+  static-PQ analytical values, independent BT.2446A and ST 2094-40 vectors,
+  metadata-less PQ render-boundary output, two HLG target responses,
+  frame-local HDR10+ scene progression/OOTF dispatch, coherent Dolby/base
+  selection, mapped Dolby Vision reshaping, and same-frame remapping across
+  SDR/HDR targets. Existing tests retain target-only rerender, final
+  Windows scaling, and real inter-frame seek coverage; temporal-state reset is
+  intentionally absent while temporal renderer features are off.
 
 Immediate milestone outcome:
 
 * All representative formats enter the same retained-frame/import/render path.
-* SDR and static PQ retain the validated numerical model.
+* SDR retains its validated numerical model; PQ-to-SDR uses the accepted
+  metadata-first policy and diagnosed fallback.
 * HLG's observed target response is accepted for display-relative V1 playback;
   absolute-reference monitoring remains outside the claim rather than being
   approximated by a second SunPlayer color pipeline.
-* HDR10+ metadata reaches libplacebo without stale carry-over.
-* Dolby Vision diagnostics distinguish mapped reshape from decoded base layer.
+* Supported HDR10+ OOTFs and scene metadata reach the selected libplacebo
+  operator without stale carry-over.
+* Dolby Vision diagnostics distinguish mapped reshape from a proven coherent
+  base representation and never mix their metadata families.
 * Unverified target behavior remains visible without blocking otherwise valid
   playback.
 

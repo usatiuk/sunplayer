@@ -181,6 +181,8 @@ The SunPlayer wrapper snapshots:
 * Coded/visible geometry, crop, aspect ratio, and rotation.
 * Software or known hardware storage kind.
 * Pixel-format and signal diagnostics.
+* An optional validated stream fact stating whether Dolby configuration proves
+  a Profile 8.1 HDR10-compatible base layer.
 
 The retained decoded frame is the authoritative color boundary. The supported
 FFmpeg builds already fill ordinary scalar and static side data from
@@ -192,6 +194,15 @@ libplacebo. Effective sample
 aspect ratio prefers the decoded frame and then the snapshotted stream/codec
 default while those contexts remain alive. Published frames do not retain or
 expose mutable format, stream, or decoder contexts.
+
+The Dolby base-compatibility fact is read once from typed
+`AV_PKT_DATA_DOVI_CONF`. It is true only for a supported version-1 record with
+the narrow Profile 8.1,
+RPU-present, base-present, enhancement-layer-absent, HDR10-compatible shape;
+missing, truncated, future-version, or otherwise invalid configuration remains
+unknown. The shared renderer may use that fact to choose a coherent base
+representation, but the media layer does not select a tone curve or infer
+compatibility from pixels.
 
 The playback-details classifier derives one current display value directly
 from that retained frame. Dolby Vision and HDR10+ side data take precedence,

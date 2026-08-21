@@ -114,10 +114,12 @@ playback:
   Vision Profile 8.1 without a second media operation. The importer reports
   retained source facts, usable HDR10+ scene metadata, and whether Dolby Vision
   reshaping was mapped. Source HDR values remain unchanged and no custom post-
-  map normalization runs. The renderer explicitly selects libplacebo
-  7.360.1's spline tone mapper and perceptual gamut mapper and disables inverse
-  mapping, peak detection, and dithering; that policy is visible in
-  diagnostics. HLG support is display-relative and does not claim absolute-
+  map normalization runs. Shared metadata-first policy now selects supported
+  HDR10+ OOTFs or coherent Dolby/HDR10 range evidence for PQ-to-SDR/WCG and an
+  explicit 1,000-nit fallback only when usable metadata is absent. It dispatches
+  pinned libplacebo operators, keeps perceptual gamut mapping, and disables
+  inverse mapping, peak detection, and dithering; the exact decision is visible
+  in diagnostics. HLG support is display-relative and does not claim absolute-
   reference monitoring, while broader dynamic-HDR profiles and physical output
   accuracy remain validation work.
 * A narrow final QRhi pass places that already processed video surface,

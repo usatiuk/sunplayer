@@ -5,6 +5,7 @@
 
 #include "media/DecodedVideoFrame.h"
 #include "video/RenderedVideoProducer.h"
+#include "video/libplacebo/LibplaceboColorPolicy.h"
 #include "video/libplacebo/LibplaceboFrameImporter.h"
 
 class DecodedVideoSource;
@@ -50,6 +51,9 @@ class LibplaceboDecodedVideoProducer final : public RenderedVideoProducer {
     std::unique_ptr<LibplaceboFrameImporter> m_importer;
     std::unique_ptr<LibplaceboFrameImporter::Mapping> m_mapping;
     std::shared_ptr<DecodedVideoFrame const> m_mappedSourceFrame;
+    bool m_mappingMapsDolbyVision = false;
+    LibplaceboColorPolicy m_colorPolicy;
+    QString m_colorPolicyDescription;
     QString m_failureReason;
     VideoFailureKind m_failureKind = VideoFailureKind::None;
     std::optional<RenderedVideoSurfaceState> m_completedState;

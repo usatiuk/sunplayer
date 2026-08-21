@@ -103,8 +103,8 @@ class D3D11LibplaceboFrameImporter final : public LibplaceboHardwareFrameImporte
 
     ~D3D11LibplaceboFrameImporter() override { resetCache(); }
 
-    bool map(DecodedVideoFrame const& frame, pl_frame& mappedFrame, VideoFrameImportDiagnostics& diagnostics,
-             VideoFrameImportFailure& failure, QString* error) override {
+    bool map(DecodedVideoFrame const& frame, bool mapDolbyVision, pl_frame& mappedFrame,
+             VideoFrameImportDiagnostics& diagnostics, VideoFrameImportFailure& failure, QString* error) override {
         failure = VideoFrameImportFailure::NativeHardwareImportUnavailable;
         auto const fail = [error](QString const& reason) {
             if (error) {
@@ -215,7 +215,8 @@ class D3D11LibplaceboFrameImporter final : public LibplaceboHardwareFrameImporte
         mappedFrame.repr.bits.bit_shift = formats.bitShift;
 #ifdef PL_HAVE_LAV_DOLBY_VISION
         m_doviMetadata = {};
-        if (AVFrameSideData const* dovi = av_frame_get_side_data(&avFrame, AV_FRAME_DATA_DOVI_METADATA)) {
+        if (AVFrameSideData const* dovi =
+                mapDolbyVision ? av_frame_get_side_data(&avFrame, AV_FRAME_DATA_DOVI_METADATA) : nullptr) {
             if (dovi->size < sizeof(AVDOVIMetadata)) {
                 mappedFrame = {};
                 failure = VideoFrameImportFailure::General;

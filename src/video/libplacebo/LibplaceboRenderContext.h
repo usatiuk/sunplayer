@@ -4,6 +4,7 @@
 #include <libplacebo/renderer.h>
 
 #include "video/RenderedVideoSurface.h"
+#include "video/libplacebo/LibplaceboColorPolicy.h"
 
 struct LibplaceboGraphicsContext;
 
@@ -25,7 +26,15 @@ class LibplaceboRenderContext final {
     bool isValid() const;
     bool render(pl_frame const& source, pl_tex targetTexture, RenderedVideoSurfaceDescription const& targetDescription,
                 bool toneMappingEnabled, QString* error = nullptr);
+    bool renderDecoded(pl_frame const& source, pl_tex targetTexture,
+                       RenderedVideoSurfaceDescription const& targetDescription,
+                       LibplaceboColorPolicyDecision const& colorPolicy, QString* error = nullptr);
 
   private:
+    bool renderWithPolicy(pl_frame const& source, pl_tex targetTexture,
+                          RenderedVideoSurfaceDescription const& targetDescription,
+                          LibplaceboToneMappingFunction toneMapping, enum pl_hdr_metadata_type metadata,
+                          std::optional<float> effectiveSourceMaximumNits, QString* error);
+
     pl_renderer m_renderer = nullptr;
 };

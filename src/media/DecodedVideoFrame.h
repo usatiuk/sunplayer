@@ -109,6 +109,7 @@ class DecodedVideoFrame final {
     static std::shared_ptr<DecodedVideoFrame const> clone(AVFrame const& frame, VideoFrameIdentity const& identity,
                                                           VideoFrameRational const& timeBase,
                                                           std::optional<std::uint64_t> graphicsDeviceGeneration,
+                                                          std::optional<bool> dolbyVisionBaseIsHdr10Compatible,
                                                           QString* error = nullptr);
 
     ~DecodedVideoFrame();
@@ -122,11 +123,13 @@ class DecodedVideoFrame final {
     VideoFrameStorageDescription const& storage() const;
     VideoSignalDescription const& signal() const;
     VideoDynamicRange dynamicRange() const;
+    std::optional<bool> dolbyVisionBaseIsHdr10Compatible() const;
     AVFrame const& ffmpegFrame() const;
 
   private:
     DecodedVideoFrame(AVFrame* frame, VideoFrameIdentity identity, VideoFrameTiming timing, VideoFrameGeometry geometry,
-                      VideoFrameStorageDescription storage, VideoSignalDescription signal);
+                      VideoFrameStorageDescription storage, VideoSignalDescription signal,
+                      std::optional<bool> dolbyVisionBaseIsHdr10Compatible);
 
     AVFrame* m_frame = nullptr;
     VideoFrameIdentity m_identity;
@@ -134,4 +137,5 @@ class DecodedVideoFrame final {
     VideoFrameGeometry m_geometry;
     VideoFrameStorageDescription m_storage;
     VideoSignalDescription m_signal;
+    std::optional<bool> m_dolbyVisionBaseIsHdr10Compatible;
 };

@@ -37,3 +37,4 @@ with a new decision when the accepted choice changes materially.
 * [0020: Keep Qt-owned Wayland windows and render fallback chrome in-scene](0020-keep-qt-owned-wayland-windows-and-render-fallback-chrome-in-scene.md)
 * [0021: Use HDR10/PQ for managed Wayland HDR presentation](0021-use-hdr10-pq-for-managed-wayland-hdr.md)
 * [0022: Paint the Windows background only before first presentation](0022-paint-windows-background-only-before-first-present.md)
+* [0023: Use a metadata-first HDR-to-SDR policy](0023-use-metadata-first-hdr-to-sdr-policy.md)

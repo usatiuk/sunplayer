@@ -107,7 +107,12 @@ bool hasValidContentLightMetadata(AVFrame const& frame) {
 
 bool hasValidHdr10PlusMetadata(AVFrame const& frame) {
     AVDynamicHDRPlus const* const metadata = sideDataPayload<AVDynamicHDRPlus>(frame, AV_FRAME_DATA_DYNAMIC_HDR_PLUS);
-    return metadata && metadata->itu_t_t35_country_code == 0xb5 && metadata->num_windows >= 1 &&
+    // FFmpeg's parsed T.35 path starts after the country/provider envelope,
+    // so decoder-produced frame side data can legitimately leave the country
+    // byte at zero. Explicitly attached complete structs retain 0xb5.
+    bool const recognizedEnvelope =
+        metadata && (metadata->itu_t_t35_country_code == 0 || metadata->itu_t_t35_country_code == 0xb5);
+    return recognizedEnvelope && metadata->application_version <= 1 && metadata->num_windows >= 1 &&
            metadata->num_windows <= 3;
 }
 
@@ -216,7 +221,8 @@ VideoDynamicRange DecodedVideoFrame::dynamicRange() const {
 
 std::shared_ptr<DecodedVideoFrame const>
 DecodedVideoFrame::clone(AVFrame const& frame, VideoFrameIdentity const& identity, VideoFrameRational const& timeBase,
-                         std::optional<std::uint64_t> graphicsDeviceGeneration, QString* error) {
+                         std::optional<std::uint64_t> graphicsDeviceGeneration,
+                         std::optional<bool> dolbyVisionBaseIsHdr10Compatible, QString* error) {
     auto const fail = [error](QString const& reason) {
         if (error) {
             *error = reason;
@@ -317,15 +323,17 @@ DecodedVideoFrame::clone(AVFrame const& frame, VideoFrameIdentity const& identit
     if (error) {
         error->clear();
     }
-    return std::shared_ptr<DecodedVideoFrame const>(
-        new DecodedVideoFrame(retainedFrame, identity, timing, geometry, storage, signal));
+    return std::shared_ptr<DecodedVideoFrame const>(new DecodedVideoFrame(
+        retainedFrame, identity, timing, geometry, storage, signal, dolbyVisionBaseIsHdr10Compatible));
 }
 
 DecodedVideoFrame::DecodedVideoFrame(AVFrame* frame, VideoFrameIdentity identity, VideoFrameTiming timing,
                                      VideoFrameGeometry geometry, VideoFrameStorageDescription storage,
-                                     VideoSignalDescription signal)
+                                     VideoSignalDescription signal,
+                                     std::optional<bool> dolbyVisionBaseIsHdr10Compatible)
     : m_frame(frame), m_identity(identity), m_timing(std::move(timing)), m_geometry(std::move(geometry)),
-      m_storage(std::move(storage)), m_signal(std::move(signal)) {}
+      m_storage(std::move(storage)), m_signal(std::move(signal)),
+      m_dolbyVisionBaseIsHdr10Compatible(dolbyVisionBaseIsHdr10Compatible) {}
 
 DecodedVideoFrame::~DecodedVideoFrame() { av_frame_free(&m_frame); }
 
@@ -338,5 +346,9 @@ VideoFrameGeometry const& DecodedVideoFrame::geometry() const { return m_geometr
 VideoFrameStorageDescription const& DecodedVideoFrame::storage() const { return m_storage; }
 
 VideoSignalDescription const& DecodedVideoFrame::signal() const { return m_signal; }
+
+std::optional<bool> DecodedVideoFrame::dolbyVisionBaseIsHdr10Compatible() const {
+    return m_dolbyVisionBaseIsHdr10Compatible;
+}
 
 AVFrame const& DecodedVideoFrame::ffmpegFrame() const { return *m_frame; }

@@ -95,6 +95,7 @@ public:
 
     bool map(
             const DecodedVideoFrame &frame,
+            bool mapDolbyVision,
             pl_frame &mappedFrame,
             VideoFrameImportDiagnostics &diagnostics,
             VideoFrameImportFailure &failure,
@@ -263,8 +264,10 @@ public:
         mappedFrame.repr.bits.bit_shift = formats.bitShift;
 #ifdef PL_HAVE_LAV_DOLBY_VISION
         m_doviMetadata = {};
-        if (const AVFrameSideData *dovi = av_frame_get_side_data(
-                &avFrame, AV_FRAME_DATA_DOVI_METADATA)) {
+        if (const AVFrameSideData *dovi = mapDolbyVision
+                ? av_frame_get_side_data(
+                    &avFrame, AV_FRAME_DATA_DOVI_METADATA)
+                : nullptr) {
             if (dovi->size < sizeof(AVDOVIMetadata)) {
                 mappedFrame = {};
                 releaseActive();

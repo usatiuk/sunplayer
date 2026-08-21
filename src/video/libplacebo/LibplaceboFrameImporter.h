@@ -49,8 +49,8 @@ class LibplaceboHardwareFrameImporter {
   public:
     virtual ~LibplaceboHardwareFrameImporter() = default;
 
-    virtual bool map(DecodedVideoFrame const& frame, pl_frame& mappedFrame, VideoFrameImportDiagnostics& diagnostics,
-                     VideoFrameImportFailure& failure, QString* error) = 0;
+    virtual bool map(DecodedVideoFrame const& frame, bool mapDolbyVision, pl_frame& mappedFrame,
+                     VideoFrameImportDiagnostics& diagnostics, VideoFrameImportFailure& failure, QString* error) = 0;
     virtual void unmap(pl_frame& mappedFrame) = 0;
 };
 
@@ -85,7 +85,7 @@ class LibplaceboFrameImporter final {
     LibplaceboFrameImporter(LibplaceboFrameImporter const&) = delete;
     LibplaceboFrameImporter& operator=(LibplaceboFrameImporter const&) = delete;
 
-    std::unique_ptr<Mapping> map(DecodedVideoFrame const& frame, QString* error = nullptr);
+    std::unique_ptr<Mapping> map(DecodedVideoFrame const& frame, bool mapDolbyVision, QString* error = nullptr);
     VideoFrameImportDiagnostics const& lastDiagnostics() const;
     std::uint64_t successfulImportCount() const;
 
