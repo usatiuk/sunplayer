@@ -12,6 +12,7 @@
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QKeyEvent>
 #include <QLibraryInfo>
 #include <QMimeData>
@@ -452,6 +453,7 @@ int main(int argc, char* argv[]) {
     QCoreApplication::setOrganizationName(QStringLiteral("usatiuk"));
     QCoreApplication::setApplicationName(QStringLiteral("SunPlayer"));
     QCoreApplication::setApplicationVersion(QStringLiteral(SUNPLAYER_VERSION));
+    app.setWindowIcon(QIcon(QStringLiteral(":/qt/qml/SunPlayer/icons/SunPlayer.png")));
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("SunPlayer HDR video player"));

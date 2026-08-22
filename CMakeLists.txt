@@ -461,7 +461,11 @@ if (APPLE)
 endif ()
 
 if (WIN32)
+    set_source_files_properties(packaging/windows/SunPlayer.rc PROPERTIES
+            OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/Assets/app.ico"
+    )
     target_sources(sunplayer PRIVATE
+            packaging/windows/SunPlayer.rc
             src/platform/windows/WindowsDisplayStateProvider.cpp
             src/platform/windows/WindowsDisplayStateProvider.h
             src/platform/windows/WindowsPlaybackPowerInhibitor.cpp
@@ -491,6 +495,9 @@ set_source_files_properties(src/app/pages/PlayerPage.qml PROPERTIES
 )
 set_source_files_properties(src/app/pages/VideoPage.qml PROPERTIES
         QT_RESOURCE_ALIAS VideoPage.qml
+)
+set_source_files_properties(src/app/icons/SunPlayer.png PROPERTIES
+        QT_RESOURCE_ALIAS icons/SunPlayer.png
 )
 set_source_files_properties(src/app/icons/lucide/play.svg PROPERTIES
         QT_RESOURCE_ALIAS icons/lucide/play.svg
@@ -540,6 +547,7 @@ qt_add_qml_module(sunplayer
         src/app/pages/PlayerPage.qml
         src/app/pages/VideoPage.qml
         RESOURCES
+        src/app/icons/SunPlayer.png
         src/app/icons/lucide/play.svg
         src/app/icons/lucide/pause.svg
         src/app/icons/lucide/rotate-ccw.svg

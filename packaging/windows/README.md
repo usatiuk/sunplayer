@@ -30,11 +30,13 @@ cmake --build build --target sunplayer_run_with_identity
 This uses `winapp run`, so it requires Windows Developer Mode but does not
 require a signing certificate or an elevated terminal. Re-running the target
 refreshes the registered `SunPlayerDevelopment` layout while preserving its
-application data. Windows displays it as `SunPlayer (Dev)`, and its separate
-package identity allows it to coexist with the eventual Store package. The
-target returns after launching the application. It exercises package identity
-and activation, but it does not construct or install an MSIX and therefore
-does not replace the signed package flow below.
+application data. The wrapper stages the installed tree, resolved manifest, and
+package assets together so `winapp` indexes the same icon candidates as the
+MSIX path. Windows displays it as `SunPlayer (Dev)`, and its separate package
+identity allows it to coexist with the eventual Store package. The target
+returns after launching the application. It exercises package identity and
+activation, but it does not construct or install an MSIX and therefore does not
+replace the signed package flow below.
 
 The development registration remains after SunPlayer exits. Remove it from
 the generated layout directory before installing a signed development MSIX:
@@ -164,12 +166,16 @@ execution alias, background task, or Store-submission automation. Additional
 specialist, raw-stream, playlist, image, and audio-only extensions are not
 claimed merely because FFmpeg can demux them. The FFmpeg dependency test pins
 availability of every advertised container family; representative playback
-and packaged activation remain release validation. Generate reviewed icon
-variants from `branding\SunPlayer.png` with:
+and packaged activation remain release validation. The shared authored icon is
+also the Qt runtime icon. Its checked-in Windows package assets and executable
+`.ico` are generated manually from that source, including the required default,
+dark-unplated, and light-unplated AppList variants. The generator also supplies
+the themed assets for the supported Windows 10/Store package:
 
 ```powershell
 Push-Location .\packaging\windows
-winapp manifest update-assets .\branding\SunPlayer.png `
+winapp manifest update-assets ..\..\src\app\icons\SunPlayer.png `
+  --light-image ..\..\src\app\icons\SunPlayer.png `
   --manifest .\Package.appxmanifest.in
 Pop-Location
 ```

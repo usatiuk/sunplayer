@@ -312,13 +312,14 @@ MakeAppx/Partner Center validation.
 
 For package-identity development, the Windows-only
 `sunplayer_run_with_identity` target installs the active configuration into an
-isolated build-tree prefix and passes that curated tree to `winapp run` with
-the development identity. WinApp owns loose-layout synchronization,
-registration, and AUMID activation. This path needs Developer Mode but no
-certificate, uses the shell-visible name `SunPlayer (Dev)`, and remains
-distinct from construction and installation of the real MSIX. Its separate
-package identity permits side-by-side installation with the future Store
-package.
+isolated build-tree prefix, stages it with the resolved manifest and package
+assets, and passes that complete input to `winapp run` with the development
+identity. This ensures WinApp's generated PRI indexes the same package assets
+as the MSIX path. WinApp owns loose-layout synchronization, registration, and
+AUMID activation. This path needs Developer Mode but no certificate, uses the
+shell-visible name `SunPlayer (Dev)`, and remains distinct from construction
+and installation of the real MSIX. Its separate package identity permits
+side-by-side installation with the future Store package.
 
 ## Testing integration
 
