@@ -106,22 +106,27 @@ playback:
   do not grow with the window.
 * On Windows, libplacebo directly wraps the QRhi-owned RGBA16F D3D11 texture,
   shares QRhi's immediate context without an output copy, and receives a
-  reference-white-relative virtual target in its fixed 203-nit coordinate
-  system. This construction is capture-validated for relative SDR, analytic
-  and real mastered static PQ, and a characterized display-relative HLG
-  response. Deterministic four-frame Main10 fixtures prove real FFmpeg decode
+  source-appropriate relative or absolute target through one shared renderer.
+  This construction is capture-validated for relative SDR, analytic and real
+  mastered static PQ, and a characterized display-relative HLG response.
+  Deterministic four-frame Main10 fixtures prove real FFmpeg decode
   and libplacebo rendering for PQ/HDR10, HLG, two-scene HDR10+, and Dolby
   Vision Profile 8.1 without a second media operation. The importer reports
   retained source facts, usable HDR10+ scene metadata, and whether Dolby Vision
-  reshaping was mapped. Source HDR values remain unchanged and no custom post-
-  map normalization runs. Shared metadata-first policy now selects supported
-  HDR10+ OOTFs or coherent Dolby/HDR10 range evidence for PQ-to-SDR/WCG and an
-  explicit 1,000-nit fallback only when usable metadata is absent. It dispatches
-  pinned libplacebo operators, keeps perceptual gamut mapping, and disables
-  inverse mapping, peak detection, and dithering; the exact decision is visible
-  in diagnostics. HLG support is display-relative and does not claim absolute-
-  reference monitoring, while broader dynamic-HDR profiles and physical output
-  accuracy remain validation work.
+  reshaping was mapped. Source HDR values remain unchanged. Shared
+  metadata-first policy selects supported HDR10+ OOTFs on SDR and on HDR when
+  the base representation and automatic scene-referred physical target are
+  known, coherent Dolby/HDR10 range evidence for PQ-to-SDR/WCG, and an explicit 1,000-nit
+  fallback for ordinary base PQ only when usable metadata is absent. It
+  dispatches pinned libplacebo operators, keeps perceptual gamut mapping, and
+  disables inverse mapping, peak detection, and dithering; the exact decision
+  is visible in diagnostics. Absolute PQ/Dolby mapping receives nominal
+  100-nit SDR or an authoritative physical HDR peak, followed only by linear
+  output-unit normalization into the shared reference-white-relative surface. A
+  headroom-only HDR target retains the diagnosed relative path. SDR-source and
+  HLG-source paths remain relative; HLG does not claim absolute-reference
+  monitoring. Broader dynamic-HDR profiles and physical output accuracy remain
+  validation work.
 * A narrow final QRhi pass places that already processed video surface,
   combines it with the UI, and presents extended-linear sRGB/scRGB when
   available, with an SDR fallback. It can also compose UI without an active
@@ -414,8 +419,9 @@ Documentation: `docs/subsystems/graphics/`
   Metal/MoltenVK output interop
 * [x] Offscreen HDR render-target contract and temporary QRhi producer
 * [x] Display-target and SDR-white updates
-* [x] Analytic reference-white-adaptive SDR/static-PQ display mapping without
-  a post-map video scale
+* [x] Prior analytic reference-white-adaptive SDR/static-PQ mapping checkpoint
+* [x] Absolute-target PQ/Dolby mapping with target-gamut-safe output-unit
+  normalization
 * [x] Real FFmpeg-decoded static-PQ fixture and retained-metadata validation
 * [ ] Actual display-gamut propagation (Windows Advanced Color implemented;
   macOS and Wayland population plus physical verification remain)

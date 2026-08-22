@@ -20,6 +20,7 @@ RenderedVideoSurfaceDescription canonicalDescription() {
     description.referenceWhiteNits = 203.0f;
     description.targetMinimumLuminanceKnown = true;
     description.targetMinimumLuminanceNits = 0.005f;
+    description.targetPeakLuminanceKnown = true;
     description.targetPeakHeadroom = 5.0f;
     return description;
 }
@@ -248,6 +249,11 @@ void RenderedVideoSurfaceTest::semanticChangesInvalidate() {
     {
         auto requested = canonicalState();
         requested.description.targetMinimumLuminanceNits = 0.01f;
+        QVERIFY(!completed.isReusableFor(requested));
+    }
+    {
+        auto requested = canonicalState();
+        requested.description.targetPeakLuminanceKnown = false;
         QVERIFY(!completed.isReusableFor(requested));
     }
     {

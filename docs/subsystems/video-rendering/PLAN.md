@@ -13,8 +13,8 @@ actually been validated.
 
 ## Product invariants
 
-* Normal playback adapts every HDR format to the active desktop reference white
-  and usable display headroom.
+* Normal playback expresses every format in the active-reference-white surface;
+  absolute PQ remains physical when the target luminance range is known.
 * SunPlayer's linear working surface uses `1.0 = active reference white` and
   permits negative and greater-than-one components.
 * Libplacebo owns content transfer interpretation, tone mapping, and gamut
@@ -75,20 +75,22 @@ reject a source the libraries can already show.
 
 ### One display-target integration
 
-The renderer selects a shared, metadata-first libplacebo policy. SDR, HLG, and
-HDR-target paths retain their established behavior; PQ-to-SDR/WCG dispatches
-supported HDR10+ OOTFs, coherent dynamic/static metadata, and a diagnosed
-missing-metadata fallback through existing libplacebo operators. Perceptual
-gamut mapping remains common, while inverse tone mapping, peak detection, and
-dithering remain disabled. The resulting decision is visible in HDR Lab and
-protected at the production capture boundary without adding another processing
-stage or a quality-preset surface.
+The renderer selects a shared, metadata-first libplacebo policy. SDR and HLG
+retain their established relative behavior. PQ uses supported HDR10+ OOTFs,
+coherent dynamic/static metadata, or a diagnosed missing-metadata fallback
+through existing libplacebo operators on SDR and HDR. Perceptual gamut mapping
+remains common, while inverse tone mapping, peak detection, and dithering remain
+disabled. The resulting decision is visible in HDR Lab and protected at the
+production capture boundary without adding another mapper or quality-preset
+surface.
 
-* [x] Select spline only for the retained HLG/HDR-target paths. For
-  PQ-to-SDR/WCG, use pinned-representable HDR10+ OOTFs through ST 2094-40 and
-  other coherent dynamic/static ranges through libplacebo's generalized
-  BT.2446A EETF. Use an explicit, diagnosed 1,000-nit maximum only when the
-  selected representation has no usable maximum.
+* [x] Use pinned-representable HDR10+ OOTFs through ST 2094-40 on SDR and on
+  HDR when the selected base representation and automatic scene-referred
+  physical target are known.
+  Use libplacebo's generalized BT.2446A EETF for other coherent PQ-to-SDR
+  dynamic/static ranges, and retain spline for ordinary HDR. Use an explicit,
+  diagnosed 1,000-nit maximum with spline only when ordinary base PQ has no
+  usable maximum.
 * [x] Keep perceptual gamut mapping, inverse tone mapping off, peak detection
   off, and dithering off for the RGBA16F target. Report the exact operator,
   metadata provenance, unsupported guidance, and fallback in diagnostics.
@@ -104,11 +106,12 @@ stage or a quality-preset surface.
   Consider enabling it only if representative missing or unreliable source
   metadata demonstrates a visible benefit and its cost and seek/scene behavior
   pass the same production-boundary tests.
-* [x] Express the display-relative headroom and active reference white through
-  current libplacebo semantics for every input. The virtual destination is
-  numerically validated for static PQ and behaviorally characterized for HLG
-  and dynamic inputs; its values are deliberately not described as literal
-  physical nits.
+* [x] Keep relative SDR/HLG in the display-relative virtual target. Give
+  absolute PQ/Dolby nominal 100-nit SDR or an authoritative physical HDR peak
+  from automatic scene-referred presentation, then convert only libplacebo's
+  final linear output unit into the shared reference-white-relative surface.
+  Retain the relative HDR fallback for display-referred, manual-headroom, or
+  otherwise unknown physical targets.
 * [x] Render a controlled HLG fixture through the current adapter at two
   reference-white/headroom targets. The captured OOTF response changes with
   the virtual target as pinned libplacebo source predicts. V1 accepts that
@@ -138,18 +141,21 @@ stage or a quality-preset surface.
 * [x] Assert hashes, decoded signal facts, static mastering/content-light
   metadata, the explicit color policy, finite/monotonic/bounded captures,
   static-PQ analytical values, independent BT.2446A and ST 2094-40 vectors,
-  metadata-less PQ render-boundary output, two HLG target responses,
-  frame-local HDR10+ scene progression/OOTF dispatch, coherent Dolby/base
-  selection, mapped Dolby Vision reshaping, and same-frame remapping across
-  SDR/HDR targets. Existing tests retain target-only rerender, final
+  metadata-less PQ render-boundary output on SDR and eligible HDR, two HLG target
+  responses, frame-local HDR10+ scene progression and OOTF dispatch on SDR and
+  eligible known-luminance HDR, surface-implied luminance invariance across
+  reference-white coordinates, coherent Dolby/base selection, mapped Dolby
+  Vision reshaping, and same-frame remapping
+  across SDR/HDR targets. Existing tests retain target-only rerender, final
   Windows scaling, and real inter-frame seek coverage; temporal-state reset is
   intentionally absent while temporal renderer features are off.
 
 Immediate milestone outcome:
 
 * All representative formats enter the same retained-frame/import/render path.
-* SDR retains its validated numerical model; PQ-to-SDR uses the accepted
-  metadata-first policy and diagnosed fallback.
+* SDR retains its validated numerical model; absolute PQ uses the accepted
+  metadata-first policy, physical target units, and diagnosed fallback across
+  SDR/HDR targets.
 * HLG's observed target response is accepted for display-relative V1 playback;
   absolute-reference monitoring remains outside the claim rather than being
   approximated by a second SunPlayer color pipeline.

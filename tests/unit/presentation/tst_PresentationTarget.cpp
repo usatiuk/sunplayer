@@ -30,6 +30,7 @@ class PresentationTargetTest final : public QObject {
   private slots:
     void calculation_data();
     void calculation();
+    void automaticPhysicalTargetEligibility();
 };
 
 void PresentationTargetTest::calculation_data() {
@@ -381,6 +382,35 @@ void PresentationTargetTest::calculation() {
     QCOMPARE(actual.potentialHeadroom, expected.potentialHeadroom);
     QCOMPARE(actual.effectiveTargetHeadroom, expected.effectiveTargetHeadroom);
     QCOMPARE(actual.sdrScale, expected.sdrScale);
+}
+
+void PresentationTargetTest::automaticPhysicalTargetEligibility() {
+    PresentationTarget target;
+    target.sceneReferred = true;
+    target.luminanceKnown = true;
+    target.maxLuminanceNits = 600.0f;
+
+    QVERIFY(canUseAutomaticPhysicalTarget(target, true));
+    QVERIFY(!canUseAutomaticPhysicalTarget(target, false));
+
+    target.sceneReferred = false;
+    QVERIFY(!canUseAutomaticPhysicalTarget(target, true));
+
+    target.sceneReferred = true;
+    target.luminanceKnown = false;
+    QVERIFY(!canUseAutomaticPhysicalTarget(target, true));
+
+    target.luminanceKnown = true;
+    target.maxLuminanceNits = 79.0f;
+    QVERIFY(!canUseAutomaticPhysicalTarget(target, true));
+
+    target.sdrWhiteKnown = true;
+    target.sdrWhiteNits = 200.0f;
+    target.maxLuminanceNits = 199.0f;
+    QVERIFY(!canUseAutomaticPhysicalTarget(target, true));
+
+    target.maxLuminanceNits = 200.0f;
+    QVERIFY(canUseAutomaticPhysicalTarget(target, true));
 }
 
 QTEST_APPLESS_MAIN(PresentationTargetTest)

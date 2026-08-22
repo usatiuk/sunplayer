@@ -1,11 +1,13 @@
-# Metadata-first HDR-to-SDR presentation mapping
+# Metadata-first HDR presentation mapping
 
-> Status: research and implementation record, 2026-08-21. The initial shared
-> policy is accepted in
+> Status: research and implementation record, 2026-08-21 through 2026-08-22.
+> The initial shared policy is accepted in
 > [ADR 0023](../decisions/0023-use-metadata-first-hdr-to-sdr-policy.md) and
-> implemented with automated evidence. Exact-frame physical comparison remains
-> follow-up evidence for perceptual claims, not an unreported implementation
-> assumption.
+> the follow-up absolute-target construction is accepted in
+> [ADR 0024](../decisions/0024-map-pq-against-absolute-target-luminance.md).
+> Both are implemented with automated evidence. Exact-frame physical comparison
+> remains follow-up evidence for perceptual claims, not an unreported
+> implementation assumption.
 
 ## Executive conclusion
 
@@ -40,24 +42,41 @@ There is no single switch that recovers every authored SDR appearance:
   is narrow, visible in diagnostics, and covered by policy/curve/render tests;
   later physical comparison can refine it without disguising its provenance.
 
+The first implementation also exposed a second, independent issue. SunPlayer
+used libplacebo's fixed `1.0 = 203 nits` output normalization as though it were
+the physical destination. A valid HDR10+ curve could therefore leave an 80-nit
+scene at roughly `80 / 203` on a nominal SDR surface instead of mapping against
+a real 100-nit destination. On HDR, source pixels and metadata remained in
+physical cd/m² while the virtual destination changed with desktop reference
+white. This was a unit-model error, not evidence for a brightness curve.
+
+The accepted construction gives libplacebo a nominal 100-nit target for
+headroom-one PQ and an authoritative physical display peak for automatic
+scene-referred HDR PQ. After tone and gamut mapping it uniformly converts
+libplacebo's `outputNits / 203` coordinates into SunPlayer's
+`outputNits / targetWhite` surface coordinates. Valid HDR10+ OOTFs on the
+selected non-Dolby or HDR10-compatible base therefore use ST 2094-40 against
+the real target on SDR and on eligible HDR targets. The exploratory `1/1.15`
+and `1/1.08` post-curves are rejected.
+
 The resulting policy belongs in the shared video-rendering layer. Platform
 providers report normalized target facts; Windows, macOS, and Linux presentation
 code must not independently choose content tone curves.
 
-The implemented first slice remains small: one shared policy
-decision, select a coherent metadata family plus tone function, keep peak
-detection disabled, expose the decision in existing diagnostics, and test the
-matrix. Do not add a user setting, brightness multiplier, custom Dolby mapper,
-ABL model, or second rendering path.
+The implemented slice remains small: one shared policy decision selects a
+coherent metadata family, tone function, and whether target luminance is
+absolute; peak detection stays disabled, existing diagnostics expose the
+decision, and tests cover the matrix. Do not add a user setting, arbitrary
+exposure, custom Dolby mapper, ABL model, or second rendering path.
 
 ## Question and constraints
 
 The immediate question is:
 
 > How should SunPlayer map PQ/HDR10, HDR10+, and supported Dolby Vision inputs
-> to an SDR or WCG desktop so ordinary lowlights and midtones remain watchable,
-> while using real source metadata whenever possible and avoiding silent image
-> analysis?
+> to SDR/WCG and HDR targets so ordinary lowlights and midtones remain
+> watchable, while using real source metadata whenever possible and avoiding
+> silent image analysis?
 
 The recommendation assumes:
 
@@ -65,8 +84,9 @@ The recommendation assumes:
   FFmpeg/libplacebo render path for the first change.
 * FFmpeg-decoded frame metadata remains authoritative.
 * Peak detection stays disabled.
-* Libplacebo continues to own transfer decoding, tone mapping, and gamut
-  mapping. SunPlayer selects policy; it does not implement a new curve.
+* Libplacebo continues to own transfer decoding, content tone mapping, and gamut
+  mapping. SunPlayer selects policy and only converts the final linear output
+  coordinate unit after an absolute-luminance map.
 * The existing display-relative working representation remains intact:
   working `1.0` is active reference white and target headroom describes the
   range above it.
@@ -157,6 +177,41 @@ not enumerate Dolby RPU extension blocks, so this inspection cannot establish
 whether L2/L8 trims exist in the file. Even if they do, the pinned libplacebo
 path does not consume them.
 
+### Exact-frame follow-up at 14:13
+
+A later production-path capture of another scene in the same local hybrid
+sample used the exact decoded frame near 14:13. The selected HDR10+ metadata
+described a target near 500 nits, scene maximum around 80 to 82 nits, and scene
+average around 8.10 nits. SunPlayer correctly selected ST 2094-40 and the
+HDR10-compatible base representation. Because the scene range fitted below the
+virtual 203-nit destination, pinned libplacebo performed little range
+compression and stored an 80-nit value near `80 / 203`. That exposed the
+mistake: the same number was then interpreted as relative SDR even though the
+intended destination was nominal 100-nit SDR.
+
+The production linear-surface capture still placed the HDR rendition below the
+nearby official SDR rendition. Representative luminance quantiles were:
+
+| Rendition | p50 | p75 | p90 | p95 | p99 | maximum |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Initial metadata-first HDR-to-SDR | 0.00345 | 0.04567 | 0.11258 | 0.14567 | 0.19691 | 0.39122 |
+| Official SDR release | 0.00590 | 0.07091 | 0.15667 | 0.19859 | 0.26122 | 0.46748 |
+
+The aligned SDR/HDR ratio was about 1.70 to 1.75 between 0.002 and 0.02,
+falling progressively toward 1.30 above 0.2. This pattern motivated inspection
+of the target units. It is not proof that the separately released SDR encode is
+a pixel-exact target grade.
+
+An exploratory post-map `1/1.15` maxRGB adjustment moved the captured
+quantiles and the user's viewing comparison materially closer to the SDR and
+Windows Player examples. It was rejected before shipping: BT.2408 assigns that
+strength to a different workflow, and a second curve does not correct the
+destination supplied to ST 2094-40. A later `1/1.08` Annex 11 candidate was also
+rejected because Annex 11 starts from an already-derived 203-nit SDR signal;
+SunPlayer's 203 value was only a storage normalization. The accepted direct
+100-nit target plus linear coordinate conversion fixes the unit boundary
+without an extra viewing curve.
+
 ### Metadata-less static-PQ sample
 
 A second user-supplied 2160p sample is HEVC Main 10, PQ, BT.2020, and limited
@@ -165,10 +220,21 @@ display, content-light, HDR10+, or Dolby Vision frame metadata. Only unrelated
 unregistered encoder SEI was visible. This is therefore a useful real fallback
 case, subject to the caveat that the probe did not exhaustively scan the file.
 
-The user reports that SunPlayer is unwatchably dark on an SDR display while
-Windows Player is materially more usable. That result is consistent with the
-10,000-nit nominal-PQ fallback feeding the generic spline. It also shows why a
-strict transfer-range fallback is not sufficient product behavior.
+The user reports that SunPlayer is unwatchably dark on both SDR and HDR while
+Windows Player is materially more usable. A production probe near 9:56 found
+PQ/BT.2020 HEVC with no mastering, content-light, HDR10+, or Dolby frame side
+data. Forensic signal statistics placed a broad high region near PQ code 495
+(about 85 nits) and the observed frame maximum near code 625 (about 357 nits).
+Those measurements diagnose the sample only; they are not production peak
+detection inputs.
+
+The cross-target darkness is consistent with the same missing source fact:
+pinned libplacebo inferred PQ's 10,000-nit ceiling. With a 600-nit HDR target,
+default spline maps 203 nits to roughly 89 nits under that assumption versus
+roughly 151 nits with an explicit 1,000-nit source maximum. For nominal SDR,
+the accepted spline fallback maps 203 nits to about 52 nits. It deliberately
+retains highlight headroom and therefore cannot guarantee that this frame's
+observed 357-nit object becomes exactly white.
 
 ### Screenshot interpretation
 
@@ -191,9 +257,9 @@ treated as approximately 100 cd/m² peak white. These values serve different
 roles.
 
 Libplacebo's normalized `1.0 = 203 cd/m²` coordinate is an internal HDR
-reference convention. SunPlayer's virtual target uses it to represent current
-display-relative headroom. It must not be read as a claim that an SDR desktop
-physically displays white at 203 nits.
+reference convention. It defines output storage units, not the target display.
+It must not be read as a claim that an SDR desktop physically displays white at
+203 nits or be passed back as the physical destination for absolute PQ.
 
 BT.2408 prefers a display-light HDR-to-SDR conversion when the goal is to
 retain the HDR source look. It warns that mismatched or linear down-mapping can
@@ -214,13 +280,28 @@ also parameterizes the EETF with arbitrary source and target maxima. This is not
 the complete canonical Method A pipeline, and it does not establish that all PQ
 content was mastered at 1,000 nits.
 
-SunPlayer currently supplies a logical 203-nit libplacebo maximum for a
-headroom-1 target because `PL_COLOR_SDR_WHITE` maps to working `1.0`; final
-SDR/WCG presentation maps that `1.0` to desktop white. Consequently the
-implemented product path is a generalized source-peak-to-logical-203 EETF followed by
-libplacebo gamut handling, not the canonical physical 1,000-to-100-nit result.
-The canonical case should be checked separately against ITU reference behavior,
-and the generalized path needs pinned curve and physical validation.
+SunPlayer now supplies a nominal 100-nit destination for headroom-one PQ. The
+selected operator and libplacebo gamut handling therefore run against the real
+signal target. A final uniform `203 / 100` scale converts only libplacebo's
+linear output unit into the white-relative surface. Pinned curve tests check the
+canonical 1,000-to-100 EETF separately from libplacebo's complete chroma/gamut
+pipeline.
+
+### Output normalization is not a viewing curve
+
+BT.2408 Annex 11 considers displaying an already-derived 203-nit SDR signal on
+a nominal 100-nit SDR display and permits an optional `1/1.08` viewing
+adjustment. That is not SunPlayer's boundary: its former 203-nit target was a
+coordinate workaround, not a real 203-nit SDR grade. Applying Annex 11 there
+would reshape the selected BT.2446A or ST 2094-40 result without correcting the
+destination those operators consumed.
+
+The accepted operation is instead linear unit conversion. Libplacebo emits
+`outputNits / 203`; SunPlayer stores `outputNits / R`, where `R` is 100 nits for
+nominal SDR or platform reference white for HDR. Multiplying RGB uniformly by
+`203 / R` works in any linear RGB basis, preserves chromaticity, and does not
+need maxRGB, a target-primary matrix, clamping, or another curve. Extended
+BT.709 values remain valid for WCG targets.
 
 Method C was designed around preserving reference levels and skin tones for
 HLG, and the report only suggests that a similar method might be applicable to
@@ -342,8 +423,9 @@ flowchart LR
     MP[macOS display provider] --> T
     LP[Linux/Wayland display provider] --> T
     P --> I[Frame import with selected DV or base mapping]
-    I --> R[Shared libplacebo renderer]
-    R --> O[Platform presentation encoding]
+    I --> R[Shared libplacebo tone and gamut map]
+    R --> V[Shared output-unit normalization]
+    V --> O[Platform presentation encoding]
 ```
 
 Platform providers own observation and normalization of:
@@ -362,6 +444,7 @@ The shared video-rendering layer owns:
 * tone-mapping function and metadata-family selection;
 * source-peak fallback and its provenance;
 * gamut mapping into the normalized target;
+* absolute PQ target units and final linear output-unit normalization;
 * diagnostics explaining the decision.
 
 Platform presentation owns only the final working-to-native coordinate and
@@ -376,25 +459,31 @@ mapping and then select metadata from that same family. It must not combine a
 Dolby-reshaped image and Dolby L1 input peak with an HDR10+ OOTF signaled for the
 HDR10-compatible base representation.
 
-For the first change, preserve the existing HDR-display behavior and change
-only PQ conversion to a target with effectively no highlight headroom,
-including SDR and WCG desktop targets. HLG remains unchanged. The accepted
+HLG remains unchanged. Absolute PQ uses a nominal 100-nit target on SDR/WCG and
+an authoritative physical peak on automatic scene-referred HDR, followed only
+by output-unit normalization. Display-referred, manual-headroom, and otherwise
+unknown physical HDR targets retain the diagnosed relative path. The accepted
 runtime matrix is:
 
-| Source evidence | Render representation | Metadata selection | SDR/WCG luminance operator | Notes |
+| Source evidence | Render representation | SDR/WCG policy | HDR policy | Notes |
 | --- | --- | --- | --- | --- |
-| SDR transfer | Existing decoded representation | None | No tone mapping | Gamut-map only when required. |
-| HLG transfer | Existing decoded representation | Existing selection | Existing spline | Explicit guard: HLG is outside this first PQ-policy change. |
-| Proven Dolby Vision Profile 8.1/HDR10+ generation with one window and a nonzero-anchor OOTF on this frame | HDR10-compatible base layer; do not apply DV reshape | HDR10+ | ST 2094-40 | Uses the coherent, pinned-representable source OOTF instead of mixing it with the DV representation. |
-| Same selected dual-format generation without a pinned-representable OOTF on this frame | HDR10-compatible base layer | HDR10+ scene values, then base-family static range | Libplacebo BT.2446A EETF | Stay in the selected representation. Diagnose valid zero-anchor or multi-window OOTFs as unsupported rather than absent/applied. |
-| Mapped Dolby representation with valid L1 and no selected base path | Dolby reshape | CIE-Y | Libplacebo BT.2446A EETF | Open, L1-maximum-guided fallback; not a Dolby trim. Ignore concurrent HDR10+ statistics from the other representation. |
-| Mapped Dolby without valid L1 but with valid Dolby `source_max_pq`/minimum | Dolby reshape | Dolby source range on the render-local copy | Libplacebo BT.2446A EETF | Use the range belonging to the reshaped representation; do not infer that L1 exists or import base-layer MaxCLL. |
-| Mapped Dolby without usable L1 or Dolby source range | Dolby reshape | Explicit compatibility fallback | Libplacebo BT.2446A EETF | Use the same diagnosed missing-PQ fallback below; do not mix base static metadata into the reshaped family. |
-| Non-Dolby HDR10+ with one window and a nonzero-anchor OOTF | Existing base representation | HDR10+ | ST 2094-40 | Uses the target-aware, pinned-representable source curve. |
-| Non-Dolby HDR10+ without a pinned-representable OOTF | Existing base representation | HDR10+ scene values, then base-family static range | Libplacebo BT.2446A EETF | Diagnose a valid zero-anchor/multi-window OOTF as unsupported rather than absent or applied. |
-| Static PQ with valid MaxCLL | Existing base representation | HDR10, with render-local maximum from MaxCLL | Libplacebo BT.2446A EETF | Content maximum precedes mastering-display maximum after validation. Preserve raw provenance and diagnose contradictions. |
-| Static PQ without valid MaxCLL but with a valid mastering range | Existing base representation | HDR10 | Libplacebo BT.2446A EETF | Use the mastering range as the next-best real metadata. |
-| PQ with none of the above | Existing selected representation | Explicit compatibility fallback | Libplacebo BT.2446A EETF | Use a 1,000-nit source maximum only for SDR/WCG conversion and diagnose the assumption. |
+| SDR transfer | Existing decoded representation | Clip/no tone mapping | Clip/no tone mapping | Relative signal; no absolute normalization. |
+| HLG transfer | Existing decoded representation | Existing spline | Existing spline | Relative, display-dependent path retained. |
+| Proven Dolby Vision Profile 8.1/HDR10+ generation with supported OOTF | HDR10-compatible base on SDR; mapped Dolby on HDR | ST 2094-40/HDR10+ | Existing mapped-Dolby spline | Do not combine base-layer OOTF with the mapped Dolby representation. |
+| Mapped Dolby with valid L1 or source range | Dolby reshape | BT.2446A with CIE-Y or Dolby source range | Spline with explicit CIE-Y or Dolby source range | Do not import base MaxCLL or select concurrent base HDR10+ through `ANY`. |
+| Non-Dolby HDR10+ with supported one-window OOTF | Existing base representation | ST 2094-40/HDR10+ | ST 2094-40/HDR10+ | Preserve source-provided target luminance; adapt it to the real destination. |
+| HDR10+ without a pinned-representable OOTF | Existing base representation | BT.2446A with HDR10+ scene values | Spline with HDR10+ scene values | Diagnose zero-anchor, local-window, or malformed OOTFs; scene values remain usable. |
+| Static PQ with valid MaxCLL | Existing base representation | BT.2446A with render-local MaxCLL | Spline with render-local MaxCLL | MaxCLL precedes mastering maximum on both target classes. |
+| Static PQ with only valid mastering range | Existing base representation | BT.2446A with mastering range | Spline with mastering range | Uses real declared metadata. |
+| Ordinary base PQ with no usable range | Existing base representation | Spline with explicit 1,000-nit maximum | Spline with explicit 1,000-nit maximum | Diagnosed compatibility assumption; no image analysis. |
+
+Every absolute PQ/Dolby row uses the same target-unit construction. On SDR,
+`R=100` and target maximum is 100 nits. On automatic scene-referred HDR with
+authoritative target luminance, `R=referenceWhite` and target maximum is the physical peak
+`R*headroom`. After libplacebo mapping, RGB is uniformly scaled by `203/R`.
+SDR-source and HLG-source paths do not receive that scale. On HDR without
+physical luminance authority, PQ/Dolby remains relative and ST 2094-40 target
+adaptation is not selected.
 
 Use one stable `useHdr10BaseForSdr`-equivalent decision for a source generation
 and target class; the name is illustrative, not a request for a new public
@@ -415,8 +504,8 @@ truth or a format mandate. A fixed 1,000-nit value is still a heuristic, but it
 is deterministic and does not analyze image content because:
 
 * the strict 10,000-nit inference can make normal content unusably dark;
-* canonical BT.2446 Method A supplies relevant 1,000-to-100-nit reference
-  behavior, even though SunPlayer would use libplacebo's generalized EETF;
+* 1,000 nits is a common HDR compatibility assumption and bounds the failure
+  more usefully than treating the PQ transfer ceiling as observed content;
 * it is deterministic and has no temporal pumping or pixel-analysis state;
 * its failure mode—lost or compressed detail above 1,000 nits—is understandable
   and can be diagnosed;
@@ -424,16 +513,11 @@ is deterministic and does not analyze image content because:
   requested no-peak-detection phase.
 
 The reported metadata-less sample established that the previous 10,000-nit
-fallback was unusable, and automated evidence now locks the narrower value and
-its curve behavior. Exact-frame physical comparison remains necessary before
-claiming perceptual parity or choosing a different fallback. There is no
-metadata-only value to discover once metadata is absent.
-
-For HDR display targets, keep the current metadata-aware spline in the first
-change. Libplacebo already skips effective mapping when the destination covers
-the source. Switching that path, changing HLG policy, or applying HDR10+ OOTFs
-on HDR targets should be separate evidence-backed work so the SDR fix does not
-destabilize the mostly acceptable HDR result.
+fallback was unusable on SDR and HDR, and automated evidence now locks the
+narrower value and its curve behavior on both target classes. Exact-frame
+physical comparison remains necessary before claiming perceptual parity or
+choosing a different fallback. There is no metadata-only value to discover once
+metadata is absent.
 
 ### Source-range precedence
 
@@ -470,6 +554,10 @@ An arbitrary brightness/exposure multiplier moves the whole image, can clip
 highlights, and masks whether source range, curve, or target normalization is
 wrong. Windows SDR-white level controls SDR/UI appearance on an HDR desktop; it
 is not a tone-mapping control for native HDR video.
+
+The accepted output scalar is not exposure: it algebraically converts
+`outputNits / 203` to `outputNits / targetWhite`. It does not vary across the
+range or change the selected tone curve.
 
 ### Tune spline until these samples look right
 
@@ -551,12 +639,17 @@ For the pinned library:
 * prove that the dual-format choice remains stable across frames with and
   without a pinned-representable OOTF, and that an unknown base-compatibility
   fact stays on the mapped-Dolby path;
-* if accepted, prove that metadata-less PQ-to-SDR uses the diagnosed 1,000-nit
-  compatibility value rather than an implicit 10,000-nit inference;
+* prove that metadata-less PQ uses the diagnosed 1,000-nit compatibility value
+  rather than an implicit 10,000-nit inference on SDR and HDR;
 * render neutral ramps, dark-face/midtone patches, highlight gradients, and
   saturated BT.2020 patches;
 * verify SDR source output is unchanged and target gamut mapping remains
-  independent of the luminance operator.
+  independent of the luminance operator;
+* verify nominal-100 mapping plus `203/100` unit normalization produces relative
+  black, half-white, and white, and retains a saturated Display-P3 color in the
+  extended BT.709 coordinate rather than clipping it to the storage basis;
+* hold physical HDR peak and source metadata fixed while changing reference
+  white, and prove `surfaceRgb * referenceWhite` remains invariant.
 
 ### Physical and comparative tests
 
@@ -611,8 +704,12 @@ is remapped when its target-class change flips the stable representation bit.
    Within the Dolby family, use only L1 or Dolby source range before fallback.
    Write any override only to the render-local color-space copy and only then
    infer remaining fields. Retain raw decoded metadata unchanged.
-4. Dispatch the existing libplacebo color-map parameters from the result for
-   SDR/WCG targets. Keep the current HDR-target and HLG paths.
+4. Dispatch the existing libplacebo color-map parameters from the result. For
+   absolute PQ/Dolby, provide nominal 100-nit SDR or an authoritative physical HDR peak,
+   then uniformly convert libplacebo's final output unit by `203/targetWhite`.
+   Keep relative SDR-source and HLG-source paths unchanged, and keep a
+   diagnosed relative fallback for HDR targets without physical luminance
+   authority.
 5. Add policy, independent-vector, pinned-render, stable-generation, and paused
    target-transition regression tests, then expose the decision through
    existing diagnostics rather than a new UI subsystem.
@@ -632,18 +729,27 @@ metadata before inference, validates the mapped representation, and dispatches
 libplacebo from one shared policy. Tests cover the decision matrix,
 version-specific HDR10+ limits and malformed values, independent BT.2446A and
 ST 2094-40 vectors, a real metadata-less PQ render through the production
-policy boundary, real HDR fixtures, and same-frame SDR/HDR remap. Peak
-detection remains off and no setting or platform-specific policy was added.
+policy boundary on SDR and eligible HDR, real HDR fixtures, same-frame SDR/HDR
+remap, surface-implied luminance invariance across reference-white coordinates,
+unknown-target fallback, and a saturated Display-P3 production render proving
+nominal-100 unit normalization. The presentation boundary separately proves that only automatic,
+scene-referred, known-luminance targets with a peak at or above reference white
+authorize physical HDR mapping; manual, display-referred, and incoherent
+targets do not. Peak detection remains off and no setting or platform-specific
+policy was added.
 
 The remaining items constrain future claims and tuning; they are not silently
 substituted runtime behavior:
 
-* Whether libplacebo's generalized BT.2446A EETF and the 1,000-nit fallback are
-  sufficiently close to the official SDR grade and Windows Player on the
+* Whether libplacebo's selected SDR operators and the 1,000-nit spline fallback
+  are sufficiently close to the official SDR grade and Windows Player on the
   observed samples without unacceptable highlight loss.
+* Whether nominal-100 SDR and physical-target HDR produce the preferred result
+  across representative dark and bright scenes; automated evidence proves the
+  unit math and gamut safety, not a universal perceptual match.
 * Whether the HDR10-compatible base plus source-provided HDR10+ OOTF wins the
-  exact-frame comparison for the dual-metadata sample as the proposed policy
-  predicts.
+  exact-frame SDR comparison for the dual-metadata sample as the policy
+  predicts; HDR retains the coherent mapped-Dolby representation.
 * Whether a later libplacebo upgrade or separately justified implementation can
   support valid zero-anchor and multi-window ST 2094-40 OOTFs; the first change
   diagnoses and falls back rather than claiming them.

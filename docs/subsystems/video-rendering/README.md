@@ -125,11 +125,20 @@ wins by construction.
 
 libplacebo owns source interpretation, tone mapping, and gamut mapping.
 libplacebo's linear convention uses `1.0 = 203 nits`; SunPlayer's rendered-video
-surface uses `1.0 = active reference white`. For relative SDR and static PQ,
-the producer currently expresses headroom as
-`max_luma = 203 * targetPeakHeadroom`. Analytic capture proves that numerical
-bridge for those inputs. Source pixels and HDR-transfer metadata remain
-unchanged, and no custom pre-output multiplier runs after tone mapping.
+surface uses `1.0 = active reference white`. Relative SDR and HLG retain the
+display-relative target `max_luma = 203 * targetPeakHeadroom`.
+
+Absolute PQ and mapped Dolby use the target construction accepted in
+[ADR 0024](../../decisions/0024-map-pq-against-absolute-target-luminance.md).
+At headroom one, libplacebo receives a nominal 100-nit SDR/WCG destination; on
+HDR it receives the physical display peak only for automatic target selection
+on a scene-referred target whose luminance range is known. After libplacebo's tone and perceptual gamut
+mapping, one uniform linear scale converts `outputNits / 203` to
+`outputNits / targetWhite`. This is coordinate normalization, not another tone
+curve. It preserves chromaticity and valid negative or greater-than-one
+extended-BT.709 WCG coordinates. Source pixels and metadata remain unchanged.
+An EDR/headroom-only, display-referred, or manual-headroom HDR target retains
+the existing relative path and reports that the physical target is unavailable.
 
 The surface remains linear BT.709/sRGB coordinates even for a wide-gamut
 target. Its separate optional raw target primaries describe the usable display
@@ -146,12 +155,15 @@ that Windows-specific interpretation a rule for future macOS or Wayland gamut
 providers.
 
 Decoded playback uses the shared metadata-first policy accepted in
-[ADR 0023](../../decisions/0023-use-metadata-first-hdr-to-sdr-policy.md). For a
-PQ source targeting SDR/WCG, it validates and selects one coherent source
-family: supported one-window HDR10+ OOTFs use libplacebo's ST 2094-40 EETF;
-HDR10+ scene values, static MaxCLL/mastering range, and mapped Dolby L1/source
-range use libplacebo's generalized BT.2446A EETF. Metadata-less PQ uses an
-explicit, diagnosed 1,000-nit compatibility maximum. A mapped Dolby image is
+[ADR 0023](../../decisions/0023-use-metadata-first-hdr-to-sdr-policy.md).
+Supported one-window HDR10+ OOTFs on the selected non-Dolby or
+HDR10-compatible base use libplacebo's ST 2094-40 EETF on SDR and on HDR with
+authoritative physical target luminance. For SDR, HDR10+ scene values, static
+MaxCLL/mastering range, and mapped Dolby L1/source range use libplacebo's
+generalized BT.2446A EETF. HDR otherwise retains spline, while carrying the
+validated scene/static metadata choice and coherent mapped representation.
+Ordinary base PQ without usable luminance metadata uses an explicit, diagnosed
+1,000-nit maximum and spline on both target classes. A mapped Dolby image is
 never combined with HDR10+ or static values from its base representation.
 
 A proven Profile 8.1 HDR10-compatible base carrying a supported HDR10+ OOTF
@@ -160,12 +172,15 @@ choice is stable for the playback generation and participates in imported-
 frame reuse, so moving a paused frame between HDR and SDR targets remaps it.
 Unknown compatibility remains on the existing mapped-Dolby path. Pinned
 libplacebo's unsupported zero-anchor and local-window OOTFs are diagnosed and
-fall back within the already selected metadata family.
+fall back within the already selected metadata family. A supported OOTF also
+falls back to scene-guided spline when an HDR target lacks authoritative
+physical luminance, rather than adapting the curve against invented nits.
 
-SDR, HLG, and HDR-target behavior retain the existing clip/spline paths.
-Perceptual gamut mapping remains selected for every path. Inverse mapping,
-peak detection, and dithering remain disabled, and the exact decision and
-fallback provenance are published through existing diagnostics. Null peak
+SDR and HLG retain the existing clip/spline paths. HDR retains spline except
+when a supported HDR10+ OOTF supplies its target-aware EETF. Perceptual gamut
+mapping remains selected for every path. Inverse mapping, peak detection, and
+dithering remain disabled, and the exact decision and fallback provenance are
+published through existing diagnostics. Null peak
 detection means there is no smoothed measured-peak state affecting playback,
 so open and seek do not need a no-op renderer reset. If a later
 evidence-backed quality profile enables temporal peak detection or frame
@@ -180,8 +195,9 @@ destination maximum while inferring HLG. V1 accepts this behavior for
 display-relative playback, but does not claim absolute-reference HLG
 monitoring. If physical evidence later rejects it, the next step is a focused
 upstream API separating physical HLG peak from destination coordinates, not a
-second SunPlayer HLG stage. HDR10+'s source-authored targeted-display luminance
-stays separate from the current display destination. The pinned Dolby Vision
+second SunPlayer HLG stage. HDR10+'s source-provided targeted-display luminance
+stays unchanged while libplacebo receives the physical current display
+destination. The pinned Dolby Vision
 helper supports the tested Profile 8.1 reshape but not all target trims or
 enhancement-layer residual processing.
 
@@ -202,9 +218,10 @@ Those formats are required V1 scope. The current experimental label describes
 unverified color behavior, not a plan to omit HLG, HDR10+, or Dolby Vision from
 the player or to deliberately break files that already render.
 
-Minimum target luminance and whether it is known are also part of the surface
-description supplied to libplacebo. SunPlayer preserves a measured physical zero
-as distinct from unavailable metadata. Because libplacebo reserves numeric
+Whether the target peak is authoritative and whether its minimum is known are
+separate parts of the surface description supplied to libplacebo. SunPlayer
+preserves a measured physical zero as distinct from unavailable metadata.
+Because libplacebo reserves numeric
 zero for unknown minimum luminance and otherwise infers a linear-target
 contrast ratio, the adapter uses `PL_COLOR_HDR_BLACK` at that API boundary for
 an unknown or known-zero minimum; shared physical state remains unchanged.
@@ -214,10 +231,11 @@ contracts, but not storage behavior. Software planes require observable
 uploads. Hardware frames require backend-native import, synchronization, and
 lifetime retention and should be the normal playback path when supported.
 
-Relative SDR white and the 203-nit HDR reference-white anchor both map to
-surface `1.0`; PQ source values and mastering metadata remain source truth.
-The physical luminance of surface `1.0` follows the platform reference white
-at presentation.
+Relative SDR/HLG paths retain libplacebo's 203-nit coordinate anchor, while
+absolute PQ/Dolby results are normalized into the same surface where `1.0`
+means platform reference white. PQ source values and mastering metadata remain
+source truth. The physical luminance of surface `1.0` follows the platform
+reference white at presentation.
 
 Embedded source ICC bytes are retained with the `AVFrame` and reported in
 diagnostics. The render-local libplacebo frame explicitly clears both ICC

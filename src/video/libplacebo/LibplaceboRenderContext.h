@@ -9,10 +9,12 @@
 struct LibplaceboGraphicsContext;
 
 // Shared libplacebo renderer policy for analytic and decoded inputs. It owns
-// target color description and tone-mapping selection. SunPlayer describes the
-// destination in libplacebo's fixed 203-nit coordinate system so its linear
-// output directly satisfies the active-reference-white surface contract.
-// Target allocation and synchronization remain in VideoTargetInterop.
+// target color description and tone-mapping selection. Relative-transfer paths
+// describe the destination in libplacebo's fixed 203-nit coordinate system.
+// Absolute PQ/Dolby paths use an authoritative physical target peak and
+// normalize the result into the same active-reference-white surface contract.
+// Headroom-only targets retain the relative path. Target allocation and
+// synchronization remain in VideoTargetInterop.
 class LibplaceboRenderContext final {
   public:
     explicit LibplaceboRenderContext(LibplaceboGraphicsContext const& graphics);
@@ -34,7 +36,8 @@ class LibplaceboRenderContext final {
     bool renderWithPolicy(pl_frame const& source, pl_tex targetTexture,
                           RenderedVideoSurfaceDescription const& targetDescription,
                           LibplaceboToneMappingFunction toneMapping, enum pl_hdr_metadata_type metadata,
-                          std::optional<float> effectiveSourceMaximumNits, QString* error);
+                          std::optional<float> effectiveSourceMaximumNits, bool useAbsoluteTargetLuminance,
+                          QString* error);
 
     pl_renderer m_renderer = nullptr;
 };

@@ -252,28 +252,44 @@ QString provenanceDescription(LibplaceboColorPolicyDecision const& decision) {
 }
 
 LibplaceboColorPolicyDecision genericDecision(LibplaceboToneMappingFunction toneMapping,
-                                              LibplaceboSourceMetadataProvenance provenance) {
+                                              LibplaceboSourceMetadataProvenance provenance,
+                                              bool useAbsoluteTargetLuminance = false, QString qualification = {}) {
     return {
         .toneMapping = toneMapping,
         .metadata = toneMapping == LibplaceboToneMappingFunction::Clip ? PL_HDR_METADATA_NONE : PL_HDR_METADATA_ANY,
         .provenance = provenance,
+        .useAbsoluteTargetLuminance = useAbsoluteTargetLuminance,
+        .qualification = std::move(qualification),
     };
 }
 
-LibplaceboColorPolicyDecision pqFallback(QString qualification = {}) {
+LibplaceboColorPolicyDecision pqCompatibilityFallback(LibplaceboToneMappingFunction toneMapping,
+                                                      bool useAbsoluteTargetLuminance, QString qualification = {}) {
     return {
-        .toneMapping = LibplaceboToneMappingFunction::Bt2446a,
+        .toneMapping = toneMapping,
         .metadata = PL_HDR_METADATA_HDR10,
         .provenance = LibplaceboSourceMetadataProvenance::PqCompatibilityFallback,
         .effectiveSourceMaximumNits = LibplaceboColorPolicy::pqCompatibilityMaximumNits,
+        .useAbsoluteTargetLuminance = useAbsoluteTargetLuminance,
         .qualification = std::move(qualification),
+    };
+}
+
+LibplaceboColorPolicyDecision hdr10PlusOotfDecision(pl_frame const& mappedFrame) {
+    return {
+        .toneMapping = LibplaceboToneMappingFunction::St2094_40,
+        .metadata = PL_HDR_METADATA_HDR10PLUS,
+        .provenance = LibplaceboSourceMetadataProvenance::Hdr10PlusOotf,
+        .selectedSourceAverageNits = sourceAverageNits(mappedFrame.color.hdr, PL_HDR_METADATA_HDR10PLUS),
+        .useAbsoluteTargetLuminance = true,
     };
 }
 } // namespace
 
 QString LibplaceboColorPolicyDecision::description() const {
     if (toneMapping == LibplaceboToneMappingFunction::Spline &&
-        provenance == LibplaceboSourceMetadataProvenance::ExistingSelection && qualification.isEmpty()) {
+        provenance == LibplaceboSourceMetadataProvenance::ExistingSelection && !useAbsoluteTargetLuminance &&
+        qualification.isEmpty()) {
         return QStringLiteral("Spline tone map · perceptual gamut map · inverse mapping off · "
                               "peak detection off · dither off");
     }
@@ -305,6 +321,9 @@ QString LibplaceboColorPolicyDecision::description() const {
     }
     if (!qualification.isEmpty()) {
         result += QStringLiteral(" · %1").arg(qualification);
+    }
+    if (useAbsoluteTargetLuminance) {
+        result += QStringLiteral(" · absolute target luminance · 203/target-white coordinate normalization");
     }
     result += QStringLiteral(" · perceptual gamut map · inverse mapping off · peak detection off · dither off");
     return result;
@@ -339,28 +358,34 @@ LibplaceboColorPolicyDecision
 LibplaceboColorPolicy::resolve(DecodedVideoFrame const& frame, pl_frame const& mappedFrame,
                                RenderedVideoSurfaceDescription const& targetDescription) const {
     Q_ASSERT(targetDescription.isValid());
-    if (!sdrLikeTarget(targetDescription)) {
-        return genericDecision(LibplaceboToneMappingFunction::Spline,
-                               LibplaceboSourceMetadataProvenance::ExistingSelection);
-    }
-
     AVFrame const& source = frame.ffmpegFrame();
+    bool const mappedDolbyVision = mappedFrame.repr.sys == PL_COLOR_SYSTEM_DOLBYVISION && mappedFrame.repr.dovi;
     if (frame.dynamicRange() == VideoDynamicRange::Sdr) {
         return genericDecision(LibplaceboToneMappingFunction::Clip, LibplaceboSourceMetadataProvenance::None);
     }
-    if (source.color_trc == AVCOL_TRC_ARIB_STD_B67 || source.color_trc != AVCOL_TRC_SMPTE2084) {
+    if (!mappedDolbyVision && source.color_trc != AVCOL_TRC_SMPTE2084) {
         return genericDecision(LibplaceboToneMappingFunction::Spline,
                                LibplaceboSourceMetadataProvenance::ExistingSelection);
     }
 
+    bool const sdrTarget = sdrLikeTarget(targetDescription);
+    bool const useAbsoluteTargetLuminance = sdrTarget || targetDescription.targetPeakLuminanceKnown;
     Hdr10PlusEvidence const dynamic = hdr10PlusEvidence(source, &mappedFrame);
-    QString ignoredBaseGuidance = hdr10PlusLimitation(dynamic);
-    if (dynamic.valid && (dynamic.sceneValid || dynamic.sourceOotfPresent)) {
-        appendQualification(ignoredBaseGuidance,
-                            QStringLiteral("concurrent HDR10+ guidance ignored for mapped Dolby representation"));
-    }
-    bool const mappedDolbyVision = mappedFrame.repr.sys == PL_COLOR_SYSTEM_DOLBYVISION && mappedFrame.repr.dovi;
+    std::optional<float> const dynamicMaximum = hdr10PlusMaximumNits(mappedFrame.color.hdr);
+
     if (mappedDolbyVision) {
+        QString ignoredBaseGuidance = hdr10PlusLimitation(dynamic);
+        if (dynamic.valid && (dynamic.sceneValid || dynamic.sourceOotfPresent)) {
+            appendQualification(ignoredBaseGuidance,
+                                QStringLiteral("concurrent HDR10+ guidance ignored for mapped Dolby representation"));
+        }
+        if (!useAbsoluteTargetLuminance) {
+            appendQualification(ignoredBaseGuidance,
+                                QStringLiteral("physical target luminance unavailable; relative HDR target retained"));
+        }
+        LibplaceboToneMappingFunction const toneMapping =
+            sdrTarget ? LibplaceboToneMappingFunction::Bt2446a : LibplaceboToneMappingFunction::Spline;
+
         std::optional<float> const level1Maximum = [&mappedFrame]() -> std::optional<float> {
             if (!pl_hdr_metadata_contains(&mappedFrame.color.hdr, PL_HDR_METADATA_CIE_Y)) {
                 return std::nullopt;
@@ -372,10 +397,11 @@ LibplaceboColorPolicy::resolve(DecodedVideoFrame const& frame, pl_frame const& m
         }();
         if (level1Maximum) {
             return {
-                .toneMapping = LibplaceboToneMappingFunction::Bt2446a,
+                .toneMapping = toneMapping,
                 .metadata = PL_HDR_METADATA_CIE_Y,
                 .provenance = LibplaceboSourceMetadataProvenance::DolbyVisionLevel1,
                 .selectedSourceAverageNits = sourceAverageNits(mappedFrame.color.hdr, PL_HDR_METADATA_CIE_Y),
+                .useAbsoluteTargetLuminance = useAbsoluteTargetLuminance,
                 .qualification = ignoredBaseGuidance,
             };
         }
@@ -384,10 +410,11 @@ LibplaceboColorPolicy::resolve(DecodedVideoFrame const& frame, pl_frame const& m
         float const maximum = mappedFrame.color.hdr.max_luma;
         if (finiteInRange(minimum, 0.0, maximumPqNits) && validMaximum(maximum) && minimum <= maximum) {
             return {
-                .toneMapping = LibplaceboToneMappingFunction::Bt2446a,
+                .toneMapping = toneMapping,
                 .metadata = PL_HDR_METADATA_HDR10,
                 .provenance = LibplaceboSourceMetadataProvenance::DolbyVisionSourceRange,
                 .effectiveSourceMaximumNits = maximum,
+                .useAbsoluteTargetLuminance = useAbsoluteTargetLuminance,
                 .qualification = ignoredBaseGuidance,
             };
         }
@@ -395,35 +422,39 @@ LibplaceboColorPolicy::resolve(DecodedVideoFrame const& frame, pl_frame const& m
         if (!ignoredBaseGuidance.isEmpty()) {
             qualification += QStringLiteral("; %1").arg(ignoredBaseGuidance);
         }
-        return pqFallback(qualification);
-    }
-
-    std::optional<float> const dynamicMaximum = hdr10PlusMaximumNits(mappedFrame.color.hdr);
-    if (dynamic.sceneValid && dynamic.pinnedOotfRepresentable && dynamicMaximum) {
-        return {
-            .toneMapping = LibplaceboToneMappingFunction::St2094_40,
-            .metadata = PL_HDR_METADATA_HDR10PLUS,
-            .provenance = LibplaceboSourceMetadataProvenance::Hdr10PlusOotf,
-            .selectedSourceAverageNits = sourceAverageNits(mappedFrame.color.hdr, PL_HDR_METADATA_HDR10PLUS),
-        };
-    }
-    if (dynamic.valid && dynamic.sceneValid && dynamicMaximum) {
-        QString qualification = hdr10PlusLimitation(dynamic);
-        if (!qualification.isEmpty()) {
-            appendQualification(qualification, QStringLiteral("global scene values used"));
-        }
-        return {
-            .toneMapping = LibplaceboToneMappingFunction::Bt2446a,
-            .metadata = PL_HDR_METADATA_HDR10PLUS,
-            .provenance = LibplaceboSourceMetadataProvenance::Hdr10PlusScene,
-            .selectedSourceAverageNits = sourceAverageNits(mappedFrame.color.hdr, PL_HDR_METADATA_HDR10PLUS),
-            .qualification = qualification,
-        };
+        return pqCompatibilityFallback(toneMapping, useAbsoluteTargetLuminance, qualification);
     }
 
     std::optional<float> const maxCll = contentMaximumNits(source);
     std::optional<float> const masteringMaximum = masteringMaximumNits(source);
-    QString staticQualification = hdr10PlusLimitation(dynamic);
+    QString metadataQualification = hdr10PlusLimitation(dynamic);
+    if (!useAbsoluteTargetLuminance) {
+        appendQualification(metadataQualification,
+                            QStringLiteral("physical target luminance unavailable; relative HDR target retained"));
+        if (dynamic.sceneValid && dynamic.pinnedOotfRepresentable && dynamicMaximum) {
+            appendQualification(metadataQualification, QStringLiteral("source OOTF not applied"));
+        }
+    }
+
+    if (useAbsoluteTargetLuminance && dynamic.sceneValid && dynamic.pinnedOotfRepresentable && dynamicMaximum) {
+        return hdr10PlusOotfDecision(mappedFrame);
+    }
+    if (dynamic.valid && dynamic.sceneValid && dynamicMaximum) {
+        QString qualification = metadataQualification;
+        if (!qualification.isEmpty()) {
+            appendQualification(qualification, QStringLiteral("global scene values used"));
+        }
+        return {
+            .toneMapping = sdrTarget ? LibplaceboToneMappingFunction::Bt2446a : LibplaceboToneMappingFunction::Spline,
+            .metadata = PL_HDR_METADATA_HDR10PLUS,
+            .provenance = LibplaceboSourceMetadataProvenance::Hdr10PlusScene,
+            .selectedSourceAverageNits = sourceAverageNits(mappedFrame.color.hdr, PL_HDR_METADATA_HDR10PLUS),
+            .useAbsoluteTargetLuminance = useAbsoluteTargetLuminance,
+            .qualification = qualification,
+        };
+    }
+
+    QString staticQualification = metadataQualification;
     if (dynamic.present) {
         if (staticQualification.isEmpty()) {
             staticQualification = QStringLiteral("HDR10+ scene values unavailable after import");
@@ -437,28 +468,32 @@ LibplaceboColorPolicy::resolve(DecodedVideoFrame const& frame, pl_frame const& m
                 QStringLiteral("mastering maximum %1 nits retained").arg(formattedNits(*masteringMaximum)));
         }
         return {
-            .toneMapping = LibplaceboToneMappingFunction::Bt2446a,
+            .toneMapping = sdrTarget ? LibplaceboToneMappingFunction::Bt2446a : LibplaceboToneMappingFunction::Spline,
             .metadata = PL_HDR_METADATA_HDR10,
             .provenance = LibplaceboSourceMetadataProvenance::MaxCll,
             .effectiveSourceMaximumNits = maxCll,
+            .useAbsoluteTargetLuminance = useAbsoluteTargetLuminance,
             .qualification = staticQualification,
         };
     }
     if (masteringMaximum) {
         return {
-            .toneMapping = LibplaceboToneMappingFunction::Bt2446a,
+            .toneMapping = sdrTarget ? LibplaceboToneMappingFunction::Bt2446a : LibplaceboToneMappingFunction::Spline,
             .metadata = PL_HDR_METADATA_HDR10,
             .provenance = LibplaceboSourceMetadataProvenance::MasteringDisplay,
             .effectiveSourceMaximumNits = masteringMaximum,
+            .useAbsoluteTargetLuminance = useAbsoluteTargetLuminance,
             .qualification = staticQualification,
         };
     }
-    QString fallbackQualification = hdr10PlusLimitation(dynamic);
+
+    QString fallbackQualification = metadataQualification;
     if (dynamic.present) {
         if (fallbackQualification.isEmpty()) {
             fallbackQualification = QStringLiteral("HDR10+ scene values unavailable after import");
         }
         appendQualification(fallbackQualification, QStringLiteral("PQ fallback used"));
     }
-    return pqFallback(fallbackQualification);
+    return pqCompatibilityFallback(LibplaceboToneMappingFunction::Spline, useAbsoluteTargetLuminance,
+                                   fallbackQualification);
 }

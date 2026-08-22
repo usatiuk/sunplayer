@@ -34,6 +34,7 @@ struct LibplaceboColorPolicyDecision {
     LibplaceboSourceMetadataProvenance provenance = LibplaceboSourceMetadataProvenance::ExistingSelection;
     std::optional<float> effectiveSourceMaximumNits;
     std::optional<float> selectedSourceAverageNits;
+    bool useAbsoluteTargetLuminance = false;
     QString qualification;
 
     QString description() const;

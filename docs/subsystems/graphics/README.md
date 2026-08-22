@@ -471,7 +471,9 @@ On managed Wayland, preferred reference and target luminance are compositor-
 declared target values. Mutter currently publishes the PQ envelope maximum;
 another compositor may publish a more output-specific maximum. SunPlayer trusts
 the reported value without compositor-name policy. These target changes can
-rerender video but do not change the stable BT.2020/PQ surface encoding.
+rerender video but do not change the stable BT.2020/PQ surface encoding. Because
+this presentation contract is display-referred, its values do not authorize
+absolute physical HDR tone mapping.
 
 ### Rendered-video surface
 
@@ -500,33 +502,33 @@ recorded in
 
 Platform display adapters observe native facts such as HDR enablement,
 luminance capabilities, and system SDR white. Shared presentation policy turns
-those facts into one display-relative target. The producer expresses available
-headroom in libplacebo's fixed 203-nit coordinate system:
-`max_luma = 203 * physicalPeak / referenceWhite`. The resulting linear samples
-therefore use `1.0 = active reference white` directly; no custom post-map scale
-is required. SDR diagnostic input remains relative, while the PQ diagnostic is
-one fixed mastered signal independent of target changes. The compositor does
-not know about libplacebo's coordinate system.
+those facts into one surface description. Relative SDR and HLG express
+headroom in libplacebo's fixed 203-nit coordinate system. Decoded PQ and mapped
+Dolby instead give libplacebo nominal 100-nit SDR or the physical peak from an
+automatic scene-referred target with known luminance, then uniformly convert
+`outputNits / 203` to `outputNits / targetWhite` after tone and gamut mapping.
+Relative-headroom, display-referred, and manual-headroom HDR targets retain the
+relative path. The compositor does not know about libplacebo's coordinate
+system.
 
-That virtual destination is currently validated only for relative SDR and an
-analytic static-PQ input. It is not assumed to be a universal HLG or
-dynamic-HDR construction: libplacebo 7.360.1 uses the destination maximum as
-HLG's physical OOTF peak. The production renderer still accepts HLG through
-the same path. A real FFmpeg-decoded PQ fixture and a controlled HLG
-target-response experiment are tracked in the video-rendering plan; only an
-observed material mismatch justifies changing the libplacebo integration.
+The analytic PQ diagnostic remains one fixed mastered signal on the established
+display-relative diagnostic path, independent of decoded-video policy. The
+virtual destination is not assumed to be a universal HLG construction:
+libplacebo 7.360.1 uses the destination maximum as HLG's physical OOTF peak.
+The production renderer still accepts HLG through that path, but does not claim
+absolute-reference HLG monitoring.
 
-The surface also preserves minimum target luminance as a value plus a known
-state. The backend converts a positive physical minimum into the same virtual
-coordinate system. Libplacebo treats numeric zero as unknown and otherwise
-infers a linear-target contrast ratio, so the adapter uses
-`PL_COLOR_HDR_BLACK` for an unknown or known-zero minimum.
+The surface preserves peak-luminance authority separately from whether the
+target minimum is known. The backend converts a positive physical minimum by
+the same ratio as the selected target maximum. Libplacebo treats
+numeric zero as unknown and otherwise infers a linear-target contrast ratio, so
+the adapter uses `PL_COLOR_HDR_BLACK` for an unknown or known-zero minimum.
 
 The texture's BT.709 primaries define its extended-linear RGB coordinate basis,
-not necessarily the physical target gamut. SunPlayer does not yet propagate
-actual display primaries into libplacebo's separate target-gamut metadata, so
-the current target gamut is inferred as BT.709 and wide-gamut output is not yet
-claimed.
+not necessarily the physical target gamut. Windows Advanced Color supplies
+validated native target primaries separately; unknown targets fall back to
+BT.709. macOS and Wayland target-gamut population and physical validation
+remain open.
 
 Target gamut mapping is separate from monitor calibration. The Windows
 Advanced Color path relies on the OS to apply the active display profile once

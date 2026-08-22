@@ -70,3 +70,9 @@ PresentationTarget calculatePresentationTarget(DisplayState const& display, Pres
     target.effectiveTargetHeadroom = std::max(1.0f, target.currentHeadroom / target.sdrScale);
     return target;
 }
+
+bool canUseAutomaticPhysicalTarget(PresentationTarget const& target, bool automaticTargetPeak) {
+    float const referenceWhiteNits = target.sdrWhiteKnown ? target.sdrWhiteNits : scRgbReferenceWhiteNits;
+    return automaticTargetPeak && target.sceneReferred && target.luminanceKnown &&
+           std::isfinite(target.maxLuminanceNits) && target.maxLuminanceNits >= referenceWhiteNits;
+}

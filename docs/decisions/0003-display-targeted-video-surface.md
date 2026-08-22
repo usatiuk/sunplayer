@@ -3,9 +3,10 @@
 * Status: Accepted
 * Date: 2026-07-28
 * Amended by:
-  [0008: Anchor normal HDR playback to the platform reference white](0008-reference-white-adaptive-hdr-display-mapping.md)
+  [0008: Anchor normal HDR playback to the platform reference white](0008-reference-white-adaptive-hdr-display-mapping.md),
+  [0016: Reconcile output changes by semantic value](0016-reconcile-output-changes-semantically.md),
   and
-  [0016: Reconcile output changes by semantic value](0016-reconcile-output-changes-semantically.md)
+  [0024: Map PQ against absolute target luminance](0024-map-pq-against-absolute-target-luminance.md)
 * Related:
   [0013: Rely on system display calibration on managed presentation paths](0013-rely-on-system-display-calibration.md)
 
@@ -49,8 +50,8 @@ device. A completed surface records:
 * The producer-content revision.
 * Its pixel size and every semantic target value that affects rendering:
   reference white, target minimum-luminance value and known state, target
-  headroom, optional validated raw target primaries, and fixed coordinate
-  semantics.
+  headroom and peak-luminance authority, optional validated raw target
+  primaries, and fixed coordinate semantics.
 
 Reuse requires an exact match of that semantic state. A separate display
 revision is deliberately absent: an event or native display identity change
@@ -72,16 +73,21 @@ Platform display adapters own native observation and report physical display
 facts. Shared presentation policy resolves those facts into the effective
 target—including minimum luminance when known—supplied to the producer. The
 producer must describe the destination so renderer output already satisfies
-this surface contract. For relative SDR and static PQ, the current libplacebo
-bridge expresses the target range in its fixed 203-nit normalized coordinate
-system: target maximum is `203 * targetPeakHeadroom`, and target minimum is
-converted by the same reference-white-relative relationship. HLG and dynamic
-HDR require format-specific target semantics and must not inherit that formula
-uncritically. No video-only normalization runs after the display map. The final
-compositor remains unaware of libplacebo's internal coordinate system and of
-the source format. Platform presentation then maps the complete final
-composition to the selected OS swapchain convention without tone-mapping video
-again.
+this surface contract. For relative SDR and HLG, the current libplacebo bridge
+expresses relative-transfer targets in its fixed 203-nit normalized
+coordinate system: target maximum is `203 * targetPeakHeadroom`, and target
+minimum is converted by the same reference-white-relative relationship.
+Absolute PQ and mapped Dolby instead use nominal 100-nit SDR or the physical
+peak from an automatic scene-referred HDR target with known luminance, then
+convert libplacebo's final `nits / 203` coordinates uniformly to the surface's
+`nits / targetWhite` coordinates as accepted in ADR 0024. Display-referred,
+manual-headroom, and otherwise unknown physical HDR targets retain the relative
+path rather than treating component headroom as nits. HLG retains its
+format-specific relative behavior. The normalization stays inside producer
+mapping and does not reshape the mapped image. The final compositor remains
+unaware of libplacebo's internal coordinate system and of the source format,
+then maps the complete composition to the selected OS swapchain convention
+without tone-mapping video again.
 
 The producer's target gamut and content mapping do not apply the monitor's ICC
 calibration. On a system-managed path, the platform applies that final

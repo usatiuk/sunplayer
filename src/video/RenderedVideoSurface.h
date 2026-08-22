@@ -43,6 +43,9 @@ struct RenderedVideoSurfaceDescription {
     // A measured zero is valid and differs from unavailable metadata.
     bool targetMinimumLuminanceKnown = false;
     float targetMinimumLuminanceNits = 0.0f;
+    // True when the peak represented by reference white times headroom is an
+    // authoritative physical luminance value.
+    bool targetPeakLuminanceKnown = false;
     float targetPeakHeadroom = 0.0f;
     bool targetPrimariesKnown = false;
     ColorPrimaries targetPrimaries;

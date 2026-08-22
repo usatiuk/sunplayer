@@ -207,6 +207,8 @@ void RhiPresentationEngine::renderFrame() {
                                                                           : scRgbReferenceWhiteNits;
         Q_ASSERT(std::isfinite(referenceWhiteNits) && referenceWhiteNits > 0.0f);
         bool const targetMinimumLuminanceKnown = presentationTarget.luminanceKnown;
+        bool const targetPeakLuminanceKnown =
+            canUseAutomaticPhysicalTarget(presentationTarget, m_settings.automaticTargetPeak());
         float const targetMinimumLuminanceNits =
             targetMinimumLuminanceKnown
                 ? std::clamp(presentationTarget.minLuminanceNits, 0.0f, referenceWhiteNits * targetPeak)
@@ -221,6 +223,7 @@ void RhiPresentationEngine::renderFrame() {
         requestedSurface->description.referenceWhiteNits = referenceWhiteNits;
         requestedSurface->description.targetMinimumLuminanceKnown = targetMinimumLuminanceKnown;
         requestedSurface->description.targetMinimumLuminanceNits = targetMinimumLuminanceNits;
+        requestedSurface->description.targetPeakLuminanceKnown = targetPeakLuminanceKnown;
         requestedSurface->description.targetPeakHeadroom = targetPeak;
         requestedSurface->description.targetPrimariesKnown = presentationTarget.targetPrimariesKnown;
         requestedSurface->description.targetPrimaries = presentationTarget.targetPrimaries;

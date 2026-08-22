@@ -23,6 +23,7 @@ extern "C" {
 #include <libavutil/frame.h>
 #include <libavutil/hdr_dynamic_metadata.h>
 #include <libavutil/mastering_display_metadata.h>
+#include <libplacebo/colorspace.h>
 }
 
 #include <rhi/qrhi.h>
@@ -103,8 +104,11 @@ void compareNear(float actual, float expected, float tolerance) {
 
 RenderedVideoSurfaceState surfaceState(GraphicsDeviceDomain& graphics, std::uint64_t contentRevision,
                                        float referenceWhiteNits = 203.0f, QSize pixelSize = {4, 4},
-                                       float targetPeakHeadroom = 1.0f) {
-    return {
+                                       float targetPeakHeadroom = 1.0f,
+                                       std::optional<ColorPrimaries> targetPrimaries = std::nullopt,
+                                       bool targetPeakLuminanceKnown = true,
+                                       float targetMinimumLuminanceNits = 0.0f) {
+    RenderedVideoSurfaceState state{
         .description =
             {
                 .pixelSize = pixelSize,
@@ -114,12 +118,18 @@ RenderedVideoSurfaceState surfaceState(GraphicsDeviceDomain& graphics, std::uint
                 .alphaMode = RenderedVideoAlphaMode::Opaque,
                 .referenceWhiteNits = referenceWhiteNits,
                 .targetMinimumLuminanceKnown = true,
-                .targetMinimumLuminanceNits = 0.0f,
+                .targetMinimumLuminanceNits = targetMinimumLuminanceNits,
+                .targetPeakLuminanceKnown = targetPeakLuminanceKnown,
                 .targetPeakHeadroom = targetPeakHeadroom,
             },
         .graphicsDeviceGeneration = graphics.generation(),
         .contentRevision = contentRevision,
     };
+    if (targetPrimaries) {
+        state.description.targetPrimariesKnown = true;
+        state.description.targetPrimaries = *targetPrimaries;
+    }
+    return state;
 }
 
 struct DecodedFrameCapture {
@@ -134,15 +144,18 @@ struct DecodedFrameCapture {
 };
 
 DecodedFrameCapture captureDecodedFrame(GraphicsDeviceDomain& graphics, std::shared_ptr<DecodedVideoFrame const> frame,
-                                        float referenceWhiteNits = 203.0f, float targetPeakHeadroom = 1.0f) {
+                                        float referenceWhiteNits = 203.0f, float targetPeakHeadroom = 1.0f,
+                                        std::optional<ColorPrimaries> targetPrimaries = std::nullopt,
+                                        bool targetPeakLuminanceKnown = true,
+                                        float targetMinimumLuminanceNits = 0.0f) {
     DecodedFrameCapture result;
     GraphicsDeviceExecutionScope execution = graphics.acquireExecutionScope();
     QRhi& rhi = graphics.rhi();
     DecodedVideoSource source(std::move(frame), VideoTargetReadback::Enabled);
     LibplaceboDecodedVideoProducer producer(graphics, source, VideoTargetReadback::Enabled);
-    RenderedVideoSurfaceState const state =
-        surfaceState(graphics, source.contentRevision(), referenceWhiteNits,
-                     source.currentFrame()->geometry().visibleSize, targetPeakHeadroom);
+    RenderedVideoSurfaceState const state = surfaceState(
+        graphics, source.contentRevision(), referenceWhiteNits, source.currentFrame()->geometry().visibleSize,
+        targetPeakHeadroom, targetPrimaries, targetPeakLuminanceKnown, targetMinimumLuminanceNits);
     if (producer.ensureSurface(state) != VideoOperationResult::Ready) {
         result.error = producer.diagnostics().target.fallbackReason;
         return result;
@@ -239,6 +252,7 @@ class FfmpegFirstFrameTest final : public QObject {
     void retainsStreamHdr10PlusAtTheDecodeBoundary();
     void hdrInputAcceptance_data();
     void hdrInputAcceptance();
+    void nominalSdrTargetPreservesWcg();
     void dualFormatTargetChangeRemapsPausedFrame();
     void realDemuxDecodeImportAndComposition();
     void compressedYuvMetadataAndRendering();
@@ -511,13 +525,28 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
     QVERIFY2(graphics, "Could not create the graphics domain");
     constexpr float referenceWhiteNits = 100.0f;
     constexpr float targetPeakHeadroom = 6.0f;
+    // A deliberately elevated test display black makes the production
+    // target-minimum path observable without changing the HDR policy.
+    float const targetMinimumLuminanceNits = kind == HdrFixtureKind::Hdr10Plus ? 5.0f : 0.0f;
     DecodedFrameCapture const capture =
-        captureDecodedFrame(*graphics, frames.front(), referenceWhiteNits, targetPeakHeadroom);
+        captureDecodedFrame(*graphics, frames.front(), referenceWhiteNits, targetPeakHeadroom, std::nullopt, true,
+                            targetMinimumLuminanceNits);
     QVERIFY2(capture.isSuccess(), qPrintable(capture.error));
     QCOMPARE(capture.readback.pixelSize, QSize(256, 144));
     QCOMPARE(capture.input.path, VideoFrameImportPath::SoftwareUpload);
-    QCOMPARE(capture.producer.colorPolicy, QStringLiteral("Spline tone map · perceptual gamut map · "
-                                                          "inverse mapping off · peak detection off · dither off"));
+    if (kind == HdrFixtureKind::Hdr10Plus) {
+        QVERIFY2(capture.producer.colorPolicy.contains(QStringLiteral("ST 2094-40 EETF")),
+                 qPrintable(capture.producer.colorPolicy));
+        QVERIFY(capture.producer.colorPolicy.contains(QStringLiteral("HDR10+ source OOTF")));
+        QVERIFY(capture.producer.colorPolicy.contains(QStringLiteral("absolute target luminance")));
+    } else if (kind == HdrFixtureKind::Hlg) {
+        QCOMPARE(capture.producer.colorPolicy, QStringLiteral("Spline tone map · perceptual gamut map · "
+                                                              "inverse mapping off · peak detection off · dither off"));
+    } else {
+        QVERIFY(capture.producer.colorPolicy.contains(QStringLiteral("Spline tone map")));
+        QVERIFY(capture.producer.colorPolicy.contains(QStringLiteral("absolute target luminance")));
+        QVERIFY(capture.producer.colorPolicy.contains(QStringLiteral("203/target-white coordinate normalization")));
+    }
     std::array<FloatPixel, 4> const patches = neutralPatchPixels(capture.readback);
     verifyNeutralPatchProperties(patches, targetPeakHeadroom, kind == HdrFixtureKind::DolbyVision ? 0.12f : 0.025f);
 
@@ -567,25 +596,31 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
         DecodedFrameCapture const metadataLessCapture =
             captureDecodedFrame(*graphics, metadataLessFrame, 203.0f, 1.0f);
         QVERIFY2(metadataLessCapture.isSuccess(), qPrintable(metadataLessCapture.error));
-        QVERIFY(metadataLessCapture.producer.colorPolicy.contains(QStringLiteral("BT.2446A EETF")));
+        QVERIFY(metadataLessCapture.producer.colorPolicy.contains(QStringLiteral("Spline tone map")));
         QVERIFY(metadataLessCapture.producer.colorPolicy.contains(
             QStringLiteral("explicit PQ compatibility fallback 1000 nits")));
+        QVERIFY(metadataLessCapture.producer.colorPolicy.contains(QStringLiteral("absolute target luminance")));
+        QVERIFY(metadataLessCapture.producer.colorPolicy.contains(
+            QStringLiteral("203/target-white coordinate normalization")));
         std::array<FloatPixel, 4> const metadataLessPatches = neutralPatchPixels(metadataLessCapture.readback);
         verifyNeutralPatchProperties(metadataLessPatches, 1.0f);
-        compareNear(metadataLessPatches[1].red, 0.376f, 0.04f);
+        // The fixture's second neutral patch is 203 nits. Pinned spline maps
+        // 1000 -> 100 nits to about 52.16 nits here; normalization therefore
+        // stores about 0.522 in the white-relative surface.
+        compareNear(metadataLessPatches[1].red, 0.522f, 0.02f);
+
+        DecodedFrameCapture const metadataLessHdrCapture =
+            captureDecodedFrame(*graphics, metadataLessFrame, referenceWhiteNits, targetPeakHeadroom);
+        QVERIFY2(metadataLessHdrCapture.isSuccess(), qPrintable(metadataLessHdrCapture.error));
+        QVERIFY(metadataLessHdrCapture.producer.colorPolicy.contains(QStringLiteral("Spline tone map")));
+        QVERIFY(metadataLessHdrCapture.producer.colorPolicy.contains(
+            QStringLiteral("explicit PQ compatibility fallback 1000 nits")));
+        QVERIFY(metadataLessHdrCapture.producer.colorPolicy.contains(QStringLiteral("absolute target luminance")));
+        std::array<FloatPixel, 4> const metadataLessHdrPatches = neutralPatchPixels(metadataLessHdrCapture.readback);
         for (std::size_t index = 0; index < metadataLessPatches.size(); ++index) {
-            compareNear(metadataLessPatches[index].red, sdrPatches[index].red, 0.01f);
+            compareNear(metadataLessHdrPatches[index].red, patches[index].red, 0.01f);
         }
 
-        constexpr std::array expected{
-            50.0f / 203.0f,
-            1.0f,
-            400.0f / 203.0f,
-            1000.0f / 203.0f,
-        };
-        for (std::size_t index = 0; index < patches.size(); ++index) {
-            compareNear(patches[index].red, expected[index], 0.12f);
-        }
     } else if (kind == HdrFixtureKind::Hlg) {
         QCOMPARE(sdrCapture.producer.colorPolicy,
                  QStringLiteral("Spline tone map · perceptual gamut map · "
@@ -634,6 +669,37 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
         QVERIFY2(sdrCapture.producer.colorPolicy.contains(QStringLiteral("ST 2094-40 EETF")),
                  qPrintable(sdrCapture.producer.colorPolicy));
         QVERIFY(sdrCapture.producer.colorPolicy.contains(QStringLiteral("HDR10+ source OOTF")));
+
+        constexpr float secondReferenceWhiteNits = 200.0f;
+        constexpr float secondTargetHeadroom = 3.0f;
+        DecodedFrameCapture const secondCapture =
+            captureDecodedFrame(*graphics, frames.front(), secondReferenceWhiteNits, secondTargetHeadroom, std::nullopt,
+                                true, targetMinimumLuminanceNits);
+        QVERIFY2(secondCapture.isSuccess(), qPrintable(secondCapture.error));
+        QVERIFY(secondCapture.producer.colorPolicy.contains(QStringLiteral("ST 2094-40 EETF")));
+        std::array<FloatPixel, 4> const secondPatches = neutralPatchPixels(secondCapture.readback);
+        verifyNeutralPatchProperties(secondPatches, secondTargetHeadroom);
+        for (std::size_t index = 0; index < patches.size(); ++index) {
+            compareNear(secondPatches[index].red * secondReferenceWhiteNits, patches[index].red * referenceWhiteNits,
+                        1.0f);
+        }
+
+        DecodedFrameCapture const zeroMinimumCapture =
+            captureDecodedFrame(*graphics, frames.front(), referenceWhiteNits, targetPeakHeadroom);
+        QVERIFY2(zeroMinimumCapture.isSuccess(), qPrintable(zeroMinimumCapture.error));
+        std::array<FloatPixel, 4> const zeroMinimumPatches = neutralPatchPixels(zeroMinimumCapture.readback);
+        QVERIFY2(std::abs(patches.front().red - zeroMinimumPatches.front().red) > 0.001f,
+                 "A positive physical target minimum did not change the darkest captured patch");
+
+        DecodedFrameCapture const unknownTargetCapture =
+            captureDecodedFrame(*graphics, frames.front(), referenceWhiteNits, targetPeakHeadroom, std::nullopt, false);
+        QVERIFY2(unknownTargetCapture.isSuccess(), qPrintable(unknownTargetCapture.error));
+        QVERIFY(unknownTargetCapture.producer.colorPolicy.contains(QStringLiteral("Spline tone map")));
+        QVERIFY(unknownTargetCapture.producer.colorPolicy.contains(QStringLiteral("HDR10+ scene maximum")));
+        QVERIFY(unknownTargetCapture.producer.colorPolicy.contains(
+            QStringLiteral("physical target luminance unavailable")));
+        QVERIFY(unknownTargetCapture.producer.colorPolicy.contains(QStringLiteral("source OOTF not applied")));
+        QVERIFY(!unknownTargetCapture.producer.colorPolicy.contains(QStringLiteral("absolute target luminance")));
     } else {
         QVERIFY(sdrCapture.producer.colorPolicy.contains(QStringLiteral("BT.2446A EETF")));
         QVERIFY(sdrCapture.producer.colorPolicy.contains(QStringLiteral("Dolby Vision")));
@@ -643,6 +709,97 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
         }
         QVERIFY(capture.input.metadataPath.contains(QStringLiteral("Dolby Vision reshape mapped by libplacebo")));
     }
+#endif
+}
+
+void FfmpegFirstFrameTest::nominalSdrTargetPreservesWcg() {
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
+    QSKIP("This test requires a D3D11 or Metal graphics domain");
+#else
+    auto const freeFrame = [](AVFrame* frame) { av_frame_free(&frame); };
+    std::unique_ptr<AVFrame, decltype(freeFrame)> source(av_frame_alloc(), freeFrame);
+    QVERIFY(source);
+    source->format = AV_PIX_FMT_RGB24;
+    source->width = 4;
+    source->height = 4;
+    source->color_primaries = AVCOL_PRI_SMPTE432;
+    source->color_trc = AVCOL_TRC_SMPTE2084;
+    source->colorspace = AVCOL_SPC_RGB;
+    source->color_range = AVCOL_RANGE_JPEG;
+    source->chroma_location = AVCHROMA_LOC_UNSPECIFIED;
+    QVERIFY(av_frame_get_buffer(source.get(), 0) >= 0);
+    QVERIFY(av_frame_make_writable(source.get()) >= 0);
+
+    auto const pqCode = [](float nits) {
+        return static_cast<std::uint8_t>(std::lround(255.0f * pl_hdr_rescale(PL_HDR_NITS, PL_HDR_PQ, nits)));
+    };
+    for (int y = 0; y < source->height; ++y) {
+        std::uint8_t* const row = source->data[0] + y * source->linesize[0];
+        for (int x = 0; x < source->width; ++x) {
+            row[x * 3] = x == 0 ? 0 : pqCode(x == 1 ? 50.0f : 100.0f);
+            row[x * 3 + 1] = 0;
+            row[x * 3 + 2] = 0;
+        }
+    }
+
+    AVFrameSideData* const lightSideData =
+        av_frame_new_side_data(source.get(), AV_FRAME_DATA_CONTENT_LIGHT_LEVEL, sizeof(AVContentLightMetadata));
+    QVERIFY(lightSideData);
+    std::memset(lightSideData->data, 0, lightSideData->size);
+    auto* const light = reinterpret_cast<AVContentLightMetadata*>(lightSideData->data);
+    light->MaxCLL = 100;
+
+    QString cloneError;
+    std::shared_ptr<DecodedVideoFrame const> const frame =
+        DecodedVideoFrame::clone(*source,
+                                 {
+                                     .playbackGeneration = 95,
+                                     .decoderRevision = 1,
+                                     .frameId = 1,
+                                 },
+                                 {1, 24}, std::nullopt, std::nullopt, &cloneError);
+    QVERIFY2(frame, qPrintable(cloneError));
+
+    ColorPrimaries const displayP3{
+        .red = {0.680f, 0.320f},
+        .green = {0.265f, 0.690f},
+        .blue = {0.150f, 0.060f},
+        .white = {0.3127f, 0.3290f},
+    };
+    std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
+    QVERIFY2(graphics, "Could not create the graphics domain");
+    DecodedFrameCapture const capture = captureDecodedFrame(*graphics, frame, PL_COLOR_SDR_WHITE, 1.0f, displayP3);
+    QVERIFY2(capture.isSuccess(), qPrintable(capture.error));
+    QVERIFY(capture.producer.colorPolicy.contains(QStringLiteral("absolute target luminance")));
+    QVERIFY(capture.producer.colorPolicy.contains(QStringLiteral("203/target-white coordinate normalization")));
+
+    pl_raw_primaries const p3{
+        .red = {displayP3.red.x, displayP3.red.y},
+        .green = {displayP3.green.x, displayP3.green.y},
+        .blue = {displayP3.blue.x, displayP3.blue.y},
+        .white = {displayP3.white.x, displayP3.white.y},
+    };
+    pl_matrix3x3 const bt709ToP3 =
+        pl_get_color_mapping_matrix(pl_raw_primaries_get(PL_COLOR_PRIM_BT_709), &p3, PL_INTENT_RELATIVE_COLORIMETRIC);
+    auto const targetRgb = [&bt709ToP3](FloatPixel const& sample) {
+        std::array values{sample.red, sample.green, sample.blue};
+        pl_matrix3x3_apply(&bt709ToP3, values.data());
+        return values;
+    };
+
+    std::array<float, 3> const black = targetRgb(pixel(capture.readback, 0, 2));
+    std::array<float, 3> const shadow = targetRgb(pixel(capture.readback, 1, 2));
+    std::array<float, 3> const white = targetRgb(pixel(capture.readback, 3, 2));
+    compareNear(black[0], 0.0f, 0.002f);
+    compareNear(black[1], 0.0f, 0.002f);
+    compareNear(black[2], 0.0f, 0.002f);
+    compareNear(shadow[0], 0.5f, 0.02f);
+    compareNear(shadow[1], 0.0f, 0.02f);
+    compareNear(shadow[2], 0.0f, 0.02f);
+    compareNear(white[0], 1.0f, 0.03f);
+    compareNear(white[1], 0.0f, 0.03f);
+    compareNear(white[2], 0.0f, 0.03f);
+    QVERIFY(pixel(capture.readback, 3, 2).red > 1.1f);
 #endif
 }
 
@@ -729,9 +886,8 @@ void FfmpegFirstFrameTest::dualFormatTargetChangeRemapsPausedFrame() {
     QVERIFY(render(6.0f));
     QCOMPARE(producer.inputImportCount(), 2U);
     QVERIFY(producer.frameImportDiagnostics().metadataPath.contains(QStringLiteral("Dolby Vision reshape mapped")));
-    QCOMPARE(producer.diagnostics().colorPolicy,
-             QStringLiteral("Spline tone map · perceptual gamut map · "
-                            "inverse mapping off · peak detection off · dither off"));
+    QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("Spline tone map")));
+    QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("absolute target luminance")));
 
     QVERIFY(render(1.0f));
     QCOMPARE(producer.inputImportCount(), 3U);
