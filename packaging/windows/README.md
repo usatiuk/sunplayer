@@ -165,11 +165,11 @@ specialist, raw-stream, playlist, image, and audio-only extensions are not
 claimed merely because FFmpeg can demux them. The FFmpeg dependency test pins
 availability of every advertised container family; representative playback
 and packaged activation remain release validation. Generate reviewed icon
-variants from `branding\SunPlayer.svg` with:
+variants from `branding\SunPlayer.png` with:
 
 ```powershell
 Push-Location .\packaging\windows
-winapp manifest update-assets .\branding\SunPlayer.svg `
+winapp manifest update-assets .\branding\SunPlayer.png `
   --manifest .\Package.appxmanifest.in
 Pop-Location
 ```
