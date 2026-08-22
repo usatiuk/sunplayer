@@ -39,10 +39,13 @@ left-button
 double-click on active Player video background does the same; one accepting
 area behind each floating island prevents labels and dead panel space from
 falling through to the video gesture while its child controls keep normal
-input. `Escape` leaves fullscreen, except that QML publishes when an open menu
-or file dialog owns the first Escape. QML retains the transport/cursor idle
-policy, while the real presentation window applies native cursor visibility
-and window-state changes.
+input. The background area recognizes the double-click on its second press but
+requests fullscreen from the matching release, so native fullscreen cannot
+start before that release reaches the redirected Quick scene; cancellation
+or session deactivation discards the pending request. `Escape` leaves
+fullscreen, except that QML publishes when an open menu or file dialog owns the
+first Escape. QML retains the transport/cursor idle policy, while the real
+presentation window applies native cursor visibility and window-state changes.
 
 Session readiness and video-frame availability are distinct UI facts. When
 audio makes the session ready before the first video frame, Player keeps its
@@ -235,10 +238,11 @@ and the viewport remain active while the preparing state is visible, then the
 preparing state disappears after frame publication. It also verifies full-page
 Player geometry, timeline formatting, scrub-preview time, relative and slider
 seek commands, backend position updates, disabled seeking state, fullscreen
-gesture dispatch, popup Escape priority state, island hit testing, and
-native-cursor intent without launching a native dialog. The window-command
-fake additionally proves the Windows-only menu action's visibility and
-two-way checked-state binding; it does not claim physical monitor coverage.
+gesture release/cancellation ordering, popup Escape priority state, island hit
+testing, and native-cursor intent without launching a native dialog. The
+window-command fake additionally proves the Windows-only menu action's
+visibility and two-way checked-state binding; it does not claim physical monitor
+coverage.
 The shell test also
 checks disabled, normal, maximized, and fullscreen application-chrome state;
 stable empty-page inset; full-root, media-independent outline visibility and

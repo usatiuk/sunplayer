@@ -357,8 +357,33 @@ void AppShellTest::publishesActiveViewport() {
     windowCommands.windowChromeController().setState(false, false, false);
     QVERIFY(QMetaObject::invokeMethod(playerPage, "revealControls", Qt::DirectConnection));
     windowCommands.resetToggleCount();
-    QTest::mouseDClick(&quickWindow, Qt::LeftButton, Qt::NoModifier, QPoint(80, 80));
+    constexpr int doubleClickEventDelayMilliseconds = 10;
+    QPoint const fullscreenGesturePoint(80, 80);
+    QTest::mousePress(&quickWindow, Qt::LeftButton, Qt::NoModifier, fullscreenGesturePoint,
+                      doubleClickEventDelayMilliseconds);
+    QTest::mouseRelease(&quickWindow, Qt::LeftButton, Qt::NoModifier, fullscreenGesturePoint,
+                        doubleClickEventDelayMilliseconds);
+    QTest::mousePress(&quickWindow, Qt::LeftButton, Qt::NoModifier, fullscreenGesturePoint,
+                      doubleClickEventDelayMilliseconds);
+    QCOMPARE(windowCommands.toggleCount(), 0);
+    QTest::mouseRelease(&quickWindow, Qt::LeftButton, Qt::NoModifier, fullscreenGesturePoint,
+                        doubleClickEventDelayMilliseconds);
     QTRY_COMPARE(windowCommands.toggleCount(), 1);
+
+    windowCommands.resetToggleCount();
+    QPoint const canceledFullscreenGesturePoint(140, 80);
+    QTest::mousePress(&quickWindow, Qt::LeftButton, Qt::NoModifier, canceledFullscreenGesturePoint,
+                      doubleClickEventDelayMilliseconds);
+    QTest::mouseRelease(&quickWindow, Qt::LeftButton, Qt::NoModifier, canceledFullscreenGesturePoint,
+                        doubleClickEventDelayMilliseconds);
+    QTest::mousePress(&quickWindow, Qt::LeftButton, Qt::NoModifier, canceledFullscreenGesturePoint,
+                      doubleClickEventDelayMilliseconds);
+    fullscreenBackgroundMouseArea->ungrabMouse();
+    QTest::mouseRelease(&quickWindow, Qt::LeftButton, Qt::NoModifier, canceledFullscreenGesturePoint,
+                        doubleClickEventDelayMilliseconds);
+    QTest::mouseClick(&quickWindow, Qt::LeftButton, Qt::NoModifier, QPoint(220, 80));
+    QCOMPARE(windowCommands.toggleCount(), 0);
+
     playerPage->setProperty("controlsVisibleByActivity", false);
     QTRY_VERIFY(transportIsland->opacity() < 0.1);
     QPoint const transportCenter = transportIsland

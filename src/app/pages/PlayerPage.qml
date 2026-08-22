@@ -307,10 +307,23 @@ VideoPage {
     MouseArea {
         objectName: "fullscreenBackgroundMouseArea"
 
+        property bool fullscreenTogglePending: false
+
         anchors.fill: parent
         visible: root.sessionReady
         acceptedButtons: Qt.LeftButton
-        onDoubleClicked: root.windowCommands.toggleFullscreen()
+        onVisibleChanged: {
+            if (!visible)
+                fullscreenTogglePending = false
+        }
+        onDoubleClicked: fullscreenTogglePending = true
+        onReleased: {
+            if (!fullscreenTogglePending)
+                return
+            fullscreenTogglePending = false
+            root.windowCommands.toggleFullscreen()
+        }
+        onCanceled: fullscreenTogglePending = false
     }
 
     ColumnLayout {
