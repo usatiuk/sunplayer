@@ -21,6 +21,11 @@ qt_add_executable(sunplayer_local_media_drop_tests
         ../src/app/LocalMediaDrop.h
 )
 
+qt_add_executable(sunplayer_window_shortcut_tests
+        unit/app/tst_WindowShortcut.cpp
+        ../src/app/WindowShortcut.h
+)
+
 qt_add_executable(sunplayer_controlled_audio_sink_tests
         unit/audio/tst_ControlledAudioSink.cpp
 )
@@ -251,6 +256,11 @@ target_include_directories(sunplayer_local_media_drop_tests
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
 )
 
+target_include_directories(sunplayer_window_shortcut_tests
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+)
+
 target_include_directories(sunplayer_controlled_audio_sink_tests
         PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
@@ -339,6 +349,12 @@ target_link_libraries(sunplayer_application_settings_tests
 
 target_link_libraries(sunplayer_local_media_drop_tests
         PRIVATE
+        Qt6::Test
+)
+
+target_link_libraries(sunplayer_window_shortcut_tests
+        PRIVATE
+        Qt6::Gui
         Qt6::Test
 )
 
@@ -565,6 +581,11 @@ add_test(
 add_test(
         NAME local-media-drop
         COMMAND sunplayer_local_media_drop_tests
+)
+
+add_test(
+        NAME window-shortcut
+        COMMAND sunplayer_window_shortcut_tests
 )
 
 add_test(

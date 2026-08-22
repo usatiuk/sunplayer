@@ -427,6 +427,7 @@ qt_add_executable(sunplayer
         src/app/PresentationSettings.h
         src/app/PresentationWindow.cpp
         src/app/PresentationWindow.h
+        src/app/WindowShortcut.h
         src/app/VideoViewportState.cpp
         src/app/VideoViewportState.h
         src/app/windowchrome/WindowChromeController.cpp

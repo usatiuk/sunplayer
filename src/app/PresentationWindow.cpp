@@ -25,6 +25,7 @@
 #include "app/LocalMediaDrop.h"
 #include "app/PresentationSettings.h"
 #include "app/VideoViewportState.h"
+#include "app/WindowShortcut.h"
 #include "diagnostics/LogCategories.h"
 #include "graphics/GraphicsBackendFactory.h"
 #include "platform/DisplayStateProvider.h"
@@ -331,11 +332,10 @@ void PresentationWindow::keyPressEvent(QKeyEvent* event) {
         event->accept();
         return;
     }
-    bool const isRelativeSeekKey = (event->key() == Qt::Key_Left || event->key() == Qt::Key_Right) &&
-                                   event->modifiers() == Qt::NoModifier;
-    if (isRelativeSeekKey && playerShortcutContextActive()) {
+    std::optional<qlonglong> const relativeSeek = relativeSeekMilliseconds(*event);
+    if (relativeSeek && playerShortcutContextActive()) {
         if (!event->isAutoRepeat()) {
-            emit relativeSeekRequested(event->key() == Qt::Key_Left ? -10'000 : 10'000);
+            emit relativeSeekRequested(*relativeSeek);
         }
         event->accept();
         return;
@@ -346,11 +346,10 @@ void PresentationWindow::keyPressEvent(QKeyEvent* event) {
 }
 
 void PresentationWindow::keyReleaseEvent(QKeyEvent* event) {
-    bool const isRelativeSeekKey = (event->key() == Qt::Key_Left || event->key() == Qt::Key_Right) &&
-                                   event->modifiers() == Qt::NoModifier;
+    std::optional<qlonglong> const relativeSeek = relativeSeekMilliseconds(*event);
     if (event->key() == Qt::Key_F11 || (event->key() == Qt::Key_Escape && !m_windowShortcutsBlocked) ||
         (event->key() == Qt::Key_Space && playbackShortcutEnabled()) ||
-        (isRelativeSeekKey && playerShortcutContextActive())) {
+        (relativeSeek && playerShortcutContextActive())) {
         event->accept();
         return;
     }
