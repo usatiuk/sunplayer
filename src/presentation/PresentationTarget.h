@@ -52,7 +52,6 @@ struct PresentationTarget {
 };
 
 PresentationTarget calculatePresentationTarget(DisplayState const& display, PresentationBackendState const& backend);
-bool canUseAutomaticPhysicalTarget(PresentationTarget const& target, bool automaticTargetPeak);
 
 Q_DECLARE_METATYPE(PresentationBackendState)
 Q_DECLARE_METATYPE(PresentationTarget)

@@ -129,7 +129,7 @@ Implement alongside graphics milestone 1:
   verify an exact 203-nit patch at surface `1.0`, no expansion while the source
   fits, highlight compression when it does not, and the final Windows scRGB
   scale.
-* [ ] Repeat the fixed mastered-PQ scenario with a small pinned FFmpeg-decoded
+* [x] Repeat the fixed mastered-PQ scenario with a small pinned FFmpeg-decoded
   HDR10 fixture containing useful neutral luminance patches and real
   mastering/content-light metadata. Validate retained metadata, target-only
   rerender without re-import, reference-white anchoring, no-expansion,
@@ -138,18 +138,18 @@ Implement alongside graphics milestone 1:
 * [ ] Add a real BT.2020 SDR fixture to the immediate acceptance matrix and
   verify source interpretation against a simulated wide-gamut target without
   treating 10-bit or BT.2020 signaling as HDR.
-* [ ] Cover HLG target response with a real multi-target FFmpeg-decoded fixture
+* [x] Cover HLG target response with a real multi-target FFmpeg-decoded fixture
   through the same libplacebo path. Keep any claim scoped to observed output;
   do not add a parallel SunPlayer HLG implementation.
-* [ ] Add real FFmpeg-decoded HDR10+ scene-transition coverage for current
+* [x] Add real FFmpeg-decoded HDR10+ scene-transition coverage for current
   dynamic metadata, reset, and no stale carry-over. Assert that the
-  source-authored targeted-display luminance remains unchanged while the
-  physical display destination varies separately.
-* [ ] Add representative Dolby Vision fixtures that distinguish a parsed
+  source-authored targeted-display luminance remains unchanged, uses ST 2094-40
+  on nominal SDR, and uses scene-guided spline on normal HDR.
+* [x] Add representative Dolby Vision fixtures that distinguish a parsed
   reshape path from decoded base-layer fallback in diagnostics and captured
   output. Report the pinned upstream stack's observed capability without
   duplicating its profile parser.
-* [ ] Treat real SDR, PQ/HDR10, HLG, HDR10+, and Dolby Vision files as one
+* [x] Treat real SDR, PQ/HDR10, HLG, HDR10+, and Dolby Vision files as one
   immediate FFmpeg/libplacebo input-acceptance milestone. Keep color claims
   scoped to tested paths and never duplicate either library's parser or color
   implementation.

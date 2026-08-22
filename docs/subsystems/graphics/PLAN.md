@@ -173,9 +173,12 @@ The direct D3D11 approach and reference-white normalization are verified
 against the pinned library and Qt versions. Completion of the broader renderer
 milestone still requires a maintained image corpus, render timing, and
 realization of non-direct target paths if supported hardware requires them.
-The virtual target is not considered valid for HLG or dynamic HDR; their
-physical-target semantics are tracked in
-[the video-rendering plan](../video-rendering/PLAN.md).
+The shared reference-white-relative target is accepted for normal PQ and
+mapped-Dolby playback. HLG remains functional but its coupling to libplacebo's
+physical OOTF peak is tracked as a validation limit in
+[the video-rendering plan](../video-rendering/PLAN.md). HDR10+ uses its source
+OOTF only for the nominal-SDR target; normal HDR retains its scene guidance
+with spline.
 
 ## Milestone 4: first decoded video frame
 

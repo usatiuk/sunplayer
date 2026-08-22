@@ -337,14 +337,18 @@ the swapchain was rebuilt.
 * Windows `DisplayInformation::GetAdvancedColorInfo()` state: current HDR mode,
   SDR white, minimum luminance, and maximum luminance.
 * macOS `NSScreen` current and potential extended-dynamic-range component
-  values, expressed relative to current SDR white.
+  values, expressed relative to current SDR white, plus an AppKit-confirmed
+  Display-P3 or BT.709 conservative target gamut.
+* Managed-Wayland preferred reference white, target luminance/headroom, and
+  explicit target primaries with a preferred-primary-volume fallback.
 
 Windows display updates arrive through `AdvancedColorInfoChanged`. A
 `QWindow::screenChanged` event refreshes the cached window-bound observer and
 marks output characteristics dirty.
 
-macOS refreshes the active `NSScreen` on `QWindow::screenChanged`, expose, and
-`NSApplicationDidChangeScreenParametersNotification`. These callbacks publish
+macOS refreshes the active `NSScreen` on `QWindow::screenChanged`, expose,
+`NSApplicationDidChangeScreenParametersNotification`, and
+`NSScreenColorSpaceDidChangeNotification`. These callbacks publish
 the latest semantic value; they do not mutate QRhi resources immediately. A
 screen change additionally marks the Metal presentation surface dirty. At the
 next render boundary, an unchanged swapchain format is reconfigured in place
@@ -501,34 +505,36 @@ recorded in
   complete.
 
 Platform display adapters observe native facts such as HDR enablement,
-luminance capabilities, and system SDR white. Shared presentation policy turns
-those facts into one surface description. Relative SDR and HLG express
-headroom in libplacebo's fixed 203-nit coordinate system. Decoded PQ and mapped
-Dolby instead give libplacebo nominal 100-nit SDR or the physical peak from an
-automatic scene-referred target with known luminance, then uniformly convert
-`outputNits / 203` to `outputNits / targetWhite` after tone and gamut mapping.
-Relative-headroom, display-referred, and manual-headroom HDR targets retain the
-relative path. The compositor does not know about libplacebo's coordinate
-system.
+luminance capabilities, system SDR white, and a usable target gamut. Shared
+presentation policy turns those facts into one surface description. Every
+normal HDR target, plus relative SDR and HLG, expresses headroom in
+libplacebo's fixed 203-nit coordinate system. Decoded PQ and mapped Dolby use a
+nominal 100-nit target only at headroom one, followed by a fixed `203 / 100`
+output-coordinate conversion. At HDR headroom there is no producer factor
+involving live reference white. The compositor does not know about
+libplacebo's coordinate system.
 
-The analytic PQ diagnostic remains one fixed mastered signal on the established
-display-relative diagnostic path, independent of decoded-video policy. The
-virtual destination is not assumed to be a universal HLG construction:
+The analytic PQ diagnostic remains one fixed mastered signal. Analytic and
+decoded inputs now share the render context's target-coordinate rule; decoded
+playback additionally supplies its metadata-family and representation policy.
+The virtual destination is not assumed to be a universal HLG construction:
 libplacebo 7.360.1 uses the destination maximum as HLG's physical OOTF peak.
 The production renderer still accepts HLG through that path, but does not claim
 absolute-reference HLG monitoring.
 
-The surface preserves peak-luminance authority separately from whether the
-target minimum is known. The backend converts a positive physical minimum by
-the same ratio as the selected target maximum. Libplacebo treats
+The surface preserves whether the target minimum is known. The backend converts
+a positive physical minimum by the same ratio as the selected target maximum.
+Libplacebo treats
 numeric zero as unknown and otherwise infers a linear-target contrast ratio, so
 the adapter uses `PL_COLOR_HDR_BLACK` for an unknown or known-zero minimum.
 
 The texture's BT.709 primaries define its extended-linear RGB coordinate basis,
-not necessarily the physical target gamut. Windows Advanced Color supplies
-validated native target primaries separately; unknown targets fall back to
-BT.709. macOS and Wayland target-gamut population and physical validation
-remain open.
+not necessarily the usable target gamut. Windows Advanced Color supplies
+validated native target primaries. macOS supplies an AppKit-confirmed P3 or
+BT.709 lower bound without parsing the display ICC profile. Managed Wayland
+supplies explicit preferred target primaries or its primary color volume.
+Unknown targets fall back to BT.709. Exact macOS profile chromaticities,
+Wayland compositor/display behavior, and physical validation remain open.
 
 Target gamut mapping is separate from monitor calibration. The Windows
 Advanced Color path relies on the OS to apply the active display profile once

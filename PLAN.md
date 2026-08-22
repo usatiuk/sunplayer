@@ -106,7 +106,7 @@ playback:
   do not grow with the window.
 * On Windows, libplacebo directly wraps the QRhi-owned RGBA16F D3D11 texture,
   shares QRhi's immediate context without an output copy, and receives a
-  source-appropriate relative or absolute target through one shared renderer.
+  reference-white-relative target through one shared renderer.
   This construction is capture-validated for relative SDR, analytic and real
   mastered static PQ, and a characterized display-relative HLG response.
   Deterministic four-frame Main10 fixtures prove real FFmpeg decode
@@ -114,19 +114,18 @@ playback:
   Vision Profile 8.1 without a second media operation. The importer reports
   retained source facts, usable HDR10+ scene metadata, and whether Dolby Vision
   reshaping was mapped. Source HDR values remain unchanged. Shared
-  metadata-first policy selects supported HDR10+ OOTFs on SDR and on HDR when
-  the base representation and automatic scene-referred physical target are
-  known, coherent Dolby/HDR10 range evidence for PQ-to-SDR/WCG, and an explicit 1,000-nit
-  fallback for ordinary base PQ only when usable metadata is absent. It
+  metadata-first policy selects supported HDR10+ OOTFs on nominal SDR,
+  coherent HDR10+ scene/static or Dolby range evidence for HDR, and an explicit
+  1,000-nit fallback for ordinary base PQ only when usable metadata is absent. It
   dispatches pinned libplacebo operators, keeps perceptual gamut mapping, and
   disables inverse mapping, peak detection, and dithering; the exact decision
-  is visible in diagnostics. Absolute PQ/Dolby mapping receives nominal
-  100-nit SDR or an authoritative physical HDR peak, followed only by linear
-  output-unit normalization into the shared reference-white-relative surface. A
-  headroom-only HDR target retains the diagnosed relative path. SDR-source and
-  HLG-source paths remain relative; HLG does not claim absolute-reference
-  monitoring. Broader dynamic-HDR profiles and physical output accuracy remain
-  validation work.
+  is visible in diagnostics. PQ/Dolby at headroom one receives nominal
+  100-nit SDR plus a fixed `203 / 100` output-coordinate conversion. Every HDR
+  target uses `203 * targetPeakHeadroom` with no live-reference-white producer
+  scale, so Windows applies `referenceWhite / 80` exactly once to the complete
+  composition; macOS and managed Wayland retain final scale one. SDR and HLG
+  remain relative; HLG does not claim absolute-reference monitoring. Broader
+  dynamic-HDR profiles and physical output accuracy remain validation work.
 * A narrow final QRhi pass places that already processed video surface,
   combines it with the UI, and presents extended-linear sRGB/scRGB when
   available, with an SDR fallback. It can also compose UI without an active
@@ -146,7 +145,10 @@ playback:
   invalidation, and bounded device recovery.
 * The configured Windows Debug target builds successfully with Qt 6.11.1,
   MSVC, pinned D3D11-only libplacebo 7.360.1, and official minimal FFmpeg
-  8.1.2 dependencies built through the project-local vcpkg configuration.
+  8.1.2 dependencies built through the project-local vcpkg configuration. On
+  2026-08-22 the complete tree and both QML lint targets passed, followed by all
+  34 registered CTests including the reference-white HDR production/compositor
+  regression and the existing GPU/hardware-decode cases.
   Windows CI also defines a separate Release install-tree probe and a seven-day
   developer artifact for trusted events after the full Debug validation path;
   the new Release path still requires its first hosted run.
@@ -278,11 +280,15 @@ validity/invalidation, decoded-frame ownership, the libplacebo and FFmpeg
 binary boundaries, and real D3D11 offscreen QRhi/libplacebo
 producer/compositor capture. The GPU capture covers SDR
 targets at 80, 100, and 203 nits and holds one fixed analytic 1000-nit PQ signal
-against one physical 600-nit target at all three reference-white levels. It
+against relative headrooms derived from a 600-nit capability at those
+reference-white levels. It
 proves unchanged surface-relative output while the source fits, highlight
 compression when available headroom falls below the source, and one final
 Windows scRGB scale. It also covers known pixels from the first
-FFmpeg-decoded frame at two SDR-white targets. The real HEVC corpus adds
+FFmpeg-decoded frame at two SDR-white targets. A decoded static-PQ regression
+holds headroom fixed at 160- and 240-nit reference whites, proves producer
+samples remain stable, and crosses the final compositor: Windows output follows
+the 1.5 reference-white ratio while macOS remains at scale one. The real HEVC corpus adds
 static-PQ patch values, HLG target response, frame-local HDR10+ scene
 progression, and mapped Dolby Vision Profile 8.1 reshape checks. A sustained
 headless probe exercises 60 animated 640×360 frames into a 1100×600 target
@@ -293,11 +299,13 @@ presented-audio clock progress. The QML component scenario separately protects
 the ready-without-frame viewport invariant. Playback-owned coarse selection
 also drains bounded video queues when the window or active page does not
 request rendering. Broader whole-application command/error scenarios, SDR/HDR
-range and profile coverage, macOS/Wayland target-gamut population,
-P010/P012/P016 capture, cross-platform hardware import, and physical-output
-validation do not yet exist. Windows Advanced Color target-gamut observation
-and policy propagation are implemented; the policy is unit-covered, and the
-renderer's target-gamut boundary is capture-tested before OS presentation.
+range and profile coverage, P010/P012/P016 capture, cross-platform hardware
+import, and physical-output validation do not yet exist. Windows Advanced
+Color native primaries, macOS's AppKit-confirmed P3/BT.709 lower bound, and
+managed-Wayland preferred target primaries are propagated. The renderer's
+target-gamut boundary is capture-tested before OS presentation; exact macOS
+ICC chromaticities, Wayland compositor/display behavior, and measured gamut
+remain unclaimed.
 
 Playback exposes normalized position/duration and seeking through a
 generation-scoped, keyframe-anchored decoder restart shared by user seek,
@@ -422,11 +430,13 @@ Documentation: `docs/subsystems/graphics/`
 * [x] Offscreen HDR render-target contract and temporary QRhi producer
 * [x] Display-target and SDR-white updates
 * [x] Prior analytic reference-white-adaptive SDR/static-PQ mapping checkpoint
-* [x] Absolute-target PQ/Dolby mapping with target-gamut-safe output-unit
-  normalization
+* [x] Nominal-100 PQ/Dolby mapping at headroom one, with fixed output-unit
+  normalization; reference-white-adaptive normal HDR at higher headroom
 * [x] Real FFmpeg-decoded static-PQ fixture and retained-metadata validation
-* [ ] Actual display-gamut propagation (Windows Advanced Color implemented;
-  macOS and Wayland population plus physical verification remain)
+* [x] Bounded display-gamut propagation from Windows Advanced Color, AppKit
+  P3/sRGB representability, and managed-Wayland preferred target primaries
+* [ ] Exact macOS profile chromaticities and physical cross-platform gamut
+  verification
 * [x] HLG target-response validation through the shared FFmpeg/libplacebo
   path, without a SunPlayer-authored HLG pipeline
 * [x] Production FFmpeg/libplacebo mapping acceptance, validation, and

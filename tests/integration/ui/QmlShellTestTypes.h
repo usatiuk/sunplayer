@@ -292,8 +292,8 @@ class ShellTestPresentationOutputState final : public QObject {
     qreal m_devicePixelRatio = 1.0;
     qreal m_refreshRate = 60.0;
     QString m_displayColorMode = QStringLiteral("Standard dynamic range");
-    QString m_targetGamut = QStringLiteral(
-        "Native target xy · R 0.6800,0.3200 · G 0.2650,0.6900 · B 0.1500,0.0600 · W 0.3127,0.3290");
+    QString m_targetGamut =
+        QStringLiteral("Target gamut xy · R 0.6800,0.3200 · G 0.2650,0.6900 · B 0.1500,0.0600 · W 0.3127,0.3290");
     bool m_displayHdrEnabled = false;
     bool m_hdrPresentationActive = false;
     bool m_sceneReferred = false;

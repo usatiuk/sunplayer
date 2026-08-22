@@ -3,9 +3,11 @@
 > Status: research and implementation record, 2026-08-21 through 2026-08-22.
 > The initial shared policy is accepted in
 > [ADR 0023](../decisions/0023-use-metadata-first-hdr-to-sdr-policy.md) and
-> the follow-up absolute-target construction is accepted in
-> [ADR 0024](../decisions/0024-map-pq-against-absolute-target-luminance.md).
-> Both are implemented with automated evidence. Exact-frame physical comparison
+> ADR 0024's normal-HDR absolute-target construction was subsequently rejected
+> by [ADR 0025](../decisions/0025-keep-normal-hdr-reference-white-adaptive.md)
+> after it was shown to cancel Windows's live SDR-white scale. ADR 0025 retains
+> the nominal-100 HDR-to-SDR result and the source-side metadata improvements.
+> Exact-frame physical comparison
 > remains follow-up evidence for perceptual claims, not an unreported
 > implementation assumption.
 
@@ -444,7 +446,8 @@ The shared video-rendering layer owns:
 * tone-mapping function and metadata-family selection;
 * source-peak fallback and its provenance;
 * gamut mapping into the normalized target;
-* absolute PQ target units and final linear output-unit normalization;
+* target-coordinate construction and the fixed nominal-SDR output-unit
+  normalization;
 * diagnostics explaining the decision.
 
 Platform presentation owns only the final working-to-native coordinate and
@@ -459,11 +462,11 @@ mapping and then select metadata from that same family. It must not combine a
 Dolby-reshaped image and Dolby L1 input peak with an HDR10+ OOTF signaled for the
 HDR10-compatible base representation.
 
-HLG remains unchanged. Absolute PQ uses a nominal 100-nit target on SDR/WCG and
-an authoritative physical peak on automatic scene-referred HDR, followed only
-by output-unit normalization. Display-referred, manual-headroom, and otherwise
-unknown physical HDR targets retain the diagnosed relative path. The accepted
-runtime matrix is:
+HLG remains unchanged. PQ and mapped Dolby use a nominal 100-nit target on the
+no-headroom SDR/WCG destination, followed only by fixed output-unit
+normalization. Every normal HDR target uses the shared reference-white-relative
+`203 * headroom` destination. The accepted runtime matrix, as corrected by ADR
+0025, is:
 
 | Source evidence | Render representation | SDR/WCG policy | HDR policy | Notes |
 | --- | --- | --- | --- | --- |
@@ -471,19 +474,18 @@ runtime matrix is:
 | HLG transfer | Existing decoded representation | Existing spline | Existing spline | Relative, display-dependent path retained. |
 | Proven Dolby Vision Profile 8.1/HDR10+ generation with supported OOTF | HDR10-compatible base on SDR; mapped Dolby on HDR | ST 2094-40/HDR10+ | Existing mapped-Dolby spline | Do not combine base-layer OOTF with the mapped Dolby representation. |
 | Mapped Dolby with valid L1 or source range | Dolby reshape | BT.2446A with CIE-Y or Dolby source range | Spline with explicit CIE-Y or Dolby source range | Do not import base MaxCLL or select concurrent base HDR10+ through `ANY`. |
-| Non-Dolby HDR10+ with supported one-window OOTF | Existing base representation | ST 2094-40/HDR10+ | ST 2094-40/HDR10+ | Preserve source-provided target luminance; adapt it to the real destination. |
+| Non-Dolby HDR10+ with supported one-window OOTF | Existing base representation | ST 2094-40/HDR10+ | Spline with HDR10+ scene values | Preserve source-provided target luminance; do not apply its physical OOTF against a relative HDR destination. |
 | HDR10+ without a pinned-representable OOTF | Existing base representation | BT.2446A with HDR10+ scene values | Spline with HDR10+ scene values | Diagnose zero-anchor, local-window, or malformed OOTFs; scene values remain usable. |
 | Static PQ with valid MaxCLL | Existing base representation | BT.2446A with render-local MaxCLL | Spline with render-local MaxCLL | MaxCLL precedes mastering maximum on both target classes. |
 | Static PQ with only valid mastering range | Existing base representation | BT.2446A with mastering range | Spline with mastering range | Uses real declared metadata. |
 | Ordinary base PQ with no usable range | Existing base representation | Spline with explicit 1,000-nit maximum | Spline with explicit 1,000-nit maximum | Diagnosed compatibility assumption; no image analysis. |
 
-Every absolute PQ/Dolby row uses the same target-unit construction. On SDR,
-`R=100` and target maximum is 100 nits. On automatic scene-referred HDR with
-authoritative target luminance, `R=referenceWhite` and target maximum is the physical peak
-`R*headroom`. After libplacebo mapping, RGB is uniformly scaled by `203/R`.
-SDR-source and HLG-source paths do not receive that scale. On HDR without
-physical luminance authority, PQ/Dolby remains relative and ST 2094-40 target
-adaptation is not selected.
+Every PQ/Dolby row uses the same render-context target rule. At headroom one,
+`R=100`, target maximum is 100 nits, and RGB is uniformly scaled by `203/100`
+after mapping. Above headroom one, `R=203`, target maximum is `203 * headroom`,
+and there is no producer normalization. SDR-source and HLG-source paths remain
+relative and do not receive the nominal-SDR scale. ST 2094-40 target adaptation
+is selected only for the nominal-SDR target.
 
 Use one stable `useHdr10BaseForSdr`-equivalent decision for a source generation
 and target class; the name is illustrative, not a request for a new public
@@ -648,8 +650,10 @@ For the pinned library:
 * verify nominal-100 mapping plus `203/100` unit normalization produces relative
   black, half-white, and white, and retains a saturated Display-P3 color in the
   extended BT.709 coordinate rather than clipping it to the storage basis;
-* hold physical HDR peak and source metadata fixed while changing reference
-  white, and prove `surfaceRgb * referenceWhite` remains invariant.
+* hold HDR headroom, source metadata, target gamut, and target minimum fixed
+  while changing only reference white; prove producer surface RGB remains
+  invariant, then prove final Windows composition follows the reference-white
+  ratio while macOS composition remains at scale one.
 
 ### Physical and comparative tests
 
@@ -705,11 +709,10 @@ is remapped when its target-class change flips the stable representation bit.
    Write any override only to the render-local color-space copy and only then
    infer remaining fields. Retain raw decoded metadata unchanged.
 4. Dispatch the existing libplacebo color-map parameters from the result. For
-   absolute PQ/Dolby, provide nominal 100-nit SDR or an authoritative physical HDR peak,
-   then uniformly convert libplacebo's final output unit by `203/targetWhite`.
-   Keep relative SDR-source and HLG-source paths unchanged, and keep a
-   diagnosed relative fallback for HDR targets without physical luminance
-   authority.
+   PQ/Dolby at headroom one, provide nominal 100-nit SDR and convert the final
+   output coordinate by fixed `203 / 100`. Every normal HDR target uses
+   `203 * targetPeakHeadroom` and no producer factor involving live reference
+   white. Keep relative SDR-source and HLG-source paths unchanged.
 5. Add policy, independent-vector, pinned-render, stable-generation, and paused
    target-transition regression tests, then expose the decision through
    existing diagnostics rather than a new UI subsystem.
@@ -729,14 +732,12 @@ metadata before inference, validates the mapped representation, and dispatches
 libplacebo from one shared policy. Tests cover the decision matrix,
 version-specific HDR10+ limits and malformed values, independent BT.2446A and
 ST 2094-40 vectors, a real metadata-less PQ render through the production
-policy boundary on SDR and eligible HDR, real HDR fixtures, same-frame SDR/HDR
-remap, surface-implied luminance invariance across reference-white coordinates,
-unknown-target fallback, and a saturated Display-P3 production render proving
-nominal-100 unit normalization. The presentation boundary separately proves that only automatic,
-scene-referred, known-luminance targets with a peak at or above reference white
-authorize physical HDR mapping; manual, display-referred, and incoherent
-targets do not. Peak detection remains off and no setting or platform-specific
-policy was added.
+policy boundary on SDR and HDR, real HDR fixtures, same-frame SDR/HDR remap,
+fixed-headroom producer invariance across reference-white coordinates, exact
+Windows/macOS compositor scaling, and a saturated Display-P3 production render
+proving nominal-100 unit normalization. The superseded automatic physical-HDR
+authorization state has been removed. Peak detection remains off and no setting
+or platform-specific tone-mapping policy was added.
 
 The remaining items constrain future claims and tuning; they are not silently
 substituted runtime behavior:
@@ -744,9 +745,10 @@ substituted runtime behavior:
 * Whether libplacebo's selected SDR operators and the 1,000-nit spline fallback
   are sufficiently close to the official SDR grade and Windows Player on the
   observed samples without unacceptable highlight loss.
-* Whether nominal-100 SDR and physical-target HDR produce the preferred result
-  across representative dark and bright scenes; automated evidence proves the
-  unit math and gamut safety, not a universal perceptual match.
+* Whether nominal-100 SDR and reference-white-adaptive HDR produce the
+  preferred result across representative dark and bright scenes; automated
+  evidence proves coordinate math and gamut safety, not a universal perceptual
+  match.
 * Whether the HDR10-compatible base plus source-provided HDR10+ OOTF wins the
   exact-frame SDR comparison for the dual-metadata sample as the policy
   predicts; HDR retains the coherent mapped-Dolby representation.

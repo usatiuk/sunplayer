@@ -33,9 +33,10 @@ std::optional<DisplayState> displayStateFromWaylandDescription(WaylandPreferredD
     float const headroom = std::max(1.0f, description.targetMaximumLuminanceNits / description.referenceWhiteNits);
     DisplayState state;
     state.valid = true;
-    state.colorMode = headroom > 1.0f ? DisplayColorMode::HighDynamicRange
-                                      : DisplayColorMode::StandardDynamicRange;
+    state.colorMode = headroom > 1.0f ? DisplayColorMode::HighDynamicRange : DisplayColorMode::StandardDynamicRange;
     state.luminanceBehavior = DisplayLuminanceBehavior::DisplayReferred;
+    state.targetPrimariesKnown = true;
+    state.targetPrimaries = description.targetPrimariesKnown ? description.targetPrimaries : description.primaries;
     state.sdrWhiteKnown = true;
     state.luminanceKnown = true;
     state.sdrWhiteNits = description.referenceWhiteNits;
@@ -66,9 +67,10 @@ WaylandSurfaceSelection selectWaylandSurface(WaylandColorManagementCapabilities 
         return {
             .mode = WaylandSdrSurfaceMode::ManagedGamma22,
             .managedHdr10 = managedHdr10,
-            .diagnostic = managedHdr10
-                              ? QStringLiteral("SunPlayer-owned color-management-v1 · BT.2020 PQ · managed sRGB fallback")
-                              : QStringLiteral("SunPlayer-owned color-management-v1 · sRGB primaries · gamma 2.2"),
+            .diagnostic =
+                managedHdr10
+                    ? QStringLiteral("SunPlayer-owned color-management-v1 · BT.2020 PQ · managed sRGB fallback")
+                    : QStringLiteral("SunPlayer-owned color-management-v1 · sRGB primaries · gamma 2.2"),
         };
     }
 

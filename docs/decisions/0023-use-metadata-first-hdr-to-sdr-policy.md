@@ -6,7 +6,7 @@
 * Amends:
   [0012: Use final decoded frames as source-color truth](0012-use-final-decoded-frames-as-color-evidence.md)
 * Amended by:
-  [0024: Map PQ against absolute target luminance](0024-map-pq-against-absolute-target-luminance.md)
+  [0025: Keep normal HDR reference-white adaptive](0025-keep-normal-hdr-reference-white-adaptive.md)
 
 ## Context
 
@@ -28,10 +28,9 @@ rendering PQ. It inspects the retained frame before libplacebo inference,
 validates mapped metadata, and dispatches existing libplacebo operators:
 
 * A supported application-version 0 or 1, one-window HDR10+ OOTF on the
-  selected non-Dolby or HDR10-compatible base uses `st2094-40` on SDR and on
-  automatic scene-referred HDR targets with a known physical luminance range. Version-specific anchor
-  limits and a conservative nondecreasing-control-point predicate protect the
-  pinned implementation.
+  selected non-Dolby or HDR10-compatible base uses `st2094-40` on nominal SDR.
+  Version-specific anchor limits and a conservative
+  nondecreasing-control-point predicate protect the pinned implementation.
 * Other usable HDR10+ scene metadata uses libplacebo's generalized BT.2446A
   EETF for SDR and the existing scene-aware spline for HDR.
 * Static HDR10 uses valid MaxCLL, then mastering maximum, with BT.2446A for SDR
@@ -50,20 +49,19 @@ one-bit choice is stable for the playback generation and is part of the
 imported-frame cache identity. HDR targets return to the existing mapped-Dolby
 path. Unknown compatibility stays on the Dolby representation.
 
-SDR-source and HLG-source behavior remain unchanged. HDR keeps its existing
-spline except where a supported HDR10+ OOTF supplies better source guidance;
-the missing-PQ fallback only makes the source-range assumption explicit. Peak
+SDR-source and HLG-source behavior remain unchanged. Reference-white-adaptive
+HDR keeps spline while retaining validated scene/static source guidance; a
+source-authored HDR10+ OOTF is not applied against an invented physical display
+target. The missing-PQ fallback only makes the source-range assumption explicit. Peak
 detection, inverse mapping, and dithering remain disabled. Perceptual gamut
 mapping remains in libplacebo. Platform adapters supply target facts only;
 this policy is shared by Windows, macOS, and Linux.
 
-PQ and mapped-Dolby decisions use the absolute-target construction in ADR 0024
-for nominal SDR and for automatic scene-referred HDR with a known physical
-luminance range. It supplies nominal 100-nit SDR or the authoritative physical
-HDR peak to libplacebo, then converts only libplacebo's final linear coordinate
-unit. EDR/headroom-only, display-referred, and manually selected HDR targets
-retain the diagnosed relative path; they never treat a fallback or configured
-value as measured physical luminance. This does not add another tone operator.
+PQ and mapped-Dolby decisions use ADR 0025's nominal 100-nit construction only
+at headroom one, followed by a fixed `203 / 100` coordinate conversion. Every
+normal HDR target uses the shared `203 * targetPeakHeadroom` relative
+destination and no producer factor involving live reference white. This does
+not add another tone operator.
 
 The retained `AVFrame` remains authoritative. The only added stream fact is a
 validated optional boolean describing whether a version-1 Dolby configuration
@@ -75,8 +73,9 @@ Effective maximum overrides exist only on a render-local copy.
 
 Benefits:
 
-* HDR10+ target guidance is used when the selected base representation, pinned
-  library, and physical destination facts can represent it coherently.
+* HDR10+ source OOTF guidance is used when the selected base representation,
+  pinned library, and nominal-SDR destination can represent it coherently;
+  scene guidance remains usable on HDR.
 * Metadata precedence is explicit, coherent, deterministic, and visible in
   existing diagnostics.
 * Metadata-less PQ receives an explicit, diagnosed 1,000-nit compatibility

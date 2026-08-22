@@ -65,7 +65,7 @@ QString PresentationOutputState::targetGamut() const {
         return tr("BT.709 / sRGB target");
     }
     ColorPrimaries const& primaries = target.targetPrimaries;
-    return tr("Native target xy · R %1,%2 · G %3,%4 · B %5,%6 · W %7,%8")
+    return tr("Target gamut xy · R %1,%2 · G %3,%4 · B %5,%6 · W %7,%8")
         .arg(primaries.red.x, 0, 'f', 4)
         .arg(primaries.red.y, 0, 'f', 4)
         .arg(primaries.green.x, 0, 'f', 4)

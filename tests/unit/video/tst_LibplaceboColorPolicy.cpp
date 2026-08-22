@@ -22,6 +22,7 @@ extern "C" {
 
 #include "media/DecodedVideoFrame.h"
 #include "video/libplacebo/LibplaceboColorPolicy.h"
+#include "video/libplacebo/LibplaceboRenderContext.h"
 
 namespace {
 struct FrameDeleter {
@@ -30,7 +31,7 @@ struct FrameDeleter {
 
 using FramePtr = std::unique_ptr<AVFrame, FrameDeleter>;
 
-RenderedVideoSurfaceDescription target(float headroom, bool targetPeakLuminanceKnown = true) {
+RenderedVideoSurfaceDescription target(float headroom) {
     return {
         .pixelSize = {2, 2},
         .pixelFormat = RenderedVideoPixelFormat::Rgba16Float,
@@ -40,7 +41,6 @@ RenderedVideoSurfaceDescription target(float headroom, bool targetPeakLuminanceK
         .referenceWhiteNits = 203.0f,
         .targetMinimumLuminanceKnown = true,
         .targetMinimumLuminanceNits = 0.0f,
-        .targetPeakLuminanceKnown = targetPeakLuminanceKnown,
         .targetPeakHeadroom = headroom,
     };
 }
@@ -179,6 +179,7 @@ class LibplaceboColorPolicyTest final : public QObject {
     Q_OBJECT
 
   private slots:
+    void calculatesTargetLuminanceFromSourceAndHeadroom();
     void preservesRelativeSourcesAndBoundsMissingPq();
     void resolvesBaseMetadataInContentSpecificOrder();
     void usesOnlyPinnedRepresentableHdr10PlusOotfs();
@@ -187,6 +188,34 @@ class LibplaceboColorPolicyTest final : public QObject {
     void bt2446aMatchesTheIndependentReferenceEetf();
     void st2094_40MatchesAnIndependentBezierVector();
 };
+
+void LibplaceboColorPolicyTest::calculatesTargetLuminanceFromSourceAndHeadroom() {
+    pl_frame source{};
+    source.color.transfer = PL_COLOR_TRC_PQ;
+
+    LibplaceboTargetLuminance const nominalPq = calculateLibplaceboTargetLuminance(source, 1.0f);
+    QCOMPARE(nominalPq.coordinateWhiteNits, 100.0f);
+    QCOMPARE(nominalPq.maximumNits, 100.0f);
+    QCOMPARE(nominalPq.outputNormalizationScale, PL_COLOR_SDR_WHITE / 100.0f);
+
+    LibplaceboTargetLuminance const hdrPq = calculateLibplaceboTargetLuminance(source, 4.0f);
+    QCOMPARE(hdrPq.coordinateWhiteNits, PL_COLOR_SDR_WHITE);
+    QCOMPARE(hdrPq.maximumNits, PL_COLOR_SDR_WHITE * 4.0f);
+    QCOMPARE(hdrPq.outputNormalizationScale, 1.0f);
+
+    source.color.transfer = PL_COLOR_TRC_LINEAR;
+    source.repr.sys = PL_COLOR_SYSTEM_DOLBYVISION;
+    LibplaceboTargetLuminance const nominalDolby = calculateLibplaceboTargetLuminance(source, 1.0f);
+    QCOMPARE(nominalDolby.coordinateWhiteNits, nominalPq.coordinateWhiteNits);
+    QCOMPARE(nominalDolby.maximumNits, nominalPq.maximumNits);
+    QCOMPARE(nominalDolby.outputNormalizationScale, nominalPq.outputNormalizationScale);
+
+    source.repr = pl_color_repr_rgb;
+    LibplaceboTargetLuminance const relative = calculateLibplaceboTargetLuminance(source, 1.0f);
+    QCOMPARE(relative.coordinateWhiteNits, PL_COLOR_SDR_WHITE);
+    QCOMPARE(relative.maximumNits, PL_COLOR_SDR_WHITE);
+    QCOMPARE(relative.outputNormalizationScale, 1.0f);
+}
 
 void LibplaceboColorPolicyTest::preservesRelativeSourcesAndBoundsMissingPq() {
     LibplaceboColorPolicy policy;
@@ -202,13 +231,11 @@ void LibplaceboColorPolicyTest::preservesRelativeSourcesAndBoundsMissingPq() {
     LibplaceboColorPolicyDecision const sdrDecision = policy.resolve(*sdr, mapped, target(1.0f));
     QCOMPARE(sdrDecision.toneMapping, LibplaceboToneMappingFunction::Clip);
     QCOMPARE(sdrDecision.metadata, PL_HDR_METADATA_NONE);
-    QVERIFY(!sdrDecision.useAbsoluteTargetLuminance);
 
     QVERIFY(policy.shouldMapDolbyVision(*hlg, target(1.0f)));
     LibplaceboColorPolicyDecision const hlgDecision = policy.resolve(*hlg, mapped, target(1.0f));
     QCOMPARE(hlgDecision.toneMapping, LibplaceboToneMappingFunction::Spline);
     QCOMPARE(hlgDecision.metadata, PL_HDR_METADATA_ANY);
-    QVERIFY(!hlgDecision.useAbsoluteTargetLuminance);
 
     QVERIFY(policy.shouldMapDolbyVision(*pq, target(4.0f)));
     LibplaceboColorPolicyDecision const hdrDecision = policy.resolve(*pq, mapped, target(4.0f));
@@ -217,7 +244,6 @@ void LibplaceboColorPolicyTest::preservesRelativeSourcesAndBoundsMissingPq() {
     QCOMPARE(hdrDecision.provenance, LibplaceboSourceMetadataProvenance::PqCompatibilityFallback);
     QCOMPARE(hdrDecision.effectiveSourceMaximumNits,
              std::optional<float>(LibplaceboColorPolicy::pqCompatibilityMaximumNits));
-    QVERIFY(hdrDecision.useAbsoluteTargetLuminance);
     QVERIFY(hdrDecision.description().contains(QStringLiteral("explicit PQ compatibility fallback 1000 nits")));
 }
 
@@ -236,7 +262,6 @@ void LibplaceboColorPolicyTest::resolvesBaseMetadataInContentSpecificOrder() {
     QCOMPARE(decision.metadata, PL_HDR_METADATA_HDR10);
     QCOMPARE(decision.provenance, LibplaceboSourceMetadataProvenance::MaxCll);
     QCOMPARE(decision.effectiveSourceMaximumNits, std::optional<float>(600.0f));
-    QVERIFY(decision.useAbsoluteTargetLuminance);
     QVERIFY(decision.qualification.contains(QStringLiteral("4000")));
 
     std::shared_ptr<DecodedVideoFrame const> const mastering =
@@ -255,7 +280,6 @@ void LibplaceboColorPolicyTest::resolvesBaseMetadataInContentSpecificOrder() {
     QCOMPARE(decision.toneMapping, LibplaceboToneMappingFunction::Spline);
     QCOMPARE(decision.effectiveSourceMaximumNits,
              std::optional<float>(LibplaceboColorPolicy::pqCompatibilityMaximumNits));
-    QVERIFY(decision.useAbsoluteTargetLuminance);
     QVERIFY(decision.description().contains(QStringLiteral("explicit PQ compatibility fallback")));
 
     std::shared_ptr<DecodedVideoFrame const> const invalidStatic =
@@ -273,30 +297,20 @@ void LibplaceboColorPolicyTest::resolvesBaseMetadataInContentSpecificOrder() {
     QCOMPARE(hdrMetadataDecision.metadata, PL_HDR_METADATA_HDR10);
     QCOMPARE(hdrMetadataDecision.provenance, LibplaceboSourceMetadataProvenance::MaxCll);
     QCOMPARE(hdrMetadataDecision.effectiveSourceMaximumNits, std::optional<float>(600.0f));
-    QVERIFY(hdrMetadataDecision.useAbsoluteTargetLuminance);
-
-    LibplaceboColorPolicyDecision const unknownTargetDecision = policy.resolve(*maxCll, mapped, target(4.0f, false));
-    QCOMPARE(unknownTargetDecision.toneMapping, LibplaceboToneMappingFunction::Spline);
-    QCOMPARE(unknownTargetDecision.metadata, PL_HDR_METADATA_HDR10);
-    QCOMPARE(unknownTargetDecision.provenance, LibplaceboSourceMetadataProvenance::MaxCll);
-    QCOMPARE(unknownTargetDecision.effectiveSourceMaximumNits, std::optional<float>(600.0f));
-    QVERIFY(!unknownTargetDecision.useAbsoluteTargetLuminance);
-    QVERIFY(unknownTargetDecision.qualification.contains(QStringLiteral("physical target luminance unavailable")));
 }
 
 void LibplaceboColorPolicyTest::usesOnlyPinnedRepresentableHdr10PlusOotfs() {
     LibplaceboColorPolicy policy;
     auto evaluate = [&policy](std::uint64_t generation, int windows, int rawAnchors, int mappedAnchors,
-                              int applicationVersion = 1, float targetHeadroom = 1.0f,
-                              bool targetPeakLuminanceKnown = true) {
+                              int applicationVersion = 1, float targetHeadroom = 1.0f) {
         std::shared_ptr<DecodedVideoFrame const> frame =
             makeFrame(generation, 1, AVCOL_TRC_SMPTE2084, std::nullopt,
                       [=](AVFrame& source) { addHdr10Plus(source, windows, true, rawAnchors, applicationVersion); });
         Q_ASSERT(frame);
         pl_frame mapped = pqMappedFrame();
         addMappedHdr10Plus(mapped, mappedAnchors);
-        policy.shouldMapDolbyVision(*frame, target(targetHeadroom, targetPeakLuminanceKnown));
-        return policy.resolve(*frame, mapped, target(targetHeadroom, targetPeakLuminanceKnown));
+        policy.shouldMapDolbyVision(*frame, target(targetHeadroom));
+        return policy.resolve(*frame, mapped, target(targetHeadroom));
     };
 
     LibplaceboColorPolicyDecision const ootf = evaluate(20, 1, 2, 2);
@@ -304,24 +318,14 @@ void LibplaceboColorPolicyTest::usesOnlyPinnedRepresentableHdr10PlusOotfs() {
     QCOMPARE(ootf.metadata, PL_HDR_METADATA_HDR10PLUS);
     QCOMPARE(ootf.provenance, LibplaceboSourceMetadataProvenance::Hdr10PlusOotf);
     QCOMPARE(ootf.selectedSourceAverageNits, std::optional<float>(80.0f));
-    QVERIFY(ootf.useAbsoluteTargetLuminance);
     QVERIFY(ootf.description().contains(QStringLiteral("selected average 80 nits")));
-    QVERIFY(ootf.description().contains(QStringLiteral("absolute target luminance")));
-    QVERIFY(ootf.description().contains(QStringLiteral("203/target-white coordinate normalization")));
 
     LibplaceboColorPolicyDecision const hdrOotf = evaluate(30, 1, 2, 2, 1, 4.0f);
-    QCOMPARE(hdrOotf.toneMapping, LibplaceboToneMappingFunction::St2094_40);
+    QCOMPARE(hdrOotf.toneMapping, LibplaceboToneMappingFunction::Spline);
     QCOMPARE(hdrOotf.metadata, PL_HDR_METADATA_HDR10PLUS);
-    QCOMPARE(hdrOotf.provenance, LibplaceboSourceMetadataProvenance::Hdr10PlusOotf);
-    QVERIFY(hdrOotf.useAbsoluteTargetLuminance);
-
-    LibplaceboColorPolicyDecision const unknownTargetOotf = evaluate(31, 1, 2, 2, 1, 4.0f, false);
-    QCOMPARE(unknownTargetOotf.toneMapping, LibplaceboToneMappingFunction::Spline);
-    QCOMPARE(unknownTargetOotf.metadata, PL_HDR_METADATA_HDR10PLUS);
-    QCOMPARE(unknownTargetOotf.provenance, LibplaceboSourceMetadataProvenance::Hdr10PlusScene);
-    QVERIFY(!unknownTargetOotf.useAbsoluteTargetLuminance);
-    QVERIFY(unknownTargetOotf.qualification.contains(QStringLiteral("physical target luminance unavailable")));
-    QVERIFY(unknownTargetOotf.qualification.contains(QStringLiteral("source OOTF not applied")));
+    QCOMPARE(hdrOotf.provenance, LibplaceboSourceMetadataProvenance::Hdr10PlusScene);
+    QVERIFY(hdrOotf.qualification.contains(
+        QStringLiteral("source OOTF not applied on reference-white-adaptive HDR target")));
 
     LibplaceboColorPolicyDecision const zeroAnchor = evaluate(21, 1, 0, 0);
     QCOMPARE(zeroAnchor.toneMapping, LibplaceboToneMappingFunction::Bt2446a);
@@ -463,7 +467,6 @@ void LibplaceboColorPolicyTest::keepsDolbyMetadataWithinTheMappedRepresentation(
     QCOMPARE(decision.metadata, PL_HDR_METADATA_HDR10);
     QCOMPARE(decision.provenance, LibplaceboSourceMetadataProvenance::DolbyVisionSourceRange);
     QCOMPARE(decision.effectiveSourceMaximumNits, std::optional<float>(1200.0f));
-    QVERIFY(decision.useAbsoluteTargetLuminance);
     QVERIFY(decision.qualification.contains(QStringLiteral("concurrent HDR10+")));
 
     mapped.color.hdr.max_pq_y = 0.0f;
@@ -489,14 +492,6 @@ void LibplaceboColorPolicyTest::keepsDolbyMetadataWithinTheMappedRepresentation(
     QCOMPARE(decision.toneMapping, LibplaceboToneMappingFunction::Spline);
     QCOMPARE(decision.metadata, PL_HDR_METADATA_HDR10);
     QCOMPARE(decision.provenance, LibplaceboSourceMetadataProvenance::DolbyVisionSourceRange);
-    QVERIFY(decision.useAbsoluteTargetLuminance);
-
-    decision = policy.resolve(*unspecifiedSource, mapped, target(4.0f, false));
-    QCOMPARE(decision.toneMapping, LibplaceboToneMappingFunction::Spline);
-    QCOMPARE(decision.metadata, PL_HDR_METADATA_HDR10);
-    QCOMPARE(decision.provenance, LibplaceboSourceMetadataProvenance::DolbyVisionSourceRange);
-    QVERIFY(!decision.useAbsoluteTargetLuminance);
-    QVERIFY(decision.qualification.contains(QStringLiteral("physical target luminance unavailable")));
 }
 
 void LibplaceboColorPolicyTest::keepsDualFormatRepresentationStable() {

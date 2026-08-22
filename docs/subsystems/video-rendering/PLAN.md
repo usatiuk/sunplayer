@@ -14,7 +14,7 @@ actually been validated.
 ## Product invariants
 
 * Normal playback expresses every format in the active-reference-white surface;
-  absolute PQ remains physical when the target luminance range is known.
+  an absolute/reference-monitoring intent would be a separate explicit mode.
 * SunPlayer's linear working surface uses `1.0 = active reference white` and
   permits negative and greater-than-one components.
 * Libplacebo owns content transfer interpretation, tone mapping, and gamut
@@ -84,9 +84,10 @@ disabled. The resulting decision is visible in HDR Lab and protected at the
 production capture boundary without adding another mapper or quality-preset
 surface.
 
-* [x] Use pinned-representable HDR10+ OOTFs through ST 2094-40 on SDR and on
-  HDR when the selected base representation and automatic scene-referred
-  physical target are known.
+* [x] Use pinned-representable HDR10+ OOTFs through ST 2094-40 on nominal SDR.
+  On reference-white-adaptive HDR retain validated scene/static guidance with
+  spline rather than applying the authored OOTF against an invented physical
+  target.
   Use libplacebo's generalized BT.2446A EETF for other coherent PQ-to-SDR
   dynamic/static ranges, and retain spline for ordinary HDR. Use an explicit,
   diagnosed 1,000-nit maximum with spline only when ordinary base PQ has no
@@ -106,12 +107,11 @@ surface.
   Consider enabling it only if representative missing or unreliable source
   metadata demonstrates a visible benefit and its cost and seek/scene behavior
   pass the same production-boundary tests.
-* [x] Keep relative SDR/HLG in the display-relative virtual target. Give
-  absolute PQ/Dolby nominal 100-nit SDR or an authoritative physical HDR peak
-  from automatic scene-referred presentation, then convert only libplacebo's
-  final linear output unit into the shared reference-white-relative surface.
-  Retain the relative HDR fallback for display-referred, manual-headroom, or
-  otherwise unknown physical targets.
+* [x] Keep every normal HDR target plus relative SDR/HLG in the
+  display-relative `203 * targetPeakHeadroom` coordinate. Give PQ/Dolby nominal
+  100-nit SDR only at headroom one and apply the fixed `203 / 100` coordinate
+  conversion. Do not install a live-reference-white producer scale at HDR
+  headroom.
 * [x] Render a controlled HLG fixture through the current adapter at two
   reference-white/headroom targets. The captured OOTF response changes with
   the virtual target as pinned libplacebo source predicts. V1 accepts that
@@ -119,8 +119,8 @@ surface.
   physical evidence may later motivate a focused upstream API separating HLG
   physical peak from destination coordinates.
 * [x] Keep HDR10+ source metadata unchanged, including its source-authored
-  targeted-system-display luminance, and supply the current physical display
-  peak separately through the libplacebo destination.
+  targeted-system-display luminance. Use its representable OOTF on nominal SDR
+  and scene guidance on reference-white-adaptive HDR.
 * [x] Report whether libplacebo applied Dolby Vision reshaping or displayed the
   decoder's proven HDR10-compatible base-layer result. Parse only the typed
   decoder configuration needed for that narrow choice; do not implement
@@ -141,10 +141,11 @@ surface.
 * [x] Assert hashes, decoded signal facts, static mastering/content-light
   metadata, the explicit color policy, finite/monotonic/bounded captures,
   static-PQ analytical values, independent BT.2446A and ST 2094-40 vectors,
-  metadata-less PQ render-boundary output on SDR and eligible HDR, two HLG target
-  responses, frame-local HDR10+ scene progression and OOTF dispatch on SDR and
-  eligible known-luminance HDR, surface-implied luminance invariance across
-  reference-white coordinates, coherent Dolby/base selection, mapped Dolby
+  metadata-less PQ render-boundary output on SDR and HDR, two HLG target
+  responses, frame-local HDR10+ scene progression and OOTF dispatch on nominal
+  SDR, fixed-headroom producer invariance across reference-white coordinates,
+  exact production-surface composition under the distinct Windows/macOS scale
+  laws, coherent Dolby/base selection, mapped Dolby
   Vision reshaping, and same-frame remapping
   across SDR/HDR targets. Existing tests retain target-only rerender, final
   Windows scaling, and real inter-frame seek coverage; temporal-state reset is
@@ -153,9 +154,9 @@ surface.
 Immediate milestone outcome:
 
 * All representative formats enter the same retained-frame/import/render path.
-* SDR retains its validated numerical model; absolute PQ uses the accepted
-  metadata-first policy, physical target units, and diagnosed fallback across
-  SDR/HDR targets.
+* SDR retains its validated numerical model; PQ uses the accepted
+  metadata-first source policy, nominal-100 SDR, reference-white-adaptive HDR,
+  and diagnosed missing-metadata fallback.
 * HLG's observed target response is accepted for display-relative V1 playback;
   absolute-reference monitoring remains outside the claim rather than being
   approximated by a second SunPlayer color pipeline.
@@ -225,10 +226,12 @@ and [ADR 0016](../../decisions/0016-reconcile-output-changes-semantically.md).
 
 ## Stage 3: Target gamut and composition verification
 
-* [x] Supply trusted Windows Advanced Color target primaries separately from
-  the extended BT.709/scRGB coordinate basis used by the RGBA16F surface. The
-  shared contract is provider-neutral; macOS and Wayland population remain
-  separate platform work.
+* [x] Supply usable platform target primaries separately from the extended
+  BT.709/scRGB coordinate basis used by the RGBA16F surface: validated Windows
+  Advanced Color native xy; an AppKit-confirmed P3 or BT.709 conservative lower
+  bound for macOS EDR; and explicit/fallback preferred target primaries on
+  managed Wayland. Exact macOS ICC xy and physical output validation remain
+  separate work.
 * [ ] Prove that negative and greater-than-one components survive libplacebo,
   QRhi composition, and the selected swapchain.
 * [ ] Verify Qt Quick and a synthetic subtitle-style layer enter the final

@@ -8,13 +8,20 @@
 
 struct LibplaceboGraphicsContext;
 
-// Shared libplacebo renderer policy for analytic and decoded inputs. It owns
-// target color description and tone-mapping selection. Relative-transfer paths
-// describe the destination in libplacebo's fixed 203-nit coordinate system.
-// Absolute PQ/Dolby paths use an authoritative physical target peak and
-// normalize the result into the same active-reference-white surface contract.
-// Headroom-only targets retain the relative path. Target allocation and
-// synchronization remain in VideoTargetInterop.
+struct LibplaceboTargetLuminance {
+    float coordinateWhiteNits = 0.0f;
+    float maximumNits = 0.0f;
+    float outputNormalizationScale = 1.0f;
+};
+
+// The source color must already be inferred. Absolute-luminance PQ/Dolby uses
+// a fixed nominal 100-nit destination only when no HDR headroom is requested.
+// Every other destination stays in libplacebo's 203-nit relative coordinate.
+LibplaceboTargetLuminance calculateLibplaceboTargetLuminance(pl_frame const& source, float targetPeakHeadroom);
+
+// Shared libplacebo renderer boundary for analytic and decoded inputs. It owns
+// target color construction and applies the caller's tone-mapping selection.
+// Target allocation and synchronization remain in VideoTargetInterop.
 class LibplaceboRenderContext final {
   public:
     explicit LibplaceboRenderContext(LibplaceboGraphicsContext const& graphics);
@@ -36,8 +43,7 @@ class LibplaceboRenderContext final {
     bool renderWithPolicy(pl_frame const& source, pl_tex targetTexture,
                           RenderedVideoSurfaceDescription const& targetDescription,
                           LibplaceboToneMappingFunction toneMapping, enum pl_hdr_metadata_type metadata,
-                          std::optional<float> effectiveSourceMaximumNits, bool useAbsoluteTargetLuminance,
-                          QString* error);
+                          std::optional<float> effectiveSourceMaximumNits, QString* error);
 
     pl_renderer m_renderer = nullptr;
 };

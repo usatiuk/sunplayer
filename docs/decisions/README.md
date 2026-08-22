@@ -38,4 +38,5 @@ with a new decision when the accepted choice changes materially.
 * [0021: Use HDR10/PQ for managed Wayland HDR presentation](0021-use-hdr10-pq-for-managed-wayland-hdr.md)
 * [0022: Paint the Windows background only before first presentation](0022-paint-windows-background-only-before-first-present.md)
 * [0023: Use a metadata-first HDR-to-SDR policy](0023-use-metadata-first-hdr-to-sdr-policy.md)
-* [0024: Map PQ against absolute target luminance](0024-map-pq-against-absolute-target-luminance.md)
+* [0024: Map PQ against absolute target luminance (superseded for normal HDR playback)](0024-map-pq-against-absolute-target-luminance.md)
+* [0025: Keep normal HDR reference-white adaptive](0025-keep-normal-hdr-reference-white-adaptive.md)

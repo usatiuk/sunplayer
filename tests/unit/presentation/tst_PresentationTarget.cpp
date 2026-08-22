@@ -30,7 +30,6 @@ class PresentationTargetTest final : public QObject {
   private slots:
     void calculation_data();
     void calculation();
-    void automaticPhysicalTargetEligibility();
 };
 
 void PresentationTargetTest::calculation_data() {
@@ -278,6 +277,8 @@ void PresentationTargetTest::calculation_data() {
         display.valid = true;
         display.colorMode = DisplayColorMode::HighDynamicRange;
         display.luminanceBehavior = DisplayLuminanceBehavior::DisplayReferred;
+        display.targetPrimariesKnown = true;
+        display.targetPrimaries = displayP3Primaries();
         display.currentHeadroom = 3.5f;
         display.potentialHeadroom = 5.0f;
 
@@ -289,6 +290,8 @@ void PresentationTargetTest::calculation_data() {
 
         PresentationTarget expected;
         expected.hdrPresentationActive = true;
+        expected.targetPrimariesKnown = true;
+        expected.targetPrimaries = displayP3Primaries();
         expected.currentHeadroom = 3.5f;
         expected.potentialHeadroom = 5.0f;
         expected.effectiveTargetHeadroom = 3.5f;
@@ -382,35 +385,6 @@ void PresentationTargetTest::calculation() {
     QCOMPARE(actual.potentialHeadroom, expected.potentialHeadroom);
     QCOMPARE(actual.effectiveTargetHeadroom, expected.effectiveTargetHeadroom);
     QCOMPARE(actual.sdrScale, expected.sdrScale);
-}
-
-void PresentationTargetTest::automaticPhysicalTargetEligibility() {
-    PresentationTarget target;
-    target.sceneReferred = true;
-    target.luminanceKnown = true;
-    target.maxLuminanceNits = 600.0f;
-
-    QVERIFY(canUseAutomaticPhysicalTarget(target, true));
-    QVERIFY(!canUseAutomaticPhysicalTarget(target, false));
-
-    target.sceneReferred = false;
-    QVERIFY(!canUseAutomaticPhysicalTarget(target, true));
-
-    target.sceneReferred = true;
-    target.luminanceKnown = false;
-    QVERIFY(!canUseAutomaticPhysicalTarget(target, true));
-
-    target.luminanceKnown = true;
-    target.maxLuminanceNits = 79.0f;
-    QVERIFY(!canUseAutomaticPhysicalTarget(target, true));
-
-    target.sdrWhiteKnown = true;
-    target.sdrWhiteNits = 200.0f;
-    target.maxLuminanceNits = 199.0f;
-    QVERIFY(!canUseAutomaticPhysicalTarget(target, true));
-
-    target.maxLuminanceNits = 200.0f;
-    QVERIFY(canUseAutomaticPhysicalTarget(target, true));
 }
 
 QTEST_APPLESS_MAIN(PresentationTargetTest)

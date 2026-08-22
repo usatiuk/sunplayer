@@ -2,6 +2,11 @@
 
 Status: Complete
 
+> Current target-luminance and target-gamut behavior is amended by
+> [ADR 0025](../../decisions/0025-keep-normal-hdr-reference-white-adaptive.md)
+> and the
+> [2026-08-22 correction plan](../cross-cutting/2026-08-22-reference-white-hdr-correction.md).
+
 ## Goal
 
 Make SDR, HDR10/PQ, HLG, HDR10+, and Dolby Vision inputs pass through the
@@ -148,7 +153,7 @@ rerender, final QRhi composition, and the single Windows output conversion.
   additional profiles, enhancement-layer residuals, and target trims remain
   unclaimed.
 * BT.2020 SDR, broader range/bit-depth/chroma combinations, P010/P012/P016
-  capture, actual target-gamut propagation, and physical display measurement
-  remain later roadmap work.
+  capture, exact macOS ICC chromaticities, native Wayland compositor gamut
+  behavior, and physical display measurement remain later roadmap work.
 
 Resulting commit subject: `Validate HDR input formats`.

@@ -11,6 +11,7 @@ class WaylandColorManagementTest final : public QObject {
     void completeManagedContractUsesGamma22();
     void hdr10CapabilitiesChooseStableHdr();
     void completePreferredDescriptionPublishesDisplayState();
+    void explicitTargetPrimariesArePublished();
     void referenceWhiteEqualsTargetMaximumIsSdr();
     void incompleteOrInvalidPreferredDescriptionIsRejected();
     void presentationModeTracksCapabilityAndBoundedRejection();
@@ -34,6 +35,15 @@ WaylandColorPrimaries srgbPrimaries() {
         .red = {.x = 0.64f, .y = 0.33f},
         .green = {.x = 0.30f, .y = 0.60f},
         .blue = {.x = 0.15f, .y = 0.06f},
+        .white = {.x = 0.3127f, .y = 0.3290f},
+    };
+}
+
+WaylandColorPrimaries displayP3Primaries() {
+    return {
+        .red = {.x = 0.680f, .y = 0.320f},
+        .green = {.x = 0.265f, .y = 0.690f},
+        .blue = {.x = 0.150f, .y = 0.060f},
         .white = {.x = 0.3127f, .y = 0.3290f},
     };
 }
@@ -134,6 +144,20 @@ void WaylandColorManagementTest::completePreferredDescriptionPublishesDisplaySta
     QCOMPARE(display->maxLuminanceNits, 1000.0f);
     QCOMPARE(display->currentHeadroom, 5.0f);
     QCOMPARE(display->potentialHeadroom, 5.0f);
+    QVERIFY(display->targetPrimariesKnown);
+    QVERIFY(display->targetPrimaries == srgbPrimaries());
+}
+
+void WaylandColorManagementTest::explicitTargetPrimariesArePublished() {
+    auto description = completeHdrDescription();
+    description.targetPrimariesKnown = true;
+    description.targetPrimaries = displayP3Primaries();
+
+    auto const display = displayStateFromWaylandDescription(description);
+
+    QVERIFY(display.has_value());
+    QVERIFY(display->targetPrimariesKnown);
+    QVERIFY(display->targetPrimaries == displayP3Primaries());
 }
 
 void WaylandColorManagementTest::referenceWhiteEqualsTargetMaximumIsSdr() {

@@ -70,14 +70,24 @@ BT.2020 SDR, full-range, 12-bit, chroma-location, contradictory-metadata, and
 dynamic-HDR profile coverage remains deferred. None of those gaps justifies a
 parallel source parser, decoder, or color pipeline.
 
-Windows Advanced Color now propagates validated native display primaries to
-libplacebo separately from the extended-linear BT.709 coordinate basis, with a
-BT.709 fallback when the native target is unavailable or invalid. A real D3D11
-renderer-boundary capture proves that unknown targets use that fallback and
-that a P3 target preserves the intended signed Display-P3-red coordinates and
-neutral white before OS presentation. Physical Windows gamut verification and
-target-gamut population from macOS and Wayland remain deferred, so the project
-does not yet make a cross-platform or measured wide-gamut-output claim.
+Windows Advanced Color propagates validated native display primaries to
+libplacebo separately from the extended-linear BT.709 coordinate basis. macOS
+propagates Display P3 only when the active `NSScreen` reports that capability,
+otherwise BT.709 when representable; this is a conservative lower bound rather
+than exact ICC-derived native xy. Managed Wayland propagates explicit preferred
+target primaries with a preferred-primary-volume fallback. A real D3D11
+renderer-boundary capture proves the shared fallback/P3 math before OS
+presentation. Exact macOS profile chromaticities, Wayland compositor/display
+behavior, and physical gamut verification remain deferred, so the project does
+not yet make a measured cross-platform wide-gamut-output claim.
+
+Managed Wayland's stable outgoing BT.2020/PQ description also still inherits a
+BT.2020/10,000-nit target volume after libplacebo maps into the preferred target
+primaries and relative headroom. Aligning that declaration requires tracking
+the optional mastering-display feature, replacing the image description after
+asynchronous preferred-description changes, handling compositor rejection, and
+validating the result on native compositors. Preferred target propagation into
+libplacebo is complete; end-to-end native Wayland target-volume behavior is not.
 
 Track under graphics milestone 5 and the active testing plan.
 

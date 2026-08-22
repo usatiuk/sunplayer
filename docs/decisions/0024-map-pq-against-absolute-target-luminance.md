@@ -1,14 +1,19 @@
 # 0024: Map PQ against absolute target luminance
 
-* Status: Accepted
+* Status: Superseded for normal HDR playback by
+  [0025: Keep normal HDR reference-white adaptive](0025-keep-normal-hdr-reference-white-adaptive.md)
 * Date: 2026-08-22
-* Implementation status: Implemented for PQ and mapped Dolby input on nominal
-  SDR and on automatic scene-referred HDR targets whose physical luminance
-  range is known
+* Implementation status: Retained only for PQ and mapped Dolby input on the
+  nominal-SDR target; the automatic physical-HDR branch was removed by ADR 0025
 * Amends:
   [0008: Anchor normal HDR playback to the platform reference white](0008-reference-white-adaptive-hdr-display-mapping.md)
   and
   [0023: Use a metadata-first HDR-to-SDR policy](0023-use-metadata-first-hdr-to-sdr-policy.md)
+
+ADR 0025 retains this decision's nominal-100 PQ/Dolby HDR-to-SDR construction
+and fixed `203 / 100` coordinate conversion. It rejects the automatic physical
+HDR branch as normal-playback behavior because its `203 / referenceWhite`
+producer scale cancels the platform reference-white anchor.
 
 ## Context
 

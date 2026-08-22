@@ -501,6 +501,13 @@ gamut mapping, scaling, native-frame import, and lifetime. Composition capture
 adds geometry, letterboxing, subtitle/UI placement and luminance, alpha
 composition, and application-owned output conversion.
 
+Reference-white regressions must hold target headroom, primaries, source frame,
+and target minimum fixed while varying only reference white. The same decoded
+production surfaces must cross the final compositor: Windows expects the
+`W / 80` ratio, while macOS and managed Wayland use final scale one. Changing
+headroom at the same time is a compression test, not a valid white-scaling
+oracle.
+
 QRhi supports asynchronous raw texture readback through
 `QRhiResourceUpdateBatch::readBackTexture()`. Capture textures must be created
 with `UsedAsTransferSource`; multisample targets cannot be read back directly.
@@ -570,7 +577,9 @@ light.
 
 On the current macOS host, AppKit observation and the EDR-capable swapchain
 selection path run against a real `NSScreen`, while pure tests cover relative
-headroom mapping and equal-state reconciliation. A user-confirmed
+headroom mapping, conservative P3 target propagation, and equal-state
+reconciliation. The new `canRepresentDisplayGamut:` observation and color-space
+notification require a fresh native run. A user-confirmed
 multi-display move and return preserve video, UI color, and EDR mapping after
 the Metal surface refresh. This physical event is not synthesized in CTest:
 the current public boundary cannot select a second physical `NSScreen` or make

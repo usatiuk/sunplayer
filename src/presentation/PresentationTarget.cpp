@@ -23,15 +23,13 @@ PresentationTarget calculatePresentationTarget(DisplayState const& display, Pres
     target.sceneReferred = displayLuminanceAuthority
                                ? display.luminanceBehavior == DisplayLuminanceBehavior::SceneReferred
                                : backend.sceneReferred;
-    bool const backendLuminanceCompatible =
-        !displayLuminanceAuthority || target.sceneReferred == backend.sceneReferred;
+    bool const backendLuminanceCompatible = !displayLuminanceAuthority || target.sceneReferred == backend.sceneReferred;
     bool const displayWhiteKnown = displayTargetUsable && display.sdrWhiteKnown && display.sdrWhiteNits > 0.0f;
-    bool const displayLuminanceKnown =
-        displayTargetUsable && display.luminanceKnown && display.maxLuminanceNits > 0.0f;
+    bool const displayLuminanceKnown = displayTargetUsable && display.luminanceKnown && display.maxLuminanceNits > 0.0f;
     bool const displayHeadroomKnown = displayTargetUsable && display.currentHeadroom > 0.0f;
 
-    target.targetPrimariesKnown = displayTargetUsable && display.targetPrimariesKnown &&
-                                  display.targetPrimaries.isValid();
+    target.targetPrimariesKnown =
+        displayTargetUsable && display.targetPrimariesKnown && display.targetPrimaries.isValid();
     if (target.targetPrimariesKnown) {
         target.targetPrimaries = display.targetPrimaries;
     }
@@ -44,12 +42,10 @@ PresentationTarget calculatePresentationTarget(DisplayState const& display, Pres
 
     target.luminanceKnown = displayLuminanceKnown || (backendLuminanceCompatible && backend.luminanceKnown);
     if (target.luminanceKnown) {
-        target.minLuminanceNits = displayLuminanceKnown
-                                          ? display.minLuminanceNits
-                                          : (backend.luminanceKnown ? backend.minLuminanceNits : 0.0f);
-        target.maxLuminanceNits = displayLuminanceKnown
-                                          ? display.maxLuminanceNits
-                                          : (backend.luminanceKnown ? backend.maxLuminanceNits : 0.0f);
+        target.minLuminanceNits = displayLuminanceKnown ? display.minLuminanceNits
+                                                        : (backend.luminanceKnown ? backend.minLuminanceNits : 0.0f);
+        target.maxLuminanceNits = displayLuminanceKnown ? display.maxLuminanceNits
+                                                        : (backend.luminanceKnown ? backend.maxLuminanceNits : 0.0f);
     }
 
     float const effectiveSdrWhiteNits = target.sdrWhiteNits > 0.0f ? target.sdrWhiteNits : scRgbReferenceWhiteNits;
@@ -63,16 +59,9 @@ PresentationTarget calculatePresentationTarget(DisplayState const& display, Pres
             ? std::max(1.0f, display.currentHeadroom)
             : (target.maxLuminanceNits > 0.0f ? std::max(1.0f, target.maxLuminanceNits / scRgbReferenceWhiteNits)
                                               : std::max(1.0f, backendCurrentHeadroom));
-    target.potentialHeadroom =
-        std::max(target.currentHeadroom,
-                 displayTargetUsable && display.potentialHeadroom > 0.0f ? display.potentialHeadroom
-                                                                         : backendPotentialHeadroom);
+    target.potentialHeadroom = std::max(target.currentHeadroom, displayTargetUsable && display.potentialHeadroom > 0.0f
+                                                                    ? display.potentialHeadroom
+                                                                    : backendPotentialHeadroom);
     target.effectiveTargetHeadroom = std::max(1.0f, target.currentHeadroom / target.sdrScale);
     return target;
-}
-
-bool canUseAutomaticPhysicalTarget(PresentationTarget const& target, bool automaticTargetPeak) {
-    float const referenceWhiteNits = target.sdrWhiteKnown ? target.sdrWhiteNits : scRgbReferenceWhiteNits;
-    return automaticTargetPeak && target.sceneReferred && target.luminanceKnown &&
-           std::isfinite(target.maxLuminanceNits) && target.maxLuminanceNits >= referenceWhiteNits;
 }
