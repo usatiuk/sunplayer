@@ -116,8 +116,10 @@ composition or another integration shape.
 ### Incomplete redirected input
 
 Mouse, wheel, and keyboard events are forwarded to the redirected Quick window.
-Touch, tablet, input methods, accessibility, drag-and-drop, and richer pointer
-semantics are not integrated.
+Touch, tablet, input methods, accessibility, and richer pointer semantics are
+not integrated. The visible native window directly accepts one copy-only local
+file drop as an application command; general QML drag targets and redirected
+drag-event semantics remain unimplemented.
 
 Address as part of the application/UI shell rather than adding isolated event
 forwarders without an input model.

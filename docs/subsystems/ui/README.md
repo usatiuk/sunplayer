@@ -260,6 +260,13 @@ the redirected-scene boundary without opening a modal operating-system dialog
 in automation. A user-confirmed run of the rebuilt application also opens the
 native file sheet without materializing a second blank window.
 
+The same component test verifies that the dialog sends its exact selected URL
+to the application window command rather than bypassing it through
+`MediaSession`. An application media-open notification returns HDR Lab to
+Player, allowing startup, dialogs, native drops, and later platform activation
+adapters to share one page-routing contract without moving route ownership into
+C++.
+
 The Windows-registered fullscreen application scenario additionally crosses
 the real window, QRhi swapchain, QML, media, and video-presentation boundaries
 while driving native F11, Escape, Space, and redirected background double-click

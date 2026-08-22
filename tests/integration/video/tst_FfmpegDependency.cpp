@@ -29,6 +29,7 @@ class FfmpegDependencyTest final : public QObject {
 
   private slots:
     void pinnedMinimalFeatureSet();
+    void advertisedContainerDemuxersAvailable();
 };
 
 void FfmpegDependencyTest::pinnedMinimalFeatureSet() {
@@ -63,6 +64,14 @@ void FfmpegDependencyTest::pinnedMinimalFeatureSet() {
 #endif
     QVERIFY(avcodec_find_decoder(AV_CODEC_ID_H264));
     QVERIFY(avcodec_find_decoder(AV_CODEC_ID_HEVC));
+}
+
+void FfmpegDependencyTest::advertisedContainerDemuxersAvailable() {
+    // These families back the common standalone video-container extensions
+    // advertised by the Windows package manifest.
+    for (char const* const demuxer : {"asf", "avi", "flv", "matroska", "mov", "mpeg", "mpegts"}) {
+        QVERIFY2(av_find_input_format(demuxer), demuxer);
+    }
 }
 
 QTEST_APPLESS_MAIN(FfmpegDependencyTest)

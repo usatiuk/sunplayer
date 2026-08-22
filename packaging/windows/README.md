@@ -127,6 +127,15 @@ $package = Get-AppxPackage -Name SunPlayerDevelopment
 Start-Process "shell:AppsFolder\$($package.PackageFamilyName)!SunPlayer"
 ```
 
+Before release, use an associated local file's **Open with** menu to select
+SunPlayer and verify a path containing spaces and non-ASCII characters. Also
+check one UNC path and a multi-selection: `MultiSelectModel="Single"` means
+Windows activates only the first selected file, not that SunPlayer is a
+single-instance application. Do not change the machine's default app as part
+of this check. Representative playback should include the seven advertised
+demuxer families, including a real 192-byte MTS/M2TS transport stream; package
+construction proves schema validity, not every codec/profile combination.
+
 After the launch/playback smoke, clean up from the elevated terminal:
 
 ```powershell
@@ -143,8 +152,19 @@ Clear-Variable password, securePassword
 
 The checked-in manifest is an x64 packaged-classic desktop application using
 `Windows.FullTrustApplication` and only the required `runFullTrust` capability.
-It intentionally has no AppContainer variant, file associations, execution
-alias, background task, or Store-submission automation. Generate reviewed icon
+It declares one common-video-container file-type association for `.avi`,
+`.flv`, `.m2ts`, `.m4v`, `.mkv`, `.mov`, `.mp4`, `.mpeg`, `.mpg`, `.mts`,
+`.ts`, `.webm`, and `.wmv`, with
+`MultiSelectModel="Single"`. Package installation makes SunPlayer available to
+Windows Open with/default-app selection without taking over the user's default;
+Windows launches the full-trust executable with the selected local path through
+the same positional-argument boundary as direct startup. The manifest
+intentionally has no AppContainer variant, custom verb or activation handler,
+execution alias, background task, or Store-submission automation. Additional
+specialist, raw-stream, playlist, image, and audio-only extensions are not
+claimed merely because FFmpeg can demux them. The FFmpeg dependency test pins
+availability of every advertised container family; representative playback
+and packaged activation remain release validation. Generate reviewed icon
 variants from `branding\SunPlayer.svg` with:
 
 ```powershell

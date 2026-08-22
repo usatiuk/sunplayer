@@ -15,6 +15,12 @@ qt_add_executable(sunplayer_application_settings_tests
         ../src/app/ApplicationSettings.h
 )
 
+qt_add_executable(sunplayer_local_media_drop_tests
+        unit/app/tst_LocalMediaDrop.cpp
+        ../src/app/LocalMediaDrop.cpp
+        ../src/app/LocalMediaDrop.h
+)
+
 qt_add_executable(sunplayer_controlled_audio_sink_tests
         unit/audio/tst_ControlledAudioSink.cpp
 )
@@ -240,6 +246,11 @@ target_include_directories(sunplayer_application_settings_tests
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
 )
 
+target_include_directories(sunplayer_local_media_drop_tests
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+)
+
 target_include_directories(sunplayer_controlled_audio_sink_tests
         PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
@@ -324,6 +335,11 @@ target_link_libraries(sunplayer_application_settings_tests
         PRIVATE
         Qt6::Test
         sunplayer_diagnostics
+)
+
+target_link_libraries(sunplayer_local_media_drop_tests
+        PRIVATE
+        Qt6::Test
 )
 
 target_link_libraries(sunplayer_controlled_audio_sink_tests
@@ -497,6 +513,7 @@ if (WIN32)
             sunplayer_presentation_target_tests
             sunplayer_application_log_tests
             sunplayer_application_settings_tests
+            sunplayer_local_media_drop_tests
             sunplayer_controlled_audio_sink_tests
             sunplayer_audio_output_ledger_tests
             sunplayer_realtime_pcm_queue_tests
@@ -543,6 +560,11 @@ add_test(
 add_test(
         NAME application-settings
         COMMAND sunplayer_application_settings_tests
+)
+
+add_test(
+        NAME local-media-drop
+        COMMAND sunplayer_local_media_drop_tests
 )
 
 add_test(
@@ -670,6 +692,21 @@ set_tests_properties(
         TIMEOUT 30
 )
 
+add_test(
+        NAME application-rejects-multiple-media
+        COMMAND $<TARGET_FILE:sunplayer>
+                --no-log-file
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/media/sdr-bt709-ffv1-video-late-flac.mkv"
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/media/sdr-bt709-ffv1-video-late-flac.mkv"
+)
+set_tests_properties(
+        application-rejects-multiple-media
+        PROPERTIES
+        LABELS "application;integration;${sunplayer_test_platform_label}"
+        TIMEOUT 30
+        PASS_REGULAR_EXPRESSION "SunPlayer accepts at most one positional media file[.]"
+)
+
 if (WIN32)
     add_test(
             NAME application-initial-background
@@ -697,12 +734,27 @@ if (WIN32)
             LABELS "application;audio;device;ui;gpu;integration;windows"
             TIMEOUT 30
     )
+
+    add_test(
+            NAME application-file-drop
+            COMMAND $<TARGET_FILE:sunplayer>
+                    --file-drop-smoke
+                    --no-log-file
+                    "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/media/sdr-bt709-ffv1-video-late-flac.mkv"
+    )
+    set_tests_properties(
+            application-file-drop
+            PROPERTIES
+            LABELS "application;ui;gpu;integration;windows"
+            TIMEOUT 30
+    )
 endif ()
 
 set_tests_properties(
         presentation-target
         application-log
         application-settings
+        local-media-drop
         rendered-video-surface
         video-viewport
         video-presentation-geometry

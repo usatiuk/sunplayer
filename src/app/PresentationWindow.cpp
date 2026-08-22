@@ -4,6 +4,7 @@
 
 #include <QCoreApplication>
 #include <QCursor>
+#include <QDropEvent>
 #include <QGuiApplication>
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -21,6 +22,7 @@
 #endif
 
 #include "app/ApplicationSettings.h"
+#include "app/LocalMediaDrop.h"
 #include "app/PresentationSettings.h"
 #include "app/VideoViewportState.h"
 #include "diagnostics/LogCategories.h"
@@ -149,7 +151,10 @@ PresentationWindow::~PresentationWindow() {
 #endif
 }
 
-void PresentationWindow::openMedia(QUrl const& url) { m_mediaSession->openMedia(url); }
+void PresentationWindow::openMedia(QUrl const& url) {
+    m_mediaSession->openMedia(url);
+    emit mediaOpenRequested();
+}
 
 MediaSession& PresentationWindow::mediaSession() { return *m_mediaSession; }
 
@@ -383,6 +388,22 @@ bool PresentationWindow::event(QEvent* event) {
     }
     Q_ASSERT(m_engine);
     switch (event->type()) {
+    case QEvent::DragEnter:
+    case QEvent::Drop: {
+        auto* const dropEvent = static_cast<QDropEvent*>(event);
+        std::optional<QUrl> const url = singleLocalMediaDropUrl(dropEvent->mimeData(), dropEvent->possibleActions());
+        if (!url) {
+            dropEvent->ignore();
+            return true;
+        }
+
+        dropEvent->setDropAction(Qt::CopyAction);
+        dropEvent->accept();
+        if (event->type() == QEvent::Drop) {
+            openMedia(*url);
+        }
+        return true;
+    }
     case QEvent::UpdateRequest:
         m_engine->render();
         return true;

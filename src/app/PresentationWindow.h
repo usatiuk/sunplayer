@@ -35,7 +35,7 @@ class PresentationWindow : public QWindow {
 #endif
     ~PresentationWindow() override;
 
-    void openMedia(QUrl const& url);
+    Q_INVOKABLE void openMedia(QUrl const& url);
     class MediaSession& mediaSession();
     const class MediaSession& mediaSession() const;
 
@@ -55,6 +55,7 @@ class PresentationWindow : public QWindow {
     void videoFramePresented(qulonglong contentRevision);
     void blankOtherDisplaysInFullscreenChanged();
     void relativeSeekRequested(qlonglong milliseconds);
+    void mediaOpenRequested();
 
   protected:
     void exposeEvent(QExposeEvent* event) override;

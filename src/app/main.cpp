@@ -14,6 +14,7 @@
 #include <QGuiApplication>
 #include <QKeyEvent>
 #include <QLibraryInfo>
+#include <QMimeData>
 #include <QPalette>
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -31,6 +32,7 @@
 #include "playback/MediaSession.h"
 
 #ifdef Q_OS_WIN
+#include <qpa/qplatformdrag.h>
 #include <windows.h>
 #endif
 
@@ -400,6 +402,35 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
     deadline->start();
     poll->start();
 }
+
+#ifdef Q_OS_WIN
+void startFileDropSmokeScenario(QGuiApplication& app, PresentationWindow& window, QUrl const& expectedUrl) {
+    QTimer::singleShot(0, &app, [&app, &window, expectedUrl] {
+        QMimeData mimeData;
+        mimeData.setUrls({expectedUrl});
+        QPoint const dropPosition(window.width() / 2, window.height() / 2);
+        Qt::DropActions const availableActions = Qt::CopyAction | Qt::MoveAction;
+        QPlatformDragQtResponse const dragResponse = QWindowSystemInterface::handleDrag(
+            &window, &mimeData, dropPosition, availableActions, Qt::NoButton, Qt::NoModifier);
+        QPlatformDropQtResponse const dropResponse = QWindowSystemInterface::handleDrop(
+            &window, &mimeData, dropPosition, availableActions, Qt::NoButton, Qt::NoModifier);
+
+        bool const passed = dragResponse.isAccepted() && dragResponse.acceptedAction() == Qt::CopyAction &&
+                            dropResponse.isAccepted() && dropResponse.acceptedAction() == Qt::CopyAction &&
+                            window.mediaSession().mediaUrl() == expectedUrl;
+        qCInfo(sunplayerLogApplication).noquote()
+            << (passed ? "event=application.file_drop_smoke_complete"
+                       : "event=application.file_drop_smoke_failed")
+            << "dragAccepted=" + QString::number(dragResponse.isAccepted())
+            << "dragAction=" + QString::number(static_cast<int>(dragResponse.acceptedAction()))
+            << "dropAccepted=" + QString::number(dropResponse.isAccepted())
+            << "dropAction=" + QString::number(static_cast<int>(dropResponse.acceptedAction()));
+        std::fprintf(passed ? stdout : stderr, "SunPlayer file-drop smoke %s.\n", passed ? "passed" : "failed");
+        std::fflush(passed ? stdout : stderr);
+        app.exit(passed ? EXIT_SUCCESS : EXIT_FAILURE);
+    });
+}
+#endif
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -408,6 +439,7 @@ int main(int argc, char* argv[]) {
     // Suppress native failure dialogs before that boundary for the bounded
     // noninteractive application scenario.
     if (hasExactArgument(argc, argv, "--playback-smoke") || hasExactArgument(argc, argv, "--fullscreen-smoke") ||
+        hasExactArgument(argc, argv, "--file-drop-smoke") ||
         hasExactArgument(argc, argv, "--verify-initial-background")) {
         SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
     }
@@ -436,6 +468,10 @@ int main(int argc, char* argv[]) {
         QStringLiteral("verify-initial-background"),
         QStringLiteral("Verify the Windows pre-presentation client background and exit."));
     parser.addOption(verifyInitialBackgroundOption);
+    QCommandLineOption const fileDropSmokeOption(
+        QStringLiteral("file-drop-smoke"),
+        QStringLiteral("Run a bounded noninteractive native file-drop scenario for the positional media file."));
+    parser.addOption(fileDropSmokeOption);
 #endif
     QCommandLineOption const debugLogOption(QStringLiteral("debug-log"),
                                             QStringLiteral("Enable SunPlayer debug logging in the session log."));
@@ -480,10 +516,27 @@ int main(int argc, char* argv[]) {
             << "--fullscreen-smoke requires exactly one positional media file.";
         return EXIT_FAILURE;
     }
+    if (positionalArguments.size() > 1) {
+        std::fprintf(stderr, "SunPlayer accepts at most one positional media file.\n");
+        std::fflush(stderr);
+        return EXIT_FAILURE;
+    }
 #ifdef Q_OS_WIN
+    if (parser.isSet(fileDropSmokeOption) && positionalArguments.size() != 1) {
+        qCCritical(sunplayerLogApplication).noquote()
+            << "--file-drop-smoke requires exactly one positional media file.";
+        return EXIT_FAILURE;
+    }
+    if (parser.isSet(fileDropSmokeOption) &&
+        (parser.isSet(verifyQmlOption) || parser.isSet(playbackSmokeOption) || parser.isSet(fullscreenSmokeOption) ||
+         parser.isSet(verifyInitialBackgroundOption))) {
+        qCCritical(sunplayerLogApplication).noquote()
+            << "--file-drop-smoke cannot be combined with another application scenario.";
+        return EXIT_FAILURE;
+    }
     if (parser.isSet(verifyInitialBackgroundOption) &&
         (parser.isSet(verifyQmlOption) || parser.isSet(playbackSmokeOption) || parser.isSet(fullscreenSmokeOption) ||
-         !positionalArguments.isEmpty())) {
+         parser.isSet(fileDropSmokeOption) || !positionalArguments.isEmpty())) {
         qCCritical(sunplayerLogApplication).noquote()
             << "--verify-initial-background cannot be combined with a media file or another application scenario.";
         return EXIT_FAILURE;
@@ -565,7 +618,8 @@ int main(int argc, char* argv[]) {
 
     bool isolatedSettingsRequested = parser.isSet(playbackSmokeOption) || parser.isSet(fullscreenSmokeOption);
 #ifdef Q_OS_WIN
-    isolatedSettingsRequested = isolatedSettingsRequested || parser.isSet(verifyInitialBackgroundOption);
+    isolatedSettingsRequested = isolatedSettingsRequested || parser.isSet(verifyInitialBackgroundOption) ||
+                                parser.isSet(fileDropSmokeOption);
 #endif
     std::unique_ptr<QTemporaryDir> isolatedSettingsDirectory;
     std::unique_ptr<ApplicationSettings> applicationSettings;
@@ -621,7 +675,11 @@ int main(int argc, char* argv[]) {
         return verifyInitialWindowBackground(window) ? EXIT_SUCCESS : EXIT_FAILURE;
     }
 #endif
-    if (!positionalArguments.isEmpty()) {
+    if (!positionalArguments.isEmpty()
+#ifdef Q_OS_WIN
+        && !parser.isSet(fileDropSmokeOption)
+#endif
+    ) {
         QString const absolutePath = QFileInfo(positionalArguments.constFirst()).absoluteFilePath();
         window.openMedia(QUrl::fromLocalFile(absolutePath));
     }
@@ -722,6 +780,12 @@ int main(int argc, char* argv[]) {
         startFullscreenSmokeScenario(app, window, *applicationSettings);
     }
     window.show();
+#ifdef Q_OS_WIN
+    if (parser.isSet(fileDropSmokeOption)) {
+        QString const absolutePath = QFileInfo(positionalArguments.constFirst()).absoluteFilePath();
+        startFileDropSmokeScenario(app, window, QUrl::fromLocalFile(absolutePath));
+    }
+#endif
 
     int const exitCode = app.exec();
     qCInfo(sunplayerLogApplication).noquote() << "event=application.stop"

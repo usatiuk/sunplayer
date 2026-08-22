@@ -47,6 +47,14 @@ Item {
             : ActiveVideoSource.Diagnostics
     }
 
+    Connections {
+        target: root.windowCommands
+
+        function onMediaOpenRequested() {
+            root.currentPage = 0
+        }
+    }
+
     Binding {
         target: root.viewportState
         property: "rect"

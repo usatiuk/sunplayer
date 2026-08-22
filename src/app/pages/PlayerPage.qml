@@ -277,7 +277,7 @@ VideoPage {
         nameFilters: [
             qsTr("Media files (*)")
         ]
-        onAccepted: root.session.openMedia(selectedFile)
+        onAccepted: root.windowCommands.openMedia(selectedFile)
     }
 
     Timer {

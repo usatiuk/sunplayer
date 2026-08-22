@@ -175,6 +175,8 @@ class ShellTestWindowCommands final : public QWindow {
     explicit ShellTestWindowCommands(QWindow* parent) : QWindow(parent), m_windowChrome(this) {}
 
     int toggleCount() const { return m_toggleCount; }
+    int openCount() const { return m_openCount; }
+    QUrl lastOpenedUrl() const { return m_lastOpenedUrl; }
     bool cursorHidden() const { return m_cursorHidden; }
     void setCursorHidden(bool hidden) { m_cursorHidden = hidden; }
     bool windowShortcutsBlocked() const { return m_windowShortcutsBlocked; }
@@ -196,21 +198,29 @@ class ShellTestWindowCommands final : public QWindow {
         emit blankOtherDisplaysInFullscreenChanged();
     }
 
-    void reset() { m_toggleCount = 0; }
+    void resetToggleCount() { m_toggleCount = 0; }
 
     ShellTestWindowChromeController& windowChromeController() { return m_windowChrome; }
 
     Q_INVOKABLE void toggleFullscreen() { ++m_toggleCount; }
+    Q_INVOKABLE void openMedia(QUrl const& url) {
+        ++m_openCount;
+        m_lastOpenedUrl = url;
+        emit mediaOpenRequested();
+    }
     QObject* windowChrome() { return &m_windowChrome; }
 
   signals:
     void otherDisplayBlankingAvailableChanged();
     void blankOtherDisplaysInFullscreenChanged();
     void relativeSeekRequested(qlonglong milliseconds);
+    void mediaOpenRequested();
 
   private:
     ShellTestWindowChromeController m_windowChrome;
     int m_toggleCount = 0;
+    int m_openCount = 0;
+    QUrl m_lastOpenedUrl;
     bool m_cursorHidden = false;
     bool m_windowShortcutsBlocked = false;
     bool m_otherDisplayBlankingAvailable = true;

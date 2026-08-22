@@ -581,9 +581,12 @@ before investing in a more complex UI composition path.
 key release events to the hidden `QQuickWindow`. The Quick root item is sized to
 the logical presentation window and receives active focus.
 
-Touch, tablet, input-method, accessibility, drag-and-drop, and richer pointer
-semantics are not yet forwarded. Input routing will need a deliberate player
-shell boundary rather than continued one-event-at-a-time growth.
+Touch, tablet, input-method, accessibility, general QML drag targets, and richer
+pointer semantics are not yet forwarded. One copy-only local file drop is
+handled directly by the visible native window as an application media-open
+command; it is not part of redirected scene input. Broader input routing will
+need a deliberate player-shell boundary rather than continued one-event-at-a-
+time growth.
 
 ## Diagnostics
 

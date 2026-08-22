@@ -7,6 +7,7 @@
 #include <QQmlProperty>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QTemporaryFile>
 #include <QTest>
 #include <QVariant>
 
@@ -265,6 +266,15 @@ void AppShellTest::publishesActiveViewport() {
     QCOMPARE(clientSideWindowChrome->property("contentTop").toReal(), 0.0);
     QVERIFY(!clientSideWindowOutline->isVisible());
 
+    QTemporaryFile dialogMediaFile;
+    QVERIFY(dialogMediaFile.open());
+    QUrl const dialogMediaUrl = QUrl::fromLocalFile(dialogMediaFile.fileName());
+    QVERIFY(openDialog->setProperty("selectedFile", dialogMediaUrl));
+    QVERIFY(QMetaObject::invokeMethod(openDialog, "accepted", Qt::DirectConnection));
+    QCOMPARE(windowCommands.openCount(), 1);
+    QCOMPARE(windowCommands.lastOpenedUrl(), dialogMediaUrl);
+    QCOMPARE(mediaSession.openCount(), 0);
+
     windowCommands.windowChromeController().setState(true, false, false);
     QVERIFY(clientSideTitleBar->height() > 0.0);
     QTRY_COMPARE(clientSideWindowChrome->property("contentTop").toReal(), clientSideTitleBar->height());
@@ -346,7 +356,7 @@ void AppShellTest::publishesActiveViewport() {
     QCOMPARE(videoViewport.rect(), viewportWithoutChrome);
     windowCommands.windowChromeController().setState(false, false, false);
     QVERIFY(QMetaObject::invokeMethod(playerPage, "revealControls", Qt::DirectConnection));
-    windowCommands.reset();
+    windowCommands.resetToggleCount();
     QTest::mouseDClick(&quickWindow, Qt::LeftButton, Qt::NoModifier, QPoint(80, 80));
     QTRY_COMPARE(windowCommands.toggleCount(), 1);
     playerPage->setProperty("controlsVisibleByActivity", false);
@@ -359,7 +369,7 @@ void AppShellTest::publishesActiveViewport() {
                                        .toPoint();
     QTest::mouseMove(&quickWindow, transportCenter);
     QTRY_VERIFY(transportIsland->opacity() > 0.9);
-    windowCommands.reset();
+    windowCommands.resetToggleCount();
     QTest::mouseDClick(&quickWindow, Qt::LeftButton, Qt::NoModifier, transportCenter);
     QCOMPARE(windowCommands.toggleCount(), 0);
     QPoint const seekControlPoint = seekSliderItem
@@ -438,7 +448,7 @@ void AppShellTest::publishesActiveViewport() {
     QCOMPARE(presentationSummary(), QStringLiteral("Presentation details unavailable"));
     mediaSession.setVideoHdr(false);
     outputState.setPresentation(QStringLiteral("Test swapchain"), false, false);
-    windowCommands.reset();
+    windowCommands.resetToggleCount();
     QPoint const detailsCenter = qobject_cast<QQuickItem*>(playbackDetailsPanel)
                                      ->mapToScene({
                                          playbackDetailsPanel->property("width").toDouble() * 0.5,
@@ -632,7 +642,7 @@ void AppShellTest::publishesActiveViewport() {
 
     QVERIFY(QMetaObject::invokeMethod(hdrLabMenuItem, "clicked", Qt::DirectConnection));
     QTRY_COMPARE(activeVideoSource.route(), ShellTestActiveVideoSource::Route::Diagnostics);
-    windowCommands.reset();
+    windowCommands.resetToggleCount();
     QTest::mouseDClick(&quickWindow, Qt::LeftButton, Qt::NoModifier, QPoint(420, 420));
     QCOMPARE(windowCommands.toggleCount(), 0);
     QTRY_COMPARE(videoViewport.rect().x(), 24.0);
@@ -647,8 +657,12 @@ void AppShellTest::publishesActiveViewport() {
     videoSource.setUseLibplacebo(false);
     QTRY_COMPARE(rendererSwitch->property("checked").toBool(), false);
 
-    QVERIFY(QMetaObject::invokeMethod(backToPlayerButton, "clicked", Qt::DirectConnection));
+    QUrl const droppedMediaUrl = QUrl::fromLocalFile(QStringLiteral("C:/Media/dropped film.mkv"));
+    windowCommands.openMedia(droppedMediaUrl);
     QTRY_COMPARE(activeVideoSource.route(), ShellTestActiveVideoSource::Route::Player);
+    QCOMPARE(windowCommands.openCount(), 2);
+    QCOMPARE(windowCommands.lastOpenedUrl(), droppedMediaUrl);
+    QCOMPARE(mediaSession.openCount(), 0);
 }
 
 QTEST_MAIN(AppShellTest)

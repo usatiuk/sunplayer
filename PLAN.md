@@ -266,8 +266,10 @@ playback:
   zero output copies/transfers, and tolerant agreement with the software-decode
   result.
 
-Physical audio-device replacement, general source buffering, and drag-and-drop
-are not integrated. Embedded subtitle discovery, selection,
+Physical audio-device replacement and general source buffering are not
+integrated. One local file can be opened through the dialog, positional launch,
+a native copy-only drop, or a packaged Windows common-video association.
+Embedded subtitle discovery, selection,
 FFmpeg decode, libass/bitmap rendering, and final composition are integrated.
 CTest/Qt Test coverage exists for pure
 presentation-target policy, video-viewport state, the real QML shell's
@@ -313,7 +315,7 @@ tooling.
   Windows diagnostic shell
 * [x] Initial player settings and persistence
 * [x] Local file dialog and optional positional command-line open
-* [ ] Drag-and-drop and platform file associations
+* [x] Single-file native drag-and-drop and Windows common-video file association
 * [ ] Top-level logging and non-media error integration
 
 Documentation: `docs/subsystems/application/`

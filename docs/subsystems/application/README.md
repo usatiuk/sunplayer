@@ -10,9 +10,11 @@ input, the active video-viewport boundary, and asynchronous continuous local
 audio/video playback with a position/duration seek timeline. Playback volume
 and the supported fullscreen display-blanking option persist across normal
 restarts. Active playback automatically inhibits display idle and idle system
-sleep. It does not yet provide drag-and-drop, general structured errors, or a
-user-facing support-report interface. It now installs the shared Qt category
-logger and bounded session-file sink.
+sleep. One local file can be opened through the file dialog, a command-line or
+Windows common-video association launch, or a native copy-only file drop. It
+does not yet provide general structured errors or a user-facing support-report
+interface. It now installs the shared Qt category logger and bounded
+session-file sink.
 
 Graphics details belong to
 [../graphics/README.md](../graphics/README.md). The current diagnostic QML is
@@ -50,7 +52,9 @@ Startup currently:
    On Windows, native background erase paints black until that surface's first
    successful QRhi presentation; D3D owns the client area from then on.
 
-One optional positional command-line path opens local media after construction.
+One optional positional command-line path opens local media after construction;
+additional paths are rejected instead of being silently ignored. Windows uses
+that same path for ordinary packaged common-video file-association launches.
 `--playback-smoke` is a narrow noninteractive verification mode for that path:
 it requires two distinct video content revisions to reach the swapchain plus
 continued live Cubeb audio-master clock progress, then exits with a process
@@ -158,6 +162,20 @@ dialog owns the gated shortcuts and routes native relative-seek requests
 through the same Player action as the transport buttons. The hidden Quick
 scene has the same logical size as the native window.
 
+`PresentationWindow` is also the single application-level media-open boundary.
+The file dialog calls it from QML, startup calls it from `main()`, and a native
+drop calls it from the visible window. An open request returns `AppShell` to
+Player while QML remains the page and active-source-route authority.
+
+The visible window accepts `DragEnter` and `Drop` only for exactly one valid
+local URL with a nonempty local path and an available copy action. It always
+answers with `CopyAction`, never move, and does not stat or canonicalize the
+path on the GUI thread. This includes UNC URLs; `MediaSession` and FFmpeg own
+the asynchronous open result. Multiple files, remote URLs, and move-only
+offers are rejected. There are no hover regions, so drag-move/leave need no
+application handling and the hidden Quick scene receives no partial general
+drag model.
+
 Qt Quick dialogs normally infer their parent from that hidden window. On
 macOS, the file dialog explicitly uses the visible `PresentationWindow` as its
 native sheet parent so opening media cannot materialize the redirected window
@@ -188,7 +206,8 @@ Qt window APIs, but the capability and stored value remain unapplied on macOS
 and Wayland until those native behaviors are validated.
 
 The current forwarding is incomplete for a player shell. Touch, tablet, input
-methods, accessibility, drag-and-drop, and file-open events remain deferred.
+methods, accessibility, richer pointer semantics, and platform application
+file-open events beyond the Windows argument launch remain deferred.
 
 ## State and settings
 
@@ -273,7 +292,13 @@ Test targets. A Qt Quick component target verifies root initial-property
 handoff, all four initial Player states, cancel/retry/close command wiring,
 Player/HDR-Lab route selection, and active-page viewport publication.
 It also verifies the other-display blanking command's availability and
-checked-state binding through the QML window-command boundary.
+checked-state binding through the QML window-command boundary. Its ingress
+coverage supplies a real fixture URL to `FileDialog`, proves that the exact URL
+reaches the application command without a direct session open, and proves an
+application open while HDR Lab is active returns the route to Player.
+The pure `local-media-drop` target covers local paths, UNC paths, combined
+copy/move offers, null/text/remote/empty/multiple payloads, and move-only
+rejection without filesystem access.
 The media-session target also drives the production playback-power policy
 through a recording adapter. It verifies one acquire across opening, ready,
 buffering, and playing seeks; release across pause, paused seeks, error, and
@@ -292,7 +317,11 @@ client background black before first presentation. Another registered,
 bounded application scenario opens a real audio-first A/V fixture through the
 production FFmpeg and Cubeb paths, shows the native presentation window, and
 waits for two distinct video content revisions plus continued live Cubeb
-audio-clock progress. A second bounded real-window scenario verifies native
+audio-clock progress. A native Windows file-drop scenario uses Qt's platform
+event boundary to enter and drop one local URL while both copy and move are
+offered; it requires copy acceptance and the exact session URL. A separate
+process check proves two positional paths fail rather than opening only the
+first. A second bounded real-window scenario verifies native
 keyboard/gesture routing, fullscreen state/restoration, cursor hiding, video
 presentation after each transition, and an unchanged advancing cubeb audio
 epoch. The 2026-08-09 Windows run passes alongside the initial-background and
@@ -301,10 +330,9 @@ continued presentation and teardown once, while two attempts timed out on
 cursor convergence. The current audio-bearing explicit run ended in an
 unresolved buffer/configure protocol failure before its final assertion. WSLg
 is not treated as native-GPU, managed-color, HDR, VAAPI, native Linux acoustic-
-output, or route-change evidence. The scenarios exercise startup, initial
-playback wiring, and fullscreen;
-broader command,
-error, shutdown, and packaged-install scenarios remain future work.
+output, or route-change evidence. The scenarios exercise startup, single-file
+ingress, initial playback wiring, and fullscreen; broader error, shutdown, and
+installed-package activation scenarios remain future work.
 
 On Windows, the fullscreen scenario enables display blanking and checks that
 one non-focusable fullscreen companion appears on every other Qt screen, that
