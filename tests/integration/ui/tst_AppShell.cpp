@@ -302,13 +302,18 @@ void AppShellTest::publishesActiveViewport() {
     rootItem->setSize({760.0, 360.0});
     quickWindow.resize(760, 360);
     QTRY_VERIFY(hdrLabDiagnosticScroll->property("contentHeight").toReal() > hdrLabDiagnosticScroll->height());
-    qreal const diagnosticMaximumY =
-        hdrLabDiagnosticScroll->property("contentHeight").toReal() - hdrLabDiagnosticScroll->height();
-    QVERIFY(hdrLabDiagnosticScroll->setProperty("contentY", diagnosticMaximumY));
-    QTRY_VERIFY(hdrLabReprobeButton->mapToItem(hdrLabDiagnosticScroll, QPointF()).y() >= 0.0);
-    QTRY_VERIFY(hdrLabReprobeButton->mapToItem(hdrLabDiagnosticScroll, QPointF()).y() +
-                    hdrLabReprobeButton->height() <=
-                hdrLabDiagnosticScroll->height());
+    QTRY_VERIFY(([&] {
+        qreal const diagnosticMaximumY =
+            hdrLabDiagnosticScroll->property("originY").toReal() +
+            hdrLabDiagnosticScroll->property("contentHeight").toReal() - hdrLabDiagnosticScroll->height();
+        if (!hdrLabDiagnosticScroll->setProperty("contentY", diagnosticMaximumY)) {
+            return false;
+        }
+
+        QRectF const reprobeBounds = hdrLabReprobeButton->mapRectToItem(
+            hdrLabDiagnosticScroll, hdrLabReprobeButton->boundingRect());
+        return reprobeBounds.top() >= 0.0 && reprobeBounds.bottom() <= hdrLabDiagnosticScroll->height();
+    })());
     rootItem->setSize({1100.0, 760.0});
     quickWindow.resize(1100, 760);
     QVERIFY(QMetaObject::invokeMethod(backToPlayerButton, "clicked", Qt::DirectConnection));
