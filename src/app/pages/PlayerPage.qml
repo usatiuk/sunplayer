@@ -448,32 +448,12 @@ VideoPage {
         objectName: "emptyState"
         anchors.centerIn: parent
         visible: root.session.state === MediaSession.Empty
-        spacing: 14
 
-        Label {
+        Button {
+            objectName: "openMediaButton"
             Layout.alignment: Qt.AlignHCenter
-            text: qsTr("Open a video")
-            color: "white"
-            font.pixelSize: 24
-            font.weight: Font.DemiBold
-        }
-
-        Label {
-            Layout.alignment: Qt.AlignHCenter
-            text: qsTr("Play local video with HDR and audio.")
-            color: "#9297a2"
-        }
-
-        RowLayout {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: 10
-
-            Button {
-                objectName: "openMediaButton"
-                text: qsTr("Open media…")
-                onClicked: root.windowCommands.chooseMedia()
-            }
-
+            text: qsTr("Open video…")
+            onClicked: root.windowCommands.chooseMedia()
         }
     }
 
