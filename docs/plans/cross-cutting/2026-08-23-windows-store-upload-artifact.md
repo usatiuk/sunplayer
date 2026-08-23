@@ -31,10 +31,12 @@ Sources:
    version text. Make CMake read it as the project version and use the full
    version for macOS bundle metadata. Keep the QML module's unrelated import
    version at `1.0`.
-2. Make the existing workflow's manual trigger the single **Release** path. It
-   accepts only `major`, `minor`, or `patch`, runs only from `main`, and requires
-   both the initiating and re-running actor to be `usatiuk`. Pull-request and
-   main-push CI behavior remains unchanged.
+2. Keep **CI** available for pull requests, main pushes, and an ordinary manual
+   run. Expose the same workflow through `workflow_call`, then add a tiny
+   dedicated **Release** workflow which accepts only `major`, `minor`, or
+   `patch` and calls CI in release mode. Release mode runs only from `main` and
+   requires both the initiating and re-running actor to be `usatiuk`; it is the
+   only mode allowed to bump, tag, push, or publish.
 3. From the dispatch's immutable `github.sha`, calculate the next version and
    Store version `X.Y.Z.0`. Reject zero Store major, components above 65535,
    missing Partner Center repository variables, moved `main`, or conflicting
@@ -64,14 +66,21 @@ Sources:
    resumes the same version and uploads a missing attachment instead of bumping
    again. An existing nonempty attachment is left unchanged. Partner Center
    submission remains a manual step.
-9. Keep the shared Store package-version validation in the packaging wrapper
-   and document only the operator-facing release procedure and remaining real
-   release gates.
+9. Key the hosted vcpkg binary cache by the repository dependency inputs, the
+   actual hosted vcpkg revision, and the runner image version. An older cache
+   may seed a new ABI identity, but the new immutable cache is saved under a
+   distinct key after a successful job instead of rebuilding forever behind an
+   exact stale key.
+10. Keep the shared Store package-version validation in the packaging wrapper
+    and document only the operator-facing release procedure and remaining real
+    release gates.
 
 ## Acceptance
 
-* One manually clicked workflow dispatch from `main` owns version bump, build,
-  Store package, symbols, tag, and GitHub Release.
+* **Actions → CI → Run workflow** performs ordinary repository-read-only CI
+  with no bump, tag, push, or GitHub Release.
+* **Actions → Release → Run workflow** from `main` owns version bump, build,
+  Store package, symbols, tag, atomic push, and GitHub Release.
 * The built binary, checked-in `VERSION.txt`, release commit, tag, MSIX version,
   and GitHub Release all identify the same release.
 * The MSIXUPLOAD root contains one MSIX and one APPXSYM; the APPXSYM root
@@ -87,18 +96,19 @@ Sources:
 
 Local validation covers strict version parsing, CMake version propagation,
 RelWithDebInfo symbol production, Store packaging, and both ZIP layouts. YAML
-and the final diff receive independent review. The first hosted manual run and
-first Partner Center acceptance remain unavoidable external release gates; the
-repository does not claim them in advance. There is deliberately no second
-dry-run mode: the first successful manual run is the live `1.0.0` GitHub
-release, while any pre-publication failure leaves remote refs unchanged.
+and the final diff receive independent review. The first hosted **Release**
+invocation and first Partner Center acceptance remain unavoidable external
+release gates; the repository does not claim them in advance. There is
+deliberately no second dry-run mode: the first successful **Release** invocation
+is the live `1.0.0` GitHub release, while any pre-publication failure leaves
+remote refs unchanged.
 
 On 2026-08-23, the valid and rejected version-bump matrix passed, including the
 first-release `major` case and Store component overflows. An isolated shallow
 Git checkout preserved the exact release commit through the bundle boundary. A
 disposable bare remote passed fresh atomic publication, later-`main` recovery,
 duplicate-attempt, reset-`main`, and conflicting-tag cases.
-Actionlint 1.7.12 accepted the workflow. The Windows RelWithDebInfo
+Actionlint 1.7.12 accepted both workflows. The Windows RelWithDebInfo
 build completed and all 36 registered tests passed. A temporary reserved-
 identity `1.0.0.0` package passed packaged-QML verification. Its MSIX had the
 expected identity/version and no PDB; its APPXSYM contained only the complete

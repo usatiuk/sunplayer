@@ -1,4 +1,4 @@
-name: CI / Release
+name: CI
 
 on:
   pull_request:
@@ -6,27 +6,30 @@ on:
     branches:
       - main
   workflow_dispatch:
+  workflow_call:
     inputs:
+      release:
+        description: Build and publish a release
+        required: false
+        default: false
+        type: boolean
       bump:
-        description: Version bump
-        required: true
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
+        description: Release version bump
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+  cancel-in-progress: ${{ inputs.release != true }}
 
 jobs:
   linux:
     name: Linux · Ubuntu 26.04
-    if: github.event_name != 'workflow_dispatch'
+    if: inputs.release != true
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     container:
@@ -266,7 +269,7 @@ jobs:
       tag: ${{ steps.prepare-release.outputs.tag }}
     env:
       VCPKG_ROOT: C:\vcpkg
-      SUNPLAYER_PACKAGE_CONFIGURATION: ${{ github.event_name == 'workflow_dispatch' && 'RelWithDebInfo' || 'Release' }}
+      SUNPLAYER_PACKAGE_CONFIGURATION: ${{ inputs.release && 'RelWithDebInfo' || 'Release' }}
 
     steps:
       - name: Check out source
@@ -276,7 +279,7 @@ jobs:
 
       - name: Prepare release revision
         id: prepare-release
-        if: github.event_name == 'workflow_dispatch'
+        if: inputs.release
         shell: pwsh
         env:
           BUMP: ${{ inputs.bump }}
@@ -426,12 +429,28 @@ jobs:
           }
           New-Item -ItemType Directory -Force -Path $binaryCache | Out-Null
 
+      - name: Resolve vcpkg cache identity
+        id: vcpkg-cache
+        shell: pwsh
+        run: |
+          $toolRevision = (git -C $env:VCPKG_ROOT rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $toolRevision -notmatch '^[0-9a-f]{40}$') {
+            throw 'Could not resolve the hosted vcpkg revision.'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:ImageVersion)) {
+            throw 'The hosted runner did not report its image version.'
+          }
+          "tool_revision=$toolRevision" >> $env:GITHUB_OUTPUT
+          "image_version=$($env:ImageVersion)" >> $env:GITHUB_OUTPUT
+
       - name: Restore vcpkg binaries
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}\sunplayer-vcpkg-binary-cache
-          key: windows-2022-vcpkg-x64-windows-clangcl-r1-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'cmake/vcpkg/**') }}
+          key: windows-2022-vcpkg-x64-windows-clangcl-r2-${{ steps.vcpkg-cache.outputs.image_version }}-${{ steps.vcpkg-cache.outputs.tool_revision }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'cmake/vcpkg/**') }}
           restore-keys: |
+            windows-2022-vcpkg-x64-windows-clangcl-r2-${{ steps.vcpkg-cache.outputs.image_version }}-${{ steps.vcpkg-cache.outputs.tool_revision }}-
+            windows-2022-vcpkg-x64-windows-clangcl-r2-
             windows-2022-vcpkg-x64-windows-clangcl-r1-
 
       - name: Configure
@@ -496,7 +515,7 @@ jobs:
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Upload Windows developer bundle
-        if: github.event_name == 'push'
+        if: inputs.release != true && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sunplayer-windows-release-${{ github.sha }}
@@ -531,7 +550,7 @@ jobs:
           }
 
       - name: Package unsigned development MSIX
-        if: github.event_name != 'workflow_dispatch'
+        if: inputs.release != true
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
@@ -540,7 +559,7 @@ jobs:
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Upload unsigned development MSIX
-        if: github.event_name == 'push'
+        if: inputs.release != true && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sunplayer-windows-msix-${{ github.sha }}
@@ -549,7 +568,7 @@ jobs:
           retention-days: 7
 
       - name: Package Store MSIX upload
-        if: github.event_name == 'workflow_dispatch'
+        if: inputs.release
         shell: pwsh
         env:
           STORE_PACKAGE_VERSION: ${{ steps.prepare-release.outputs.store_version }}
@@ -589,7 +608,7 @@ jobs:
           Move-Item -LiteralPath $zip -Destination $upload
 
       - name: Upload release inputs
-        if: github.event_name == 'workflow_dispatch'
+        if: inputs.release
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sunplayer-release-${{ steps.prepare-release.outputs.application_version }}
@@ -603,7 +622,7 @@ jobs:
   publish:
     name: Publish release
     if: >-
-      github.event_name == 'workflow_dispatch' &&
+      inputs.release &&
       github.actor == 'usatiuk' &&
       github.triggering_actor == 'usatiuk' &&
       github.ref == 'refs/heads/main'

@@ -419,7 +419,10 @@ evidence.
 The Windows job uses `windows-2022`, exact Qt 6.11.1 installed by a pinned
 `aqtinstall` revision with Qt 6.11 repository-layout support, MSVC for SunPlayer,
 and the root manifest's clang-cl vcpkg triplet for dependencies. It caches only
-the exact Qt tree and vcpkg's ABI-addressed binary archives. It builds all GPU
+the exact Qt tree and vcpkg's ABI-addressed binary archives. The vcpkg cache key
+includes the dependency files, hosted vcpkg revision, and runner image version,
+so a successful job after a hosted toolchain change saves a new immutable cache
+instead of repeatedly rebuilding behind an older exact key. It builds all GPU
 and device code, runs QML lint, then excludes CTests labeled `device` or `gpu`
 because a generic hosted runner does not satisfy SunPlayer's hardware-only D3D11
 or default-audio-device contracts. That exclusion also drops the software/HDR
@@ -431,7 +434,8 @@ Ordinary CI requests only read-only repository contents, disables persisted
 checkout credentials, and pins actions by full commit SHA. Every event stages
 and probes a Windows distribution tree. Pull requests and main pushes use
 `Release` and package it with the unsigned `SunPlayerDevelopment` identity;
-main pushes upload the tree and MSIX as separate seven-day artifacts.
+main pushes and ordinary manual CI runs upload the tree and MSIX as separate
+seven-day artifacts.
 Microsoft's pinned setup action
 provides `winapp` v0.6.0, and CI
 checks every file in that release archive against a reviewed SHA-256 digest
@@ -441,8 +445,10 @@ does not cache build trees, the shared in-job
 release path succeeds in a hosted run, it is implemented and locally reviewed
 configuration rather than a claim that hosted packaging passes.
 
-The same workflow has one owner-only manual release path using
-`RelWithDebInfo`. It bumps the root
+The CI workflow is also reusable. A separate, owner-only manual **Release**
+workflow calls it in release mode using `RelWithDebInfo`; this keeps an ordinary
+manual CI run available without duplicating the Windows pipeline. Release mode
+bumps the root
 `VERSION.txt`, creates the release commit locally, and builds that exact
 revision as `RelWithDebInfo`. After the Store MSIX and full `sunplayer.pdb`
 APPXSYM are successfully wrapped in an MSIXUPLOAD, a separate write-scoped job

@@ -98,7 +98,8 @@ combinations.
 
 ### Hosted CI capability boundary
 
-The root GitHub Actions workflow is configured as two direct platform jobs.
+The root CI workflow is configured as two direct platform jobs and can also be
+run manually without entering release mode.
 Linux uses Ubuntu 26.04 system dependencies plus headless native Wayland,
 lavapipe Vulkan, and a PulseAudio null sink, and intends to run all registered
 Linux CTests. That lane exercises production interfaces against controlled

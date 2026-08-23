@@ -96,9 +96,10 @@ signs it after certification.
 
 ## CI and release packages
 
-Pull requests and main pushes package the Release install tree with the unsigned
-`SunPlayerDevelopment` identity. Main pushes retain the development bundle and
-MSIX for seven days; pull requests retain neither.
+Pull requests, main pushes, and ordinary manual CI runs package the Release
+install tree with the unsigned `SunPlayerDevelopment` identity. Main pushes and
+manual CI runs retain the development bundle and MSIX for seven days; pull
+requests retain neither.
 
 After reserving SunPlayer, configure these public GitHub repository variables
 from Partner Center's Product identity page:
@@ -107,7 +108,7 @@ from Partner Center's Product identity page:
 * `WINDOWS_STORE_PUBLISHER`
 * `WINDOWS_STORE_PUBLISHER_DISPLAY_NAME`
 
-To release, open **Actions → CI / Release → Run workflow** on `main` and choose
+To release, open **Actions → Release → Run workflow** on `main` and choose
 `major`, `minor`, or `patch`. The first Store release starts from the checked-in
 `0.1.0`, so choose `major` to produce SunPlayer `1.0.0`, package version
 `1.0.0.0`, tag `v1.0.0`, and the matching GitHub Release.

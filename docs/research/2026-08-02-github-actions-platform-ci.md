@@ -53,7 +53,11 @@ persisted with `actions/cache`, uses vcpkg's supported `files` provider and
 requires only read-only repository permissions. The cache key covers the
 manifest, registry baseline, configuration, overlay ports, and custom triplet.
 Restoring an older prefix is safe because vcpkg validates each archive by its
-own package ABI before reuse. Raw source downloads are not cached: a successful
+own package ABI before reuse. The primary GitHub cache key must additionally
+identify the hosted runner image and preinstalled vcpkg revision: GitHub cache
+entries are immutable, so otherwise vcpkg can reject and rebuild an archive
+after a hosted toolchain change while the old exact key prevents the rebuilt
+archive from being saved. Raw source downloads are not cached: a successful
 binary hit already avoids them, and duplicating those archives would consume
 cache quota without improving the normal path.
 
