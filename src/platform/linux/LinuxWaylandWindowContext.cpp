@@ -1,10 +1,13 @@
 #include "platform/linux/LinuxWaylandWindowContext.h"
 
+#include <cerrno>
 #include <cstdint>
 #include <cstring>
 #include <functional>
 #include <memory>
 #include <optional>
+#include <stdexcept>
+#include <system_error>
 #include <utility>
 
 #include <QColorSpace>
@@ -202,6 +205,14 @@ struct RegistryInventory {
     bool decorationManagerAdvertised = false;
 };
 
+struct RegistryDeleter {
+    void operator()(wl_registry* registry) const {
+        if (registry) {
+            wl_registry_destroy(registry);
+        }
+    }
+};
+
 void handleGlobal(void* data, wl_registry*, std::uint32_t name, char const* interface, std::uint32_t version) {
     auto& inventory = *static_cast<RegistryInventory*>(data);
     if (std::strcmp(interface, "zxdg_decoration_manager_v1") == 0) {
@@ -225,8 +236,8 @@ void roundtripOrFail(wl_display& display, char const* operation) {
     if (wl_display_roundtrip(&display) >= 0) {
         return;
     }
-    qCFatal(sunplayerLogPlatform, "Wayland connection failed while %s (error %d)", operation,
-            wl_display_get_error(&display));
+    int const displayError = wl_display_get_error(&display);
+    throw std::system_error(displayError != 0 ? displayError : EIO, std::generic_category(), operation);
 }
 
 void waitForManagedDescriptions(wl_display& display, ManagedImageDescription& sdrDescription,
@@ -239,10 +250,9 @@ void waitForManagedDescriptions(wl_display& display, ManagedImageDescription& sd
         if (wl_display_dispatch(&display) >= 0) {
             continue;
         }
-        qCFatal(sunplayerLogPlatform,
-                "Wayland connection failed while waiting for managed surface "
-                "descriptions (error %d)",
-                wl_display_get_error(&display));
+        int const displayError = wl_display_get_error(&display);
+        throw std::system_error(displayError != 0 ? displayError : EIO, std::generic_category(),
+                                "waiting for managed surface descriptions");
     }
 }
 
@@ -552,19 +562,23 @@ struct LinuxWaylandWindowContext::NativeState final {
     explicit NativeState(QGuiApplication& application) {
         auto* const native = application.nativeInterface<QNativeInterface::QWaylandApplication>();
         if (!native || !native->display()) {
-            qCFatal(sunplayerLogPlatform, "The Wayland QPA did not expose its wl_display");
+            throw std::system_error(ENODEV, std::generic_category(),
+                                    "The Wayland QPA did not expose its wl_display");
         }
 
-        wl_display* const display = native->display();
-        wl_registry* const registry = wl_display_get_registry(display);
+        display = native->display();
+        std::unique_ptr<wl_registry, RegistryDeleter> registry(wl_display_get_registry(display));
         if (!registry) {
-            qCFatal(sunplayerLogPlatform, "Could not create the Wayland capability registry");
+            int const displayError = wl_display_get_error(display);
+            throw std::system_error(displayError != 0 ? displayError : EIO, std::generic_category(),
+                                    "Could not create the Wayland capability registry");
         }
 
         RegistryInventory inventory;
-        if (wl_registry_add_listener(registry, &registryListener, &inventory) < 0) {
-            wl_registry_destroy(registry);
-            qCFatal(sunplayerLogPlatform, "Could not observe Wayland globals");
+        if (wl_registry_add_listener(registry.get(), &registryListener, &inventory) < 0) {
+            int const displayError = wl_display_get_error(display);
+            throw std::system_error(displayError != 0 ? displayError : EIO, std::generic_category(),
+                                    "Could not observe Wayland globals");
         }
         roundtripOrFail(*display, "discovering color-management-v1");
 
@@ -573,14 +587,13 @@ struct LinuxWaylandWindowContext::NativeState final {
             capabilities.protocolAdvertised = true;
             capabilities.protocolVersion = inventory.colorManagerVersion;
             if (inventory.colorManagerVersion >= WaylandColorManagementCapabilities::requiredProtocolVersion) {
-                colorManager = std::make_unique<ColorManagerBinding>(registry, inventory.colorManagerName,
+                colorManager = std::make_unique<ColorManagerBinding>(registry.get(), inventory.colorManagerName,
                                                                      inventory.colorManagerVersion);
                 roundtripOrFail(*display, "reading color-management-v1 capabilities");
                 capabilities = colorManager->capabilities();
                 prepareManagedDescriptions(*display);
             }
         }
-        wl_registry_destroy(registry);
     }
 
     void attachManagedSurface(wl_surface* surface) {
@@ -645,6 +658,7 @@ struct LinuxWaylandWindowContext::NativeState final {
     }
 
   public:
+    wl_display* display = nullptr;
     WaylandColorManagementCapabilities capabilities;
     bool decorationManagerAdvertised = false;
     std::unique_ptr<ColorManagerBinding> colorManager;
@@ -659,8 +673,9 @@ void prepareLinuxWaylandPlatform() { qputenv("QT_QPA_PLATFORM", QByteArrayLitera
 
 LinuxWaylandWindowContext::LinuxWaylandWindowContext(QGuiApplication& application) {
     if (QGuiApplication::platformName() != QStringLiteral("wayland")) {
-        qCFatal(sunplayerLogPlatform, "SunPlayer requires native Wayland; Qt selected QPA '%s'",
-                qPrintable(QGuiApplication::platformName()));
+        throw LinuxWaylandStartupError(QStringLiteral("SunPlayer requires native Wayland; Qt selected QPA '%1'")
+                                           .arg(QGuiApplication::platformName())
+                                           .toStdString());
     }
 
     m_nativeState = std::make_unique<NativeState>(application);
@@ -673,13 +688,14 @@ LinuxWaylandWindowContext::LinuxWaylandWindowContext(QGuiApplication& applicatio
 
     QVersionNumber const supportedApi = m_vulkanInstance.supportedApiVersion();
     if (supportedApi < QVersionNumber(1, 3)) {
-        qCFatal(sunplayerLogGraphics, "SunPlayer requires Vulkan 1.3; the loader reports %s",
-                qPrintable(supportedApi.toString()));
+        throw LinuxWaylandStartupError(QStringLiteral("SunPlayer requires Vulkan 1.3; the loader reports %1")
+                                           .arg(supportedApi.toString())
+                                           .toStdString());
     }
     m_vulkanInstance.setApiVersion(QVersionNumber(1, 3));
     m_vulkanInstance.setExtensions(QRhiVulkanInitParams::preferredInstanceExtensions());
     if (!m_vulkanInstance.create()) {
-        qCFatal(sunplayerLogGraphics, "Could not create the Vulkan 1.3 instance");
+        throw LinuxWaylandStartupError("Could not create the Vulkan 1.3 instance");
     }
 
     qCInfo(sunplayerLogPlatform).noquote()
@@ -708,7 +724,12 @@ void LinuxWaylandWindowContext::configureWindow(QWindow& window) {
     window.setVulkanInstance(&m_vulkanInstance);
     window.create();
     if (!window.handle()) {
-        qCFatal(sunplayerLogPlatform, "Qt could not create the native Wayland window surface");
+        int const displayError = wl_display_get_error(m_nativeState->display);
+        if (displayError != 0) {
+            throw std::system_error(displayError, std::generic_category(),
+                                    "Qt could not create the native Wayland window surface");
+        }
+        throw LinuxWaylandStartupError("Qt could not create the native Wayland window surface");
     }
     m_window = &window;
 }

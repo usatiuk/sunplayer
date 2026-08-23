@@ -1,9 +1,16 @@
 # Microsoft Store package
 
-SunPlayer packages the self-contained Windows tree produced by
+SunPlayer packages the Windows Store payload produced by
 `cmake --install`. Qt, CMake, and vcpkg own runtime deployment; Microsoft
 `winapp` owns manifest processing, PRI generation, architecture stamping,
 packing, and optional signing.
+
+The manifest requires Windows 11 24H2 (build 26100) or newer and declares
+`Microsoft.VCLibs.140.00.UWPDesktop` at minimum version `14.0.33728.0`. The
+Store installs and services that Visual C++ runtime framework. Qt's VCRedist
+deployment is disabled, so neither its installer nor app-local runtime DLLs are
+package payload. Windows supplies the D3D11, DXGI, WASAPI, Media Foundation,
+Win32, and Schannel system components used by the application.
 
 For local packaging, install the tested CLI once:
 
@@ -59,6 +66,12 @@ cmake --install build --config Release --prefix $install
 & "$install\bin\sunplayer.exe" --verify-qml --no-log-file
 ```
 
+After vcpkg and Qt deployment, installation generates
+`share/sunplayer/ThirdPartyNotices.txt` from their local metadata and notice
+files. A deployed dependency runtime without one unambiguous metadata owner
+fails installation. No third-party license text or component catalog is
+checked into SunPlayer.
+
 ## Create the unsigned Store MSIX
 
 Reserve SunPlayer in Partner Center first. Copy the package identity name,
@@ -75,14 +88,15 @@ Product identity page. Use an approved four-part Store version ending in `.0`.
   -PublisherDisplayName 'VALUE-FROM-PARTNER-CENTER'
 ```
 
-The wrapper only materializes those four values into the reviewed manifest and
-calls `winapp package`. It does not deploy dependencies, install tools, unpack
-the result, or duplicate Microsoft package validation. The Store package is
-unsigned; Partner Center signs it after certification.
+The wrapper checks the required package files, materializes the identity and
+version values into the reviewed manifest, and calls `winapp package`. It does
+not deploy dependencies, install tools, unpack the result, or duplicate
+Microsoft package validation. The Store package is unsigned; Partner Center
+signs it after certification.
 
 ## CI package artifact
 
-Every Windows CI run packages the verified Release install tree with the
+Every Windows CI run packages the Release install tree with the
 unsigned `SunPlayerDevelopment` identity, so pull requests exercise the complete
 packaging boundary. Trusted main pushes and manual workflow runs additionally
 upload the MSIX for seven days. No certificates or secrets are involved. This
@@ -118,13 +132,27 @@ winapp cert generate `
 ```
 
 From an elevated terminal, trust the temporary certificate, then install and
-launch the MSIX. When finished, remove the package, delete the exact trusted
-certificate by the exported `.cer` thumbprint, and delete the PFX/CER files.
-Generated packages and development certificates are ignored by Git.
+launch the MSIX. Store installation resolves the declared VCLibs framework,
+but `Add-AppxPackage` does not download it for a local sideload. Verify the x64
+Desktop framework first; on a clean validation machine, supply the Retail x64
+framework `.appx` from the matching Windows SDK through `-DependencyPath`.
+When finished, remove the package, delete the exact trusted certificate by the
+exported `.cer` thumbprint, and delete the PFX/CER files. Generated packages and
+development certificates are ignored by Git.
 
 ```powershell
 winapp cert install .\out\SunPlayerDevelopment.pfx --password $password
-Add-AppxPackage .\out\SunPlayerDevelopment_1.0.0.0_x64.msix
+$vclibs = Get-AppxPackage -Name Microsoft.VCLibs.140.00.UWPDesktop |
+  Where-Object Architecture -eq X64 |
+  Where-Object { $_.Version -ge [version]'14.0.33728.0' }
+if ($vclibs) {
+  Add-AppxPackage .\out\SunPlayerDevelopment_1.0.0.0_x64.msix
+} else {
+  $vclibsAppx = Join-Path ${env:ProgramFiles(x86)} `
+    'Microsoft SDKs\Windows Kits\10\ExtensionSDKs\Microsoft.VCLibs.Desktop\14.0\Appx\Retail\x64\Microsoft.VCLibs.x64.14.00.Desktop.appx'
+  Add-AppxPackage .\out\SunPlayerDevelopment_1.0.0.0_x64.msix `
+    -DependencyPath $vclibsAppx
+}
 $package = Get-AppxPackage -Name SunPlayerDevelopment
 Start-Process "shell:AppsFolder\$($package.PackageFamilyName)!SunPlayer"
 ```
@@ -170,7 +198,7 @@ and packaged activation remain release validation. The shared authored icon is
 also the Qt runtime icon. Its checked-in Windows package assets and executable
 `.ico` are generated manually from that source, including the required default,
 dark-unplated, and light-unplated AppList variants. The generator also supplies
-the themed assets for the supported Windows 10/Store package:
+the themed assets for the Windows 11 Store package:
 
 ```powershell
 Push-Location .\packaging\windows

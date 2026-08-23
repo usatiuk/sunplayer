@@ -186,6 +186,35 @@ optional and do not occupy permanent space around the movie. Video/audio track
 changes and subtitle changes all use their implemented session commands rather
 than QML-owned playback state.
 
+## Help, diagnostics, and error actions
+
+`PlayerPage` keeps **Report a bug…** and **About SunPlayer** as direct items in
+the existing overflow menu. A platform-styled `ToolButton` exposes the same
+menu while no media is active, so support and packaged notices do not depend
+on successful playback.
+
+About is a separate Qt Widgets dialog rather than an in-scene Quick dialog. It
+therefore follows the active platform widget style and remains independent of
+the redirected QRhi composition path. It shows the application version/build
+ID, source action, generated third-party notices, packaged privacy policy, and
+Copy diagnostic information. It does not introduce a second custom dialog
+style beside the player scene.
+
+`SupportController` receives the current application-owned session and output
+state but does not own playback or recovery. It builds diagnostics from an
+explicit allowlist of stable identifiers, booleans, numbers, and counters.
+Reports exclude media names, paths and URLs, user/host identifiers, raw logs,
+and arbitrary library errors. Structured backend fields preserve their real
+Unicode and punctuation while rejecting accidental path/URL/control-shaped
+values. **Report a bug…** copies the detailed summary, then asks the system
+browser to open a bounded prefilled GitHub issue; it never uploads or submits
+anything.
+
+Media-open/decode exhaustion stays in the QML error page and offers Retry,
+Restart, Open another, Report a bug, and Quit. Total presentation failure uses
+the platform-styled fallback dialog because the failed QRhi pipeline cannot be
+trusted to draw its own error UI.
+
 ## HDR Lab and diagnostics
 
 The former diagnostic playground now lives in `HdrLabPage` without losing its
@@ -256,6 +285,11 @@ registered audio-first application playback scenario crosses the production
 FFmpeg, Cubeb, QML, QRhi, libplacebo, and swapchain paths and exits
 noninteractively after observing real presentation plus continued clock
 progress.
+
+The same shell test verifies direct Report/About menu routing in active and
+idle states and all five media-error commands. Native dialog pixels are not a
+test contract; platform dialogs and browser/clipboard dispatch stay behind the
+controller/window boundaries.
 
 The component test also asserts that macOS resolves `FileDialog.parentWindow`
 to the supplied visible window-command host, while other platforms leave the

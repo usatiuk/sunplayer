@@ -69,6 +69,23 @@ endif ()
 
 project(SunPlayer VERSION 0.1.0 LANGUAGES C CXX)
 
+set(SUNPLAYER_SOURCE_URL "https://github.com/usatiuk/sunplayer")
+set(SUNPLAYER_ISSUES_URL "https://github.com/usatiuk/sunplayer/issues/new")
+set(SUNPLAYER_BUILD_ID "" CACHE STRING
+        "Release build identifier shown in About and diagnostics")
+if (NOT SUNPLAYER_BUILD_ID)
+    execute_process(
+            COMMAND git rev-parse --short=12 HEAD
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            OUTPUT_VARIABLE SUNPLAYER_BUILD_ID
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+    )
+    if (NOT SUNPLAYER_BUILD_ID)
+        set(SUNPLAYER_BUILD_ID "unknown")
+    endif ()
+endif ()
+
 if (APPLE)
     enable_language(OBJCXX)
 endif ()
@@ -94,6 +111,7 @@ sunplayer_configure_libass()
 if (WIN32)
     find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS
             GuiPrivate
+            Widgets
             Quick
             QuickControls2
             QuickDialogs2
@@ -140,6 +158,7 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
     find_package(Qt6 6.10...<6.11 REQUIRED COMPONENTS
             GuiPrivate
+            Widgets
             Quick
             QuickControls2
             QuickDialogs2
@@ -188,6 +207,7 @@ elseif (APPLE)
 
     find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS
             GuiPrivate
+            Widgets
             Quick
             QuickControls2
             QuickDialogs2
@@ -420,6 +440,8 @@ qt_add_executable(sunplayer
         src/playback/VideoFrameScheduler.h
         src/app/ApplicationSettings.cpp
         src/app/ApplicationSettings.h
+        src/app/ApplicationError.cpp
+        src/app/ApplicationError.h
         src/app/LocalMediaDrop.cpp
         src/app/LocalMediaDrop.h
         src/app/main.cpp
@@ -427,6 +449,10 @@ qt_add_executable(sunplayer
         src/app/PresentationSettings.h
         src/app/PresentationWindow.cpp
         src/app/PresentationWindow.h
+        src/app/SupportController.cpp
+        src/app/SupportController.h
+        src/app/SupportDiagnostics.cpp
+        src/app/SupportDiagnostics.h
         src/app/WindowShortcut.h
         src/app/VideoViewportState.cpp
         src/app/VideoViewportState.h
@@ -590,6 +616,7 @@ unset(sunplayer_spirv_opt CACHE)
 target_link_libraries(sunplayer
         PRIVATE
         Qt6::GuiPrivate
+        Qt6::Widgets
         Qt6::Quick
         Qt6::QuickControls2
         Qt6::QuickDialogs2
@@ -618,6 +645,17 @@ target_include_directories(sunplayer
 target_compile_definitions(sunplayer
         PRIVATE
         SUNPLAYER_VERSION="${PROJECT_VERSION}"
+        SUNPLAYER_BUILD_ID="${SUNPLAYER_BUILD_ID}"
+        SUNPLAYER_SOURCE_URL="${SUNPLAYER_SOURCE_URL}"
+        SUNPLAYER_ISSUES_URL="${SUNPLAYER_ISSUES_URL}"
+)
+
+set_source_files_properties(PRIVACY.md PROPERTIES
+        QT_RESOURCE_ALIAS legal/PRIVACY.md
+)
+qt_add_resources(sunplayer "sunplayer_legal"
+        PREFIX /
+        FILES PRIVACY.md
 )
 
 set_target_properties(sunplayer PROPERTIES
@@ -668,22 +706,14 @@ endif ()
 
 include(GNUInstallDirs)
 
-if (WIN32)
-    # MSIX needs the compiler runtime app-locally. Select the runtime from the
-    # toolset used for this build and keep packaging out of dependency closure.
-    set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION ${CMAKE_INSTALL_BINDIR})
-    include(InstallRequiredSystemLibraries)
-endif ()
-
 install(TARGETS sunplayer
         BUNDLE DESTINATION .
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
-install(FILES src/app/icons/lucide/LICENSE
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/sunplayer/licenses
-        RENAME Lucide.txt
+install(FILES LICENSE PRIVACY.md
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/sunplayer
 )
 
 if (WIN32)
@@ -701,11 +731,25 @@ if (WIN32)
             NO_TRANSLATIONS
             NO_UNSUPPORTED_PLATFORM_ERROR
             DEPLOY_TOOL_OPTIONS
+            --no-opengl-sw
             --no-system-d3d-compiler
             --no-system-dxc-compiler
             --skip-plugin-types qmltooling
     )
     install(SCRIPT ${deploy_script})
+
+    get_filename_component(sunplayer_qt_prefix "${Qt6_DIR}/../../.." ABSOLUTE)
+    get_filename_component(sunplayer_qt_version_root "${sunplayer_qt_prefix}/.." ABSOLUTE)
+    set(sunplayer_qt_source_root "${sunplayer_qt_version_root}/Src")
+    set(sunplayer_vcpkg_prefix
+            "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+    configure_file(
+            cmake/SunPlayerWindowsThirdPartyInstall.cmake.in
+            "${CMAKE_CURRENT_BINARY_DIR}/SunPlayerWindowsThirdPartyInstall.cmake"
+            @ONLY
+    )
+    install(SCRIPT
+            "${CMAKE_CURRENT_BINARY_DIR}/SunPlayerWindowsThirdPartyInstall.cmake")
 
     set(sunplayer_development_root
             "${CMAKE_CURRENT_BINARY_DIR}/sunplayer-development")

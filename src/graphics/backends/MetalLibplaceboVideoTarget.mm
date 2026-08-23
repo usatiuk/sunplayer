@@ -129,9 +129,10 @@ public:
             m_producerAccessActive = false;
             if (deviceLost())
                 return VideoOperationResult::DeviceLost;
-            qCFatal(
+            qCCritical(
                 sunplayerLogGraphics,
                 "Libplacebo failed the Metal/Vulkan texture handoff");
+            return VideoOperationResult::Unavailable;
         }
         m_producerAccessActive = false;
         return VideoOperationResult::Ready;
@@ -376,9 +377,10 @@ private:
             if (!holdForMetal()) {
                 if (deviceLost())
                     return VideoOperationResult::DeviceLost;
-                qCFatal(
+                qCCritical(
                     sunplayerLogGraphics,
                     "Libplacebo failed the initial Metal/Vulkan texture handoff");
+                return VideoOperationResult::Unavailable;
             }
             m_initialHandoffPending = false;
         }

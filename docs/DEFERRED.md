@@ -134,12 +134,14 @@ drag-event semantics remain unimplemented.
 Address as part of the application/UI shell rather than adding isolated event
 forwarders without an input model.
 
-### Recovery ends in process termination
+### Native presentation-error validation
 
-Device loss has bounded retries and unexpected frame failures get one rebuild,
-but exhaustion calls `qFatal`. The player eventually needs structured
-presentation errors, a user-visible recovery state, and a way to keep unrelated
-application state alive.
+Plausible presentation failure now stops the failed engine generation and
+offers the applicable platform-styled Retry, Restart, Report a bug, and Quit
+actions. Media errors separately retain Retry, Restart, Open another, Report a
+bug, and Quit. Descriptor and QML command routing are deterministic; fresh-
+generation presentation retry, native macOS/Wayland dialogs, and real driver/
+device-loss exhaustion still need stronger platform evidence.
 
 ### One window and one presentation domain
 
@@ -218,12 +220,10 @@ the test solely for initial CI.
 Linux hosted CI uses lavapipe and a Pulse null sink. A VAAPI/DRM PRIME hardware
 runner, an HDR/display lab, and physical-audio/default-route scenarios remain
 separate future lanes. Windows now has a narrow CMake-install-to-MSIX path using
-Microsoft `winapp`; Partner Center identity, redistribution/licensing approval,
-clean-machine verification, certification, and Store release remain deferred.
-The short-lived Windows Release-tree and unsigned development-identity MSIX
-artifacts do not close those gates.
-Until those obligations are resolved, it is project-internal development output
-and is not approved as a public binary distribution or release.
+Microsoft `winapp`; Partner Center identity, clean-machine verification,
+certification, and Store release remain deferred. The short-lived Windows
+Release-tree and unsigned development-identity MSIX artifacts do not close
+those gates.
 macOS CI remains deferred until its bundle/deployment contract and useful
 hosted-versus-native-hardware test split are defined.
 

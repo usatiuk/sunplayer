@@ -22,8 +22,16 @@ $assets = Join-Path $scriptDirectory "Assets"
 $temporary = Join-Path ([System.IO.Path]::GetTempPath()) ("sunplayer-msix-" + [guid]::NewGuid().ToString("N"))
 $certificate = $null
 
-if (-not (Test-Path -LiteralPath (Join-Path $install "bin\sunplayer.exe") -PathType Leaf)) {
-    throw "InstallPrefix must contain bin\sunplayer.exe."
+foreach ($required in @(
+    'bin\sunplayer.exe',
+    'share\sunplayer\LICENSE',
+    'share\sunplayer\PRIVACY.md',
+    'share\sunplayer\ThirdPartyNotices.txt')) {
+    $requiredPath = Join-Path $install $required
+    if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf) -or
+        (Get-Item -LiteralPath $requiredPath).Length -eq 0) {
+        throw "InstallPrefix is missing required package file: $required"
+    }
 }
 if ([string]::IsNullOrWhiteSpace($CertificatePath)) {
     if (-not [string]::IsNullOrWhiteSpace($CertificatePassword)) {

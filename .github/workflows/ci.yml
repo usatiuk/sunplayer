@@ -262,8 +262,8 @@ jobs:
         id: qt-cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          path: ${{ runner.temp }}\Qt\6.11.1\msvc2022_64
-          key: windows-2022-qt-6.11.1-msvc2022_64-r1
+          path: ${{ runner.temp }}\Qt\6.11.1
+          key: windows-2022-qt-6.11.1-msvc2022_64-with-sources-r2
 
       - name: Install Qt
         if: steps.qt-cache.outputs.cache-hit != 'true'
@@ -274,6 +274,10 @@ jobs:
             --outputdir "$env:RUNNER_TEMP\Qt" `
             windows desktop 6.11.1 win64_msvc2022_64 `
             -m qtshadertools
+          python -m aqt install-src `
+            --outputdir "$env:RUNNER_TEMP\Qt" `
+            windows 6.11.1 `
+            --archives qtbase qtdeclarative qtimageformats qtsvg
 
       - name: Verify Qt and vcpkg
         shell: pwsh
@@ -360,9 +364,6 @@ jobs:
           cmake --install "%RUNNER_TEMP%\sunplayer-windows-release" --config Release --prefix "%RUNNER_TEMP%\sunplayer-windows-artifact"
           if errorlevel 1 exit /b %errorlevel%
           if not exist "%RUNNER_TEMP%\sunplayer-windows-artifact\bin\qt.conf" exit /b 1
-          if exist "%RUNNER_TEMP%\sunplayer-windows-artifact\bin\d3dcompiler_*.dll" exit /b 1
-          if exist "%RUNNER_TEMP%\sunplayer-windows-artifact\bin\dxcompiler*.dll" exit /b 1
-          if exist "%RUNNER_TEMP%\sunplayer-windows-artifact\bin\dxil*.dll" exit /b 1
           "%RUNNER_TEMP%\sunplayer-windows-artifact\bin\sunplayer.exe" --verify-qml
           if errorlevel 1 exit /b %errorlevel%
 

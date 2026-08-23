@@ -40,7 +40,8 @@ HdrCompositor::ResourceResult HdrCompositor::initialize(QRhiRenderPassDescriptor
         if (m_rhi.isDeviceLost()) {
             return ResourceResult::DeviceLost;
         }
-        qCFatal(sunplayerLogPresentation, "Could not create the HDR compositor uniform buffer");
+        qCCritical(sunplayerLogPresentation, "Could not create the HDR compositor uniform buffer");
+        return ResourceResult::Unavailable;
     }
 
     m_sampler.reset(m_rhi.newSampler(QRhiSampler::Nearest, QRhiSampler::Nearest, QRhiSampler::None,
@@ -49,7 +50,8 @@ HdrCompositor::ResourceResult HdrCompositor::initialize(QRhiRenderPassDescriptor
         if (m_rhi.isDeviceLost()) {
             return ResourceResult::DeviceLost;
         }
-        qCFatal(sunplayerLogPresentation, "Could not create the HDR compositor sampler");
+        qCCritical(sunplayerLogPresentation, "Could not create the HDR compositor sampler");
+        return ResourceResult::Unavailable;
     }
 
     m_emptyLayerTexture.reset(m_rhi.newTexture(QRhiTexture::RGBA8, {1, 1}, 1));
@@ -58,10 +60,12 @@ HdrCompositor::ResourceResult HdrCompositor::initialize(QRhiRenderPassDescriptor
         if (m_rhi.isDeviceLost()) {
             return ResourceResult::DeviceLost;
         }
-        qCFatal(sunplayerLogPresentation, "Could not create the empty composition-layer texture");
+        qCCritical(sunplayerLogPresentation, "Could not create the empty composition-layer texture");
+        return ResourceResult::Unavailable;
     }
-    if (createBindings(videoTexture, subtitleTexture, uiTexture) == ResourceResult::DeviceLost) {
-        return ResourceResult::DeviceLost;
+    ResourceResult const bindingsResult = createBindings(videoTexture, subtitleTexture, uiTexture);
+    if (bindingsResult != ResourceResult::Ready) {
+        return bindingsResult;
     }
 
     QShader const vertexShader = loadShader(QStringLiteral(":/shaders/fullscreen.vert.qsb"));
@@ -78,7 +82,8 @@ HdrCompositor::ResourceResult HdrCompositor::initialize(QRhiRenderPassDescriptor
         if (m_rhi.isDeviceLost()) {
             return ResourceResult::DeviceLost;
         }
-        qCFatal(sunplayerLogPresentation, "Could not create the HDR compositor graphics pipeline");
+        qCCritical(sunplayerLogPresentation, "Could not create the HDR compositor graphics pipeline");
+        return ResourceResult::Unavailable;
     }
     return ResourceResult::Ready;
 }
@@ -142,7 +147,8 @@ HdrCompositor::ResourceResult HdrCompositor::createBindings(QRhiTexture* videoTe
         if (m_rhi.isDeviceLost()) {
             return ResourceResult::DeviceLost;
         }
-        qCFatal(sunplayerLogPresentation, "Could not create the HDR compositor resource bindings");
+        qCCritical(sunplayerLogPresentation, "Could not create the HDR compositor resource bindings");
+        return ResourceResult::Unavailable;
     }
     m_videoLayerAvailable = videoTexture != nullptr;
     return ResourceResult::Ready;

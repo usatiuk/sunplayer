@@ -188,6 +188,8 @@ remain developer-supplied; this command does not define the later package.
 
 The executable currently requires:
 
+* `Qt6::Widgets` for platform-styled About and total-presentation/startup
+  fallback dialogs.
 * `Qt6::Quick`.
 * `Qt6::QuickControls2`.
 * `Qt6::QuickDialogs2`.
@@ -198,6 +200,13 @@ Qt is pinned to exactly 6.11.1 because QRhi is a private API with limited
 compatibility guarantees. A Qt upgrade is an explicit maintenance task that
 must rebuild and runtime-test redirected Quick rendering, swapchain HDR state,
 texture and shader resources, surface loss, and device recovery.
+
+Windows package generation also requires the matching Qt Sources archives for
+`qtbase`, `qtdeclarative`, `qtimageformats`, and `qtsvg`; their `LICENSES`
+directories are the offline notice inputs paired with the local module SPDX
+metadata. Hosted CI caches those sources with the binary Qt tree and verifies
+the required Qt build tools before configuration. SPDX paths identify the
+owning module. SPDX files are not copied into the package.
 
 On Linux the corresponding contract is Qt `>=6.10,<6.11` and additionally
 requires `Qt6::DBus`, `Qt6::WaylandClientPrivate`, and Qt's Wayland scanner
@@ -252,17 +261,18 @@ CMake installs the executable or bundle through `GNUInstallDirs`. Linux embeds
 the SunPlayer QML module in the executable while keeping Qt's imported QML
 modules and native/media libraries system-owned; it does not run Qt's
 deployment copier. The eventual distro package must express those runtime
-package dependencies. On Windows, vcpkg's app-local dependency walker installs the executable's complete
-transitive runtime-DLL set before `qt_generate_deploy_qml_app_script()` supplies
-the current Qt deployment step with:
+package dependencies. On Windows, vcpkg's app-local dependency walker installs
+the executable's complete transitive runtime-DLL set before
+`qt_generate_deploy_qml_app_script()` supplies the current Qt deployment step
+with:
 
-* Compiler-runtime deployment on Windows.
 * No translation deployment.
 * No unsupported-platform configuration error.
-* No app-local D3D or DXC shader-compiler deployment.
+* No app-local software OpenGL, D3D, or DXC shader-compiler deployment.
 
-SunPlayer's Windows backend is D3D11-only. Qt 6.11 supports Windows 10 1809 or
-newer, where `d3dcompiler_47.dll` is an operating-system component. Both Qt's
+SunPlayer's Store package intentionally requires Windows 11 24H2 (build 26100)
+or newer. Its Windows backend is D3D11-only, and `d3dcompiler_47.dll` is an
+operating-system component. Both Qt's
 D3D11 QRhi path and libplacebo prefer that serviced System32 copy; SunPlayer does
 not expose Qt's D3D12/Shader Model 6 path that would use the separately
 distributed `dxcompiler.dll` and `dxil.dll`. The deployment flags therefore
@@ -277,8 +287,11 @@ import directory from `QLibraryInfo`, so the same boundary follows the build
 tree's local `qt.conf` and Qt's standard install layout without duplicating
 either path. The complete Release install tree is the authoritative input for
 both CI artifacts described below. CI rejects a tree containing the excluded
-D3D or DXC compiler DLLs. CMake installs the matching MSVC runtime app-locally
-and Qt deployment skips its separate redistributable installer.
+D3D or DXC compiler DLLs. Qt's compiler-runtime deployment is disabled because
+it would place a dead `vc_redist.x64.exe` installer in the MSIX payload. The
+manifest instead declares Microsoft's Store-serviced
+`Microsoft.VCLibs.140.00.UWPDesktop` framework at minimum version
+`14.0.33728.0`.
 
 Build-tree application and test targets use vcpkg's app-local walker and CMake's
 `TARGET_RUNTIME_DLLS`; the install path uses vcpkg's corresponding
@@ -289,18 +302,29 @@ runtime targets. SunPlayer's config-aware FFmpeg component targets also make its
 four DLLs participate in CMake's standard traversal. This prevents loader
 dialogs and makes dependency boundaries reproducible during development.
 
-This remains scaffolding rather than a complete distributable package. It does
-not yet define:
+After vcpkg and Qt deployment finish, the install runs
+`packaging/windows/Generate-ThirdPartyNotices.ps1`. It reads installed vcpkg
+SPDX/copyright files, Qt module SPDX/source notices, and Lucide's colocated
+metadata. Every deployed dependency DLL/EXE must have one exact metadata-path
+owner. Generation writes:
 
-* Final third-party notices, corresponding-source/build-recipe handling, and
-  codec licensing/patent policy for FFmpeg and libass.
-* A complete third-party notice and source-offer workflow for shipped
-  libplacebo and other LGPL components.
+```text
+share/sunplayer/LICENSE
+share/sunplayer/PRIVACY.md
+share/sunplayer/ThirdPartyNotices.txt
+```
+
+The notice file contains component versions, source locations, and the local
+dependency-provided text. No machine inventory or third-party license copy is
+stored in the repository. The Visual C++ runtime is supplied by the declared
+Store framework rather than the application payload.
+
+Remaining packaging work is operational:
+
 * A non-Store Windows installer or portable layout.
 * macOS signing, notarization, and bundle policy.
 * Wayland Linux package formats and compositor/runtime requirements. X11 and
   XWayland compatibility are not packaging targets.
-* Runtime feature and dependency-version reporting.
 * Clean-machine package verification.
 
 The Store package path stays on this install boundary. The small
@@ -416,20 +440,18 @@ does not publish releases and does not cache build trees, the shared in-job
 Release path succeeds in a hosted run, it is implemented and locally reviewed
 configuration rather than a claim that hosted packaging passes.
 
-The short-lived artifacts are project-internal developer output. They are not
-approved for public binary distribution: complete third-party notice,
-corresponding-source, codec-policy, and redistribution work remains deferred.
+The short-lived artifacts are project-internal developer output. Partner
+Center identity, signing, certification, clean-machine verification, and an
+actual Store submission remain separate release steps.
 
 ## Verification
 
-The current Windows CMake tree registers 30 CTest cases. On 2026-08-16 the
-complete Debug build, all 23 non-device/non-GPU tests, and the real two-display
-fullscreen scenario pass in the Windows/MSVC/Ninja environment after
-initializing the Visual Studio developer environment. Earlier dedicated runs
-cover the cubeb ABI/backend check, FFmpeg libswresample boundary, one-pass
-synchronized decode, bounded controlled sink, real D3D11VA decode/import, and
-GPU compositor tests. The dependency graph is built under the project-local
-clang-cl triplet; the SunPlayer executable remains MSVC-built.
+The current Windows CMake tree registers 36 CTest cases. On 2026-08-23 the
+RelWithDebInfo tree built successfully and all 36 passed together at bounded
+parallelism in the Windows/MSVC/Ninja environment after initializing the Visual
+Studio developer environment. Both production and test QML lint targets pass.
+The dependency graph is built under the
+project-local clang-cl triplet; the SunPlayer executable remains MSVC-built.
 A bounded application scenario additionally opens an audio-first fixture in
 the built executable and observes live default-device clock progress plus two
 distinct video revisions reaching the swapchain before automatic exit.
@@ -443,9 +465,9 @@ without user interaction.
 
 On Ubuntu 26.04 under WSL, clean Debug and Release builds pass with system
 dependencies. The last validated tree passed all 26 then-registered Linux tests
-and QML lint; the current tree registers 27 after adding the platform-neutral
-application-settings test and awaits a new Linux run. Existing evidence includes
-the system-cubeb sink, real application audio-first playback, shared embedded-
+and QML lint; the current tree has additional platform-neutral support and
+packaging coverage and awaits a new Linux run. Existing evidence includes the
+system-cubeb sink, real application audio-first playback, shared embedded-
 subtitle behavior, system libass rendering, exact Wayland SDR surface
 selection, application-chrome layout behavior, and packaged-QML verification.
 The final gamma-2.2 pixel readback remains in the Windows-only compositor
@@ -465,17 +487,18 @@ player opens WSLg's Pulse-compatible default route through system cubeb and
 advances its cubeb-backed A/V clock. Native PulseAudio/PipeWire-Pulse route
 changes, native GPU behavior, VAAPI/DRM PRIME, managed gamma-2.2 compositor
 declaration, HDR, and physical displays remain open.
-The Windows build and application runtime were user-confirmed after the cross-
-platform change. A fresh full 30-test Windows rerun remains an explicit
-regression gate beyond this slice's 23 non-device/non-GPU tests and focused
-two-display fullscreen scenario.
+The current RelWithDebInfo build passes all 36 registered tests and both QML
+lint targets. A fresh install generated notices for 21 components while
+resolving all 94 dependency runtimes, passed packaged-QML verification, and
+produced an unsigned MSIX. Clean-machine framework resolution, signing,
+certification, and Store submission remain release gates.
 
 On the Apple M2/macOS 26 host, Debug and clean Release source builds succeed
 with tests enabled, and QML lint plus focused Metal, SDR/HDR, VideoToolbox,
 subtitle, audio, seek, and production application scenarios pass. The prior
-final Debug tree passed all 26 then-registered tests; the current tree registers
-27 after adding the platform-neutral application-settings test, and its macOS
-rerun remains pending. The Release executable itself declares macOS 13, but
+final Debug tree passed all 26 then-registered tests; the current tree has
+additional platform-neutral support coverage, and its macOS rerun remains
+pending. The Release executable itself declares macOS 13, but
 cached vcpkg static archives were built for the newer host target; rebuilding
 and validating the
 complete dependency graph for macOS 13 is intentionally deferred to packaging,

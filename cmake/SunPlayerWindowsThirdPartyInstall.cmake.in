@@ -1,0 +1,10 @@
+execute_process(
+        COMMAND pwsh -NoLogo -NoProfile -File
+                "@CMAKE_CURRENT_SOURCE_DIR@/packaging/windows/Generate-ThirdPartyNotices.ps1"
+                -InstallPrefix "${CMAKE_INSTALL_PREFIX}"
+                -RepositoryRoot "@CMAKE_CURRENT_SOURCE_DIR@"
+                -VcpkgPrefix "@sunplayer_vcpkg_prefix@"
+                -QtPrefix "@sunplayer_qt_prefix@"
+                -QtSourceRoot "@sunplayer_qt_source_root@"
+        COMMAND_ERROR_IS_FATAL ANY
+)

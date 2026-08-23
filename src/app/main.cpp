@@ -4,19 +4,24 @@
 #include <memory>
 #include <optional>
 #include <string_view>
+#include <system_error>
 
+#include <QAbstractButton>
+#include <QApplication>
 #include <QByteArray>
 #include <QCommandLineParser>
 #include <QCoreApplication>
 #include <QDebug>
 #include <QElapsedTimer>
 #include <QFileInfo>
-#include <QGuiApplication>
 #include <QIcon>
 #include <QKeyEvent>
 #include <QLibraryInfo>
+#include <QMessageBox>
 #include <QMimeData>
 #include <QPalette>
+#include <QProcess>
+#include <QPushButton>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QStyleHints>
@@ -25,8 +30,10 @@
 #include <QUrl>
 #include <qpa/qwindowsysteminterface.h>
 
+#include "app/ApplicationError.h"
 #include "app/ApplicationSettings.h"
 #include "app/PresentationWindow.h"
+#include "app/SupportController.h"
 #include "diagnostics/ApplicationLog.h"
 #include "diagnostics/LogCategories.h"
 #include "graphics/GraphicsBackendFactory.h"
@@ -146,6 +153,38 @@ bool otherDisplayBlankingReady(PresentationWindow const& presentationWindow) {
         }
     }
     return remainingScreens.isEmpty();
+}
+
+int showStartupError(ApplicationError error, SupportController& supportController) {
+    for (;;) {
+        supportController.setApplicationError(error);
+        QMessageBox dialog(QMessageBox::Critical, QObject::tr("SunPlayer startup error"), error.userMessage(),
+                           QMessageBox::NoButton);
+        dialog.setInformativeText(QObject::tr("Error code: %1").arg(error.stableCode()));
+        dialog.setDetailedText(error.technicalDetail());
+        ApplicationErrorActions const actions = error.suggestedActions();
+        QAbstractButton* const restart = actions.testFlag(ApplicationErrorAction::Restart)
+                                             ? dialog.addButton(QObject::tr("Restart"), QMessageBox::AcceptRole)
+                                             : nullptr;
+        QAbstractButton* const report = actions.testFlag(ApplicationErrorAction::ReportBug)
+                                            ? dialog.addButton(QObject::tr("Report a bug…"), QMessageBox::HelpRole)
+                                            : nullptr;
+        QAbstractButton* const quit = actions.testFlag(ApplicationErrorAction::Quit)
+                                          ? dialog.addButton(QObject::tr("Quit"), QMessageBox::RejectRole)
+                                          : nullptr;
+        dialog.exec();
+        if (restart && dialog.clickedButton() == restart) {
+            if (QProcess::startDetached(QCoreApplication::applicationFilePath(), {})) {
+                return EXIT_SUCCESS;
+            }
+            error = ApplicationError(ApplicationError::Code::RestartFailed, QObject::tr("SunPlayer could not restart."),
+                                     QStringLiteral("QProcess::startDetached rejected the replacement process"));
+        } else if (report && dialog.clickedButton() == report) {
+            supportController.reportBug();
+        } else if ((quit && dialog.clickedButton() == quit) || !dialog.clickedButton()) {
+            return EXIT_FAILURE;
+        }
+    }
 }
 
 enum class FullscreenSmokeStage {
@@ -448,7 +487,7 @@ int main(int argc, char* argv[]) {
 #ifdef Q_OS_LINUX
     prepareLinuxWaylandPlatform();
 #endif
-    QGuiApplication app(argc, argv);
+    QApplication app(argc, argv);
     app.styleHints()->setColorScheme(Qt::ColorScheme::Dark);
     QCoreApplication::setOrganizationName(QStringLiteral("usatiuk"));
     QCoreApplication::setApplicationName(QStringLiteral("SunPlayer"));
@@ -647,12 +686,41 @@ int main(int argc, char* argv[]) {
 
     GraphicsBackendFactory::configureQtQuick();
 
+    SupportController supportController(applicationLog && applicationLog->debugEnabled());
+
 #ifdef Q_OS_LINUX
-    LinuxWaylandWindowContext windowContext(app);
-    PresentationWindow window(*applicationSettings, windowContext);
+    std::unique_ptr<LinuxWaylandWindowContext> windowContext;
+    std::unique_ptr<PresentationWindow> presentationWindow;
+    try {
+        windowContext = std::make_unique<LinuxWaylandWindowContext>(app);
+        presentationWindow =
+            std::make_unique<PresentationWindow>(*applicationSettings, supportController, *windowContext);
+    } catch (std::system_error const& error) {
+        qCCritical(sunplayerLogPlatform).noquote()
+            << "event=application.wayland_connection_failed"
+            << "detail=" + QString::fromUtf8(error.what());
+        return EXIT_FAILURE;
+    } catch (LinuxWaylandStartupError const& error) {
+        return showStartupError(
+            ApplicationError(ApplicationError::Code::PlatformStartupFailed,
+                             QObject::tr("SunPlayer could not initialize the Wayland/Vulkan presentation platform."),
+                             QString::fromUtf8(error.what())),
+            supportController);
+    }
+    PresentationWindow& window = *presentationWindow;
 #else
-    PresentationWindow window(*applicationSettings);
+    PresentationWindow window(*applicationSettings, supportController);
 #endif
+    supportController.setParentWindow(&window);
+    bool const presentationStarted = window.startPresentation();
+    bool const automatedScenario = parser.isSet(playbackSmokeOption) || parser.isSet(fullscreenSmokeOption)
+#ifdef Q_OS_WIN
+                                   || parser.isSet(fileDropSmokeOption) || parser.isSet(verifyInitialBackgroundOption)
+#endif
+        ;
+    if (!presentationStarted && automatedScenario) {
+        return EXIT_FAILURE;
+    }
     if (parser.isSet(fullscreenSmokeOption)) {
         bool const expectedRestoredBlanking = window.otherDisplayBlankingAvailable();
         if (!qFuzzyCompare(window.mediaSession().volume(), fullscreenSmokeStoredVolume) ||

@@ -177,7 +177,8 @@ VideoOperationResult DiagnosticVideoProducer::createResources() {
         if (m_rhi.isDeviceLost()) {
             return VideoOperationResult::DeviceLost;
         }
-        qCFatal(sunplayerLogVideo, "Could not create the diagnostic video uniform buffer");
+        qCCritical(sunplayerLogVideo, "Could not create the diagnostic video uniform buffer");
+        return VideoOperationResult::Unavailable;
     }
 
     m_bindings.reset(m_rhi.newShaderResourceBindings());
@@ -188,7 +189,8 @@ VideoOperationResult DiagnosticVideoProducer::createResources() {
         if (m_rhi.isDeviceLost()) {
             return VideoOperationResult::DeviceLost;
         }
-        qCFatal(sunplayerLogVideo, "Could not create the diagnostic video resource bindings");
+        qCCritical(sunplayerLogVideo, "Could not create the diagnostic video resource bindings");
+        return VideoOperationResult::Unavailable;
     }
 
     QShader const vertexShader = loadShader(QStringLiteral(":/shaders/fullscreen.vert.qsb"));
@@ -206,7 +208,8 @@ VideoOperationResult DiagnosticVideoProducer::createResources() {
         if (m_rhi.isDeviceLost()) {
             return VideoOperationResult::DeviceLost;
         }
-        qCFatal(sunplayerLogVideo, "Could not create the diagnostic video graphics pipeline");
+        qCCritical(sunplayerLogVideo, "Could not create the diagnostic video graphics pipeline");
+        return VideoOperationResult::Unavailable;
     }
     return VideoOperationResult::Ready;
 }

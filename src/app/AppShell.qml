@@ -13,6 +13,7 @@ Item {
     required property MediaSession mediaSession
     required property ActiveVideoSource activeVideoSource
     required property VideoViewportState viewportState
+    required property SupportController supportController
 
     property int currentPage: 0
     readonly property VideoPage activePage:
@@ -85,6 +86,7 @@ Item {
             session: root.mediaSession
             outputState: root.presentationOutput
             windowCommands: root.windowCommands
+            supportController: root.supportController
             onHdrLabRequested: root.currentPage = 1
         }
 

@@ -14,6 +14,7 @@
 #include <rhi/qrhi.h>
 
 #include "app/PresentationSettings.h"
+#include "app/SupportController.h"
 #include "app/VideoViewportState.h"
 #include "diagnostics/LogCategories.h"
 #include "playback/MediaSession.h"
@@ -41,10 +42,10 @@ class RenderControl final : public QQuickRenderControl {
 QuickUiLayer::QuickUiLayer(QWindow& renderWindow, QRhi& rhi, PresentationOutputState& outputState,
                            PresentationSettings& settings, DiagnosticVideoSource& diagnosticSource,
                            MediaSession& mediaSession, ActiveVideoSource& activeVideoSource,
-                           VideoViewportState& videoViewport, QObject* parent)
+                           VideoViewportState& videoViewport, SupportController& supportController, QObject* parent)
     : QObject(parent), m_renderWindow(renderWindow), m_rhi(rhi), m_outputState(outputState), m_settings(settings),
       m_diagnosticSource(diagnosticSource), m_mediaSession(mediaSession), m_activeVideoSource(activeVideoSource),
-      m_videoViewport(videoViewport) {}
+      m_videoViewport(videoViewport), m_supportController(supportController) {}
 
 QuickUiLayer::~QuickUiLayer() {
     Q_ASSERT(m_renderControl);
@@ -121,6 +122,10 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
             QStringLiteral("viewportState"),
             QVariant::fromValue(&m_videoViewport),
         },
+        {
+            QStringLiteral("supportController"),
+            QVariant::fromValue(&m_supportController),
+        },
     };
     QObject* object = component.createWithInitialProperties(initialProperties);
     m_rootItem.reset(qobject_cast<QQuickItem*>(object));
@@ -136,7 +141,8 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
         if (m_rhi.isDeviceLost()) {
             return InitializationResult::DeviceLost;
         }
-        qCFatal(sunplayerLogPresentation, "Could not initialize redirected Qt Quick rendering");
+        qCCritical(sunplayerLogPresentation, "Could not initialize redirected Qt Quick rendering");
+        return InitializationResult::Unavailable;
     }
     return InitializationResult::Ready;
 }
@@ -180,7 +186,8 @@ QuickUiLayer::RenderTargetUpdate QuickUiLayer::ensureRenderTarget(QSize const& p
             releaseRenderTarget();
             return RenderTargetUpdate::DeviceLost;
         }
-        qCFatal(sunplayerLogPresentation, "Could not create the Qt Quick FP16 texture");
+        qCCritical(sunplayerLogPresentation, "Could not create the Qt Quick FP16 texture");
+        return RenderTargetUpdate::Unavailable;
     }
 
     // fromRhiRenderTarget() adopts this target as-is. Qt Quick's default 2D
@@ -191,7 +198,9 @@ QuickUiLayer::RenderTargetUpdate QuickUiLayer::ensureRenderTarget(QSize const& p
             releaseRenderTarget();
             return RenderTargetUpdate::DeviceLost;
         }
-        qCFatal(sunplayerLogPresentation, "Could not create the Qt Quick depth/stencil buffer");
+        qCCritical(sunplayerLogPresentation, "Could not create the Qt Quick depth/stencil buffer");
+        releaseRenderTarget();
+        return RenderTargetUpdate::Unavailable;
     }
 
     QRhiTextureRenderTargetDescription description(QRhiColorAttachment(m_texture.get()));
@@ -204,7 +213,9 @@ QuickUiLayer::RenderTargetUpdate QuickUiLayer::ensureRenderTarget(QSize const& p
             releaseRenderTarget();
             return RenderTargetUpdate::DeviceLost;
         }
-        qCFatal(sunplayerLogPresentation, "Could not create the Qt Quick FP16 render target");
+        qCCritical(sunplayerLogPresentation, "Could not create the Qt Quick FP16 render target");
+        releaseRenderTarget();
+        return RenderTargetUpdate::Unavailable;
     }
 
     m_pixelSize = pixelSize;

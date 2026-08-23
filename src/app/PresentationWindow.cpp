@@ -2,20 +2,25 @@
 
 #include <utility>
 
+#include <QAbstractButton>
 #include <QCoreApplication>
 #include <QCursor>
 #include <QDropEvent>
 #include <QGuiApplication>
 #include <QKeyEvent>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPlatformSurfaceEvent>
+#include <QProcess>
+#include <QPushButton>
 #include <QQuickWindow>
 #include <QRasterWindow>
 #include <QResizeEvent>
 #include <QScreen>
 #include <QTimer>
 #include <QWheelEvent>
+#include <QWidget>
 
 #ifdef Q_OS_WIN
 #include <qt_windows.h>
@@ -24,6 +29,7 @@
 #include "app/ApplicationSettings.h"
 #include "app/LocalMediaDrop.h"
 #include "app/PresentationSettings.h"
+#include "app/SupportController.h"
 #include "app/VideoViewportState.h"
 #include "app/WindowShortcut.h"
 #include "diagnostics/LogCategories.h"
@@ -59,18 +65,25 @@ class OtherDisplayBlankingWindow final : public QRasterWindow {
     }
 };
 
+void parentNativeDialog(QWidget& dialog, QWindow& parent) {
+    dialog.winId();
+    if (QWindow* const window = dialog.windowHandle()) {
+        window->setTransientParent(&parent);
+    }
+}
+
 } // namespace
 
 #ifdef Q_OS_LINUX
-PresentationWindow::PresentationWindow(ApplicationSettings& applicationSettings,
+PresentationWindow::PresentationWindow(ApplicationSettings& applicationSettings, SupportController& supportController,
                                        LinuxWaylandWindowContext& windowContext)
-    : m_applicationSettings(applicationSettings), m_windowChrome(*this, windowContext.requiresClientSideDecorations()),
-      m_windowContext(windowContext) {
+    : m_applicationSettings(applicationSettings), m_supportController(supportController),
+      m_windowChrome(*this, windowContext.requiresClientSideDecorations()), m_windowContext(windowContext) {
     initialize(windowContext.surfaceSelection().presentationContract(), windowContext.takeDisplayStateProvider(nullptr),
                &windowContext);
 #else
-PresentationWindow::PresentationWindow(ApplicationSettings& applicationSettings)
-    : m_applicationSettings(applicationSettings), m_windowChrome(*this, false) {
+PresentationWindow::PresentationWindow(ApplicationSettings& applicationSettings, SupportController& supportController)
+    : m_applicationSettings(applicationSettings), m_supportController(supportController), m_windowChrome(*this, false) {
     initialize(PresentationSurfaceContract{}, {}, nullptr);
 #endif
 }
@@ -106,12 +119,9 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
             [this] { m_applicationSettings.setBlankOtherDisplaysInFullscreen(m_blankOtherDisplaysInFullscreen); });
     m_activeVideoSource = std::make_unique<ActiveVideoSource>(m_mediaSession->videoSource(), *m_diagnosticVideoSource);
     m_videoViewport = std::make_unique<VideoViewportState>(nullptr);
-    m_engine = std::make_unique<RhiPresentationEngine>(*this, *m_outputState, *m_settings, *m_activeVideoSource,
-                                                       *m_diagnosticVideoSource, *m_mediaSession, *m_videoViewport,
-                                                       surfaceContract, surfaceController);
-    connect(m_engine.get(), &RhiPresentationEngine::videoFramePresented, this,
-            &PresentationWindow::videoFramePresented);
-    m_presentationLifecycle = PresentationLifecycle::Active;
+    m_supportController.attach(*m_mediaSession, *m_outputState);
+    m_surfaceContract = surfaceContract;
+    m_surfaceController = surfaceController;
     connect(this, &QWindow::windowStateChanged, this, [this](Qt::WindowState state) {
         if (state != Qt::WindowFullScreen) {
             m_restoreMaximizedAfterFullscreen = state == Qt::WindowMaximized;
@@ -135,21 +145,26 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
 
     setMinimumSize({760, 560});
     resize(1100, 760);
-    // Attaching may create the native window and synchronously deliver events.
-    // The engine must already exist before display monitoring starts.
+    // Attaching may create the native window and synchronously deliver events;
+    // the lifecycle remains Initializing until startPresentation() owns an engine.
     m_outputState->attach(*this);
 }
 
 PresentationWindow::~PresentationWindow() {
     // QRhi and every resource derived from the native surface must be gone
     // before Qt destroys that surface and its QVulkanInstance association.
-    Q_ASSERT(m_presentationLifecycle == PresentationLifecycle::Active);
+    Q_ASSERT(m_presentationLifecycle != PresentationLifecycle::Releasing);
     m_presentationLifecycle = PresentationLifecycle::Releasing;
     m_engine.reset();
 #ifdef Q_OS_LINUX
     m_outputState.reset();
     m_windowContext.releaseWindow(*this);
 #endif
+}
+
+bool PresentationWindow::startPresentation() {
+    Q_ASSERT(m_presentationLifecycle == PresentationLifecycle::Initializing);
+    return createPresentationEngine();
 }
 
 void PresentationWindow::openMedia(QUrl const& url) {
@@ -182,6 +197,19 @@ void PresentationWindow::exitFullscreen() {
         showNormal();
     }
 }
+
+void PresentationWindow::restartApplication() {
+    if (!launchRestart()) {
+        QMessageBox dialog(QMessageBox::Critical, tr("Could not restart SunPlayer"),
+                           tr("SunPlayer could not start a replacement process. You can report the problem or quit."),
+                           QMessageBox::Ok);
+        dialog.setWindowModality(Qt::WindowModal);
+        parentNativeDialog(dialog, *this);
+        dialog.exec();
+    }
+}
+
+void PresentationWindow::quitApplication() { QCoreApplication::quit(); }
 
 bool PresentationWindow::cursorHidden() const { return m_cursorHidden; }
 
@@ -279,11 +307,14 @@ void PresentationWindow::mouseDoubleClickEvent(QMouseEvent* event) { forwardMous
 void PresentationWindow::mouseMoveEvent(QMouseEvent* event) { forwardMouseEvent(*event); }
 
 void PresentationWindow::forwardMouseEvent(QMouseEvent& event) {
-    if (QQuickWindow* quickWindow = m_engine->quickWindow()) {
-        QMouseEvent mapped(event.type(), event.position(), event.scenePosition(), event.globalPosition(),
-                           event.button(), event.buttons(), event.modifiers(), event.source(), event.pointingDevice());
-        mapped.setTimestamp(event.timestamp());
-        QCoreApplication::sendEvent(quickWindow, &mapped);
+    if (m_engine) {
+        if (QQuickWindow* quickWindow = m_engine->quickWindow()) {
+            QMouseEvent mapped(event.type(), event.position(), event.scenePosition(), event.globalPosition(),
+                               event.button(), event.buttons(), event.modifiers(), event.source(),
+                               event.pointingDevice());
+            mapped.setTimestamp(event.timestamp());
+            QCoreApplication::sendEvent(quickWindow, &mapped);
+        }
     }
 }
 
@@ -305,8 +336,10 @@ void PresentationWindow::togglePlayback() {
 }
 
 void PresentationWindow::wheelEvent(QWheelEvent* event) {
-    if (QQuickWindow* quickWindow = m_engine->quickWindow()) {
-        QCoreApplication::sendEvent(quickWindow, event);
+    if (m_engine) {
+        if (QQuickWindow* quickWindow = m_engine->quickWindow()) {
+            QCoreApplication::sendEvent(quickWindow, event);
+        }
     }
 }
 
@@ -340,8 +373,10 @@ void PresentationWindow::keyPressEvent(QKeyEvent* event) {
         event->accept();
         return;
     }
-    if (QQuickWindow* quickWindow = m_engine->quickWindow()) {
-        QCoreApplication::sendEvent(quickWindow, event);
+    if (m_engine) {
+        if (QQuickWindow* quickWindow = m_engine->quickWindow()) {
+            QCoreApplication::sendEvent(quickWindow, event);
+        }
     }
 }
 
@@ -353,8 +388,10 @@ void PresentationWindow::keyReleaseEvent(QKeyEvent* event) {
         event->accept();
         return;
     }
-    if (QQuickWindow* quickWindow = m_engine->quickWindow()) {
-        QCoreApplication::sendEvent(quickWindow, event);
+    if (m_engine) {
+        if (QQuickWindow* quickWindow = m_engine->quickWindow()) {
+            QCoreApplication::sendEvent(quickWindow, event);
+        }
     }
 }
 
@@ -382,6 +419,18 @@ bool PresentationWindow::nativeEvent(QByteArray const& eventType, void* message,
 #endif
 
 bool PresentationWindow::event(QEvent* event) {
+    // Native-surface teardown must always reach a live engine. A terminal
+    // presentation error suspends rendering before destroying the failed
+    // engine on the next event-loop turn, and the surface may disappear in
+    // that interval.
+    if (event->type() == QEvent::PlatformSurface && m_engine) {
+        auto* const surfaceEvent = static_cast<QPlatformSurfaceEvent*>(event);
+        if (surfaceEvent->surfaceEventType() == QPlatformSurfaceEvent::SurfaceCreated) {
+            m_engine->handleSurfaceCreated();
+        } else if (surfaceEvent->surfaceEventType() == QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed) {
+            m_engine->releaseSwapChain();
+        }
+    }
     if (m_presentationLifecycle != PresentationLifecycle::Active) {
         return QWindow::event(event);
     }
@@ -409,16 +458,111 @@ bool PresentationWindow::event(QEvent* event) {
     case QEvent::DevicePixelRatioChange:
         m_engine->markUiDirty();
         break;
-    case QEvent::PlatformSurface:
-        if (static_cast<QPlatformSurfaceEvent*>(event)->surfaceEventType() == QPlatformSurfaceEvent::SurfaceCreated) {
-            m_engine->handleSurfaceCreated();
-        } else if (static_cast<QPlatformSurfaceEvent*>(event)->surfaceEventType() ==
-                   QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed) {
-            m_engine->releaseSwapChain();
-        }
-        break;
     default:
         break;
     }
     return QWindow::event(event);
+}
+
+bool PresentationWindow::createPresentationEngine() {
+    Q_ASSERT(!m_engine);
+    Q_ASSERT(m_presentationLifecycle == PresentationLifecycle::Initializing ||
+             m_presentationLifecycle == PresentationLifecycle::Suspended);
+    m_presentationLifecycle = PresentationLifecycle::Initializing;
+    m_engine = std::make_unique<RhiPresentationEngine>(*this, *m_outputState, *m_settings, *m_activeVideoSource,
+                                                       *m_diagnosticVideoSource, *m_mediaSession, *m_videoViewport,
+                                                       m_supportController, m_surfaceContract, m_surfaceController);
+    connect(m_engine.get(), &RhiPresentationEngine::videoFramePresented, this,
+            &PresentationWindow::videoFramePresented);
+    connect(m_engine.get(), &RhiPresentationEngine::terminalError, this, &PresentationWindow::handlePresentationError);
+    if (!m_engine->start()) {
+        return false;
+    }
+    m_presentationLifecycle = PresentationLifecycle::Active;
+    m_supportController.setApplicationError(std::nullopt);
+    if (isExposed()) {
+        m_engine->handleExposure();
+    }
+    return true;
+}
+
+void PresentationWindow::handlePresentationError(ApplicationError error) {
+    if (m_presentationLifecycle == PresentationLifecycle::Releasing ||
+        m_presentationLifecycle == PresentationLifecycle::Suspended) {
+        return;
+    }
+    m_presentationLifecycle = PresentationLifecycle::Suspended;
+    m_supportController.setApplicationError(error);
+    QTimer::singleShot(0, this, [this, error = std::move(error)]() mutable {
+        if (m_presentationLifecycle != PresentationLifecycle::Suspended) {
+            return;
+        }
+        m_engine.reset();
+        showPresentationErrorDialog(std::move(error));
+    });
+}
+
+void PresentationWindow::showPresentationErrorDialog(ApplicationError error) {
+    while (m_presentationLifecycle == PresentationLifecycle::Suspended) {
+        QMessageBox dialog(QMessageBox::Critical, tr("SunPlayer presentation error"), error.userMessage(),
+                           QMessageBox::NoButton);
+        dialog.setInformativeText(tr("Error code: %1").arg(error.stableCode()));
+        dialog.setDetailedText(error.technicalDetail());
+        dialog.setWindowModality(Qt::WindowModal);
+        parentNativeDialog(dialog, *this);
+
+        ApplicationErrorActions const actions = error.suggestedActions();
+        QAbstractButton* retry = actions.testFlag(ApplicationErrorAction::Retry)
+                                     ? dialog.addButton(tr("Retry"), QMessageBox::AcceptRole)
+                                     : nullptr;
+        QAbstractButton* restart = actions.testFlag(ApplicationErrorAction::Restart)
+                                       ? dialog.addButton(tr("Restart"), QMessageBox::ActionRole)
+                                       : nullptr;
+        QAbstractButton* report = actions.testFlag(ApplicationErrorAction::ReportBug)
+                                      ? dialog.addButton(tr("Report a bug…"), QMessageBox::HelpRole)
+                                      : nullptr;
+        QAbstractButton* quit = actions.testFlag(ApplicationErrorAction::Quit)
+                                    ? dialog.addButton(tr("Quit"), QMessageBox::RejectRole)
+                                    : nullptr;
+        dialog.exec();
+        QAbstractButton* const selected = dialog.clickedButton();
+        if (retry && selected == retry) {
+            retryPresentation();
+            return;
+        }
+        if (restart && selected == restart) {
+            if (launchRestart()) {
+                return;
+            }
+            error = ApplicationError(ApplicationError::Code::RestartFailed, tr("SunPlayer could not restart."),
+                                     QStringLiteral("QProcess::startDetached rejected the replacement process"));
+            continue;
+        }
+        if (report && selected == report) {
+            m_supportController.reportBug();
+            continue;
+        }
+        if ((quit && selected == quit) || !selected) {
+            QCoreApplication::quit();
+            return;
+        }
+    }
+}
+
+void PresentationWindow::retryPresentation() {
+    if (m_presentationLifecycle != PresentationLifecycle::Suspended) {
+        return;
+    }
+    createPresentationEngine();
+}
+
+bool PresentationWindow::launchRestart() {
+    if (QProcess::startDetached(QCoreApplication::applicationFilePath(), {})) {
+        QCoreApplication::quit();
+        return true;
+    }
+    m_supportController.setApplicationError(
+        ApplicationError(ApplicationError::Code::RestartFailed, tr("SunPlayer could not restart."),
+                         QStringLiteral("QProcess::startDetached rejected the replacement process")));
+    return false;
 }

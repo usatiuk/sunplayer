@@ -15,6 +15,14 @@ qt_add_executable(sunplayer_application_settings_tests
         ../src/app/ApplicationSettings.h
 )
 
+qt_add_executable(sunplayer_support_tests
+        unit/app/tst_Support.cpp
+        ../src/app/ApplicationError.cpp
+        ../src/app/ApplicationError.h
+        ../src/app/SupportDiagnostics.cpp
+        ../src/app/SupportDiagnostics.h
+)
+
 qt_add_executable(sunplayer_local_media_drop_tests
         unit/app/tst_LocalMediaDrop.cpp
         ../src/app/LocalMediaDrop.cpp
@@ -251,6 +259,11 @@ target_include_directories(sunplayer_application_settings_tests
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
 )
 
+target_include_directories(sunplayer_support_tests
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+)
+
 target_include_directories(sunplayer_local_media_drop_tests
         PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
@@ -345,6 +358,11 @@ target_link_libraries(sunplayer_application_settings_tests
         PRIVATE
         Qt6::Test
         sunplayer_diagnostics
+)
+
+target_link_libraries(sunplayer_support_tests
+        PRIVATE
+        Qt6::Test
 )
 
 target_link_libraries(sunplayer_local_media_drop_tests
@@ -529,6 +547,7 @@ if (WIN32)
             sunplayer_presentation_target_tests
             sunplayer_application_log_tests
             sunplayer_application_settings_tests
+            sunplayer_support_tests
             sunplayer_local_media_drop_tests
             sunplayer_controlled_audio_sink_tests
             sunplayer_audio_output_ledger_tests
@@ -576,6 +595,11 @@ add_test(
 add_test(
         NAME application-settings
         COMMAND sunplayer_application_settings_tests
+)
+
+add_test(
+        NAME support
+        COMMAND sunplayer_support_tests
 )
 
 add_test(

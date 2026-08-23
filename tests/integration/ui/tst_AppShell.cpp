@@ -58,6 +58,7 @@ void AppShellTest::publishesActiveViewport() {
     ShellTestDiagnosticVideoSource videoSource(nullptr);
     ShellTestMediaSession mediaSession(nullptr);
     ShellTestActiveVideoSource activeVideoSource(nullptr);
+    ShellTestSupportController supportController(nullptr);
     VideoViewportState videoViewport(nullptr);
     QVariantMap const initialProperties{
         {
@@ -91,6 +92,10 @@ void AppShellTest::publishesActiveViewport() {
         {
             QStringLiteral("viewportState"),
             QVariant::fromValue(&videoViewport),
+        },
+        {
+            QStringLiteral("supportController"),
+            QVariant::fromValue(&supportController),
         },
     };
 
@@ -134,6 +139,8 @@ void AppShellTest::publishesActiveViewport() {
     QObject* const errorState = rootItem->findChild<QObject*>(QStringLiteral("errorState"));
     QObject* const cancelOpenButton = rootItem->findChild<QObject*>(QStringLiteral("cancelOpenButton"));
     QObject* const retryMediaButton = rootItem->findChild<QObject*>(QStringLiteral("retryMediaButton"));
+    QObject* const openAnotherMediaErrorButton =
+        rootItem->findChild<QObject*>(QStringLiteral("openAnotherMediaErrorButton"));
     QObject* const closeMediaButton = rootItem->findChild<QObject*>(QStringLiteral("closeMediaButton"));
     QObject* const playPauseButton = rootItem->findChild<QObject*>(QStringLiteral("playPauseButton"));
     QObject* const playPauseButtonIcon = rootItem->findChild<QObject*>(QStringLiteral("playPauseButtonIcon"));
@@ -168,6 +175,12 @@ void AppShellTest::publishesActiveViewport() {
     QObject* const subtitleOffItem = rootItem->findChild<QObject*>(QStringLiteral("subtitleTrack_-1"));
     QObject* const subtitleEnglishItem = rootItem->findChild<QObject*>(QStringLiteral("subtitleTrack_2"));
     QObject* const hdrLabMenuItem = rootItem->findChild<QObject*>(QStringLiteral("hdrLabMenuItem"));
+    QObject* const reportBugMenuItem = rootItem->findChild<QObject*>(QStringLiteral("reportBugMenuItem"));
+    QObject* const aboutMenuItem = rootItem->findChild<QObject*>(QStringLiteral("aboutMenuItem"));
+    QObject* const idleMoreButton = rootItem->findChild<QObject*>(QStringLiteral("idleMoreButton"));
+    QObject* const restartMediaErrorButton = rootItem->findChild<QObject*>(QStringLiteral("restartMediaErrorButton"));
+    QObject* const reportMediaErrorButton = rootItem->findChild<QObject*>(QStringLiteral("reportMediaErrorButton"));
+    QObject* const quitMediaErrorButton = rootItem->findChild<QObject*>(QStringLiteral("quitMediaErrorButton"));
     QObject* const closePlaybackDetailsButton =
         rootItem->findChild<QObject*>(QStringLiteral("closePlaybackDetailsButton"));
     QObject* const playbackDetailsPanel = rootItem->findChild<QObject*>(QStringLiteral("playbackDetailsPanel"));
@@ -196,6 +209,7 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(errorState);
     QVERIFY(cancelOpenButton);
     QVERIFY(retryMediaButton);
+    QVERIFY(openAnotherMediaErrorButton);
     QVERIFY(closeMediaButton);
     QVERIFY(playPauseButton);
     QVERIFY(playPauseButtonIcon);
@@ -225,6 +239,12 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(subtitleOffItem);
     QVERIFY(subtitleEnglishItem);
     QVERIFY(hdrLabMenuItem);
+    QVERIFY(reportBugMenuItem);
+    QVERIFY(aboutMenuItem);
+    QVERIFY(idleMoreButton);
+    QVERIFY(restartMediaErrorButton);
+    QVERIFY(reportMediaErrorButton);
+    QVERIFY(quitMediaErrorButton);
     QVERIFY(closePlaybackDetailsButton);
     QVERIFY(playbackDetailsPanel);
     QVERIFY(transportIsland);
@@ -263,6 +283,14 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_VERIFY(!windowCommands.windowShortcutsBlocked());
     QTRY_VERIFY(!videoViewport.visible());
     QTRY_VERIFY(emptyState->property("visible").toBool());
+    QTRY_VERIFY(idleMoreButton->property("visible").toBool());
+    QVERIFY(QMetaObject::invokeMethod(idleMoreButton, "clicked", Qt::DirectConnection));
+    QTRY_VERIFY(transportMenu->property("visible").toBool());
+    QVERIFY(QMetaObject::invokeMethod(reportBugMenuItem, "clicked", Qt::DirectConnection));
+    QCOMPARE(supportController.reportCount(), 1);
+    QVERIFY(QMetaObject::invokeMethod(aboutMenuItem, "clicked", Qt::DirectConnection));
+    QCOMPARE(supportController.aboutCount(), 1);
+    QVERIFY(QMetaObject::invokeMethod(transportMenu, "close", Qt::DirectConnection));
     QCOMPARE(clientSideWindowChrome->property("contentTop").toReal(), 0.0);
     QVERIFY(!clientSideWindowOutline->isVisible());
 
@@ -342,6 +370,7 @@ void AppShellTest::publishesActiveViewport() {
     mediaSession.setState(ShellTestMediaSession::State::Ready, false);
     QVERIFY(QMetaObject::invokeMethod(playerPage, "revealControls", Qt::DirectConnection));
     QTRY_VERIFY(videoViewport.visible());
+    QTRY_VERIFY(!idleMoreButton->property("visible").toBool());
     QTRY_VERIFY(waitingForVideoState->property("visible").toBool());
     QTRY_VERIFY(playPauseButton->property("visible").toBool());
     QTRY_VERIFY(seekSlider->property("visible").toBool());
@@ -550,6 +579,11 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_VERIFY(!transportMenu->property("visible").toBool());
     QTRY_VERIFY(!windowCommands.windowShortcutsBlocked());
 
+    QVERIFY(QMetaObject::invokeMethod(reportBugMenuItem, "clicked", Qt::DirectConnection));
+    QCOMPARE(supportController.reportCount(), 2);
+    QVERIFY(QMetaObject::invokeMethod(aboutMenuItem, "clicked", Qt::DirectConnection));
+    QCOMPARE(supportController.aboutCount(), 2);
+
     mediaSession.setPlaybackInterruption(ShellTestMediaSession::PlaybackInterruption::Buffering);
     QVERIFY(!mediaSession.playing());
     QVERIFY(mediaSession.playRequested());
@@ -570,6 +604,16 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(QMetaObject::invokeMethod(retryMediaButton, "clicked", Qt::DirectConnection));
     QCOMPARE(mediaSession.retryCount(), 1);
     QCOMPARE(mediaSession.openCount(), 0);
+    QVERIFY(QMetaObject::invokeMethod(openAnotherMediaErrorButton, "clicked", Qt::DirectConnection));
+    QTRY_VERIFY(openDialog->property("visible").toBool());
+    QVERIFY(QMetaObject::invokeMethod(openDialog, "close", Qt::DirectConnection));
+    QTRY_VERIFY(!openDialog->property("visible").toBool());
+    QVERIFY(QMetaObject::invokeMethod(restartMediaErrorButton, "clicked", Qt::DirectConnection));
+    QCOMPARE(windowCommands.restartCount(), 1);
+    QVERIFY(QMetaObject::invokeMethod(reportMediaErrorButton, "clicked", Qt::DirectConnection));
+    QCOMPARE(supportController.reportCount(), 3);
+    QVERIFY(QMetaObject::invokeMethod(quitMediaErrorButton, "clicked", Qt::DirectConnection));
+    QCOMPARE(windowCommands.quitCount(), 1);
 
     mediaSession.setState(ShellTestMediaSession::State::Ready, true);
     QVERIFY(QMetaObject::invokeMethod(playerPage, "revealControls", Qt::DirectConnection));

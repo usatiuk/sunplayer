@@ -2,11 +2,13 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 #include <QObject>
 #include <QString>
 #include <QTimer>
 
+#include "app/ApplicationError.h"
 #include "presentation/PresentationSurfaceContract.h"
 
 class GraphicsDeviceDomain;
@@ -25,6 +27,7 @@ class QuickUiLayer;
 class SubtitleRenderer;
 class RenderedVideoProducer;
 class VideoViewportState;
+class SupportController;
 enum class VideoOperationResult;
 
 // Owns one presentation domain and sequences its QRhi work.
@@ -35,10 +38,11 @@ class RhiPresentationEngine final : public QObject {
     RhiPresentationEngine(QWindow& window, PresentationOutputState& outputState, PresentationSettings& settings,
                           ActiveVideoSource& videoSource, DiagnosticVideoSource& diagnosticSource,
                           MediaSession& mediaSession, VideoViewportState& videoViewport,
-                          PresentationSurfaceContract surfaceContract, PresentationSurfaceController* surfaceController,
-                          QObject* parent = nullptr);
+                          SupportController& supportController, PresentationSurfaceContract surfaceContract,
+                          PresentationSurfaceController* surfaceController, QObject* parent = nullptr);
     ~RhiPresentationEngine() override;
 
+    bool start();
     void render();
     void handleExposure();
     void handleSurfaceCreated();
@@ -55,6 +59,7 @@ class RhiPresentationEngine final : public QObject {
     // video surface. Application scenarios can observe real presentation
     // progress without reaching into renderer internals or using screenshots.
     void videoFramePresented(qulonglong contentRevision);
+    void terminalError(ApplicationError error);
 
   private:
     void renderFrame();
@@ -80,6 +85,7 @@ class RhiPresentationEngine final : public QObject {
     void queueSurfaceTransition();
     void rejectRequiredHdrSurface(char const* reason);
     void rebuildForPresentIncompatibleSurface();
+    void fail(ApplicationError error);
 
     QWindow& m_window;
     PresentationOutputState& m_outputState;
@@ -88,6 +94,7 @@ class RhiPresentationEngine final : public QObject {
     DiagnosticVideoSource& m_diagnosticSource;
     MediaSession& m_mediaSession;
     VideoViewportState& m_videoViewport;
+    SupportController& m_supportController;
     PresentationSurfaceContract m_surfaceContract;
     PresentationSurfaceController* m_surfaceController = nullptr;
     std::unique_ptr<GraphicsDeviceDomain> m_graphicsDevice;
@@ -101,6 +108,8 @@ class RhiPresentationEngine final : public QObject {
     QTimer m_deviceRecoveryTimer;
     QTimer m_swapChainRecoveryTimer;
     bool m_rendering = false;
+    bool m_stopped = false;
+    bool m_destroying = false;
     // Mirrors an outstanding QWindow UpdateRequest owned by this engine.
     bool m_framePending = false;
     // Captures synchronous dirty signals without recursively entering render().

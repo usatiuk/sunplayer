@@ -86,7 +86,8 @@ VideoOperationResult LibplaceboDecodedVideoProducer::render(QRhiCommandBuffer& c
 
     VideoOperationResult const beginResult = m_target->beginProducerAccess(commandBuffer);
     if (beginResult != VideoOperationResult::Ready) {
-        return beginResult;
+        return beginResult == VideoOperationResult::Unavailable ? unavailable(m_target->diagnostics().fallbackReason)
+                                                                 : beginResult;
     }
 
     QString renderError;
@@ -138,7 +139,11 @@ VideoOperationResult LibplaceboDecodedVideoProducer::render(QRhiCommandBuffer& c
 }
 
 VideoOperationResult LibplaceboDecodedVideoProducer::prepareForComposition(QRhiCommandBuffer& commandBuffer) {
-    return m_target ? m_target->prepareForComposition(commandBuffer) : VideoOperationResult::Unavailable;
+    if (!m_target) {
+        return unavailable(QStringLiteral("Libplacebo target is unavailable"));
+    }
+    VideoOperationResult const result = m_target->prepareForComposition(commandBuffer);
+    return result == VideoOperationResult::Unavailable ? unavailable(m_target->diagnostics().fallbackReason) : result;
 }
 
 void LibplaceboDecodedVideoProducer::submissionAccepted() {

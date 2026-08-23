@@ -26,6 +26,8 @@ the newer note or decision rather than silently rewriting the investigation.
 * [2026-07-29: FFmpeg continuous decode and backpressure](2026-07-29-ffmpeg-continuous-decode-and-backpressure.md)
 * [2026-07-30: Reference-white-adaptive HDR display mapping](2026-07-30-reference-white-adaptive-hdr-mapping.md)
 * [2026-08-22: Reference-white HDR regression analysis](2026-08-22-reference-white-hdr-regression.md)
+* [2026-08-22: Release support and runtime-error boundary](2026-08-22-release-support-and-runtime-errors.md)
+* [2026-08-22: Windows third-party notices without an inventory](2026-08-22-derived-third-party-inventory.md)
 * [2026-07-30: FFmpeg keyframe seek and restart](2026-07-30-ffmpeg-keyframe-seek-and-restart.md)
 * [2026-07-30: Large network Matroska seek observability](2026-07-30-large-network-matroska-seek-observability.md)
 * [2026-07-31: Audio architecture research draft](2026-07-31-chatgpt-audio.md)

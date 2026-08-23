@@ -304,16 +304,29 @@ The native surface and graphics device have different lifetimes:
   software pipeline's later seeks from retaining stale capability state.
 * Device recovery is bounded to eight attempts, spaced 250 milliseconds apart.
 * An otherwise unexpected QRhi frame error triggers one complete rebuild. A
-  second consecutive frame error is fatal.
-* Packaged-QML, shader, invariant, and non-device resource failures fail fast;
-  they are programming or deployment failures rather than recoverable runtime
-  states.
-* A native Wayland connection failure is process-fatal rather than entering
-  graphics-device recovery. Ordinary external window-state changes converge
-  through Qt's asynchronous surface and exposure events.
+  second consecutive frame error stops presentation and publishes a typed
+  `graphics.frame_submission_failed` error.
+* Non-device-loss allocation, swapchain, compositor, diagnostic-video, and
+  QRhi submission failures stop the current presentation generation and
+  publish one typed application error. Decoded-video target/handoff failure
+  remains a `MediaSession` error while the shared UI/compositor is healthy.
+* Packaged QML/shaders, missing required native handles, impossible producer
+  ownership, and synchronization overflow remain fail-fast programming or
+  deployment invariants.
+* Native Wayland/Vulkan startup prerequisites reached after a healthy Qt QPA
+  connection use the controlled startup-error boundary. A platform plugin that
+  never starts, or a dead display connection, can only log and exit nonzero;
+  the process cannot display another window through the failed connection.
 
-This is currently diagnostic-level recovery. Exhaustion still terminates the
-application and is not yet surfaced as a player error state.
+`RhiPresentationEngine` performs fallible startup only from `start()`, after
+`PresentationWindow` has connected `terminalError`. The first terminal failure
+stops timers and frame requests, and queued window-side teardown destroys the
+failed engine outside its own signal stack. Native-surface destruction is still
+forwarded during that suspended interval so swapchain resources cannot outlive
+their platform surface. Retry creates a fresh generation; Restart, Report a
+bug, and Quit are owned by the application window rather than the renderer.
+Media decode/render exhaustion remains a `MediaSession` error and is not
+duplicated as a graphics failure.
 
 ## Presentation and color model
 

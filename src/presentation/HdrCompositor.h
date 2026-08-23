@@ -41,6 +41,7 @@ class HdrCompositor final {
     enum class ResourceResult {
         Ready,
         DeviceLost,
+        Unavailable,
     };
 
     explicit HdrCompositor(QRhi& rhi);

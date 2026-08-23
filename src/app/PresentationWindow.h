@@ -12,6 +12,8 @@
 
 class DisplayStateProvider;
 class ApplicationSettings;
+class ApplicationError;
+class SupportController;
 
 #ifdef Q_OS_LINUX
 class LinuxWaylandWindowContext;
@@ -29,18 +31,22 @@ class PresentationWindow : public QWindow {
 
   public:
 #ifdef Q_OS_LINUX
-    PresentationWindow(ApplicationSettings& applicationSettings, LinuxWaylandWindowContext& windowContext);
+    PresentationWindow(ApplicationSettings& applicationSettings, SupportController& supportController,
+                       LinuxWaylandWindowContext& windowContext);
 #else
-    explicit PresentationWindow(ApplicationSettings& applicationSettings);
+    PresentationWindow(ApplicationSettings& applicationSettings, SupportController& supportController);
 #endif
     ~PresentationWindow() override;
 
+    bool startPresentation();
     Q_INVOKABLE void openMedia(QUrl const& url);
     class MediaSession& mediaSession();
     const class MediaSession& mediaSession() const;
 
     Q_INVOKABLE void toggleFullscreen();
     Q_INVOKABLE void exitFullscreen();
+    Q_INVOKABLE void restartApplication();
+    Q_INVOKABLE void quitApplication();
 
     bool cursorHidden() const;
     void setCursorHidden(bool hidden);
@@ -76,6 +82,7 @@ class PresentationWindow : public QWindow {
     enum class PresentationLifecycle {
         Initializing,
         Active,
+        Suspended,
         Releasing,
     };
 
@@ -88,8 +95,14 @@ class PresentationWindow : public QWindow {
     bool playerShortcutContextActive() const;
     bool playbackShortcutEnabled() const;
     void togglePlayback();
+    bool createPresentationEngine();
+    void handlePresentationError(ApplicationError error);
+    void showPresentationErrorDialog(ApplicationError error);
+    void retryPresentation();
+    bool launchRestart();
 
     ApplicationSettings& m_applicationSettings;
+    SupportController& m_supportController;
     std::unique_ptr<class PresentationOutputState> m_outputState;
     std::unique_ptr<class PresentationSettings> m_settings;
     std::unique_ptr<class DiagnosticVideoSource> m_diagnosticVideoSource;
@@ -98,6 +111,8 @@ class PresentationWindow : public QWindow {
     std::unique_ptr<class ActiveVideoSource> m_activeVideoSource;
     std::unique_ptr<class VideoViewportState> m_videoViewport;
     std::unique_ptr<class RhiPresentationEngine> m_engine;
+    PresentationSurfaceContract m_surfaceContract;
+    PresentationSurfaceController* m_surfaceController = nullptr;
     std::vector<std::unique_ptr<QWindow>> m_otherDisplayBlankingWindows;
     WindowChromeController m_windowChrome;
 #ifdef Q_OS_LINUX

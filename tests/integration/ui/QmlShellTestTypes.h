@@ -176,6 +176,8 @@ class ShellTestWindowCommands final : public QWindow {
 
     int toggleCount() const { return m_toggleCount; }
     int openCount() const { return m_openCount; }
+    int restartCount() const { return m_restartCount; }
+    int quitCount() const { return m_quitCount; }
     QUrl lastOpenedUrl() const { return m_lastOpenedUrl; }
     bool cursorHidden() const { return m_cursorHidden; }
     void setCursorHidden(bool hidden) { m_cursorHidden = hidden; }
@@ -203,6 +205,8 @@ class ShellTestWindowCommands final : public QWindow {
     ShellTestWindowChromeController& windowChromeController() { return m_windowChrome; }
 
     Q_INVOKABLE void toggleFullscreen() { ++m_toggleCount; }
+    Q_INVOKABLE void restartApplication() { ++m_restartCount; }
+    Q_INVOKABLE void quitApplication() { ++m_quitCount; }
     Q_INVOKABLE void openMedia(QUrl const& url) {
         ++m_openCount;
         m_lastOpenedUrl = url;
@@ -220,6 +224,8 @@ class ShellTestWindowCommands final : public QWindow {
     ShellTestWindowChromeController m_windowChrome;
     int m_toggleCount = 0;
     int m_openCount = 0;
+    int m_restartCount = 0;
+    int m_quitCount = 0;
     QUrl m_lastOpenedUrl;
     bool m_cursorHidden = false;
     bool m_windowShortcutsBlocked = false;
@@ -642,6 +648,25 @@ class ShellTestMediaSession final : public QObject {
     int m_retryCount = 0;
     int m_seekCount = 0;
     qlonglong m_lastSeekMilliseconds = -1;
+};
+
+class ShellTestSupportController final : public QObject {
+    Q_OBJECT
+    QML_NAMED_ELEMENT(SupportController)
+    QML_UNCREATABLE("Test support controller is supplied by the component harness")
+
+  public:
+    explicit ShellTestSupportController(QObject* parent) : QObject(parent) {}
+
+    int reportCount() const { return m_reportCount; }
+    int aboutCount() const { return m_aboutCount; }
+
+    Q_INVOKABLE void reportBug() { ++m_reportCount; }
+    Q_INVOKABLE void showAbout() { ++m_aboutCount; }
+
+  private:
+    int m_reportCount = 0;
+    int m_aboutCount = 0;
 };
 
 class ShellTestActiveVideoSource final : public QObject {

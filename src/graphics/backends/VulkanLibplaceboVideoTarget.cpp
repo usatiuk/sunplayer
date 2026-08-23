@@ -110,7 +110,8 @@ VideoOperationResult VulkanLibplaceboVideoTarget::endProducerAccess(QRhiCommandB
         if (deviceLost()) {
             return VideoOperationResult::DeviceLost;
         }
-        qCFatal(sunplayerLogGraphics, "Libplacebo failed the mandatory Vulkan image handoff");
+        qCCritical(sunplayerLogGraphics, "Libplacebo failed the mandatory Vulkan image handoff");
+        return VideoOperationResult::Unavailable;
     }
     m_compositionBarrierPending = true;
     m_texture->setNativeLayout(static_cast<int>(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
@@ -270,9 +271,9 @@ VideoOperationResult VulkanLibplaceboVideoTarget::signalQrhiCompletion() {
     if (result == VK_ERROR_DEVICE_LOST) {
         return VideoOperationResult::DeviceLost;
     }
-    qCFatal(sunplayerLogGraphics, "Could not order QRhi completion before libplacebo: Vulkan error %d",
-            static_cast<int>(result));
-    Q_UNREACHABLE_RETURN(VideoOperationResult::Unavailable);
+    qCCritical(sunplayerLogGraphics, "Could not order QRhi completion before libplacebo: Vulkan error %d",
+               static_cast<int>(result));
+    return VideoOperationResult::Unavailable;
 }
 
 void VulkanLibplaceboVideoTarget::recordCompositionBarrier(QRhiCommandBuffer& commandBuffer) {

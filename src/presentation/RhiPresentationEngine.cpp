@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cmath>
 #include <optional>
+#include <utility>
 
 #include <QQuickWindow>
 #include <QWindow>
@@ -11,6 +12,7 @@
 #include <rhi/qrhi.h>
 
 #include "app/PresentationSettings.h"
+#include "app/SupportController.h"
 #include "app/VideoViewportState.h"
 #include "diagnostics/LogCategories.h"
 #include "graphics/GraphicsBackendFactory.h"
@@ -80,12 +82,13 @@ QRhiSwapChain::Format desiredSwapChainFormat(PresentationSurfaceContract const& 
 RhiPresentationEngine::RhiPresentationEngine(QWindow& window, PresentationOutputState& outputState,
                                              PresentationSettings& settings, ActiveVideoSource& videoSource,
                                              DiagnosticVideoSource& diagnosticSource, MediaSession& mediaSession,
-                                             VideoViewportState& videoViewport,
+                                             VideoViewportState& videoViewport, SupportController& supportController,
                                              PresentationSurfaceContract surfaceContract,
                                              PresentationSurfaceController* surfaceController, QObject* parent)
     : QObject(parent), m_window(window), m_outputState(outputState), m_settings(settings), m_videoSource(videoSource),
       m_diagnosticSource(diagnosticSource), m_mediaSession(mediaSession), m_videoViewport(videoViewport),
-      m_surfaceContract(surfaceContract), m_surfaceController(surfaceController) {
+      m_supportController(supportController), m_surfaceContract(surfaceContract),
+      m_surfaceController(surfaceController) {
     Q_ASSERT((m_surfaceController != nullptr) ==
              (m_surfaceContract.mode != PresentationSurfaceMode::AdaptiveExtendedLinear));
     m_deviceRecoveryTimer.setSingleShot(true);
@@ -107,15 +110,27 @@ RhiPresentationEngine::RhiPresentationEngine(QWindow& window, PresentationOutput
     connect(&m_deviceRecoveryTimer, &QTimer::timeout, this, &RhiPresentationEngine::requestFrame);
     connect(&m_swapChainRecoveryTimer, &QTimer::timeout, this, &RhiPresentationEngine::requestFrame);
     connect(&m_mediaSession, &MediaSession::subtitleChanged, this, &RhiPresentationEngine::requestFrame);
-
-    if (!initializeGraphicsDevice()) {
-        qCFatal(sunplayerLogPresentation, "Could not create the QRhi backend");
-    }
 }
 
-RhiPresentationEngine::~RhiPresentationEngine() { releaseDevice(); }
+RhiPresentationEngine::~RhiPresentationEngine() {
+    m_destroying = true;
+    releaseDevice();
+}
+
+bool RhiPresentationEngine::start() {
+    if (!initializeGraphicsDevice()) {
+        fail(ApplicationError(ApplicationError::Code::PresentationInitializationFailed,
+                              tr("SunPlayer could not initialize graphics presentation."),
+                              QStringLiteral("GraphicsBackendFactory did not create a QRhi device domain")));
+        return false;
+    }
+    return true;
+}
 
 void RhiPresentationEngine::render() {
+    if (m_stopped) {
+        return;
+    }
     Q_ASSERT(!m_rendering);
 
     m_framePending = false;
@@ -124,12 +139,15 @@ void RhiPresentationEngine::render() {
     renderFrame();
     m_rendering = false;
 
-    if (m_frameRequestedWhileRendering) {
+    if (!m_stopped && m_frameRequestedWhileRendering) {
         requestFrame();
     }
 }
 
 void RhiPresentationEngine::renderFrame() {
+    if (m_stopped) {
+        return;
+    }
     if (m_surfaceTransitionPending || !m_window.isExposed() || m_window.size().isEmpty()) {
         return;
     }
@@ -160,6 +178,12 @@ void RhiPresentationEngine::renderFrame() {
         targetUpdate = m_quickUi->ensureRenderTarget(pixelSize, m_window.devicePixelRatio());
         if (targetUpdate == QuickUiLayer::RenderTargetUpdate::DeviceLost) {
             handleDeviceLoss("creating the Qt Quick render target");
+            return;
+        }
+        if (targetUpdate == QuickUiLayer::RenderTargetUpdate::Unavailable) {
+            fail(ApplicationError(ApplicationError::Code::UiRenderingUnavailable,
+                                  tr("SunPlayer could not create its user-interface render target."),
+                                  QStringLiteral("QRhi rejected an FP16 Qt Quick render target")));
             return;
         }
 
@@ -263,9 +287,16 @@ void RhiPresentationEngine::renderFrame() {
 
     if (!m_compositor) {
         m_compositor = std::make_unique<HdrCompositor>(*m_rhi);
-        if (m_compositor->initialize(*m_renderPassDescriptor, compositionVideoTexture, m_subtitleRenderer->texture(),
-                                     m_quickUi->texture()) == HdrCompositor::ResourceResult::DeviceLost) {
+        HdrCompositor::ResourceResult const compositorResult = m_compositor->initialize(
+            *m_renderPassDescriptor, compositionVideoTexture, m_subtitleRenderer->texture(), m_quickUi->texture());
+        if (compositorResult == HdrCompositor::ResourceResult::DeviceLost) {
             handleDeviceLoss("creating the HDR compositor");
+            return;
+        }
+        if (compositorResult == HdrCompositor::ResourceResult::Unavailable) {
+            fail(ApplicationError(ApplicationError::Code::CompositorUnavailable,
+                                  tr("SunPlayer could not initialize video composition."),
+                                  QStringLiteral("QRhi rejected an HDR compositor resource")));
             return;
         }
         m_boundVideoTextureRevision = compositionTextureRevision;
@@ -273,9 +304,16 @@ void RhiPresentationEngine::renderFrame() {
     } else if (videoProducerChanged || targetUpdate == QuickUiLayer::RenderTargetUpdate::Recreated ||
                m_boundVideoTextureRevision != compositionTextureRevision ||
                m_boundSubtitleTextureRevision != subtitleTextureRevision) {
-        if (m_compositor->setTextures(compositionVideoTexture, m_subtitleRenderer->texture(), m_quickUi->texture()) ==
-            HdrCompositor::ResourceResult::DeviceLost) {
+        HdrCompositor::ResourceResult const bindingResult =
+            m_compositor->setTextures(compositionVideoTexture, m_subtitleRenderer->texture(), m_quickUi->texture());
+        if (bindingResult == HdrCompositor::ResourceResult::DeviceLost) {
             handleDeviceLoss("rebinding compositor layer textures");
+            return;
+        }
+        if (bindingResult == HdrCompositor::ResourceResult::Unavailable) {
+            fail(ApplicationError(ApplicationError::Code::CompositorUnavailable,
+                                  tr("SunPlayer could not update video composition."),
+                                  QStringLiteral("QRhi rejected compositor texture bindings")));
             return;
         }
         m_boundVideoTextureRevision = compositionTextureRevision;
@@ -415,6 +453,9 @@ void RhiPresentationEngine::renderFrame() {
 }
 
 void RhiPresentationEngine::requestFrame() {
+    if (m_stopped) {
+        return;
+    }
     if (!m_window.isExposed()) {
         return;
     }
@@ -430,6 +471,9 @@ void RhiPresentationEngine::requestFrame() {
 }
 
 void RhiPresentationEngine::handleExposure() {
+    if (m_stopped) {
+        return;
+    }
     if (!m_window.isExposed()) {
         // Qt may discard a queued update while the native surface is hidden.
         // It cannot satisfy a future exposure once the surface has changed.
@@ -455,6 +499,9 @@ void RhiPresentationEngine::handleExposure() {
 }
 
 void RhiPresentationEngine::markUiDirty() {
+    if (m_stopped) {
+        return;
+    }
     if (m_quickUi) {
         m_quickUi->markDirty();
     }
@@ -464,6 +511,9 @@ void RhiPresentationEngine::markUiDirty() {
 void RhiPresentationEngine::markPresentationDirty() { requestFrame(); }
 
 void RhiPresentationEngine::releaseSwapChain() {
+    if (m_stopped && !m_graphicsDevice) {
+        return;
+    }
     std::optional<GraphicsDeviceExecutionScope> execution;
     if (m_graphicsDevice) {
         execution.emplace(m_graphicsDevice->acquireExecutionScope());
@@ -502,10 +552,17 @@ bool RhiPresentationEngine::initializeDevice() {
     Q_ASSERT(m_rhi);
 
     m_quickUi = std::make_unique<QuickUiLayer>(m_window, *m_rhi, m_outputState, m_settings, m_diagnosticSource,
-                                               m_mediaSession, m_videoSource, m_videoViewport);
+                                               m_mediaSession, m_videoSource, m_videoViewport, m_supportController);
     connect(m_quickUi.get(), &QuickUiLayer::updateRequested, this, &RhiPresentationEngine::requestFrame);
-    if (m_quickUi->initialize() == QuickUiLayer::InitializationResult::DeviceLost) {
+    QuickUiLayer::InitializationResult const result = m_quickUi->initialize();
+    if (result == QuickUiLayer::InitializationResult::DeviceLost) {
         handleDeviceLoss("initializing Qt Quick");
+        return false;
+    }
+    if (result == QuickUiLayer::InitializationResult::Unavailable) {
+        fail(ApplicationError(ApplicationError::Code::UiRenderingUnavailable,
+                              tr("SunPlayer could not initialize its user interface."),
+                              QStringLiteral("QQuickRenderControl initialization failed")));
         return false;
     }
     m_subtitleRenderer = std::make_unique<SubtitleRenderer>(*m_rhi);
@@ -626,8 +683,10 @@ void RhiPresentationEngine::scheduleSwapChainRecovery(char const* operation) {
     constexpr auto retryDelay = std::chrono::milliseconds(250);
 
     if (m_swapChainRecoveryAttempts >= maximumAttempts) {
-        qCFatal(sunplayerLogPresentation, "QRhi swapchain recovery failed after %d attempts while %s", maximumAttempts,
-                operation);
+        fail(ApplicationError(
+            ApplicationError::Code::SwapChainUnavailable, tr("SunPlayer could not recover the presentation surface."),
+            QStringLiteral("QRhi swap-chain recovery exhausted while %1").arg(QString::fromLatin1(operation))));
+        return;
     }
 
     ++m_swapChainRecoveryAttempts;
@@ -654,7 +713,12 @@ void RhiPresentationEngine::releaseDevice() {
     if (m_rhi && !m_rhi->isDeviceLost()) {
         QRhi::FrameOpResult const finishResult = m_rhi->finish();
         if (finishResult != QRhi::FrameOpSuccess && finishResult != QRhi::FrameOpDeviceLost) {
-            qCFatal(sunplayerLogGraphics, "Could not finish GPU work before releasing device resources");
+            qCCritical(sunplayerLogGraphics, "Could not finish GPU work before releasing device resources");
+            if (!m_destroying) {
+                fail(ApplicationError(ApplicationError::Code::GraphicsCleanupFailed,
+                                      tr("SunPlayer could not safely reset the graphics device."),
+                                      QStringLiteral("QRhi::finish returned %1").arg(static_cast<int>(finishResult))));
+            }
         }
     }
     releaseSwapChainResources();
@@ -690,7 +754,12 @@ void RhiPresentationEngine::handleDeviceLoss(char const* operation) {
 
 void RhiPresentationEngine::handleFrameError(char const* operation, int result) {
     if (m_retriedFrameError) {
-        qCFatal(sunplayerLogPresentation, "QRhi failed twice while %s: %d", operation, result);
+        fail(ApplicationError(ApplicationError::Code::FrameSubmissionFailed,
+                              tr("SunPlayer could not submit video frames."),
+                              QStringLiteral("QRhi failed twice while %1 with result %2")
+                                  .arg(QString::fromLatin1(operation))
+                                  .arg(result)));
+        return;
     }
     qCWarning(sunplayerLogPresentation, "QRhi failed while %s: %d; rebuilding once", operation, result);
     m_retriedFrameError = true;
@@ -724,16 +793,26 @@ bool RhiPresentationEngine::handleVideoOperationResult(char const* operation, Vi
         requestFrame();
         return false;
     }
-    qCFatal(sunplayerLogPresentation, "Video path unavailable while %s: %s", operation, qPrintable(effectiveReason));
+    ApplicationError::Code const code = m_videoSource.route() == ActiveVideoSource::Route::Diagnostics
+                                            ? ApplicationError::Code::DiagnosticVideoUnavailable
+                                            : ApplicationError::Code::FrameSubmissionFailed;
+    fail(ApplicationError(code, tr("SunPlayer could not render the active video source."),
+                          QStringLiteral("%1: %2").arg(QString::fromLatin1(operation), effectiveReason)));
     return false;
 }
 
 void RhiPresentationEngine::scheduleDeviceRecovery() {
+    if (m_stopped) {
+        return;
+    }
     constexpr int maximumAttempts = 8;
     constexpr auto retryDelay = std::chrono::milliseconds(250);
 
     if (m_deviceRecoveryAttempts >= maximumAttempts) {
-        qCFatal(sunplayerLogPresentation, "QRhi device recovery failed after %d attempts", maximumAttempts);
+        fail(ApplicationError(ApplicationError::Code::GraphicsDeviceRecoveryExhausted,
+                              tr("SunPlayer could not recover the graphics device."),
+                              QStringLiteral("QRhi device recovery exhausted after %1 attempts").arg(maximumAttempts)));
+        return;
     }
 
     ++m_deviceRecoveryAttempts;
@@ -882,6 +961,9 @@ bool RhiPresentationEngine::reconcileOutputCharacteristics() {
 }
 
 void RhiPresentationEngine::queueSurfaceTransition() {
+    if (m_stopped) {
+        return;
+    }
     Q_ASSERT(m_surfaceController);
     if (m_surfaceTransitionPending) {
         return;
@@ -892,6 +974,9 @@ void RhiPresentationEngine::queueSurfaceTransition() {
     QMetaObject::invokeMethod(
         this,
         [this] {
+            if (m_stopped) {
+                return;
+            }
             if (!m_graphicsDevice) {
                 m_surfaceTransitionPending = false;
                 m_outputCharacteristicsDirty = true;
@@ -932,4 +1017,21 @@ void RhiPresentationEngine::rebuildForPresentIncompatibleSurface() {
     m_recoveringDevice = true;
     releaseDevice();
     scheduleDeviceRecovery();
+}
+
+void RhiPresentationEngine::fail(ApplicationError error) {
+    if (m_stopped) {
+        return;
+    }
+    Q_ASSERT(error.isValid());
+    m_stopped = true;
+    m_mediaSession.invalidateGraphicsDevice();
+    m_deviceRecoveryTimer.stop();
+    m_swapChainRecoveryTimer.stop();
+    m_framePending = false;
+    m_frameRequestedWhileRendering = false;
+    qCCritical(sunplayerLogPresentation).noquote()
+        << "event=presentation.terminal_error"
+        << "code=" + error.stableCode() << "subsystem=" + error.subsystemName() << "detail=" + error.technicalDetail();
+    emit terminalError(std::move(error));
 }

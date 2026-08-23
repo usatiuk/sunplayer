@@ -1,6 +1,7 @@
 {
   "name": "sunplayer",
   "version-string": "0.1.0",
+  "license": "GPL-3.0-or-later",
   "builtin-baseline": "9d7f79f56ae1a9b4704d6a7fb8237e347a974133",
   "dependencies": [
     {

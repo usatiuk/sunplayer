@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <optional>
+#include <stdexcept>
 
 #include <QVulkanInstance>
 
@@ -11,6 +12,11 @@ class QGuiApplication;
 class QObject;
 class QWindow;
 class DisplayStateProvider;
+
+class LinuxWaylandStartupError final : public std::runtime_error {
+  public:
+    using std::runtime_error::runtime_error;
+};
 
 // Selects the process Wayland boundary before QGuiApplication is constructed.
 void prepareLinuxWaylandPlatform();

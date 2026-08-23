@@ -12,6 +12,7 @@ VideoPage {
     required property MediaSession session
     required property PresentationOutputState outputState
     required property WindowCommands windowCommands
+    required property SupportController supportController
 
     signal hdrLabRequested
 
@@ -465,8 +466,27 @@ VideoPage {
             }
 
             Button {
+                objectName: "restartMediaErrorButton"
+                text: qsTr("Restart")
+                onClicked: root.windowCommands.restartApplication()
+            }
+
+            Button {
+                objectName: "openAnotherMediaErrorButton"
                 text: qsTr("Open another…")
                 onClicked: openDialog.open()
+            }
+
+            Button {
+                objectName: "reportMediaErrorButton"
+                text: qsTr("Report a bug…")
+                onClicked: root.supportController.reportBug()
+            }
+
+            Button {
+                objectName: "quitMediaErrorButton"
+                text: qsTr("Quit")
+                onClicked: root.windowCommands.quitApplication()
             }
         }
     }
@@ -1047,10 +1067,45 @@ VideoPage {
             MenuSeparator {}
 
             MenuItem {
+                objectName: "reportBugMenuItem"
+                text: qsTr("Report a bug…")
+                onClicked: root.supportController.reportBug()
+            }
+
+            MenuItem {
+                objectName: "aboutMenuItem"
+                text: qsTr("About SunPlayer")
+                onClicked: root.supportController.showAbout()
+            }
+
+            MenuSeparator {}
+
+            MenuItem {
                 objectName: "closeMediaButton"
                 text: qsTr("Close video")
                 onClicked: root.session.cancel()
             }
         }
+    }
+
+    ToolButton {
+        id: idleMoreButton
+        objectName: "idleMoreButton"
+        anchors {
+            right: parent.right
+            top: parent.top
+            margins: 20
+        }
+        z: 40
+        visible: !root.sessionActive
+        text: qsTr("More actions")
+        display: AbstractButton.IconOnly
+        icon.source: "icons/lucide/ellipsis.svg"
+        icon.width: 18
+        icon.height: 18
+        onClicked: transportMenu.popup(
+            idleMoreButton,
+            Qt.point(idleMoreButton.width - transportMenu.implicitWidth,
+                     idleMoreButton.height))
     }
 }

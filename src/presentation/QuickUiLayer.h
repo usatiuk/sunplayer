@@ -21,6 +21,7 @@ class QRhiTexture;
 class QRhiTextureRenderTarget;
 class QWindow;
 class VideoViewportState;
+class SupportController;
 
 // Redirected Qt Quick scene exposed as one compositor texture.
 class QuickUiLayer final : public QObject {
@@ -30,17 +31,20 @@ class QuickUiLayer final : public QObject {
     enum class InitializationResult {
         Ready,
         DeviceLost,
+        Unavailable,
     };
 
     enum class RenderTargetUpdate {
         Unchanged,
         Recreated,
         DeviceLost,
+        Unavailable,
     };
 
     QuickUiLayer(QWindow& renderWindow, QRhi& rhi, PresentationOutputState& outputState, PresentationSettings& settings,
                  DiagnosticVideoSource& diagnosticSource, MediaSession& mediaSession,
-                 ActiveVideoSource& activeVideoSource, VideoViewportState& videoViewport, QObject* parent = nullptr);
+                 ActiveVideoSource& activeVideoSource, VideoViewportState& videoViewport,
+                 SupportController& supportController, QObject* parent = nullptr);
     ~QuickUiLayer() override;
 
     InitializationResult initialize();
@@ -68,6 +72,7 @@ class QuickUiLayer final : public QObject {
     MediaSession& m_mediaSession;
     ActiveVideoSource& m_activeVideoSource;
     VideoViewportState& m_videoViewport;
+    SupportController& m_supportController;
     std::unique_ptr<QQuickRenderControl> m_renderControl;
     std::unique_ptr<QQuickWindow> m_quickWindow;
     std::unique_ptr<QQmlEngine> m_qmlEngine;
