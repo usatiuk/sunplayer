@@ -33,6 +33,7 @@ class SupportController final : public QObject {
 
   signals:
     void actionStatusChanged();
+    void hdrLabRequested();
 
   private:
     static QString loadPackagedText(QString const& fileName);

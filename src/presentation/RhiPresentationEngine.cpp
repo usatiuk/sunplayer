@@ -223,8 +223,12 @@ void RhiPresentationEngine::renderFrame() {
 
     if (!videoRect.isEmpty()) {
         PresentationTarget const presentationTarget = m_outputState.presentationTarget();
-        float const requestedTargetPeak = m_settings.automaticTargetPeak() ? presentationTarget.effectiveTargetHeadroom
-                                                                           : m_settings.manualTargetHeadroom();
+        bool const diagnosticsActive = m_videoSource.route() == ActiveVideoSource::Route::Diagnostics;
+        // Manual target controls belong to HDR Lab. Player always follows the
+        // live platform target, regardless of retained diagnostic state.
+        float const requestedTargetPeak = diagnosticsActive && !m_settings.automaticTargetPeak()
+                                              ? m_settings.manualTargetHeadroom()
+                                              : presentationTarget.effectiveTargetHeadroom;
         float const targetPeak = m_surfaceContract.constrainTargetHeadroom(requestedTargetPeak);
         Q_ASSERT(std::isfinite(targetPeak) && targetPeak >= 1.0f);
         float const referenceWhiteNits =

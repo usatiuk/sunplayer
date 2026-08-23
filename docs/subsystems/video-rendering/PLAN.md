@@ -260,7 +260,7 @@ physical check pass.
   geometry changes, and track changes.
 * [ ] Publish one structured source/display/rendering diagnostic snapshot with
   policy identities, revisions, provenance, copy counts, and fallback reason.
-* [ ] Remove HDR Lab target overrides from production Player state so
+* [x] Remove HDR Lab target overrides from production Player state so
   diagnostic experimentation cannot silently change ordinary playback.
 * [ ] Add Player-level open, pause, seek, display-change, device-recovery, and
   shutdown scenarios around the color pipeline.

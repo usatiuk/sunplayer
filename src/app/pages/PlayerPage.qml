@@ -16,8 +16,6 @@ VideoPage {
     required property WindowCommands windowCommands
     required property SupportController supportController
 
-    signal hdrLabRequested
-
     readonly property bool sessionReady:
         session.state === MediaSession.Ready
     readonly property bool frameReady:
@@ -440,11 +438,6 @@ VideoPage {
                 onClicked: openDialog.open()
             }
 
-            Button {
-                objectName: "emptyHdrLabButton"
-                text: qsTr("HDR Lab")
-                onClicked: root.hdrLabRequested()
-            }
         }
     }
 
@@ -1163,12 +1156,6 @@ VideoPage {
                     text: qsTr("No subtitles available")
                     enabled: false
                 }
-            }
-
-            MenuItem {
-                objectName: "hdrLabMenuItem"
-                text: qsTr("HDR Lab")
-                onClicked: root.hdrLabRequested()
             }
 
             MenuSeparator {}

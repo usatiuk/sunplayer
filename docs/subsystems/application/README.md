@@ -212,9 +212,13 @@ file-open events beyond the Windows argument launch remain deferred.
 
 ## State and settings
 
-`PresentationSettings` contains presentation-facing controls:
+`PresentationSettings` contains HDR Lab presentation controls:
 
 * Automatic or manual target peak.
+
+The presentation engine consults the manual value only while
+`ActiveVideoSource` is on its Diagnostics route. Player always takes the live
+platform target, so retained lab experiments cannot alter ordinary playback.
 
 `VideoViewportState` separately holds the active page's video rectangle in root
 logical coordinates and its visibility. `AppShell` publishes either the Player
@@ -252,8 +256,9 @@ The application smoke modes retain a `QTemporaryDir` for the complete lifetime
 of an explicit INI-backed adapter, so verification neither reads nor changes a
 developer's native preferences. Mute, current media and position, track
 selection, window geometry/state, current page, and HDR Lab controls remain
-unpersisted. Player preferences, playback-session state, presentation policy,
-and short-lived diagnostic controls keep deliberately different lifetimes.
+unpersisted. Player preferences, playback-session state, production
+presentation policy, and short-lived diagnostic controls keep deliberately
+different lifetimes.
 
 ## Errors and recovery
 

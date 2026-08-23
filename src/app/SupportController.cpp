@@ -169,8 +169,13 @@ void SupportController::showAbout() {
 
     auto* const buttons = new QDialogButtonBox(QDialogButtonBox::Close, dialog);
     auto* const sourceButton = buttons->addButton(tr("Source code"), QDialogButtonBox::ActionRole);
+    auto* const hdrLabButton = buttons->addButton(tr("Open HDR Lab"), QDialogButtonBox::ActionRole);
     auto* const copyButton = buttons->addButton(tr("Copy diagnostic information"), QDialogButtonBox::ActionRole);
     connect(sourceButton, &QPushButton::clicked, this, &SupportController::openSourceCode);
+    connect(hdrLabButton, &QPushButton::clicked, dialog, [this, dialog] {
+        dialog->accept();
+        emit hdrLabRequested();
+    });
     connect(copyButton, &QPushButton::clicked, this, &SupportController::copyDiagnosticInformation);
     connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
     layout->addWidget(buttons);

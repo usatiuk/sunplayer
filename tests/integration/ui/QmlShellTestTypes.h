@@ -675,6 +675,10 @@ class ShellTestSupportController final : public QObject {
 
     Q_INVOKABLE void reportBug() { ++m_reportCount; }
     Q_INVOKABLE void showAbout() { ++m_aboutCount; }
+    void requestHdrLab() { emit hdrLabRequested(); }
+
+  signals:
+    void hdrLabRequested();
 
   private:
     int m_reportCount = 0;

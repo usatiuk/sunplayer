@@ -199,13 +199,6 @@ managed-SDR capability are unmanaged sRGB-assumed fallbacks.
 Application-managed display ICC is deferred; if implemented it must transform
 the complete post-QRhi composition rather than video alone.
 
-### HDR Lab target control affects production playback state
-
-HDR Lab's manual target-headroom control currently shares presentation
-settings with the Player. A later player-reliability slice must separate the
-diagnostic override from production display policy so experiments cannot
-silently alter ordinary playback.
-
 ## CI and release engineering
 
 ### Hosted hardware and mixed-test coverage

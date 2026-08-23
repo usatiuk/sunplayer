@@ -130,7 +130,6 @@ void AppShellTest::publishesActiveViewport() {
     QObject* const playbackHoverHandler = rootItem->findChild<QObject*>(QStringLiteral("playbackHoverHandler"));
     QQuickItem* const fullscreenBackgroundMouseArea =
         rootItem->findChild<QQuickItem*>(QStringLiteral("fullscreenBackgroundMouseArea"));
-    QObject* const emptyHdrLabButton = rootItem->findChild<QObject*>(QStringLiteral("emptyHdrLabButton"));
     QObject* const backToPlayerButton = rootItem->findChild<QObject*>(QStringLiteral("backToPlayerButton"));
     QQuickItem* const clientSideWindowChrome =
         rootItem->findChild<QQuickItem*>(QStringLiteral("clientSideWindowChrome"));
@@ -183,7 +182,6 @@ void AppShellTest::publishesActiveViewport() {
     QObject* const subtitleMenu = rootItem->findChild<QObject*>(QStringLiteral("subtitleMenu"));
     QObject* const subtitleOffItem = rootItem->findChild<QObject*>(QStringLiteral("subtitleTrack_-1"));
     QObject* const subtitleEnglishItem = rootItem->findChild<QObject*>(QStringLiteral("subtitleTrack_2"));
-    QObject* const hdrLabMenuItem = rootItem->findChild<QObject*>(QStringLiteral("hdrLabMenuItem"));
     QObject* const reportBugMenuItem = rootItem->findChild<QObject*>(QStringLiteral("reportBugMenuItem"));
     QObject* const aboutMenuItem = rootItem->findChild<QObject*>(QStringLiteral("aboutMenuItem"));
     QObject* const idleMoreButton = rootItem->findChild<QObject*>(QStringLiteral("idleMoreButton"));
@@ -206,7 +204,7 @@ void AppShellTest::publishesActiveViewport() {
 #endif
     QVERIFY(playbackHoverHandler);
     QVERIFY(fullscreenBackgroundMouseArea);
-    QVERIFY(emptyHdrLabButton);
+    QVERIFY(!rootItem->findChild<QObject*>(QStringLiteral("emptyHdrLabButton")));
     QVERIFY(backToPlayerButton);
     QVERIFY(clientSideWindowChrome);
     QVERIFY(clientSideTitleBar);
@@ -251,7 +249,7 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(subtitleMenu);
     QVERIFY(subtitleOffItem);
     QVERIFY(subtitleEnglishItem);
-    QVERIFY(hdrLabMenuItem);
+    QVERIFY(!rootItem->findChild<QObject*>(QStringLiteral("hdrLabMenuItem")));
     QVERIFY(reportBugMenuItem);
     QVERIFY(aboutMenuItem);
     QCOMPARE(clientSideApplicationTitle->property("text").toString(), QStringLiteral("SunPlayer (Test)"));
@@ -342,7 +340,7 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(!openingState->property("visible").toBool());
     QVERIFY(!errorState->property("visible").toBool());
     QVERIFY(!seekSlider->property("visible").toBool());
-    QVERIFY(QMetaObject::invokeMethod(emptyHdrLabButton, "clicked", Qt::DirectConnection));
+    supportController.requestHdrLab();
     QTRY_COMPARE(activeVideoSource.route(), ShellTestActiveVideoSource::Route::Diagnostics);
     rootItem->setSize({760.0, 560.0});
     quickWindow.resize(760, 560);
@@ -836,7 +834,7 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_VERIFY(!videoViewport.visible());
     mediaSession.setState(ShellTestMediaSession::State::Ready, true);
 
-    QVERIFY(QMetaObject::invokeMethod(hdrLabMenuItem, "clicked", Qt::DirectConnection));
+    supportController.requestHdrLab();
     QTRY_COMPARE(activeVideoSource.route(), ShellTestActiveVideoSource::Route::Diagnostics);
     windowCommands.resetToggleCount();
     QTest::mouseDClick(&quickWindow, Qt::LeftButton, Qt::NoModifier, QPoint(420, 420));

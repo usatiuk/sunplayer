@@ -5,7 +5,7 @@
 The QML scene has a thin `AppShell` with a default `PlayerPage` and retained
 `HdrLabPage`, rendered offscreen through `QQuickRenderControl`. The shell and
 viewport boundary are production structure; HDR Lab remains developer tooling
-and is reached from Player rather than occupying permanent playback chrome.
+and is opened deliberately from About rather than occupying playback chrome.
 
 Player opens a local file and presents the movie across the full page. Windows
 uses D3D11/D3D11VA, macOS uses Metal/MoltenVK/VideoToolbox, and Linux uses the
@@ -98,9 +98,9 @@ Main.qml
 
 `VideoPage` defines the viewport rectangle and visibility contract shared by
 Player and HDR Lab. `AppShell` owns the two-page route and translates the
-active page's viewport into root logical coordinates. Player exposes HDR Lab
-through its empty state and overflow menu, while HDR Lab has one return action;
-no permanent navigation bar reduces the movie viewport. A stable
+active page's viewport into root logical coordinates. The About controller can
+request HDR Lab, while HDR Lab has one return action; no permanent navigation
+element reduces the movie viewport. A stable
 `ActiveVideoSource` delegates presentation to Player or HDR Lab and changes the
 concrete producer only at a render boundary. No routing framework, page
 registry, or service container is needed.
@@ -209,7 +209,8 @@ About is a separate Qt Widgets dialog rather than an in-scene Quick dialog. It
 therefore follows the active platform widget style and remains independent of
 the redirected QRhi composition path. It shows the application version/build
 ID, source action, generated third-party notices, packaged privacy policy, and
-Copy diagnostic information. It does not introduce a second custom dialog
+Copy diagnostic information. Its **Open HDR Lab** action is the sole entry to
+developer presentation controls. It does not introduce a second custom dialog
 style beside the player scene.
 
 `SupportController` receives the current application-owned session and output
@@ -249,7 +250,9 @@ no supported target path is available.
 For HDR diagnostics, pattern peak is a fixed multiple of the 203-nit HDR
 reference white and is labeled with its mastered nit value. Target peak remains
 a multiple of the active platform reference white. This deliberately lets an
-SDR-white/display change rerender one unchanged PQ signal.
+SDR-white/display change rerender one unchanged PQ signal. A manual target peak
+is applied only while the active video route is Diagnostics; Player always uses
+the live platform target, even if the retained HDR Lab controls remain manual.
 
 Diagnostics label the input path separately from output interop. The current
 libplacebo lab source reports one fixed-size software-frame CPU upload; the
@@ -257,10 +260,10 @@ direct D3D11 and Metal targets report zero output copies or CPU transfers.
 Hardware-frame imports remain separately diagnosed rather than making every
 path look “zero-copy.”
 
-Player is the default page and HDR Lab remains reachable through Player's
-overflow menu or empty state. Reusable read-only source, presentation, and
-pipeline diagnostics appear in the optional Player details panel, but HDR Lab
-controls do not become ordinary player preferences.
+Player is the default page and HDR Lab is reachable only through About.
+Reusable read-only source, presentation, and pipeline diagnostics appear in
+the optional Player details panel, but HDR Lab controls do not become ordinary
+player preferences or production presentation state.
 
 ## Verification
 
@@ -269,7 +272,7 @@ and renderability. A non-presenting Qt Quick component test creates the real
 QML shell through the same initial-property contract, resizes it, and verifies
 that active-page geometry and visibility reach `VideoViewportState`. It also
 verifies Empty/Opening/Ready/Error visibility, cancel/retry/close and
-play/pause command wiring, Player/HDR-Lab route and viewport selection, the
+play/pause command wiring, About-only Player/HDR-Lab routing and viewport selection, the
 optional details panel with selected video/audio/subtitle, source signal,
 presentation, and performance text, plus the diagnostic renderer switch's
 default and source binding. Source/router coverage verifies that the diagnostic route
@@ -303,9 +306,10 @@ noninteractively after observing real presentation plus continued clock
 progress.
 
 The same shell test verifies direct Report/About menu routing in active and
-idle states and all five media-error commands. Native dialog pixels are not a
-test contract; platform dialogs and browser/clipboard dispatch stay behind the
-controller/window boundaries.
+idle states, absence of Player-page HDR Lab actions, the About controller's
+diagnostic-route request, and all five media-error commands. Native dialog
+pixels are not a test contract; platform dialogs and browser/clipboard dispatch
+stay behind the controller/window boundaries.
 
 The component test also asserts that macOS resolves `FileDialog.parentWindow`
 to the supplied visible window-command host, while other platforms leave the

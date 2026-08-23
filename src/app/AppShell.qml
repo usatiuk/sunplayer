@@ -57,6 +57,14 @@ Item {
         }
     }
 
+    Connections {
+        target: root.supportController
+
+        function onHdrLabRequested() {
+            root.currentPage = 1
+        }
+    }
+
     Binding {
         target: root.viewportState
         property: "rect"
@@ -89,7 +97,6 @@ Item {
             outputState: root.presentationOutput
             windowCommands: root.windowCommands
             supportController: root.supportController
-            onHdrLabRequested: root.currentPage = 1
         }
 
         HdrLabPage {

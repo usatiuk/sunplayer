@@ -3,7 +3,8 @@
 #include <QObject>
 #include <QtQml/qqmlregistration.h>
 
-// Presentation-target controls used by the current diagnostic application.
+// HDR Lab presentation-target controls. Production playback never consumes
+// the manual diagnostic override.
 class PresentationSettings final : public QObject {
     Q_OBJECT
     QML_ELEMENT

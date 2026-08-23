@@ -82,7 +82,7 @@ playback:
   RGBA16F texture with the matching depth/stencil attachment required by its
   default depth-assisted 2D ordering.
 * A thin QML application shell defaults to a video-first Player page and keeps
-  the retained HDR Lab reachable from Player's empty state or overflow menu.
+  the retained HDR Lab reachable only through About.
   Player publishes a full-page video viewport with a transient transport island
   and optional grouped playback-details panel. The panel separates selected
   source tracks and conservative SDR/HDR classification from presentation mode
@@ -90,7 +90,9 @@ playback:
   active page publishes generic root-coordinate viewport geometry with explicit
   visibility. HDR Lab uses libplacebo by default and can select the retained
   procedural QRhi producer for diagnostic comparison; that switch is not a
-  playback fallback or player preference.
+  playback fallback or player preference. Its manual target override is applied
+  only on the Diagnostics route, so Player always follows the live platform
+  target.
 * A narrow application settings boundary restores and records playback volume
   and the supported fullscreen display-blanking preference through Qt's native
   per-user store. Runtime owners remain canonical, application smoke modes use
