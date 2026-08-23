@@ -16,11 +16,13 @@ void WindowShortcutTest::recognizesRelativeSeekKeys() {
     QKeyEvent const right(QEvent::KeyPress, Qt::Key_Right, Qt::NoModifier);
     QKeyEvent const macLeft(QEvent::KeyPress, Qt::Key_Left, Qt::KeypadModifier);
     QKeyEvent const macRight(QEvent::KeyPress, Qt::Key_Right, Qt::KeypadModifier);
+    QKeyEvent const repeatedRight(QEvent::KeyPress, Qt::Key_Right, Qt::NoModifier, QString{}, true, 3);
 
     QCOMPARE(relativeSeekMilliseconds(left), -10'000);
     QCOMPARE(relativeSeekMilliseconds(right), 10'000);
     QCOMPARE(relativeSeekMilliseconds(macLeft), -10'000);
     QCOMPARE(relativeSeekMilliseconds(macRight), 10'000);
+    QCOMPARE(relativeSeekMilliseconds(repeatedRight), 10'000);
 }
 
 void WindowShortcutTest::rejectsModifiedAndUnrelatedKeys() {

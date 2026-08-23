@@ -19,9 +19,19 @@ VideoPage {
     readonly property bool sessionReady:
         session.state === MediaSession.Ready
     readonly property bool frameReady:
-        sessionReady && session.hasFrame
+        sessionActive && session.hasFrame
     readonly property bool sessionActive:
         sessionReady || session.seeking
+    property bool relativeSeekPending: false
+    property double relativeSeekOriginMilliseconds: 0
+    property double relativeSeekDeltaMilliseconds: 0
+    readonly property double pendingRelativeSeekTargetMilliseconds:
+        Math.max(0, Math.min(session.durationMilliseconds,
+            relativeSeekOriginMilliseconds + relativeSeekDeltaMilliseconds))
+    readonly property double seekFeedbackPositionMilliseconds:
+        relativeSeekPending
+            ? pendingRelativeSeekTargetMilliseconds
+            : session.positionMilliseconds
     property bool showPlaybackDetails: false
     property bool controlsVisibleByActivity: true
     property point lastPointerPosition: Qt.point(-1, -1)
@@ -29,7 +39,7 @@ VideoPage {
         !session.playRequested
         || session.ended
         || session.seeking
-        || session.playbackInterruption !== MediaSession.None
+        || relativeSeekPending
         || transportMenu.visible
         || detailsHover.hovered
         || seekSlider.pressed
@@ -45,13 +55,24 @@ VideoPage {
     videoViewportRect:
         Qt.rect(0, 0, root.width, root.height)
     videoViewportVisible:
-        visible && sessionReady
+        visible && sessionActive
 
     Connections {
         target: root.windowCommands
 
         function onRelativeSeekRequested(milliseconds) {
             root.seekBy(milliseconds)
+        }
+    }
+
+    Connections {
+        target: root.session
+
+        function onTimelineChanged() {
+            if (!root.session.seekable
+                    || root.session.durationMilliseconds <= 0) {
+                root.clearPendingRelativeSeek()
+            }
         }
     }
 
@@ -136,7 +157,7 @@ VideoPage {
     }
 
     function togglePlayback() {
-        if (!sessionReady || session.seeking)
+        if (!sessionReady && !session.seeking)
             return
         if (session.playRequested && !session.ended)
             session.pause()
@@ -145,26 +166,75 @@ VideoPage {
         revealControls()
     }
 
-    function seekBy(milliseconds) {
-        if (!session.seekable
-                || session.durationMilliseconds <= 0
-                || session.seeking) {
+    function clearPendingRelativeSeek() {
+        relativeSeekTimer.stop()
+        relativeSeekPending = false
+        relativeSeekDeltaMilliseconds = 0
+    }
+
+    function dispatchPendingRelativeSeek() {
+        if (!relativeSeekPending)
+            return
+        if (seekSlider.pressed) {
+            clearPendingRelativeSeek()
             return
         }
-        const target = Math.max(
-            0,
-            Math.min(
-                session.durationMilliseconds,
-                session.positionMilliseconds + milliseconds))
+        const target = Math.round(pendingRelativeSeekTargetMilliseconds)
+        const origin = Math.round(relativeSeekOriginMilliseconds)
+        clearPendingRelativeSeek()
+        if (session.seekable
+                && session.durationMilliseconds > 0
+                && sessionActive
+                && target !== origin) {
+            session.seekToMilliseconds(target)
+        }
+    }
+
+    function seekTo(milliseconds) {
+        clearPendingRelativeSeek()
+        if (!sessionActive
+                || !session.seekable
+                || session.durationMilliseconds <= 0) {
+            return
+        }
+        const target = Math.max(0,
+            Math.min(session.durationMilliseconds, milliseconds))
         session.seekToMilliseconds(Math.round(target))
         revealControls()
     }
 
+    function seekBy(milliseconds) {
+        if (!session.seekable
+                || session.durationMilliseconds <= 0
+                || !sessionActive) {
+            return
+        }
+        if (!relativeSeekPending) {
+            relativeSeekOriginMilliseconds = session.positionMilliseconds
+            relativeSeekDeltaMilliseconds = 0
+            relativeSeekPending = true
+        }
+        relativeSeekDeltaMilliseconds += milliseconds
+        if (relativeSeekDeltaMilliseconds === 0) {
+            clearPendingRelativeSeek()
+        } else {
+            relativeSeekTimer.restart()
+        }
+        revealControls()
+    }
+
+    onVisibleChanged: {
+        if (!visible && relativeSeekPending)
+            clearPendingRelativeSeek()
+    }
+
     onSessionActiveChanged: {
-        if (sessionActive)
+        if (sessionActive) {
             revealControls()
-        else
+        } else {
+            clearPendingRelativeSeek()
             hideControlsTimer.stop()
+        }
     }
 
     onControlsPinnedChanged: {
@@ -292,6 +362,15 @@ VideoPage {
         }
     }
 
+    Timer {
+        id: relativeSeekTimer
+        objectName: "relativeSeekTimer"
+
+        interval: 180
+        repeat: false
+        onTriggered: root.dispatchPendingRelativeSeek()
+    }
+
     HoverHandler {
         objectName: "playbackHoverHandler"
         acceptedDevices:
@@ -311,7 +390,7 @@ VideoPage {
         property bool fullscreenTogglePending: false
 
         anchors.fill: parent
-        visible: root.sessionReady
+        visible: root.sessionActive
         acceptedButtons: Qt.LeftButton
         onVisibleChanged: {
             if (!visible)
@@ -368,18 +447,29 @@ VideoPage {
     ColumnLayout {
         objectName: "waitingForVideoState"
         anchors.centerIn: parent
-        visible: root.sessionReady && !root.session.hasFrame
-        spacing: 12
+        visible: root.sessionReady
+            && !root.session.hasFrame
+            && !root.session.seeking
+        spacing: 10
 
         BusyIndicator {
+            objectName: "preparingIndicator"
             Layout.alignment: Qt.AlignHCenter
+            Layout.minimumWidth: 32
+            Layout.minimumHeight: 32
+            Layout.preferredWidth: 32
+            Layout.preferredHeight: 32
+            Layout.maximumWidth: 32
+            Layout.maximumHeight: 32
             running: parent.visible
         }
 
         Label {
+            objectName: "preparingLabel"
             Layout.alignment: Qt.AlignHCenter
             text: qsTr("Preparing video…")
             color: "#c7ccd6"
+            font.pixelSize: 14
         }
     }
 
@@ -391,11 +481,13 @@ VideoPage {
         spacing: 14
 
         BusyIndicator {
+            objectName: "openingIndicator"
             Layout.alignment: Qt.AlignHCenter
             running: parent.visible
         }
 
         Label {
+            objectName: "openingLabel"
             Layout.alignment: Qt.AlignHCenter
             text: qsTr("Opening %1…").arg(root.session.displayName)
             color: "white"
@@ -413,21 +505,45 @@ VideoPage {
     ColumnLayout {
         objectName: "seekingState"
         anchors.centerIn: parent
-        visible: root.session.seeking
-        spacing: 14
+        visible: root.relativeSeekPending || root.session.seeking
+        spacing: 10
 
         BusyIndicator {
+            objectName: "seekingIndicator"
             Layout.alignment: Qt.AlignHCenter
-            running: parent.visible
+            Layout.minimumWidth: 32
+            Layout.minimumHeight: 32
+            Layout.preferredWidth: 32
+            Layout.preferredHeight: 32
+            Layout.maximumWidth: 32
+            Layout.maximumHeight: 32
+            visible: root.session.seeking
+            running: visible
         }
 
         Label {
+            objectName: "seekingLabel"
             Layout.alignment: Qt.AlignHCenter
             text: qsTr("Seeking to %1…").arg(
-                root.formatTime(root.session.positionMilliseconds))
-            color: "white"
-            font.pixelSize: 20
+                root.formatTime(root.seekFeedbackPositionMilliseconds))
+            color: "#c7ccd6"
+            font.pixelSize: 14
         }
+    }
+
+    BusyIndicator {
+        id: bufferingIndicator
+        objectName: "bufferingIndicator"
+
+        anchors.centerIn: parent
+        width: 32
+        height: 32
+        visible: root.frameReady
+            && root.session.playRequested
+            && root.session.playbackInterruption === MediaSession.Buffering
+            && !root.relativeSeekPending
+            && !root.session.seeking
+        running: visible
     }
 
     ColumnLayout {
@@ -771,7 +887,7 @@ VideoPage {
                         seekSlider.pressed
                             ? Math.round(seekSlider.valueAt(
                                 seekSlider.position))
-                            : root.session.positionMilliseconds)
+                            : root.seekFeedbackPositionMilliseconds)
                     color: "#f5f6fa"
                     font.features: { "tnum": 1 }
                 }
@@ -786,24 +902,23 @@ VideoPage {
                     live: false
                     enabled: root.session.seekable
                         && root.session.durationMilliseconds > 0
-                        && !root.session.seeking
                     onMoved: {
                         if (enabled && !pressed) {
-                            root.session.seekToMilliseconds(
-                                Math.round(valueAt(position)))
+                            root.seekTo(valueAt(position))
                         }
                     }
                     onPressedChanged: {
                         root.revealControls()
-                        if (enabled && !pressed) {
-                            root.session.seekToMilliseconds(
-                                Math.round(valueAt(position)))
+                        if (pressed) {
+                            root.clearPendingRelativeSeek()
+                        } else if (enabled) {
+                            root.seekTo(valueAt(position))
                         }
                     }
 
                     Binding on value {
                         when: !seekSlider.pressed
-                        value: root.session.positionMilliseconds
+                        value: root.seekFeedbackPositionMilliseconds
                         restoreMode: Binding.RestoreBinding
                     }
                 }
@@ -874,7 +989,6 @@ VideoPage {
                         text: qsTr("Seek backward 10 seconds")
                         enabled: root.session.seekable
                             && root.session.durationMilliseconds > 0
-                            && !root.session.seeking
                         onClicked: root.seekBy(-10000)
                     }
 
@@ -884,7 +998,7 @@ VideoPage {
 
                         Layout.alignment: Qt.AlignVCenter
                         prominent: true
-                        enabled: !root.session.seeking
+                        enabled: root.sessionReady || root.session.seeking
                         iconSource: root.session.playRequested
                             && !root.session.ended
                                 ? "icons/lucide/pause.svg"
@@ -903,7 +1017,6 @@ VideoPage {
                         text: qsTr("Seek forward 10 seconds")
                         enabled: root.session.seekable
                             && root.session.durationMilliseconds > 0
-                            && !root.session.seeking
                         onClicked: root.seekBy(10000)
                     }
                 }

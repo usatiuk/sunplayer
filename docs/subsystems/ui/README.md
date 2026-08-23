@@ -31,9 +31,11 @@ fullscreen. It is hidden and its stored value remains unapplied on other
 platforms for now.
 
 The native presentation window handles non-repeating `F11`/`Escape`, gated
-Space play/pause, and unmodified Left/Right ten-second seeks because the
+Space play/pause, and unmodified Left/Right ten-second seeks (including native
+key repeat) because the
 redirected Quick window is not the active native shortcut target. Relative
-seek requests reuse the Player page action used by the transport buttons.
+seek requests reuse the Player page action used by the transport buttons and
+accumulate into one target during a 180 ms trailing input window.
 `F11` toggles Qt-managed fullscreen from either page. A
 left-button
 double-click on active Player video background does the same; one accepting
@@ -160,16 +162,23 @@ Inactive pages cannot compete for the viewport.
   be waiting for its first due frame.
 
 The Ready state exposes play/pause or replay, ten-second relative seeks, open
-another, close, mute, and volume. The active video viewport fills the page and
-the bottom-center transport island is pinned only while paused, ended, seeking,
-buffering, actively manipulating a slider, or menu-open. A stationary pointer
-over the island does not pin it onscreen. Its non-live timeline sends only
-interactive moves back to the session, so backend position updates cannot
-create seek loops; while pressed, the current-time label follows the selected
-slider position. Seeking has a distinct busy state and keeps the timeline
-visible but disabled. Explicit user play intent means Buffering still offers
-Pause and a pause made during an interruption cannot be mistaken for automatic
-playback.
+another, close, mute, and volume. Relative taps update a visible pending target
+immediately and dispatch one generation replacement after 180 ms of quiet;
+pressing the slider cancels any pending relative burst and slider release
+remains immediate. A new burst can supersede a slow active seek.
+The active video viewport retains its last frame while that replacement opens,
+and play/pause, relative buttons, and the slider remain usable. The viewport
+fills the page and the bottom-center transport island is pinned only while
+paused, ended, seeking, actively manipulating a slider, or menu-open. A
+stationary pointer over the island does not pin it onscreen. Its non-live
+timeline sends only interactive moves back to the session, so backend position
+updates cannot create seek loops; while pressed, the current-time label follows
+the selected slider position. Preparing and seeking use the same compact
+activity style.
+Buffering keeps the frame, shows only a centered spinner, and does not summon
+the transport. Explicit user play intent means Buffering still offers Pause
+when the user reveals the controls, and a pause made during an interruption
+cannot be mistaken for automatic playback.
 
 An optional scrollable upper-right playback-details panel groups media, video,
 audio, subtitles, output, and performance. It shows the selected track labels;
@@ -266,9 +275,12 @@ opaque black panel backgrounds. It explicitly covers `Ready` before `hasFrame`: 
 and the viewport remain active while the preparing state is visible, then the
 preparing state disappears after frame publication. It also verifies full-page
 Player geometry, timeline formatting, scrub-preview time, relative and slider
-seek commands, backend position updates, disabled seeking state, fullscreen
-gesture release/cancellation ordering, popup Escape priority state, island hit
-testing, and native-cursor intent without launching a native dialog. The
+seek commands, fixed-origin burst accumulation/cancellation and boundary
+clamping, active-seek supersession, retained-frame viewport and enabled
+controls, buffering feedback without transport pinning, backend position
+updates, fullscreen gesture release/cancellation ordering, popup Escape priority
+state, island hit testing, and native-cursor intent without launching a native
+dialog. The
 window-command fake additionally proves the Windows-only menu action's
 visibility and two-way checked-state binding; it does not claim physical monitor
 coverage.

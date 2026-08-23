@@ -2,6 +2,7 @@
 
 * Status: Accepted
 * Date: 2026-07-30
+* Amended: 2026-08-23
 
 ## Context
 
@@ -30,21 +31,35 @@ hardware-import fallback, graphics recovery, and replay. The request carries:
   negative-timestamp preroll is still filtered.
 
 Each same-media targeted restart cancels the previous operation, increments
-the playback generation once, clears stale queue/current-frame state, opens
-fresh demux and codec contexts, positions or begins natural reading before
-demux handoff, and decodes forward normally. This includes replay and an
-explicit seek to zero.
+the playback generation once, clears the stale queue, opens fresh demux and
+codec contexts, positions or begins natural reading before demux handoff, and
+decodes forward normally. An ordinary user seek retains the immutable frame
+already being presented until the new generation selects its replacement;
+that retained frame never re-enters scheduling and does not weaken generation
+checks. New media, cancellation, error, replay, track/fallback restart, and
+graphics-device invalidation still clear current-frame state. An explicit
+seek to zero remains a targeted restart.
 
 Decoded keyframe preroll is removed before the bounded frame mailbox. The gate
 uses a decoded duration when FFmpeg supplied one. When duration is missing or
 only estimated, it waits for the next decoded PTS before deciding which frame
 covers the target. It admits the frame active at the target and the next frame
 needed by normal scheduling, or the first frame after a gap. At end of stream,
-the final preceding frame is the bounded fallback. The session becomes ready
-only after an admitted frame is published and anchors its clock no earlier
-than both the requested position and that frame's PTS. Paused seeks remain
-paused; playing seeks resume after bootstrap. Rapid seeks retain only the
-newest request, and old-generation callbacks and frames remain invalid.
+the final preceding frame is the bounded fallback. Stream discovery or audio
+may make the session ready before a future replacement video frame is due, but
+the seek remains observable and the retained frame remains current until the
+new generation's frame is selected. Its clock anchors no earlier than both the
+requested position and that frame's PTS. Paused seeks remain paused; playing
+seeks resume after bootstrap. Play/pause
+intent remains mutable while the replacement opens. Rapid relative UI commands
+are coalesced briefly before dispatch, while any request dispatched during an
+active seek immediately replaces that generation; old-generation callbacks
+and frames remain invalid.
+
+If a current-generation seek drains cleanly without admitting any video frame,
+the session completes the seek and clears the retained old-generation frame.
+It does not present stale video indefinitely or treat the valid no-video target
+as a decoder failure.
 
 Graphics recovery uses the same restart for software and hardware-backed
 pipelines. Software frame storage can remain valid across device generations,
@@ -77,9 +92,8 @@ Benefits:
 Costs:
 
 * Each seek currently reopens and reprobes the local file.
-* The displayed video clears while the new generation reaches its target.
-* Audio and subtitle streams will need to join the same normalized start
-  request before A/V seeking is complete.
+* One previously presented frame remains alive while an ordinary user seek
+  reaches its target.
 
 ## Alternatives considered
 

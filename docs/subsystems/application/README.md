@@ -157,10 +157,11 @@ Mouse, wheel, and ordinary keyboard input are forwarded to the redirected
 hidden `QQuickWindow`, including the complete native double-click event
 sequence and its timestamp/device metadata. The visible native window handles
 non-repeating F11/Escape, gated Space play/pause, and unmodified Left/Right
-ten-second relative seek requests. QML publishes whether a transient menu or
-dialog owns the gated shortcuts and routes native relative-seek requests
-through the same Player action as the transport buttons. The hidden Quick
-scene has the same logical size as the native window.
+ten-second relative seek requests, including held-key repeat. Space remains
+available while a user seek is opening. QML publishes whether a transient menu
+or dialog owns the gated shortcuts and routes native relative-seek requests
+through the same Player action as the transport buttons. The hidden Quick scene
+has the same logical size as the native window.
 
 `PresentationWindow` is also the single application-level media-open boundary.
 The file dialog calls it from QML, startup calls it from `main()`, and a native

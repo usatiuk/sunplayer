@@ -452,7 +452,8 @@ void MediaSession::retry() {
 
 void MediaSession::play() {
     Q_ASSERT(QThread::currentThread() == thread());
-    if (m_state != State::Ready) {
+    bool const seekOpening = m_state == State::Opening && m_seeking;
+    if (m_state != State::Ready && !seekOpening) {
         return;
     }
     if (m_ended) {
@@ -469,6 +470,18 @@ void MediaSession::play() {
     }
     m_userWantsPlaying = true;
     m_audioPlayIntent.store(true, std::memory_order_release);
+    if (seekOpening) {
+        {
+            std::lock_guard lock(m_audioSinkLifecycleMutex);
+            if (m_audioSink && m_audioSinkGeneration.load(std::memory_order_acquire) == m_playbackGeneration) {
+                m_audioSink->start();
+            }
+        }
+        m_playbackMonitorTimer.start();
+        emit sessionChanged();
+        emit timelineChanged();
+        return;
+    }
     if (!m_audioTailClockActive) {
         std::lock_guard lock(m_audioSinkLifecycleMutex);
         if (m_audioSink && m_audioSinkGeneration.load(std::memory_order_acquire) == m_playbackGeneration) {
@@ -490,7 +503,8 @@ void MediaSession::play() {
 
 void MediaSession::pause() {
     Q_ASSERT(QThread::currentThread() == thread());
-    if (m_state != State::Ready || !m_userWantsPlaying || m_ended) {
+    bool const seekOpening = m_state == State::Opening && m_seeking;
+    if ((m_state != State::Ready && !seekOpening) || !m_userWantsPlaying || m_ended) {
         return;
     }
     auto const now = std::chrono::steady_clock::now();
@@ -499,6 +513,18 @@ void MediaSession::pause() {
     // user pause or resume automatically afterward.
     m_userWantsPlaying = false;
     m_audioPlayIntent.store(false, std::memory_order_release);
+    if (seekOpening) {
+        {
+            std::lock_guard lock(m_audioSinkLifecycleMutex);
+            if (m_audioSink && m_audioSinkGeneration.load(std::memory_order_acquire) == m_playbackGeneration) {
+                m_audioSink->pause();
+            }
+        }
+        m_playbackMonitorTimer.stop();
+        emit sessionChanged();
+        emit timelineChanged();
+        return;
+    }
     std::optional<AudioPresentationSnapshot> audio;
     if (!observeAudioOutput(now, audio)) {
         return;
@@ -654,7 +680,9 @@ void MediaSession::startDecode(QUrl const& url, QString const& path, VideoHardwa
     std::uint64_t const generation = m_playbackGeneration;
     cancelPipeline();
     m_frameQueue.reset(m_playbackGeneration);
-    m_videoSource.clearFrame();
+    if (!seeking) {
+        m_videoSource.clearFrame();
+    }
     if (generation != m_playbackGeneration) {
         return;
     }
@@ -854,9 +882,10 @@ void MediaSession::workerLoop(std::stop_token workerStopToken) {
                                 << "generation=" + QString::number(generation)
                                 << "sampleRate=" + QString::number(block.format.sampleRate)
                                 << "channels=" + QString::number(block.format.channelCount);
-                            if (m_audioPlayIntent.load(std::memory_order_acquire)) {
+                            bool const playIntent = m_audioPlayIntent.load(std::memory_order_acquire);
+                            if (playIntent) {
                                 m_audioSink->start();
-                            } else if (!m_audioPlayIntent.load(std::memory_order_acquire)) {
+                            } else {
                                 m_audioSink->pause();
                             }
                         }
@@ -1093,7 +1122,18 @@ void MediaSession::completeDecode(std::uint64_t generation, FfmpegMediaDecodeRes
 
     applyDiagnostics(result.video.diagnostics);
     m_decoderDrained = result.video.endOfStream;
+    bool const seekFinishedWithoutVideo = m_seeking && m_decoderDrained && m_frameQueue.size(generation) == 0;
+    bool const notifyReadySeekCompletion = seekFinishedWithoutVideo && m_state == State::Ready;
+    if (seekFinishedWithoutVideo) {
+        m_seeking = false;
+        m_videoSource.clearFrame();
+    }
     handleFramesAvailable(generation);
+    if (notifyReadySeekCompletion) {
+        emit sessionChanged();
+        emit timelineChanged();
+        emit playbackMetricsChanged();
+    }
 }
 
 void MediaSession::postFramesAvailable(std::uint64_t generation) {
@@ -1200,7 +1240,8 @@ void MediaSession::failWithoutWorker(QUrl const& url, QString const& message) {
 void MediaSession::handlePresentationFailure(VideoFailure const& failure) {
     Q_ASSERT(QThread::currentThread() == thread());
     Q_ASSERT(failure.isValid());
-    if (m_state != State::Ready) {
+    bool const seekInProgress = m_seeking && (m_state == State::Opening || m_state == State::Ready);
+    if (m_state != State::Ready && !seekInProgress) {
         return;
     }
     if (failure.kind == VideoFailureKind::HardwareFrameImportUnavailable && !m_hardwareImportFallbackConsumed) {
@@ -1209,6 +1250,9 @@ void MediaSession::handlePresentationFailure(VideoFailure const& failure) {
             std::int64_t const restartPosition =
                 mediaClockSnapshotAt(std::chrono::steady_clock::now()).positionMicroseconds;
             m_hardwareImportFallbackConsumed = true;
+            if (seekInProgress) {
+                m_videoSource.clearFrame();
+            }
             restartAt(restartPosition,
                       {
                           .device = {},
@@ -1216,7 +1260,7 @@ void MediaSession::handlePresentationFailure(VideoFailure const& failure) {
                                                   "using software decode: %1")
                                                    .arg(failure.reason),
                       },
-                      false);
+                      seekInProgress);
             return;
         }
     }
@@ -1601,7 +1645,6 @@ bool MediaSession::enterReady(std::chrono::steady_clock::time_point now) {
     m_clockAnchorMediaMicroseconds = m_requestedPositionMicroseconds;
     m_clockAnchorTime = now;
     m_state = State::Ready;
-    m_seeking = false;
     if (m_durationMicroseconds && m_requestedPositionMicroseconds >= *m_durationMicroseconds) {
         m_clockAnchorMediaMicroseconds = *m_durationMicroseconds;
         m_ended = true;
@@ -1683,6 +1726,10 @@ MediaSession::selectFrameForPresentation(std::chrono::steady_clock::time_point n
         m_decoderDrained && (!currentGenerationUsesAudioClock() || m_audioTailClockActive);
     VideoFrameSelection selection = m_frameScheduler.selectForPresentation(
         m_frameQueue, m_playbackGeneration, clock, playbackInputDrained, m_durationMicroseconds);
+    bool const completedSeek = m_seeking && (selection.frame || selection.reachedEnd);
+    if (completedSeek) {
+        m_seeking = false;
+    }
     bool const firstPublishedFrame = selection.frame && !m_videoSource.currentFrame();
     bool videoDetailsChanged = false;
     if (selection.frame) {
@@ -1703,7 +1750,7 @@ MediaSession::selectFrameForPresentation(std::chrono::steady_clock::time_point n
     if (selection.frame) {
         m_pendingPublicationGeneration = m_playbackGeneration;
         m_sessionNotificationPending =
-            enteredReady || firstPublishedFrame || selection.reachedEnd || videoDetailsChanged;
+            enteredReady || completedSeek || firstPublishedFrame || selection.reachedEnd || videoDetailsChanged;
         m_playbackMetricsNotificationPending = true;
     } else if (selection.reachedEnd || enteredReady) {
         emit sessionChanged();

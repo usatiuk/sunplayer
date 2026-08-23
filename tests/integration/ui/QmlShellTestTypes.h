@@ -496,7 +496,11 @@ class ShellTestMediaSession final : public QObject {
     void setState(State state, bool hasFrame = false) {
         m_state = state;
         m_hasFrame = hasFrame;
-        m_playRequested = state == State::Ready;
+        if (state == State::Ready) {
+            m_playRequested = true;
+        } else if (state == State::Empty || state == State::Error) {
+            m_playRequested = false;
+        }
         m_ended = false;
         m_seeking = false;
         if (state == State::Ready) {

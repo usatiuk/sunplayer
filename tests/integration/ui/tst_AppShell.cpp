@@ -109,8 +109,7 @@ void AppShellTest::publishesActiveViewport() {
     QQuickItem* const hdrLabDiagnosticScroll =
         rootItem->findChild<QQuickItem*>(QStringLiteral("hdrLabDiagnosticScroll"));
     QQuickItem* const hdrLabReprobeButton = rootItem->findChild<QQuickItem*>(QStringLiteral("hdrLabReprobeButton"));
-    QObject* const hdrLabSourcePeakSlider =
-        rootItem->findChild<QObject*>(QStringLiteral("hdrLabSourcePeakSlider"));
+    QObject* const hdrLabSourcePeakSlider = rootItem->findChild<QObject*>(QStringLiteral("hdrLabSourcePeakSlider"));
     QObject* const hdrLabSourcePeakLabel = rootItem->findChild<QObject*>(QStringLiteral("hdrLabSourcePeakLabel"));
     QObject* const hdrLabFooterPanel = rootItem->findChild<QObject*>(QStringLiteral("hdrLabFooterPanel"));
     QVERIFY(rendererSwitch);
@@ -145,6 +144,12 @@ void AppShellTest::publishesActiveViewport() {
     QObject* const playPauseButton = rootItem->findChild<QObject*>(QStringLiteral("playPauseButton"));
     QObject* const playPauseButtonIcon = rootItem->findChild<QObject*>(QStringLiteral("playPauseButtonIcon"));
     QObject* const seekingState = rootItem->findChild<QObject*>(QStringLiteral("seekingState"));
+    QObject* const relativeSeekTimer = rootItem->findChild<QObject*>(QStringLiteral("relativeSeekTimer"));
+    QObject* const preparingIndicator = rootItem->findChild<QObject*>(QStringLiteral("preparingIndicator"));
+    QObject* const preparingLabel = rootItem->findChild<QObject*>(QStringLiteral("preparingLabel"));
+    QObject* const seekingIndicator = rootItem->findChild<QObject*>(QStringLiteral("seekingIndicator"));
+    QObject* const seekingLabel = rootItem->findChild<QObject*>(QStringLiteral("seekingLabel"));
+    QObject* const bufferingIndicator = rootItem->findChild<QObject*>(QStringLiteral("bufferingIndicator"));
     QObject* const seekSlider = rootItem->findChild<QObject*>(QStringLiteral("seekSlider"));
     QObject* const positionLabel = rootItem->findChild<QObject*>(QStringLiteral("positionLabel"));
     QObject* const durationLabel = rootItem->findChild<QObject*>(QStringLiteral("durationLabel"));
@@ -214,6 +219,12 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(playPauseButton);
     QVERIFY(playPauseButtonIcon);
     QVERIFY(seekingState);
+    QVERIFY(relativeSeekTimer);
+    QVERIFY(preparingIndicator);
+    QVERIFY(preparingLabel);
+    QVERIFY(seekingIndicator);
+    QVERIFY(seekingLabel);
+    QVERIFY(bufferingIndicator);
     QVERIFY(seekSlider);
     QVERIFY(positionLabel);
     QVERIFY(durationLabel);
@@ -341,15 +352,15 @@ void AppShellTest::publishesActiveViewport() {
     quickWindow.resize(760, 360);
     QTRY_VERIFY(hdrLabDiagnosticScroll->property("contentHeight").toReal() > hdrLabDiagnosticScroll->height());
     QTRY_VERIFY(([&] {
-        qreal const diagnosticMaximumY =
-            hdrLabDiagnosticScroll->property("originY").toReal() +
-            hdrLabDiagnosticScroll->property("contentHeight").toReal() - hdrLabDiagnosticScroll->height();
+        qreal const diagnosticMaximumY = hdrLabDiagnosticScroll->property("originY").toReal() +
+                                         hdrLabDiagnosticScroll->property("contentHeight").toReal() -
+                                         hdrLabDiagnosticScroll->height();
         if (!hdrLabDiagnosticScroll->setProperty("contentY", diagnosticMaximumY)) {
             return false;
         }
 
-        QRectF const reprobeBounds = hdrLabReprobeButton->mapRectToItem(
-            hdrLabDiagnosticScroll, hdrLabReprobeButton->boundingRect());
+        QRectF const reprobeBounds =
+            hdrLabReprobeButton->mapRectToItem(hdrLabDiagnosticScroll, hdrLabReprobeButton->boundingRect());
         return reprobeBounds.top() >= 0.0 && reprobeBounds.bottom() <= hdrLabDiagnosticScroll->height();
     })());
     rootItem->setSize({1100.0, 760.0});
@@ -372,6 +383,9 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_VERIFY(videoViewport.visible());
     QTRY_VERIFY(!idleMoreButton->property("visible").toBool());
     QTRY_VERIFY(waitingForVideoState->property("visible").toBool());
+    QCOMPARE(preparingIndicator->property("width").toInt(), 32);
+    QCOMPARE(preparingIndicator->property("height").toInt(), 32);
+    QCOMPARE(QQmlProperty(preparingLabel, QStringLiteral("font.pixelSize")).read().toInt(), 14);
     QTRY_VERIFY(playPauseButton->property("visible").toBool());
     QTRY_VERIFY(seekSlider->property("visible").toBool());
     QTRY_VERIFY(muteButton->property("visible").toBool());
@@ -584,17 +598,26 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(QMetaObject::invokeMethod(aboutMenuItem, "clicked", Qt::DirectConnection));
     QCOMPARE(supportController.aboutCount(), 2);
 
+    mediaSession.setState(ShellTestMediaSession::State::Ready, true);
+    playerPage->setProperty("controlsVisibleByActivity", false);
+    QTRY_VERIFY(transportIsland->opacity() < 0.1);
     mediaSession.setPlaybackInterruption(ShellTestMediaSession::PlaybackInterruption::Buffering);
     QVERIFY(!mediaSession.playing());
     QVERIFY(mediaSession.playRequested());
+    QTRY_VERIFY(bufferingIndicator->property("visible").toBool());
+    QTRY_VERIFY(transportIsland->opacity() < 0.1);
     QTRY_VERIFY(playbackStateLabel->property("text").toString().contains(QStringLiteral("Buffering audio")));
     QVERIFY(QMetaObject::invokeMethod(playPauseButton, "clicked", Qt::DirectConnection));
     QVERIFY(!mediaSession.playRequested());
+    QTRY_VERIFY(!bufferingIndicator->property("visible").toBool());
+    QTRY_VERIFY(transportIsland->opacity() > 0.9);
     QTRY_VERIFY(playbackStateLabel->property("text").toString().contains(QStringLiteral("Paused")));
     QVERIFY(QMetaObject::invokeMethod(playPauseButton, "clicked", Qt::DirectConnection));
     QVERIFY(mediaSession.playRequested());
+    QTRY_VERIFY(bufferingIndicator->property("visible").toBool());
     QTRY_VERIFY(playbackStateLabel->property("text").toString().contains(QStringLiteral("Buffering audio")));
     mediaSession.setPlaybackInterruption(ShellTestMediaSession::PlaybackInterruption::None);
+    QTRY_VERIFY(!bufferingIndicator->property("visible").toBool());
 
     mediaSession.setState(ShellTestMediaSession::State::Ready, true);
     QTRY_VERIFY(!waitingForVideoState->property("visible").toBool());
@@ -657,46 +680,134 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(mediaSession.lastSeekMilliseconds() > 30'000);
     QTRY_COMPARE(qRound(seekSlider->property("value").toDouble()),
                  static_cast<int>(mediaSession.lastSeekMilliseconds()));
-    qlonglong const seekedPosition = mediaSession.lastSeekMilliseconds();
-    QVERIFY(QMetaObject::invokeMethod(seekBackwardButton, "clicked", Qt::DirectConnection));
-    QTRY_COMPARE(mediaSession.lastSeekMilliseconds(), std::max<qlonglong>(0, seekedPosition - 10'000));
-    QVERIFY(QMetaObject::invokeMethod(seekForwardButton, "clicked", Qt::DirectConnection));
-    QTRY_COMPARE(mediaSession.lastSeekMilliseconds(),
-                 std::min<qlonglong>(mediaSession.durationMilliseconds(),
-                                     std::max<qlonglong>(0, seekedPosition - 10'000) + 10'000));
+    QCOMPARE(relativeSeekTimer->property("interval").toInt(), 180);
+    int const seekCountAfterSlider = mediaSession.seekCount();
 
-    mediaSession.setTimeline(30'000, 65'000, true);
-    emit windowCommands.relativeSeekRequested(-10'000);
-    QTRY_COMPARE(mediaSession.lastSeekMilliseconds(), 20'000);
+    // Relative commands share one fixed origin and dispatch once after the
+    // burst. The production flush function keeps the test deterministic.
     mediaSession.setTimeline(30'000, 65'000, true);
     emit windowCommands.relativeSeekRequested(10'000);
-    QTRY_COMPARE(mediaSession.lastSeekMilliseconds(), 40'000);
+    emit windowCommands.relativeSeekRequested(10'000);
+    emit windowCommands.relativeSeekRequested(10'000);
+    QVERIFY(QMetaObject::invokeMethod(relativeSeekTimer, "stop", Qt::DirectConnection));
+    QCOMPARE(mediaSession.seekCount(), seekCountAfterSlider);
+    QVERIFY(playerPage->property("relativeSeekPending").toBool());
+    QCOMPARE(qRound(playerPage->property("pendingRelativeSeekTargetMilliseconds").toDouble()), 60'000);
+    QTRY_COMPARE(positionLabel->property("text").toString(), QStringLiteral("1:00"));
+    QTRY_VERIFY(seekingState->property("visible").toBool());
+    QVERIFY(QMetaObject::invokeMethod(playerPage, "dispatchPendingRelativeSeek", Qt::DirectConnection));
+    QCOMPARE(mediaSession.seekCount(), seekCountAfterSlider + 1);
+    QCOMPARE(mediaSession.lastSeekMilliseconds(), 60'000);
+    QVERIFY(!playerPage->property("relativeSeekPending").toBool());
+
+    // Equal opposite commands cancel the burst instead of drifting because
+    // clamping is applied only to the displayed/dispatched target.
+    mediaSession.setTimeline(30'000, 65'000, true);
+    int const seekCountBeforeCancellation = mediaSession.seekCount();
+    emit windowCommands.relativeSeekRequested(10'000);
+    emit windowCommands.relativeSeekRequested(-10'000);
+    QVERIFY(!playerPage->property("relativeSeekPending").toBool());
+    QVERIFY(QMetaObject::invokeMethod(playerPage, "dispatchPendingRelativeSeek", Qt::DirectConnection));
+    QCOMPARE(mediaSession.seekCount(), seekCountBeforeCancellation);
+
+    // Reversal after hitting a boundary must also cancel from the fixed
+    // origin; sequentially clamping each tap would incorrectly drift to 10s.
+    mediaSession.setTimeline(5'000, 65'000, true);
+    emit windowCommands.relativeSeekRequested(-10'000);
+    emit windowCommands.relativeSeekRequested(10'000);
+    QVERIFY(!playerPage->property("relativeSeekPending").toBool());
+    QVERIFY(QMetaObject::invokeMethod(playerPage, "dispatchPendingRelativeSeek", Qt::DirectConnection));
+    QCOMPARE(mediaSession.seekCount(), seekCountBeforeCancellation);
 
     mediaSession.setTimeline(5'000, 65'000, true);
     QVERIFY(QMetaObject::invokeMethod(seekBackwardButton, "clicked", Qt::DirectConnection));
-    QTRY_COMPARE(mediaSession.lastSeekMilliseconds(), 0);
+    QVERIFY(QMetaObject::invokeMethod(relativeSeekTimer, "stop", Qt::DirectConnection));
+    QCOMPARE(mediaSession.seekCount(), seekCountBeforeCancellation);
+    QCOMPARE(qRound(playerPage->property("pendingRelativeSeekTargetMilliseconds").toDouble()), 0);
+    QVERIFY(QMetaObject::invokeMethod(playerPage, "dispatchPendingRelativeSeek", Qt::DirectConnection));
+    QCOMPARE(mediaSession.lastSeekMilliseconds(), 0);
 
     mediaSession.setTimeline(62'000, 65'000, true);
     QVERIFY(QMetaObject::invokeMethod(seekForwardButton, "clicked", Qt::DirectConnection));
-    QTRY_COMPARE(mediaSession.lastSeekMilliseconds(), 65'000);
+    QVERIFY(QMetaObject::invokeMethod(relativeSeekTimer, "stop", Qt::DirectConnection));
+    QCOMPARE(qRound(playerPage->property("pendingRelativeSeekTargetMilliseconds").toDouble()), 65'000);
+    QVERIFY(QMetaObject::invokeMethod(playerPage, "dispatchPendingRelativeSeek", Qt::DirectConnection));
+    QCOMPARE(mediaSession.lastSeekMilliseconds(), 65'000);
 
     mediaSession.setTimeline(42'000, 65'000, false);
     QTRY_VERIFY(!seekSlider->property("enabled").toBool());
     mediaSession.setTimeline(42'000, 65'000, true);
     QTRY_VERIFY(seekSlider->property("enabled").toBool());
 
-    mediaSession.setState(ShellTestMediaSession::State::Opening);
+    // A slow seek keeps the old frame and controls visible. New relative
+    // commands still form a single latest-wins replacement request.
+    mediaSession.setState(ShellTestMediaSession::State::Opening, true);
     mediaSession.setTimeline(42'000, 65'000, true, true);
     QTRY_VERIFY(seekingState->property("visible").toBool());
     QVERIFY(!openingState->property("visible").toBool());
-    QVERIFY(!seekSlider->property("enabled").toBool());
-    QVERIFY(!videoViewport.visible());
+    QVERIFY(seekSlider->property("enabled").toBool());
+    QVERIFY(seekBackwardButton->property("enabled").toBool());
+    QVERIFY(seekForwardButton->property("enabled").toBool());
+    QVERIFY(playPauseButton->property("enabled").toBool());
+    QVERIFY(videoViewport.visible());
+    QTRY_COMPARE(seekingIndicator->property("width").toInt(), preparingIndicator->property("width").toInt());
+    QTRY_COMPARE(seekingIndicator->property("height").toInt(), preparingIndicator->property("height").toInt());
+    QCOMPARE(QQmlProperty(seekingLabel, QStringLiteral("font.pixelSize")).read().toInt(),
+             QQmlProperty(preparingLabel, QStringLiteral("font.pixelSize")).read().toInt());
+
+    // Pressing the absolute scrubber cancels an undelivered relative burst,
+    // so it cannot launch an obsolete seek while the drag is held.
+    int const seekCountBeforeAbsoluteSupersession = mediaSession.seekCount();
+    emit windowCommands.relativeSeekRequested(10'000);
+    QVERIFY(playerPage->property("relativeSeekPending").toBool());
+    QPointF const activeSeekSliderStart = seekSliderItem->mapToScene({
+        seekSliderItem->width() * 0.55,
+        seekSliderItem->height() * 0.5,
+    });
+    QPointF const activeSeekSliderDestination = seekSliderItem->mapToScene({
+        seekSliderItem->width() * 0.8,
+        seekSliderItem->height() * 0.5,
+    });
+    QTest::mousePress(&quickWindow, Qt::LeftButton, Qt::NoModifier, activeSeekSliderStart.toPoint());
+    QTRY_VERIFY(!playerPage->property("relativeSeekPending").toBool());
+    QTest::qWait(220);
+    QCOMPARE(mediaSession.seekCount(), seekCountBeforeAbsoluteSupersession);
+    QTest::mouseMove(&quickWindow, activeSeekSliderDestination.toPoint());
+    QTest::mouseRelease(&quickWindow, Qt::LeftButton, Qt::NoModifier, activeSeekSliderDestination.toPoint());
+    QTRY_COMPARE(mediaSession.seekCount(), seekCountBeforeAbsoluteSupersession + 1);
+    QVERIFY(mediaSession.lastSeekMilliseconds() > 45'000);
+    QVERIFY(QMetaObject::invokeMethod(playerPage, "dispatchPendingRelativeSeek", Qt::DirectConnection));
+    QCOMPARE(mediaSession.seekCount(), seekCountBeforeAbsoluteSupersession + 1);
+    mediaSession.setTimeline(42'000, 65'000, true, true);
+
+    QVERIFY(mediaSession.playRequested());
+    QVERIFY(QMetaObject::invokeMethod(playPauseButton, "clicked", Qt::DirectConnection));
+    QVERIFY(!mediaSession.playRequested());
+    QVERIFY(QMetaObject::invokeMethod(playPauseButton, "clicked", Qt::DirectConnection));
+    QVERIFY(mediaSession.playRequested());
+
+    int const seekCountBeforeSupersession = mediaSession.seekCount();
+    emit windowCommands.relativeSeekRequested(-10'000);
+    emit windowCommands.relativeSeekRequested(-10'000);
+    QVERIFY(QMetaObject::invokeMethod(relativeSeekTimer, "stop", Qt::DirectConnection));
+    QCOMPARE(mediaSession.seekCount(), seekCountBeforeSupersession);
+    QCOMPARE(qRound(playerPage->property("pendingRelativeSeekTargetMilliseconds").toDouble()), 22'000);
+    QVERIFY(QMetaObject::invokeMethod(playerPage, "dispatchPendingRelativeSeek", Qt::DirectConnection));
+    QCOMPARE(mediaSession.seekCount(), seekCountBeforeSupersession + 1);
+    QCOMPARE(mediaSession.lastSeekMilliseconds(), 22'000);
+
+    // Leaving the active playback/seek state invalidates an undelivered burst.
     mediaSession.setState(ShellTestMediaSession::State::Ready, true);
-    QVERIFY(mediaSession.playing());
-    QVERIFY(QMetaObject::invokeMethod(playPauseButton, "clicked", Qt::DirectConnection));
-    QVERIFY(!mediaSession.playing());
-    QVERIFY(QMetaObject::invokeMethod(playPauseButton, "clicked", Qt::DirectConnection));
-    QVERIFY(mediaSession.playing());
+    mediaSession.setTimeline(22'000, 65'000, true);
+    emit windowCommands.relativeSeekRequested(10'000);
+    QVERIFY(QMetaObject::invokeMethod(relativeSeekTimer, "stop", Qt::DirectConnection));
+    QVERIFY(playerPage->property("relativeSeekPending").toBool());
+    int const seekCountBeforeInvalidation = mediaSession.seekCount();
+    mediaSession.setState(ShellTestMediaSession::State::Opening, true);
+    QTRY_VERIFY(!playerPage->property("relativeSeekPending").toBool());
+    QVERIFY(QMetaObject::invokeMethod(playerPage, "dispatchPendingRelativeSeek", Qt::DirectConnection));
+    QCOMPARE(mediaSession.seekCount(), seekCountBeforeInvalidation);
+    mediaSession.setState(ShellTestMediaSession::State::Ready, true);
 
     qreal const originalHeight = videoViewport.rect().height();
     rootItem->setSize({900.0, 650.0});

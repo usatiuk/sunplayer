@@ -323,8 +323,8 @@ bool PresentationWindow::playerShortcutContextActive() const {
 }
 
 bool PresentationWindow::playbackShortcutEnabled() const {
-    return playerShortcutContextActive() && m_mediaSession->state() == MediaSession::State::Ready &&
-           !m_mediaSession->seeking();
+    return playerShortcutContextActive() &&
+           (m_mediaSession->state() == MediaSession::State::Ready || m_mediaSession->seeking());
 }
 
 void PresentationWindow::togglePlayback() {
@@ -367,9 +367,7 @@ void PresentationWindow::keyPressEvent(QKeyEvent* event) {
     }
     std::optional<qlonglong> const relativeSeek = relativeSeekMilliseconds(*event);
     if (relativeSeek && playerShortcutContextActive()) {
-        if (!event->isAutoRepeat()) {
-            emit relativeSeekRequested(*relativeSeek);
-        }
+        emit relativeSeekRequested(*relativeSeek);
         event->accept();
         return;
     }

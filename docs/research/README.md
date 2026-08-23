@@ -29,6 +29,7 @@ the newer note or decision rather than silently rewriting the investigation.
 * [2026-08-22: Release support and runtime-error boundary](2026-08-22-release-support-and-runtime-errors.md)
 * [2026-08-22: Windows third-party notices without an inventory](2026-08-22-derived-third-party-inventory.md)
 * [2026-08-23: Windows D3D11VA edge-corruption diagnosis](2026-08-23-windows-d3d11va-edge-corruption.md)
+* [2026-08-23: Responsive seeking and playback feedback](2026-08-23-responsive-seeking-and-playback-feedback.md)
 * [2026-07-30: FFmpeg keyframe seek and restart](2026-07-30-ffmpeg-keyframe-seek-and-restart.md)
 * [2026-07-30: Large network Matroska seek observability](2026-07-30-large-network-matroska-seek-observability.md)
 * [2026-07-31: Audio architecture research draft](2026-07-31-chatgpt-audio.md)
