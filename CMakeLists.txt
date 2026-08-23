@@ -80,6 +80,8 @@ project(SunPlayer VERSION ${SUNPLAYER_PROJECT_VERSION} LANGUAGES C CXX)
 
 set(SUNPLAYER_SOURCE_URL "https://github.com/usatiuk/sunplayer")
 set(SUNPLAYER_ISSUES_URL "https://github.com/usatiuk/sunplayer/issues/new")
+set(SUNPLAYER_DISPLAY_NAME "SunPlayer (Dev)" CACHE STRING
+        "User-visible application name")
 set(SUNPLAYER_BUILD_ID "" CACHE STRING
         "Release build identifier shown in About and diagnostics")
 if (NOT SUNPLAYER_BUILD_ID)
@@ -654,6 +656,7 @@ target_include_directories(sunplayer
 target_compile_definitions(sunplayer
         PRIVATE
         SUNPLAYER_VERSION="${PROJECT_VERSION}"
+        SUNPLAYER_DISPLAY_NAME="${SUNPLAYER_DISPLAY_NAME}"
         SUNPLAYER_BUILD_ID="${SUNPLAYER_BUILD_ID}"
         SUNPLAYER_SOURCE_URL="${SUNPLAYER_SOURCE_URL}"
         SUNPLAYER_ISSUES_URL="${SUNPLAYER_ISSUES_URL}"
@@ -772,6 +775,7 @@ if (WIN32)
                     "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/Run-WindowsDevelopment.ps1"
                     -InstallPrefix "${sunplayer_development_root}/install"
                     -OutputAppxDirectory "${sunplayer_development_root}/AppX"
+                    -DisplayName "${SUNPLAYER_DISPLAY_NAME}"
             DEPENDS sunplayer
             USES_TERMINAL
             VERBATIM

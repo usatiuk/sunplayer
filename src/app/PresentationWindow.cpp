@@ -95,7 +95,7 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
 #ifdef Q_OS_LINUX
     m_windowContext.configureWindow(*this);
 #endif
-    setTitle(tr("SunPlayer"));
+    setTitle(QGuiApplication::applicationDisplayName());
 
     m_outputState = displayStateProvider
                         ? std::make_unique<PresentationOutputState>(std::move(displayStateProvider), nullptr)

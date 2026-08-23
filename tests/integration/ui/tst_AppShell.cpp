@@ -66,6 +66,10 @@ void AppShellTest::publishesActiveViewport() {
             1.0,
         },
         {
+            QStringLiteral("applicationDisplayName"),
+            QStringLiteral("SunPlayer (Test)"),
+        },
+        {
             QStringLiteral("windowCommands"),
             QVariant::fromValue(&windowCommands),
         },
@@ -131,6 +135,8 @@ void AppShellTest::publishesActiveViewport() {
     QQuickItem* const clientSideWindowChrome =
         rootItem->findChild<QQuickItem*>(QStringLiteral("clientSideWindowChrome"));
     QQuickItem* const clientSideTitleBar = rootItem->findChild<QQuickItem*>(QStringLiteral("clientSideTitleBar"));
+    QObject* const clientSideApplicationTitle =
+        rootItem->findChild<QObject*>(QStringLiteral("clientSideApplicationTitle"));
     QQuickItem* const clientSideWindowOutline =
         rootItem->findChild<QQuickItem*>(QStringLiteral("clientSideWindowOutline"));
     QObject* const openingState = rootItem->findChild<QObject*>(QStringLiteral("openingState"));
@@ -206,6 +212,7 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(backToPlayerButton);
     QVERIFY(clientSideWindowChrome);
     QVERIFY(clientSideTitleBar);
+    QVERIFY(clientSideApplicationTitle);
     QVERIFY(clientSideWindowOutline);
     QQmlProperty const outlineBorderWidth(clientSideWindowOutline, QStringLiteral("border.width"));
     QVERIFY(outlineBorderWidth.isValid());
@@ -252,6 +259,8 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(hdrLabMenuItem);
     QVERIFY(reportBugMenuItem);
     QVERIFY(aboutMenuItem);
+    QCOMPARE(clientSideApplicationTitle->property("text").toString(), QStringLiteral("SunPlayer (Test)"));
+    QCOMPARE(aboutMenuItem->property("text").toString(), QStringLiteral("About SunPlayer (Test)"));
     QVERIFY(idleMoreButton);
     QVERIFY(restartMediaErrorButton);
     QVERIFY(reportMediaErrorButton);

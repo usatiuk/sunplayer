@@ -116,14 +116,15 @@ void SupportController::showAbout() {
     auto* const dialog = new QDialog;
     m_aboutDialog = dialog;
     dialog->setAttribute(Qt::WA_DeleteOnClose);
-    dialog->setWindowTitle(tr("About SunPlayer"));
+    QString const displayName = QGuiApplication::applicationDisplayName();
+    dialog->setWindowTitle(tr("About %1").arg(displayName));
     dialog->setWindowIcon(QGuiApplication::windowIcon());
     dialog->setWindowModality(Qt::WindowModal);
     dialog->resize(720, 580);
 
     auto* const layout = new QVBoxLayout(dialog);
 
-    auto* const title = new QLabel(tr("SunPlayer %1").arg(version()), dialog);
+    auto* const title = new QLabel(tr("%1 %2").arg(displayName, version()), dialog);
     QFont titleFont = title->font();
     titleFont.setPointSizeF(titleFont.pointSizeF() + 4.0);
     titleFont.setBold(true);

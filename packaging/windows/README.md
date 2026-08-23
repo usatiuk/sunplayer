@@ -39,9 +39,9 @@ require a signing certificate or an elevated terminal. Re-running the target
 refreshes the registered `SunPlayerDevelopment` layout while preserving its
 application data. The wrapper stages the installed tree, resolved manifest, and
 package assets together so `winapp` indexes the same icon candidates as the
-MSIX path. Windows displays it as `SunPlayer (Dev)`, and its separate package
-identity allows it to coexist with the eventual Store package. The target
-returns after launching the application. It exercises package identity and
+MSIX path. Windows and the in-app UI display it as `SunPlayer (Dev)`, and its
+separate package identity allows it to coexist with the eventual Store package.
+The target returns after launching the application. It exercises package identity and
 activation, but it does not construct or install an MSIX and therefore does not
 replace the signed package flow below.
 
@@ -142,6 +142,7 @@ winapp cert generate `
   -IdentityName SunPlayerDevelopment `
   -Publisher 'CN=SunPlayerDevelopment' `
   -PublisherDisplayName 'SunPlayer Development' `
+  -DisplayName 'SunPlayer (Dev)' `
   -CertificatePath .\out\SunPlayerDevelopment.pfx `
   -CertificatePassword $password
 ```

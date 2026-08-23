@@ -491,11 +491,13 @@ int main(int argc, char* argv[]) {
     app.styleHints()->setColorScheme(Qt::ColorScheme::Dark);
     QCoreApplication::setOrganizationName(QStringLiteral("usatiuk"));
     QCoreApplication::setApplicationName(QStringLiteral("SunPlayer"));
+    QGuiApplication::setApplicationDisplayName(QStringLiteral(SUNPLAYER_DISPLAY_NAME));
     QCoreApplication::setApplicationVersion(QStringLiteral(SUNPLAYER_VERSION));
     app.setWindowIcon(QIcon(QStringLiteral(":/qt/qml/SunPlayer/icons/SunPlayer.png")));
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(QStringLiteral("SunPlayer HDR video player"));
+    parser.setApplicationDescription(
+        QStringLiteral("%1 HDR video player").arg(QGuiApplication::applicationDisplayName()));
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addPositionalArgument(QStringLiteral("media"), QStringLiteral("Local media file to open."),

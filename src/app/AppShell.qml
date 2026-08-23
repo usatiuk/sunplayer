@@ -6,6 +6,7 @@ Item {
     id: root
 
     required property real renderDevicePixelRatio
+    required property string applicationDisplayName
     required property WindowCommands windowCommands
     required property PresentationOutputState presentationOutput
     required property PresentationSettings presentationPolicy
@@ -84,6 +85,7 @@ Item {
             id: playerPage
 
             session: root.mediaSession
+            applicationDisplayName: root.applicationDisplayName
             outputState: root.presentationOutput
             windowCommands: root.windowCommands
             supportController: root.supportController
@@ -105,6 +107,7 @@ Item {
         anchors.fill: parent
         z: 100
         controller: root.windowCommands.windowChrome
+        applicationDisplayName: root.applicationDisplayName
         renderDevicePixelRatio: root.renderDevicePixelRatio
         titleRequested: root.currentPage !== 0
             || !playerPage.sessionActive

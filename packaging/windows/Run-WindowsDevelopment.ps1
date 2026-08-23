@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)] [string]$InstallPrefix,
-    [Parameter(Mandatory = $true)] [string]$OutputAppxDirectory
+    [Parameter(Mandatory = $true)] [string]$OutputAppxDirectory,
+    [string]$DisplayName = "SunPlayer (Dev)"
 )
 
 Set-StrictMode -Version Latest
@@ -32,7 +33,7 @@ $manifest = (Get-Content -LiteralPath $template -Raw).
     Replace("@IDENTITY_NAME@", "SunPlayerDevelopment").
     Replace("@PUBLISHER@", "CN=SunPlayerDevelopment").
     Replace("@PUBLISHER_DISPLAY_NAME@", "SunPlayer Development").
-    Replace("@DISPLAY_NAME@", "SunPlayer (Dev)").
+    Replace("@DISPLAY_NAME@", [System.Security.SecurityElement]::Escape($DisplayName)).
     Replace("@PACKAGE_VERSION@", "1.0.0.0")
 
 try {

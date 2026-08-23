@@ -10,6 +10,7 @@ VideoPage {
     objectName: "playerPage"
 
     required property MediaSession session
+    required property string applicationDisplayName
     required property PresentationOutputState outputState
     required property WindowCommands windowCommands
     required property SupportController supportController
@@ -1187,7 +1188,7 @@ VideoPage {
 
             MenuItem {
                 objectName: "aboutMenuItem"
-                text: qsTr("About SunPlayer")
+                text: qsTr("About %1").arg(root.applicationDisplayName)
                 onClicked: root.supportController.showAbout()
             }
 

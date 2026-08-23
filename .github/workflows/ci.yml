@@ -270,6 +270,7 @@ jobs:
     env:
       VCPKG_ROOT: C:\vcpkg
       SUNPLAYER_PACKAGE_CONFIGURATION: ${{ inputs.release && 'RelWithDebInfo' || 'Release' }}
+      SUNPLAYER_DISPLAY_NAME: ${{ inputs.release && 'SunPlayer' || 'SunPlayer (Dev)' }}
 
     steps:
       - name: Check out source
@@ -492,7 +493,7 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
           set "VCPKG_BINARY_SOURCES=clear;files,%RUNNER_TEMP%\sunplayer-vcpkg-binary-cache,readwrite"
-          cmake -S . -B "%RUNNER_TEMP%\sunplayer-windows-release" -G Ninja -DCMAKE_BUILD_TYPE=%SUNPLAYER_PACKAGE_CONFIGURATION% -DBUILD_TESTING=OFF "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DVCPKG_INSTALLED_DIR=%RUNNER_TEMP%\sunplayer-vcpkg-installed" "-DCMAKE_PREFIX_PATH=%RUNNER_TEMP%\Qt\6.11.1\msvc2022_64"
+          cmake -S . -B "%RUNNER_TEMP%\sunplayer-windows-release" -G Ninja -DCMAKE_BUILD_TYPE=%SUNPLAYER_PACKAGE_CONFIGURATION% -DBUILD_TESTING=OFF "-DSUNPLAYER_DISPLAY_NAME=%SUNPLAYER_DISPLAY_NAME%" "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DVCPKG_INSTALLED_DIR=%RUNNER_TEMP%\sunplayer-vcpkg-installed" "-DCMAKE_PREFIX_PATH=%RUNNER_TEMP%\Qt\6.11.1\msvc2022_64"
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Build distribution bundle
@@ -555,7 +556,7 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
-          pwsh -NoLogo -NoProfile -File packaging\windows\Package-WindowsStore.ps1 -InstallPrefix "%RUNNER_TEMP%\sunplayer-windows-artifact" -Output "%RUNNER_TEMP%\SunPlayerDevelopment.msix" -PackageVersion 1.0.0.0 -IdentityName SunPlayerDevelopment -Publisher "CN=SunPlayerDevelopment" -PublisherDisplayName "SunPlayer Development"
+          pwsh -NoLogo -NoProfile -File packaging\windows\Package-WindowsStore.ps1 -InstallPrefix "%RUNNER_TEMP%\sunplayer-windows-artifact" -Output "%RUNNER_TEMP%\SunPlayerDevelopment.msix" -PackageVersion 1.0.0.0 -IdentityName SunPlayerDevelopment -Publisher "CN=SunPlayerDevelopment" -PublisherDisplayName "SunPlayer Development" -DisplayName "%SUNPLAYER_DISPLAY_NAME%"
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Upload unsigned development MSIX

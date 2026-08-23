@@ -4,6 +4,7 @@
 
 #include <QQmlComponent>
 #include <QQmlEngine>
+#include <QGuiApplication>
 #include <QQuickGraphicsDevice>
 #include <QQuickItem>
 #include <QQuickRenderControl>
@@ -93,6 +94,10 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
         {
             QStringLiteral("renderDevicePixelRatio"),
             m_renderWindow.devicePixelRatio(),
+        },
+        {
+            QStringLiteral("applicationDisplayName"),
+            QGuiApplication::applicationDisplayName(),
         },
         {
             QStringLiteral("windowCommands"),

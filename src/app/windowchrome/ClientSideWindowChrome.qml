@@ -8,6 +8,7 @@ Item {
 
     objectName: "clientSideWindowChrome"
     required property var controller
+    required property string applicationDisplayName
     required property real renderDevicePixelRatio
     required property bool titleRequested
     required property bool contentInsetRequested
@@ -58,12 +59,14 @@ Item {
         }
 
         Label {
+            objectName: "clientSideApplicationTitle"
+
             anchors {
                 left: parent.left
                 leftMargin: 14
                 verticalCenter: parent.verticalCenter
             }
-            text: qsTr("SunPlayer")
+            text: root.applicationDisplayName
             color: "#e8eaf0"
             font.pixelSize: 13
             font.weight: Font.Medium
