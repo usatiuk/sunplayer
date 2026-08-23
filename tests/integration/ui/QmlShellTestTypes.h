@@ -543,6 +543,14 @@ class ShellTestMediaSession final : public QObject {
         emit mutedChanged();
     }
 
+    void setHasAudioOutput(bool hasAudioOutput) {
+        if (m_hasAudioOutput == hasAudioOutput) {
+            return;
+        }
+        m_hasAudioOutput = hasAudioOutput;
+        emit audioDiagnosticsChanged();
+    }
+
     void setPlaybackInterruption(PlaybackInterruption interruption) {
         if (m_playbackInterruption == interruption) {
             return;

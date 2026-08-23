@@ -58,17 +58,18 @@ cancels the previous decode generation, opens fresh FFmpeg contexts, seeks to
 a keyframe at or before the requested position, decodes dependencies, and
 filters decoded preroll before the three-frame mailbox. `Ready` resumes only
 after current-generation stream discovery; a future target frame may not yet
-be due. The previously presented immutable frame remains visible during an
-ordinary user seek but never re-enters the scheduler;
-new media, cancellation, failure, fallback, and graphics invalidation still
-clear it. `seeking` remains true until the replacement generation selects a
-frame active at the requested position (or the first frame after it), or
-cleanly ends. Paused seeks stay paused, playing seeks resume from the requested
-clock anchor, and play intent can change while the replacement opens.
+be due. The previously presented frame is cleared before every decoder-
+generation restart. Clearing also invalidates the decoded producer so its
+mapped source frame, libplacebo mapping, and native import resources cannot
+cross into the replacement generation. `seeking` remains true until the
+replacement generation selects a frame active at the requested position (or
+the first frame after it), or cleanly ends. Paused seeks stay paused, playing
+seeks resume from the requested clock anchor, and play intent can change while
+the replacement opens.
 Rapid seeks use the existing latest-request replacement and stale-generation
 rejection.
-If a seek drains cleanly with no admitted video frame, it completes and clears
-the retained old-generation frame rather than leaving stale video latched.
+If a seek drains cleanly with no admitted video frame, it completes without
+leaving stale video latched.
 
 Embedded video/audio selection uses that same replacement boundary. The
 session records the concrete indexes reported by the initial probe, captures
@@ -227,8 +228,8 @@ from intuition in this first scheduler.
 Current focused tests drive a real twelve-frame FFmpeg fixture through the
 production session, pause with the three-frame mailbox full, advance controlled
 presentation times, resume, select every frame, replay, seek while paused and
-playing, seek to end, retain then replace the old frame, change play intent
-during a replacement audio epoch, and verify drain/end behavior and bounded
+playing, seek to end, clear the old frame at restart, change play intent during
+a replacement audio epoch, and verify drain/end behavior and bounded
 occupancy. A real sparse-GOP H.264 seek test verifies decode from a preceding
 keyframe, B-frame presentation order, and publication at the requested position.
 An additional two-frame, 3000-second sparse-timeline Matroska fixture verifies

@@ -140,7 +140,7 @@ void AppShellTest::publishesActiveViewport() {
     QQuickItem* const clientSideWindowOutline =
         rootItem->findChild<QQuickItem*>(QStringLiteral("clientSideWindowOutline"));
     QObject* const openingState = rootItem->findChild<QObject*>(QStringLiteral("openingState"));
-    QObject* const waitingForVideoState = rootItem->findChild<QObject*>(QStringLiteral("waitingForVideoState"));
+    QObject* const playbackActivityState = rootItem->findChild<QObject*>(QStringLiteral("playbackActivityState"));
     QObject* const errorState = rootItem->findChild<QObject*>(QStringLiteral("errorState"));
     QObject* const cancelOpenButton = rootItem->findChild<QObject*>(QStringLiteral("cancelOpenButton"));
     QObject* const retryMediaButton = rootItem->findChild<QObject*>(QStringLiteral("retryMediaButton"));
@@ -149,12 +149,10 @@ void AppShellTest::publishesActiveViewport() {
     QObject* const closeMediaButton = rootItem->findChild<QObject*>(QStringLiteral("closeMediaButton"));
     QObject* const playPauseButton = rootItem->findChild<QObject*>(QStringLiteral("playPauseButton"));
     QObject* const playPauseButtonIcon = rootItem->findChild<QObject*>(QStringLiteral("playPauseButtonIcon"));
-    QObject* const seekingState = rootItem->findChild<QObject*>(QStringLiteral("seekingState"));
     QObject* const relativeSeekTimer = rootItem->findChild<QObject*>(QStringLiteral("relativeSeekTimer"));
-    QObject* const preparingIndicator = rootItem->findChild<QObject*>(QStringLiteral("preparingIndicator"));
-    QObject* const preparingLabel = rootItem->findChild<QObject*>(QStringLiteral("preparingLabel"));
-    QObject* const seekingIndicator = rootItem->findChild<QObject*>(QStringLiteral("seekingIndicator"));
-    QObject* const seekingLabel = rootItem->findChild<QObject*>(QStringLiteral("seekingLabel"));
+    QObject* const playbackActivityIndicator =
+        rootItem->findChild<QObject*>(QStringLiteral("playbackActivityIndicator"));
+    QObject* const playbackActivityLabel = rootItem->findChild<QObject*>(QStringLiteral("playbackActivityLabel"));
     QObject* const bufferingIndicator = rootItem->findChild<QObject*>(QStringLiteral("bufferingIndicator"));
     QObject* const seekSlider = rootItem->findChild<QObject*>(QStringLiteral("seekSlider"));
     QObject* const positionLabel = rootItem->findChild<QObject*>(QStringLiteral("positionLabel"));
@@ -217,7 +215,7 @@ void AppShellTest::publishesActiveViewport() {
     QQmlProperty const outlineBorderWidth(clientSideWindowOutline, QStringLiteral("border.width"));
     QVERIFY(outlineBorderWidth.isValid());
     QVERIFY(openingState);
-    QVERIFY(waitingForVideoState);
+    QVERIFY(playbackActivityState);
     QVERIFY(errorState);
     QVERIFY(cancelOpenButton);
     QVERIFY(retryMediaButton);
@@ -225,12 +223,9 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(closeMediaButton);
     QVERIFY(playPauseButton);
     QVERIFY(playPauseButtonIcon);
-    QVERIFY(seekingState);
     QVERIFY(relativeSeekTimer);
-    QVERIFY(preparingIndicator);
-    QVERIFY(preparingLabel);
-    QVERIFY(seekingIndicator);
-    QVERIFY(seekingLabel);
+    QVERIFY(playbackActivityIndicator);
+    QVERIFY(playbackActivityLabel);
     QVERIFY(bufferingIndicator);
     QVERIFY(seekSlider);
     QVERIFY(positionLabel);
@@ -391,10 +386,13 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(QMetaObject::invokeMethod(playerPage, "revealControls", Qt::DirectConnection));
     QTRY_VERIFY(videoViewport.visible());
     QTRY_VERIFY(!idleMoreButton->property("visible").toBool());
-    QTRY_VERIFY(waitingForVideoState->property("visible").toBool());
-    QCOMPARE(preparingIndicator->property("width").toInt(), 32);
-    QCOMPARE(preparingIndicator->property("height").toInt(), 32);
-    QCOMPARE(QQmlProperty(preparingLabel, QStringLiteral("font.pixelSize")).read().toInt(), 14);
+    QTRY_VERIFY(playbackActivityState->property("visible").toBool());
+    QCOMPARE(playbackActivityIndicator->property("width").toInt(), 44);
+    QCOMPARE(playbackActivityIndicator->property("height").toInt(), 44);
+    QVERIFY(playbackActivityIndicator->property("running").toBool());
+    QCOMPARE(playbackActivityLabel->property("text").toString(), QStringLiteral("Preparing video…"));
+    QCOMPARE(QQmlProperty(playbackActivityLabel, QStringLiteral("font.pixelSize")).read().toInt(), 15);
+    QVERIFY(playbackActivityState->property("color").value<QColor>().alphaF() > 0.5f);
     QTRY_VERIFY(playPauseButton->property("visible").toBool());
     QTRY_VERIFY(seekSlider->property("visible").toBool());
     QTRY_VERIFY(muteButton->property("visible").toBool());
@@ -629,7 +627,7 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_VERIFY(!bufferingIndicator->property("visible").toBool());
 
     mediaSession.setState(ShellTestMediaSession::State::Ready, true);
-    QTRY_VERIFY(!waitingForVideoState->property("visible").toBool());
+    QTRY_VERIFY(!playbackActivityState->property("visible").toBool());
     mediaSession.setState(ShellTestMediaSession::State::Error);
     QTRY_VERIFY(errorState->property("visible").toBool());
     QVERIFY(retryMediaButton->property("enabled").toBool());
@@ -703,7 +701,12 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(playerPage->property("relativeSeekPending").toBool());
     QCOMPARE(qRound(playerPage->property("pendingRelativeSeekTargetMilliseconds").toDouble()), 60'000);
     QTRY_COMPARE(positionLabel->property("text").toString(), QStringLiteral("1:00"));
-    QTRY_VERIFY(seekingState->property("visible").toBool());
+    QTRY_VERIFY(playbackActivityState->property("visible").toBool());
+    QVERIFY(playbackActivityIndicator->property("visible").toBool());
+    QVERIFY(playbackActivityIndicator->property("running").toBool());
+    QCOMPARE(playbackActivityIndicator->property("width").toInt(), 44);
+    QCOMPARE(QQmlProperty(playbackActivityLabel, QStringLiteral("font.pixelSize")).read().toInt(), 15);
+    QVERIFY(playbackActivityLabel->property("text").toString().contains(QStringLiteral("1:00")));
     QVERIFY(QMetaObject::invokeMethod(playerPage, "dispatchPendingRelativeSeek", Qt::DirectConnection));
     QCOMPARE(mediaSession.seekCount(), seekCountAfterSlider + 1);
     QCOMPARE(mediaSession.lastSeekMilliseconds(), 60'000);
@@ -748,21 +751,24 @@ void AppShellTest::publishesActiveViewport() {
     mediaSession.setTimeline(42'000, 65'000, true);
     QTRY_VERIFY(seekSlider->property("enabled").toBool());
 
-    // A slow seek keeps the old frame and controls visible. New relative
-    // commands still form a single latest-wins replacement request.
-    mediaSession.setState(ShellTestMediaSession::State::Opening, true);
+    // A slow seek clears decoder-backed video and rebuilds audio output, but
+    // keeps the playback controls usable. New relative commands still form a
+    // single latest-wins replacement request.
+    mediaSession.setState(ShellTestMediaSession::State::Opening, false);
+    mediaSession.setHasAudioOutput(false);
     mediaSession.setTimeline(42'000, 65'000, true, true);
-    QTRY_VERIFY(seekingState->property("visible").toBool());
+    QTRY_VERIFY(playbackActivityState->property("visible").toBool());
     QVERIFY(!openingState->property("visible").toBool());
     QVERIFY(seekSlider->property("enabled").toBool());
     QVERIFY(seekBackwardButton->property("enabled").toBool());
     QVERIFY(seekForwardButton->property("enabled").toBool());
     QVERIFY(playPauseButton->property("enabled").toBool());
+    QVERIFY(muteButton->property("visible").toBool());
+    QVERIFY(volumeSlider->property("visible").toBool());
     QVERIFY(videoViewport.visible());
-    QTRY_COMPARE(seekingIndicator->property("width").toInt(), preparingIndicator->property("width").toInt());
-    QTRY_COMPARE(seekingIndicator->property("height").toInt(), preparingIndicator->property("height").toInt());
-    QCOMPARE(QQmlProperty(seekingLabel, QStringLiteral("font.pixelSize")).read().toInt(),
-             QQmlProperty(preparingLabel, QStringLiteral("font.pixelSize")).read().toInt());
+    QCOMPARE(playbackActivityIndicator->property("width").toInt(), 44);
+    QCOMPARE(playbackActivityIndicator->property("height").toInt(), 44);
+    QVERIFY(playbackActivityIndicator->property("running").toBool());
 
     // Pressing the absolute scrubber cancels an undelivered relative burst,
     // so it cannot launch an obsolete seek while the drag is held.
@@ -807,6 +813,7 @@ void AppShellTest::publishesActiveViewport() {
 
     // Leaving the active playback/seek state invalidates an undelivered burst.
     mediaSession.setState(ShellTestMediaSession::State::Ready, true);
+    mediaSession.setHasAudioOutput(true);
     mediaSession.setTimeline(22'000, 65'000, true);
     emit windowCommands.relativeSeekRequested(10'000);
     QVERIFY(QMetaObject::invokeMethod(relativeSeekTimer, "stop", Qt::DirectConnection));

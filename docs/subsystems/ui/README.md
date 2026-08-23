@@ -166,15 +166,18 @@ another, close, mute, and volume. Relative taps update a visible pending target
 immediately and dispatch one generation replacement after 180 ms of quiet;
 pressing the slider cancels any pending relative burst and slider release
 remains immediate. A new burst can supersede a slow active seek.
-The active video viewport retains its last frame while that replacement opens,
-and play/pause, relative buttons, and the slider remain usable. The viewport
-fills the page and the bottom-center transport island is pinned only while
-paused, ended, seeking, actively manipulating a slider, or menu-open. A
+The active video viewport stays present on its black background while the old
+decoder-backed frame is released and the replacement opens. Play/pause,
+relative buttons, and the slider remain usable. Mute and volume remain visible
+for a selected audio track even while the audio output is transiently rebuilt.
+The viewport fills the page and the bottom-center transport island is pinned
+only while paused, ended, seeking, actively manipulating a slider, or
+menu-open. A
 stationary pointer over the island does not pin it onscreen. Its non-live
 timeline sends only interactive moves back to the session, so backend position
 updates cannot create seek loops; while pressed, the current-time label follows
-the selected slider position. Preparing and seeking use the same compact
-activity style.
+the selected slider position. Preparing and seeking use one subtle dark-backed
+activity overlay with a visible spinner above readable status text.
 Buffering keeps the frame, shows only a centered spinner, and does not summon
 the transport. Explicit user play intent means Buffering still offers Pause
 when the user reveals the controls, and a pause made during an interruption
@@ -276,8 +279,9 @@ and the viewport remain active while the preparing state is visible, then the
 preparing state disappears after frame publication. It also verifies full-page
 Player geometry, timeline formatting, scrub-preview time, relative and slider
 seek commands, fixed-origin burst accumulation/cancellation and boundary
-clamping, active-seek supersession, retained-frame viewport and enabled
-controls, buffering feedback without transport pinning, backend position
+clamping, active-seek supersession, cleared-frame viewport with enabled
+transport and selected-track volume controls, buffering feedback without
+transport pinning, backend position
 updates, fullscreen gesture release/cancellation ordering, popup Escape priority
 state, island hit testing, and native-cursor intent without launching a native
 dialog. The

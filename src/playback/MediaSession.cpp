@@ -680,9 +680,7 @@ void MediaSession::startDecode(QUrl const& url, QString const& path, VideoHardwa
     std::uint64_t const generation = m_playbackGeneration;
     cancelPipeline();
     m_frameQueue.reset(m_playbackGeneration);
-    if (!seeking) {
-        m_videoSource.clearFrame();
-    }
+    m_videoSource.clearFrame();
     if (generation != m_playbackGeneration) {
         return;
     }

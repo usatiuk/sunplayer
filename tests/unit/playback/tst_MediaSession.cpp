@@ -172,7 +172,7 @@ class MediaSessionTest final : public QObject {
     void seekPreservesTimelineAndPlayIntent();
     void interFrameSeekPublishesRequestedFrame();
     void futureSeekFrameAdvancesClockAnchor();
-    void zeroFrameSeekClearsRetainedFrame();
+    void zeroFrameSeekClearsFrameAtRestart();
     void playPauseIntentAppliesDuringSeek();
     void newerSeekRejectsStaleCompletion();
     void cancelDuringSeekClearsSession();
@@ -184,7 +184,7 @@ class MediaSessionTest final : public QObject {
     void cancelReturnsBeforeWorkerExit();
     void destructionCancelsWorker();
     void presentationFailureBecomesSessionError();
-    void presentationFailureDuringSeekClearsRetainedFrame();
+    void presentationFailureDuringSeekBecomesSessionError();
     void hardwareImportFailureRetriesSoftware();
     void hardwareImportFailureDuringSeekRestartsSoftware();
     void hardwareImportFallbackRestartsAtPosition();
@@ -1417,30 +1417,30 @@ void MediaSessionTest::futureSeekFrameAdvancesClockAnchor() {
     session.openMedia(QUrl::fromLocalFile(playbackFixturePath()));
     QTRY_COMPARE_WITH_TIMEOUT(session.state(), MediaSession::State::Ready, 5000);
     session.pause();
-    std::shared_ptr<DecodedVideoFrame const> const retainedFrame = session.videoSource().currentFrame();
-    QVERIFY(retainedFrame);
+    QVERIFY(session.hasFrame());
 
     session.seekToMilliseconds(600);
+    QVERIFY(!session.hasFrame());
     QTRY_COMPARE_WITH_TIMEOUT(session.state(), MediaSession::State::Ready, 5000);
     QCOMPARE(session.positionMilliseconds(), 600);
     QVERIFY(session.seeking());
-    QCOMPARE(session.videoSource().currentFrame(), retainedFrame);
+    QVERIFY(!session.hasFrame());
 
     session.play();
     QElapsedTimer timer;
     timer.start();
-    while (session.videoSource().currentFrame() == retainedFrame && timer.elapsed() < 1'000) {
+    while (!session.hasFrame() && timer.elapsed() < 1'000) {
         session.videoSource().prepareForPresentation(std::chrono::steady_clock::now());
         QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
         QThread::yieldCurrentThread();
     }
-    QVERIFY(session.videoSource().currentFrame() != retainedFrame);
+    QVERIFY(session.hasFrame());
     QVERIFY(!session.seeking());
     QVERIFY(session.positionMilliseconds() >= 750);
     QCOMPARE(session.videoSource().currentFrame()->timing().ptsMicroseconds(), std::optional<std::int64_t>(750'000));
 }
 
-void MediaSessionTest::zeroFrameSeekClearsRetainedFrame() {
+void MediaSessionTest::zeroFrameSeekClearsFrameAtRestart() {
     MediaSession session(
         VideoTargetReadback::Disabled,
         [](FfmpegMediaDecodeRequest const& request, FfmpegVideoFrameSink const& videoSink,
@@ -1462,7 +1462,7 @@ void MediaSessionTest::zeroFrameSeekClearsRetainedFrame() {
 
     session.seekToMilliseconds(1'000);
     QVERIFY(session.seeking());
-    QVERIFY(session.hasFrame());
+    QVERIFY(!session.hasFrame());
     QTRY_VERIFY_WITH_TIMEOUT(session.state() == MediaSession::State::Ready && !session.seeking(), 5'000);
     QVERIFY(!session.hasFrame());
     QVERIFY(session.errorMessage().isEmpty());
@@ -1554,24 +1554,23 @@ void MediaSessionTest::newerSeekRejectsStaleCompletion() {
     session.openMedia(QUrl::fromLocalFile(playbackFixturePath()));
     QTRY_COMPARE_WITH_TIMEOUT(session.state(), MediaSession::State::Ready, 5000);
     session.pause();
-    std::shared_ptr<DecodedVideoFrame const> const retainedFrame = session.videoSource().currentFrame();
-    QVERIFY(retainedFrame);
+    QVERIFY(session.hasFrame());
 
     session.seekToMilliseconds(500);
     QTRY_VERIFY_WITH_TIMEOUT(delayed->started.load(), 2000);
-    QCOMPARE(session.videoSource().currentFrame(), retainedFrame);
+    QVERIFY(!session.hasFrame());
     std::uint64_t const olderGeneration = session.playbackGeneration();
     session.seekToMilliseconds(2'000);
     QVERIFY(session.playbackGeneration() != olderGeneration);
     QCOMPARE(session.positionMilliseconds(), 2'000);
     QVERIFY(session.seeking());
-    QCOMPARE(session.videoSource().currentFrame(), retainedFrame);
+    QVERIFY(!session.hasFrame());
 
     delayed->allowExit();
     QTRY_COMPARE_WITH_TIMEOUT(session.state(), MediaSession::State::Ready, 5000);
     QVERIFY(!session.seeking());
     QCOMPARE(session.positionMilliseconds(), 2'000);
-    QVERIFY(session.videoSource().currentFrame() != retainedFrame);
+    QVERIFY(session.hasFrame());
     QCOMPARE(session.videoSource().currentFrame()->timing().ptsMicroseconds(), std::optional<std::int64_t>(2'000'000));
     QCOMPARE(session.videoSource().currentFrame()->identity().playbackGeneration, session.playbackGeneration());
 }
@@ -1738,7 +1737,7 @@ void MediaSessionTest::presentationFailureBecomesSessionError() {
     QCOMPARE(session.errorMessage(), QStringLiteral("unsupported mapped surface"));
 }
 
-void MediaSessionTest::presentationFailureDuringSeekClearsRetainedFrame() {
+void MediaSessionTest::presentationFailureDuringSeekBecomesSessionError() {
     auto delayed = std::make_shared<DelayedStopOperation>();
     MediaSession session(VideoTargetReadback::Disabled,
                          [delayed](FfmpegVideoDecodeRequest const& request, FfmpegVideoFrameSink const& sink,
@@ -1756,16 +1755,16 @@ void MediaSessionTest::presentationFailureDuringSeekClearsRetainedFrame() {
     QTRY_VERIFY_WITH_TIMEOUT(delayed->started.load(), 2000);
     QCOMPARE(session.state(), MediaSession::State::Opening);
     QVERIFY(session.seeking());
-    QVERIFY(session.hasFrame());
+    QVERIFY(!session.hasFrame());
 
     QVERIFY(session.videoSource().reportPresentationFailure({
         .kind = VideoFailureKind::General,
-        .reason = QStringLiteral("retained frame could not be presented"),
+        .reason = QStringLiteral("seek-time presentation failure"),
     }));
     QCOMPARE(session.state(), MediaSession::State::Error);
     QVERIFY(!session.seeking());
     QVERIFY(!session.hasFrame());
-    QCOMPARE(session.errorMessage(), QStringLiteral("retained frame could not be presented"));
+    QCOMPARE(session.errorMessage(), QStringLiteral("seek-time presentation failure"));
 
     delayed->allowExit();
     QTRY_VERIFY_WITH_TIMEOUT(delayed->exited.load(), 2000);
@@ -1859,7 +1858,7 @@ void MediaSessionTest::hardwareImportFailureDuringSeekRestartsSoftware() {
     QTRY_VERIFY_WITH_TIMEOUT(delayed->started.load(), 2'000);
     std::uint64_t const blockedGeneration = session.playbackGeneration();
     QVERIFY(session.seeking());
-    QVERIFY(session.hasFrame());
+    QVERIFY(!session.hasFrame());
 
     QVERIFY(session.videoSource().reportPresentationFailure({
         .kind = VideoFailureKind::HardwareFrameImportUnavailable,

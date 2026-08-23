@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.Basic as Basic
 import QtQuick.Dialogs
 import QtQuick.Layouts
 
@@ -23,6 +24,8 @@ VideoPage {
         sessionActive && session.hasFrame
     readonly property bool sessionActive:
         sessionReady || session.seeking
+    readonly property bool audioControlsAvailable:
+        sessionActive && session.selectedAudioStreamIndex >= 0
     property bool relativeSeekPending: false
     property double relativeSeekOriginMilliseconds: 0
     property double relativeSeekDeltaMilliseconds: 0
@@ -445,32 +448,51 @@ VideoPage {
         }
     }
 
-    ColumnLayout {
-        objectName: "waitingForVideoState"
+    Rectangle {
+        id: playbackActivityState
+        objectName: "playbackActivityState"
         anchors.centerIn: parent
-        visible: root.sessionReady
-            && !root.session.hasFrame
-            && !root.session.seeking
-        spacing: 10
+        visible: (root.sessionReady
+                && !root.session.hasFrame
+                && !root.session.seeking)
+            || root.relativeSeekPending
+            || root.session.seeking
+        implicitWidth: playbackActivityContent.implicitWidth + 32
+        implicitHeight: playbackActivityContent.implicitHeight + 24
+        radius: 10
+        color: "#9911151d"
 
-        BusyIndicator {
-            objectName: "preparingIndicator"
-            Layout.alignment: Qt.AlignHCenter
-            Layout.minimumWidth: 32
-            Layout.minimumHeight: 32
-            Layout.preferredWidth: 32
-            Layout.preferredHeight: 32
-            Layout.maximumWidth: 32
-            Layout.maximumHeight: 32
-            running: parent.visible
-        }
+        ColumnLayout {
+            id: playbackActivityContent
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 6
 
-        Label {
-            objectName: "preparingLabel"
-            Layout.alignment: Qt.AlignHCenter
-            text: qsTr("Preparing video…")
-            color: "#c7ccd6"
-            font.pixelSize: 14
+            Basic.BusyIndicator {
+                objectName: "playbackActivityIndicator"
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: 44
+                Layout.preferredHeight: 44
+                Layout.minimumWidth: 44
+                Layout.minimumHeight: 44
+                Layout.maximumWidth: 44
+                Layout.maximumHeight: 44
+                padding: 2
+                running: playbackActivityState.visible
+                palette.dark: "white"
+            }
+
+            Label {
+                objectName: "playbackActivityLabel"
+                Layout.alignment: Qt.AlignHCenter
+                text: root.relativeSeekPending || root.session.seeking
+                    ? qsTr("Seeking to %1…").arg(
+                        root.formatTime(root.seekFeedbackPositionMilliseconds))
+                    : qsTr("Preparing video…")
+                color: "white"
+                font.pixelSize: 15
+                font.weight: Font.Medium
+            }
         }
     }
 
@@ -500,35 +522,6 @@ VideoPage {
             Layout.alignment: Qt.AlignHCenter
             text: qsTr("Cancel")
             onClicked: root.session.cancel()
-        }
-    }
-
-    ColumnLayout {
-        objectName: "seekingState"
-        anchors.centerIn: parent
-        visible: root.relativeSeekPending || root.session.seeking
-        spacing: 10
-
-        BusyIndicator {
-            objectName: "seekingIndicator"
-            Layout.alignment: Qt.AlignHCenter
-            Layout.minimumWidth: 32
-            Layout.minimumHeight: 32
-            Layout.preferredWidth: 32
-            Layout.preferredHeight: 32
-            Layout.maximumWidth: 32
-            Layout.maximumHeight: 32
-            visible: root.session.seeking
-            running: visible
-        }
-
-        Label {
-            objectName: "seekingLabel"
-            Layout.alignment: Qt.AlignHCenter
-            text: qsTr("Seeking to %1…").arg(
-                root.formatTime(root.seekFeedbackPositionMilliseconds))
-            color: "#c7ccd6"
-            font.pixelSize: 14
         }
     }
 
@@ -948,7 +941,7 @@ VideoPage {
                         id: muteButton
                         objectName: "muteButton"
 
-                        visible: root.session.hasAudioOutput
+                        visible: root.audioControlsAvailable
                         iconSource: root.session.muted
                             ? "icons/lucide/volume-x.svg"
                             : "icons/lucide/volume-2.svg"
@@ -963,7 +956,7 @@ VideoPage {
                         id: volumeSlider
                         objectName: "volumeSlider"
 
-                        visible: root.session.hasAudioOutput
+                        visible: root.audioControlsAvailable
                             && transportIsland.width >= 560
                         Layout.preferredWidth: 104
                         from: 0

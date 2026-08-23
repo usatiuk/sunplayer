@@ -26,11 +26,12 @@ Stop-aware queue tests cover hard
 capacity, backpressure, and generation/cancellation wakeups. Session tests
 cover real continuous playback, controlled timestamp advancement, play/pause,
 drain/end, nonzero seek, paused/playing intent across seek, seek-to-end,
-retained-frame replacement, seek-time audio play intent, position-preserving
+frame clearing at generation replacement, seek-time audio play intent, position-preserving
 fallback, cancellation, stale-generation rejection, destruction, and
 presentation failure. The QML shell test deterministically flushes the real
 relative-seek burst action and covers accumulation, cancellation, clamping,
-active-seek supersession, retained-frame controls, and compact buffering state.
+active-seek supersession, empty-frame transport/volume controls, and compact
+buffering state.
 A no-window application mode loads the
 packaged QML module with its production type registrations. SunPlayer has narrow
 registered startup and playback scenarios on all three current platforms plus a
