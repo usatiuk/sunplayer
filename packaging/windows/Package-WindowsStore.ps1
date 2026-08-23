@@ -14,6 +14,22 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+$versionParts = @($PackageVersion -split '\.')
+if ($versionParts.Count -ne 4) {
+    throw "PackageVersion must contain four numeric components and end in .0."
+}
+$versionNumbers = foreach ($part in $versionParts) {
+    $number = 0
+    if ($part -notmatch '^[0-9]+$' -or
+        -not [uint16]::TryParse($part, [ref]$number)) {
+        throw "PackageVersion components must be integers from 0 through 65535."
+    }
+    $number
+}
+if ($versionNumbers[0] -eq 0 -or $versionNumbers[3] -ne 0) {
+    throw "PackageVersion must have a nonzero first component and end in .0."
+}
+
 $install = [System.IO.Path]::GetFullPath($InstallPrefix)
 $outputPath = [System.IO.Path]::GetFullPath($Output)
 $scriptDirectory = $PSScriptRoot

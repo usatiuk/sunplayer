@@ -1,4 +1,4 @@
-name: CI
+name: CI / Release
 
 on:
   pull_request:
@@ -6,17 +6,27 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
   linux:
     name: Linux · Ubuntu 26.04
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     container:
@@ -249,14 +259,132 @@ jobs:
     name: Windows · Qt 6.11.1
     runs-on: windows-2022
     timeout-minutes: 180
+    outputs:
+      application-version: ${{ steps.prepare-release.outputs.application_version }}
+      release-sha: ${{ steps.prepare-release.outputs.release_sha }}
+      store-version: ${{ steps.prepare-release.outputs.store_version }}
+      tag: ${{ steps.prepare-release.outputs.tag }}
     env:
       VCPKG_ROOT: C:\vcpkg
+      SUNPLAYER_PACKAGE_CONFIGURATION: ${{ github.event_name == 'workflow_dispatch' && 'RelWithDebInfo' || 'Release' }}
 
     steps:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+
+      - name: Prepare release revision
+        id: prepare-release
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        env:
+          BUMP: ${{ inputs.bump }}
+          INITIAL_ACTOR: ${{ github.actor }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          STORE_IDENTITY_NAME: ${{ vars.WINDOWS_STORE_IDENTITY_NAME }}
+          STORE_PUBLISHER: ${{ vars.WINDOWS_STORE_PUBLISHER }}
+          STORE_PUBLISHER_DISPLAY_NAME: ${{ vars.WINDOWS_STORE_PUBLISHER_DISPLAY_NAME }}
+        run: |
+          if ($env:INITIAL_ACTOR -ne 'usatiuk' -or $env:TRIGGERING_ACTOR -ne 'usatiuk') {
+            throw 'Only usatiuk may start or re-run a release.'
+          }
+          if ($env:GITHUB_REF -ne 'refs/heads/main') {
+            throw 'Releases must be created from main.'
+          }
+
+          $requiredVariables = @{
+            WINDOWS_STORE_IDENTITY_NAME = $env:STORE_IDENTITY_NAME
+            WINDOWS_STORE_PUBLISHER = $env:STORE_PUBLISHER
+            WINDOWS_STORE_PUBLISHER_DISPLAY_NAME = $env:STORE_PUBLISHER_DISPLAY_NAME
+          }
+          foreach ($entry in $requiredVariables.GetEnumerator()) {
+            if ([string]::IsNullOrWhiteSpace($entry.Value)) {
+              throw "Configure the $($entry.Key) repository variable from Partner Center."
+            }
+          }
+
+          $currentText = (Get-Content -LiteralPath VERSION.txt -Raw).Trim()
+          if ($currentText -notmatch '^(\d+)\.(\d+)\.(\d+)$') {
+            throw 'VERSION.txt must contain one X.Y.Z version.'
+          }
+          $parts = @()
+          foreach ($part in @($Matches[1], $Matches[2], $Matches[3])) {
+            $value = 0
+            if (-not [uint16]::TryParse($part, [ref]$value)) {
+              throw 'VERSION.txt components must be integers from 0 through 65535.'
+            }
+            $parts += [int]$value
+          }
+          switch ($env:BUMP) {
+            'major' { $parts = @(($parts[0] + 1), 0, 0) }
+            'minor' { $parts = @($parts[0], ($parts[1] + 1), 0) }
+            'patch' { $parts = @($parts[0], $parts[1], ($parts[2] + 1)) }
+            default { throw 'The release bump must be major, minor, or patch.' }
+          }
+          if ($parts.Where({ $_ -gt 65535 }).Count -ne 0) {
+            throw 'The resulting version exceeds the Store component limit of 65535.'
+          }
+          if ($parts[0] -eq 0) {
+            throw 'The Store requires a nonzero major version. Choose major for the first release.'
+          }
+
+          $applicationVersion = $parts -join '.'
+          $storeVersion = "$applicationVersion.0"
+          $tag = "v$applicationVersion"
+          $originalSha = $env:GITHUB_SHA
+
+          git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch origin/main.' }
+          $remoteMain = (git rev-parse refs/remotes/origin/main).Trim()
+
+          $remoteTag = (@(git ls-remote --tags origin "refs/tags/$tag") -join "`n").Trim()
+          if ($LASTEXITCODE -ne 0) { throw "Could not inspect remote tag $tag." }
+
+          if ($remoteMain -eq $originalSha -and [string]::IsNullOrEmpty($remoteTag)) {
+            Set-Content -LiteralPath VERSION.txt -Value $applicationVersion
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add VERSION.txt
+            git commit -m "Release $applicationVersion"
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create the local release commit.' }
+            $releaseSha = (git rev-parse HEAD).Trim()
+            git tag $tag $releaseSha
+            if ($LASTEXITCODE -ne 0) { throw "Could not create local tag $tag." }
+          }
+          elseif (-not [string]::IsNullOrEmpty($remoteTag)) {
+            if ([int]$env:RUN_ATTEMPT -le 1) {
+              throw "$tag already exists; only a re-run may recover it."
+            }
+            git fetch origin "refs/tags/$tag:refs/tags/$tag"
+            if ($LASTEXITCODE -ne 0) { throw "Could not fetch existing tag $tag." }
+            $releaseSha = (git rev-parse "$tag^{commit}").Trim()
+            $parentSha = (git rev-parse "$releaseSha^").Trim()
+            $taggedVersion = (git show "${releaseSha}:VERSION.txt").Trim()
+            if ($parentSha -ne $originalSha -or
+                $taggedVersion -ne $applicationVersion) {
+              throw "Existing refs for $tag do not match this release run."
+            }
+            git merge-base --is-ancestor $releaseSha refs/remotes/origin/main
+            if ($LASTEXITCODE -ne 0) {
+              throw "$tag is not part of origin/main history."
+            }
+            git checkout --detach $releaseSha
+            if ($LASTEXITCODE -ne 0) { throw "Could not check out existing release $tag." }
+          }
+          else {
+            throw 'origin/main moved after this release was dispatched.'
+          }
+
+          git branch --force release-build $releaseSha
+          git bundle create "$env:RUNNER_TEMP\sunplayer-release.bundle" release-build "^$originalSha"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not preserve the exact release commit.' }
+
+          "application_version=$applicationVersion" >> $env:GITHUB_OUTPUT
+          "release_sha=$releaseSha" >> $env:GITHUB_OUTPUT
+          "store_version=$storeVersion" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
 
       - name: Restore Qt
         id: qt-cache
@@ -339,16 +467,16 @@ jobs:
           ctest --test-dir "%RUNNER_TEMP%\sunplayer-windows-debug" --output-on-failure --parallel %NUMBER_OF_PROCESSORS% -LE "device|gpu"
           if errorlevel 1 exit /b %errorlevel%
 
-      - name: Configure Release bundle
+      - name: Configure distribution bundle
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
           set "VCPKG_BINARY_SOURCES=clear;files,%RUNNER_TEMP%\sunplayer-vcpkg-binary-cache,readwrite"
-          cmake -S . -B "%RUNNER_TEMP%\sunplayer-windows-release" -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DVCPKG_INSTALLED_DIR=%RUNNER_TEMP%\sunplayer-vcpkg-installed" "-DCMAKE_PREFIX_PATH=%RUNNER_TEMP%\Qt\6.11.1\msvc2022_64"
+          cmake -S . -B "%RUNNER_TEMP%\sunplayer-windows-release" -G Ninja -DCMAKE_BUILD_TYPE=%SUNPLAYER_PACKAGE_CONFIGURATION% -DBUILD_TESTING=OFF "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DVCPKG_INSTALLED_DIR=%RUNNER_TEMP%\sunplayer-vcpkg-installed" "-DCMAKE_PREFIX_PATH=%RUNNER_TEMP%\Qt\6.11.1\msvc2022_64"
           if errorlevel 1 exit /b %errorlevel%
 
-      - name: Build Release bundle
+      - name: Build distribution bundle
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
@@ -356,19 +484,19 @@ jobs:
           cmake --build "%RUNNER_TEMP%\sunplayer-windows-release" --target sunplayer --parallel %NUMBER_OF_PROCESSORS%
           if errorlevel 1 exit /b %errorlevel%
 
-      - name: Stage Release bundle
+      - name: Stage distribution bundle
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
-          cmake --install "%RUNNER_TEMP%\sunplayer-windows-release" --config Release --prefix "%RUNNER_TEMP%\sunplayer-windows-artifact"
+          cmake --install "%RUNNER_TEMP%\sunplayer-windows-release" --config %SUNPLAYER_PACKAGE_CONFIGURATION% --prefix "%RUNNER_TEMP%\sunplayer-windows-artifact"
           if errorlevel 1 exit /b %errorlevel%
           if not exist "%RUNNER_TEMP%\sunplayer-windows-artifact\bin\qt.conf" exit /b 1
           "%RUNNER_TEMP%\sunplayer-windows-artifact\bin\sunplayer.exe" --verify-qml
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Upload Windows developer bundle
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'push'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sunplayer-windows-release-${{ github.sha }}
@@ -403,6 +531,7 @@ jobs:
           }
 
       - name: Package unsigned development MSIX
+        if: github.event_name != 'workflow_dispatch'
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
@@ -411,10 +540,153 @@ jobs:
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Upload unsigned development MSIX
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'push'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sunplayer-windows-msix-${{ github.sha }}
           path: ${{ runner.temp }}\SunPlayerDevelopment.msix
           if-no-files-found: error
           retention-days: 7
+
+      - name: Package Store MSIX upload
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        env:
+          STORE_PACKAGE_VERSION: ${{ steps.prepare-release.outputs.store_version }}
+          STORE_IDENTITY_NAME: ${{ vars.WINDOWS_STORE_IDENTITY_NAME }}
+          STORE_PUBLISHER: ${{ vars.WINDOWS_STORE_PUBLISHER }}
+          STORE_PUBLISHER_DISPLAY_NAME: ${{ vars.WINDOWS_STORE_PUBLISHER_DISPLAY_NAME }}
+        run: |
+          $msix = Join-Path $env:RUNNER_TEMP "SunPlayer_$($env:STORE_PACKAGE_VERSION)_x64.msix"
+          & .\packaging\windows\Package-WindowsStore.ps1 `
+            -InstallPrefix "$env:RUNNER_TEMP\sunplayer-windows-artifact" `
+            -Output $msix `
+            -PackageVersion $env:STORE_PACKAGE_VERSION `
+            -IdentityName $env:STORE_IDENTITY_NAME `
+            -Publisher $env:STORE_PUBLISHER `
+            -PublisherDisplayName $env:STORE_PUBLISHER_DISPLAY_NAME
+
+          $pdb = Join-Path $env:RUNNER_TEMP 'sunplayer-windows-release\sunplayer.pdb'
+          if (-not (Test-Path -LiteralPath $pdb -PathType Leaf) -or
+              (Get-Item -LiteralPath $pdb).Length -eq 0) {
+            throw "The full SunPlayer linker PDB is missing: $pdb"
+          }
+          if (Get-ChildItem -LiteralPath "$env:RUNNER_TEMP\sunplayer-windows-artifact" -Filter *.pdb -File -Recurse) {
+            throw 'PDB files must remain outside the installed MSIX payload.'
+          }
+
+          $symbolZip = Join-Path $env:RUNNER_TEMP 'SunPlayerSymbols.zip'
+          $appxSym = Join-Path $env:RUNNER_TEMP "SunPlayer_$($env:STORE_PACKAGE_VERSION)_x64.appxsym"
+          Compress-Archive `
+            -LiteralPath $pdb `
+            -DestinationPath $symbolZip `
+            -CompressionLevel Optimal
+          Move-Item -LiteralPath $symbolZip -Destination $appxSym
+
+          $zip = Join-Path $env:RUNNER_TEMP 'SunPlayerStoreUpload.zip'
+          $upload = Join-Path $env:RUNNER_TEMP "SunPlayer_$($env:STORE_PACKAGE_VERSION)_x64.msixupload"
+          Compress-Archive -LiteralPath @($msix, $appxSym) -DestinationPath $zip -CompressionLevel Optimal
+          Move-Item -LiteralPath $zip -Destination $upload
+
+      - name: Upload release inputs
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sunplayer-release-${{ steps.prepare-release.outputs.application_version }}
+          path: |
+            ${{ runner.temp }}\SunPlayer_${{ steps.prepare-release.outputs.store_version }}_x64.msixupload
+            ${{ runner.temp }}\sunplayer-release.bundle
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 1
+
+  publish:
+    name: Publish release
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.actor == 'usatiuk' &&
+      github.triggering_actor == 'usatiuk' &&
+      github.ref == 'refs/heads/main'
+    needs: windows
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Check out dispatch revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Download release inputs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sunplayer-release-${{ needs.windows.outputs.application-version }}
+          path: ${{ runner.temp }}/sunplayer-release
+
+      - name: Push exact release revision
+        env:
+          ORIGINAL_SHA: ${{ github.sha }}
+          RELEASE_SHA: ${{ needs.windows.outputs.release-sha }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          TAG: ${{ needs.windows.outputs.tag }}
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/sunplayer-release/sunplayer-release.bundle"
+          git bundle verify "$bundle"
+          git fetch "$bundle" refs/heads/release-build:refs/heads/release-build
+          [[ "$(git rev-parse refs/heads/release-build)" == "$RELEASE_SHA" ]]
+          [[ "$(git rev-parse "$RELEASE_SHA^")" == "$ORIGINAL_SHA" ]]
+
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          remote_main="$(git rev-parse refs/remotes/origin/main)"
+          remote_tag="$(git ls-remote --tags origin "refs/tags/$TAG" | cut -f1)"
+
+          if [[ "$remote_main" == "$ORIGINAL_SHA" && -z "$remote_tag" ]]; then
+            git tag "$TAG" "$RELEASE_SHA"
+            git push --atomic origin \
+              "$RELEASE_SHA:refs/heads/main" \
+              "refs/tags/$TAG:refs/tags/$TAG"
+          elif [[ "$remote_tag" != "$RELEASE_SHA" ]]; then
+            echo "Remote $TAG conflicts with this release." >&2
+            exit 1
+          elif (( RUN_ATTEMPT <= 1 )); then
+            echo "$TAG already exists; only a re-run may recover it." >&2
+            exit 1
+          elif ! git merge-base --is-ancestor "$RELEASE_SHA" refs/remotes/origin/main; then
+            echo "$TAG is not part of origin/main history." >&2
+            exit 1
+          fi
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STORE_VERSION: ${{ needs.windows.outputs.store-version }}
+          TAG: ${{ needs.windows.outputs.tag }}
+          VERSION: ${{ needs.windows.outputs.application-version }}
+        run: |
+          set -euo pipefail
+          upload="$RUNNER_TEMP/sunplayer-release/SunPlayer_${STORE_VERSION}_x64.msixupload"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            asset_name="$(basename "$upload")"
+            asset_info="$(gh release view "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json assets \
+              --jq ".assets[] | select(.name == \"$asset_name\") | .size")"
+            if [[ -z "$asset_info" ]]; then
+              gh release upload "$TAG" "$upload" --repo "$GITHUB_REPOSITORY"
+            else
+              if [[ "$asset_info" -le 0 ]]; then
+                echo "Existing release asset $asset_name is incomplete; refusing to replace it." >&2
+                exit 1
+              fi
+              echo "Release asset $asset_name already exists; leaving it unchanged."
+            fi
+          else
+            gh release create "$TAG" "$upload" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "SunPlayer $VERSION" \
+              --generate-notes \
+              --verify-tag
+          fi

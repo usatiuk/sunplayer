@@ -427,22 +427,30 @@ cases bundled into the mixed `ffmpeg-first-frame` executable; splitting a
 hosted software subset is deferred while the complete test remains dedicated-
 machine coverage.
 
-The workflow requests only read-only repository contents, disables persisted
-checkout credentials, and pins actions by full commit SHA. Every event stages,
-probes, and packages the Release tree with the unsigned
-`SunPlayerDevelopment` identity. Trusted main pushes and manual dispatches
-upload that tree and MSIX as separate seven-day artifacts; pull requests upload
-neither. Microsoft's pinned setup action provides `winapp` v0.6.0, and CI
+Ordinary CI requests only read-only repository contents, disables persisted
+checkout credentials, and pins actions by full commit SHA. Every event stages
+and probes a Windows distribution tree. Pull requests and main pushes use
+`Release` and package it with the unsigned `SunPlayerDevelopment` identity;
+main pushes upload the tree and MSIX as separate seven-day artifacts.
+Microsoft's pinned setup action
+provides `winapp` v0.6.0, and CI
 checks every file in that release archive against a reviewed SHA-256 digest
 before execution. The packaging script remains installation-free. The workflow
-does not publish releases and does not cache build trees, the shared in-job
+does not cache build trees, the shared in-job
 `vcpkg_installed` tree, downloads, artifacts, or credentials. Until the new
-Release path succeeds in a hosted run, it is implemented and locally reviewed
+release path succeeds in a hosted run, it is implemented and locally reviewed
 configuration rather than a claim that hosted packaging passes.
 
-The short-lived artifacts are project-internal developer output. Partner
-Center identity, signing, certification, clean-machine verification, and an
-actual Store submission remain separate release steps.
+The same workflow has one owner-only manual release path using
+`RelWithDebInfo`. It bumps the root
+`VERSION.txt`, creates the release commit locally, and builds that exact
+revision as `RelWithDebInfo`. After the Store MSIX and full `sunplayer.pdb`
+APPXSYM are successfully wrapped in an MSIXUPLOAD, a separate write-scoped job
+atomically pushes the commit and tag and creates the GitHub Release. Failed
+GitHub Release creation can be re-run against those exact refs. The workflow
+does not use Store credentials or submit to Partner Center. Clean-machine
+verification, certification, and Store submission remain separate release
+steps.
 
 ## Verification
 

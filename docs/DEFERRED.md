@@ -220,10 +220,10 @@ the test solely for initial CI.
 Linux hosted CI uses lavapipe and a Pulse null sink. A VAAPI/DRM PRIME hardware
 runner, an HDR/display lab, and physical-audio/default-route scenarios remain
 separate future lanes. Windows now has a narrow CMake-install-to-MSIX path using
-Microsoft `winapp`; Partner Center identity, clean-machine verification,
-certification, and Store release remain deferred. The short-lived Windows
-Release-tree and unsigned development-identity MSIX artifacts do not close
-those gates.
+Microsoft `winapp` and a manual GitHub release path that wraps the Store MSIX
+and application symbols in an `.msixupload`. The first hosted release run,
+clean-machine verification, Partner Center certification, and Store submission
+remain release gates.
 macOS CI remains deferred until its bundle/deployment contract and useful
 hosted-versus-native-hardware test split are defined.
 

@@ -42,8 +42,10 @@ Makefile
 .qmlls.ini
 
 # Local Windows packages and development certificates
+*.appxsym
 *.cer
 *.msix
+*.msixupload
 *.pfx
 
 # OS metadata and logs

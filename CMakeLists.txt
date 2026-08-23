@@ -67,7 +67,16 @@ if (CMAKE_HOST_APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
     )
 endif ()
 
-project(SunPlayer VERSION 0.1.0 LANGUAGES C CXX)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION.txt"
+        SUNPLAYER_PROJECT_VERSION)
+string(STRIP "${SUNPLAYER_PROJECT_VERSION}"
+        SUNPLAYER_PROJECT_VERSION)
+if (NOT SUNPLAYER_PROJECT_VERSION MATCHES
+        "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+    message(FATAL_ERROR "VERSION.txt must contain one X.Y.Z version.")
+endif ()
+
+project(SunPlayer VERSION ${SUNPLAYER_PROJECT_VERSION} LANGUAGES C CXX)
 
 set(SUNPLAYER_SOURCE_URL "https://github.com/usatiuk/sunplayer")
 set(SUNPLAYER_ISSUES_URL "https://github.com/usatiuk/sunplayer/issues/new")
@@ -660,7 +669,7 @@ qt_add_resources(sunplayer "sunplayer_legal"
 
 set_target_properties(sunplayer PROPERTIES
         MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
-        MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
+        MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
         MACOSX_BUNDLE TRUE
         WIN32_EXECUTABLE TRUE
 )

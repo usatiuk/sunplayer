@@ -94,15 +94,29 @@ not deploy dependencies, install tools, unpack the result, or duplicate
 Microsoft package validation. The Store package is unsigned; Partner Center
 signs it after certification.
 
-## CI package artifact
+## CI and release packages
 
-Every Windows CI run packages the Release install tree with the
-unsigned `SunPlayerDevelopment` identity, so pull requests exercise the complete
-packaging boundary. Trusted main pushes and manual workflow runs additionally
-upload the MSIX for seven days. No certificates or secrets are involved. This
-is development evidence, not a Store-submittable package; the three identity
-values and version must be replaced with the reserved Partner Center values for
-a Store release.
+Pull requests and main pushes package the Release install tree with the unsigned
+`SunPlayerDevelopment` identity. Main pushes retain the development bundle and
+MSIX for seven days; pull requests retain neither.
+
+After reserving SunPlayer, configure these public GitHub repository variables
+from Partner Center's Product identity page:
+
+* `WINDOWS_STORE_IDENTITY_NAME`
+* `WINDOWS_STORE_PUBLISHER`
+* `WINDOWS_STORE_PUBLISHER_DISPLAY_NAME`
+
+To release, open **Actions → CI / Release → Run workflow** on `main` and choose
+`major`, `minor`, or `patch`. The first Store release starts from the checked-in
+`0.1.0`, so choose `major` to produce SunPlayer `1.0.0`, package version
+`1.0.0.0`, tag `v1.0.0`, and the matching GitHub Release.
+
+The release uses `RelWithDebInfo`. Its `.msixupload` contains the unsigned x64
+MSIX and an `.appxsym` containing the complete linker-produced
+`sunplayer.pdb`. Download the MSIXUPLOAD from the GitHub Release and submit it
+manually to Partner Center. No certificate, GitHub Secret, Store credential, or
+automatic Store submission is involved.
 
 ## Local signed package
 
