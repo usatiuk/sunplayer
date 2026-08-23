@@ -55,7 +55,8 @@ rendering are deferred until a real product path requires them.
   frame metadata is absent, before that frame is retained.
 * Dynamic-metadata diagnostics are best-effort and may become current on a
   later frame; atomic diagnostic perfection is not a rendering requirement.
-* Existing frame retention and zero-copy storage ownership remain unchanged.
+* Existing frame retention and native storage ownership remain unchanged;
+  platform import may still require a diagnosed same-device GPU copy.
 * New metadata handling requires a concrete format fixture or observed
   library propagation gap rather than speculative completeness.
 * Removing redundant stream-to-frame mutation can change diagnostics for

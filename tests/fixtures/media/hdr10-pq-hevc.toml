@@ -38,4 +38,6 @@ features = [
     "static-mastering-metadata",
     "content-light-metadata",
     "analytical-neutral-patches",
+    "d3d11va-hardware-decode",
+    "exact-size-same-device-gpu-copy",
 ]

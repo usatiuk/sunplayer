@@ -77,9 +77,11 @@ download a hardware frame.
   session policy. Repeated typed failures become session errors.
 
 The implementation exercises software `AVFrame` retention/upload and Windows
-D3D11VA retention/direct import. A pinned H.264 scenario proves that a retained
-NV12 texture-array slice can be rendered after decoder teardown without an
-input CPU transfer or GPU copy. The session tests cover typed software
-re-decode after import rejection and generation replacement after graphics
-invalidation. Other platform importers and non-direct GPU/CPU copy fallbacks
-remain future implementations.
+D3D11VA retention through an exact-size same-device copy. Pinned NV12 and P010
+scenarios prove that a retained texture-array slice can be rendered after
+decoder teardown with no input CPU transfer and one GPU copy; direct sampling
+of padded decoder textures was rejected after the
+[edge-corruption diagnosis](../research/2026-08-23-windows-d3d11va-edge-corruption.md).
+The session tests cover typed software re-decode after import rejection and
+generation replacement after graphics invalidation. The Linux native importer
+and any demonstrated need for a CPU fallback remain future work.

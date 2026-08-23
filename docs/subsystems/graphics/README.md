@@ -10,8 +10,9 @@ recovery model.
 The production decoded-frame/render boundary is wired into the Player and
 capture-tested headlessly. Software `AVFrame` planes upload through
 libplacebo; on Windows, supported H.264 input decodes into a retained D3D11VA
-texture slice on the same device and maps directly into libplacebo without an
-input copy. On macOS, VideoToolbox NV12/P010 `CVPixelBuffer` planes become
+texture slice, copies once into an exact-size texture on the same device, and
+maps that texture into libplacebo without an input CPU transfer. On macOS,
+VideoToolbox NV12/P010 `CVPixelBuffer` planes become
 same-device Metal texture views and remain retained until GPU consumption
 completes.
 HDR Lab still uses the analytic libplacebo producer by default, with the
@@ -131,7 +132,7 @@ geometry, and display policy remain outside the native execution scope.
 | `DiagnosticVideoProducer` | Implements the producer contract with the temporary pattern pipeline and direct `QrhiVideoTarget`. |
 | `LibplaceboDiagnosticVideoProducer` | Owns a persistent renderer and analytic RGBA32F upload texture; describes sRGB or BT.2020/PQ input and a linear BT.709 target to libplacebo. |
 | `D3D11LibplaceboVideoTarget` | Wraps the QRhi-owned RGBA16F D3D11 texture as a `pl_tex` and brackets same-immediate-context work through QRhi external commands. |
-| `D3D11LibplaceboFrameImporter` | Validates a retained D3D11VA texture/slice and maps NV12/P010/P012/P016 plane views into libplacebo without copying the frame. |
+| `D3D11LibplaceboFrameImporter` | Validates a retained D3D11VA texture/slice, copies its active rectangle into a cached exact-size same-device texture, and maps its NV12/P010/P012/P016 plane views into libplacebo. |
 | `LinuxWaylandWindowContext` | Owns the window-scoped `QVulkanInstance`, inventories optional managed-color and decoration capabilities before native creation, follows the current surface's preferred description, transactionally applies managed SDR/HDR modes, and explicitly destroys the native surface before the instance. |
 | `VulkanGraphicsDeviceDomain` | Lets QRhi own the Vulkan 1.3 device/queue, validates the selected device features, imports those handles into libplacebo, and owns their shared queue guard and diagnostics. |
 | `VulkanLibplaceboVideoTarget` | Wraps a QRhi-owned RGBA16F Vulkan image for libplacebo, transfers layout knowledge back to QRhi, and preserves same-queue producer-to-sampler order without an output copy. |
@@ -733,14 +734,17 @@ teardown. The RGB case captures both video and composition output and verifies
 copy diagnostics plus target-only rerender reuse. The compressed YUV case
 verifies exact decoded plane samples, BT.709 limited-range conversion, timing,
 and non-square-pixel metadata. A third pinned H.264 scenario decodes a real
-D3D11VA NV12 frame on the graphics-domain device, imports the retained texture
-slice directly, asserts zero input CPU transfers/GPU copies and zero output
-copies/transfers, and compares captured output against software decode. CTest
+D3D11VA NV12 frame on the graphics-domain device, copies the retained texture
+slice into a cached exact-size texture, asserts zero input CPU transfers, one
+input GPU copy, and zero output copies/transfers, and compares the complete
+captured border at 2× output size against software decode. The NV12 case also
+exercises a nonzero crop; a Main10 HEVC fixture exercises the same P010 path.
+CTest
 requires D3D11VA for this target rather than treating a missing capability as
 green coverage. The FFV1 and H.264 fixtures are also decoded as complete
 three-frame streams through the bounded continuous path, including simultaneous
 retention of three D3D11VA surfaces. A fixed mastered PQ fixture,
-P010/P012/P016 capture,
+P012/P016 capture,
 renderer image corpus, cross-backend capture, and recorded runtime display
 matrix do not exist yet.
 

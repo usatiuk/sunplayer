@@ -105,9 +105,11 @@ Implement alongside graphics milestone 1:
 * [x] Cover an analytically generated Matroska/FFV1 YUV420P stream with
   BT.709 limited-range metadata, timestamps, non-square pixels, exact decoded
   plane samples, and tolerant linear-RGB capture.
-* [x] Cover a pinned H.264 stream through real D3D11VA decode and direct NV12
-  plane import, assert zero input and output copies/transfers, and compare its
-  capture against software decode.
+* [x] Cover pinned H.264/NV12 and Main10 HEVC/P010 streams through real
+  D3D11VA decode and exact-size same-device import. Assert one input GPU copy,
+  zero CPU/output transfers, compare the complete 2× output border plus a
+  nonzero crop against software decode, and reject odd visible extents for
+  software retry.
 * [x] Drain all three FFV1 and H.264 frames through the production continuous
   send/receive/flush path, including bounded simultaneous D3D11VA retention.
 * [x] Make the registered hardware-decode CTest fail when D3D11VA is missing;

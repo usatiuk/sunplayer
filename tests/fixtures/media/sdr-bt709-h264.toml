@@ -31,7 +31,7 @@ features = [
     "real-container",
     "lossy-compressed-video",
     "d3d11va-hardware-decode",
-    "direct-native-surface-import",
+    "exact-size-same-device-gpu-copy",
     "zero-cpu-transfer",
     "yuv420p",
     "limited-range",

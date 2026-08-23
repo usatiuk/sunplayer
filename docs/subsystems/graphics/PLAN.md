@@ -219,7 +219,7 @@ Generation-scoped seeking and position-preserving graphics recovery are now
 implemented by the playback/media subsystems. Audio remains a later milestone.
 The first Windows hardware path is milestone 5.
 
-## Milestone 5: Windows hardware decode and direct input import
+## Milestone 5: Windows hardware decode and safe input import
 
 Prefer the native decoder path without changing the decoded-frame, source,
 libplacebo producer, or compositor contracts.
@@ -228,16 +228,17 @@ libplacebo producer, or compositor contracts.
 
 * [x] Create the Windows D3D11 device with video support and import that exact
   device/context into QRhi and libplacebo.
-* [x] Give FFmpeg a referenced D3D11VA hardware-device context with
-  shader-resource decoder surfaces.
+* [x] Give FFmpeg a referenced D3D11VA hardware-device context; decoder
+  surfaces are copy sources and do not require shader-resource binding.
 * [x] Enable D3D11 multithread protection and serialize FFmpeg device callbacks
   with QRhi/libplacebo GPU resource and command phases.
 * [x] Negotiate decoder hardware formats through FFmpeg's public codec
   configuration API.
 * [x] Retain the hardware `AVFrame`, device generation, texture array, and
   slice at the decoded-frame boundary.
-* [x] Directly wrap NV12, P010, P012, and P016 D3D11 plane views for
-  libplacebo with explicit effective depth and storage shift.
+* [x] Wrap NV12, P010, P012, and P016 D3D11 plane views for libplacebo with
+  explicit effective depth and storage shift. Use a cached exact-size
+  same-device copy instead of sampling padded decoder textures directly.
 * [x] Retry the decode operation in software after a configured hardware
   failure before the first published frame and expose the fallback reason.
 * [x] Retry once in software when a decoded hardware surface cannot be
@@ -245,16 +246,18 @@ libplacebo producer, or compositor contracts.
 * [x] Capture logical position, supersede old-generation decode/frame state,
   and re-decode current media after graphics-device recreation against the
   replacement capability, including software-backed pipelines.
-* [x] Prove real H.264 D3D11VA decode/direct import against a pinned fixture.
-* [ ] Capture P010/P012/P016 and real device-loss behavior.
+* [x] Prove real H.264/NV12 and Main10 HEVC/P010 D3D11VA safe import against
+  pinned fixtures, including 2× four-edge and nonzero-crop software-decode
+  agreement.
+* [ ] Capture P012/P016 and real device-loss behavior.
 * [ ] Measure decoder/render contention during long continuous playback.
 
 ### Acceptance
 
 The real H.264 scenario returns D3D11 storage belonging to the active graphics
 generation, renders through the production libplacebo target, reports zero
-input CPU transfers and GPU copies, and agrees with software decode within
-declared floating-point tolerances. The unsupported FFV1 hardware path falls
+input CPU transfers and one GPU copy, and agrees with software decode across
+the output border within declared floating-point tolerances. The unsupported FFV1 hardware path falls
 back to software with an explicit reason.
 
 ## Backend realization

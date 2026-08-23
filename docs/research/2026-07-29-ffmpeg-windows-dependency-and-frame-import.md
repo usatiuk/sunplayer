@@ -1,7 +1,9 @@
 # FFmpeg Windows dependency and frame-import research
 
 * Date: 2026-07-29
-* Status: Dependency, software mapping, and D3D11VA direct import validated
+* Status: Dependency and software mapping validated. The initial D3D11VA
+  zero-copy conclusion was superseded by the
+  [2026-08-23 edge-corruption diagnosis](2026-08-23-windows-d3d11va-edge-corruption.md).
 
 ## Official vcpkg package
 
@@ -61,11 +63,15 @@ For an FFmpeg D3D11 frame:
   normally NV12, P010, P012, or P016.
 
 The implemented D3D11VA hardware context uses SunPlayer's graphics-domain device
-rather than creating a second adapter/device. Decoder frame pools request
-shader-resource binding.
+rather than creating a second adapter/device. Decoder surfaces remain ordinary
+copy sources; only SunPlayer's exact-size destination requests shader-resource
+binding.
 
-The native importer wraps each plane and array slice through
-`pl_d3d11_wrap()`:
+The initial native importer wrapped each decoder plane and array slice directly
+through `pl_d3d11_wrap()`. That proved the format mapping but was not a safe
+playback default because decoder textures can be padded. The corrected importer
+copies the active chroma-aligned rectangle into a cached exact-size D3D11
+texture, then wraps these same plane formats:
 
 | Storage | Luma view | Chroma view |
 | --- | --- | --- |
@@ -88,23 +94,24 @@ The implemented Windows policy is:
 3. It imports that device/context into QRhi and gives the same device to
    libplacebo and FFmpeg.
 4. The retained `AVFrame` reserves its pool slice.
-5. libplacebo source reads occur inside QRhi's external-command bracket.
-6. The frame reference is released only after those reads are ordered on the
-   shared context.
+5. The importer orders one exact-size GPU copy from the retained decoder slice
+   before libplacebo reads the copy on the same immediate context.
+6. The frame reference remains valid while that copy is ordered.
 
 The graphics domain also exposes one recursive execution scope used by
 FFmpeg's hardware-context callbacks and the engine's QRhi/libplacebo resource,
 command, and teardown phases. Device-independent source selection, geometry,
 and display policy execute outside that scope. This provides explicit
 sequence-level ordering on top of D3D11's per-call multithread protection. The
-retained `AVFrame` keeps the texture-array slice reserved while cached
-libplacebo plane views refer to it.
+retained `AVFrame` keeps the texture-array slice reserved while the copy is
+ordered; cached libplacebo views refer only to SunPlayer's exact-size texture.
 
-A pinned 640×360 H.264 scenario has validated D3D11VA NV12 decode, device and
-slice checks, `R8_UNORM`/`R8G8_UNORM` plane wrapping, direct libplacebo
-rendering, zero input CPU transfers, zero input GPU copies, and tolerant output
-agreement with software decode. P010/P012/P016 capture, continuous decode
-contention, and device-loss recovery still require verification.
+Pinned H.264/NV12 and Main10 HEVC/P010 scenarios validate device and slice
+checks, `R8_UNORM`/`R8G8_UNORM` and `R16_UNORM`/`R16G16_UNORM` plane wrapping,
+one same-device input copy, zero input CPU transfers, and four-edge output
+agreement with software decode. P012/P016 capture, continuous decode
+contention, affected production-file playback, and device-loss recovery still
+require verification.
 
 ## Sources
 

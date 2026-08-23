@@ -74,8 +74,6 @@ VideoHardwareDecodeCapability createVideoDecodeCapability(ID3D11Device& device, 
     d3d11->lock = lockFfmpegDevice;
     d3d11->unlock = unlockFfmpegDevice;
     d3d11->lock_ctx = executionState.get();
-    d3d11->BindFlags |= D3D11_BIND_SHADER_RESOURCE;
-
     int const status = av_hwdevice_ctx_init(deviceReference);
     if (status < 0) {
         QString const reason = QStringLiteral("FFmpeg could not initialize the shared "

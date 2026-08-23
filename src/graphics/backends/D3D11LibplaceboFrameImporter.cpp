@@ -3,12 +3,12 @@
 #include <array>
 #include <cstdint>
 #include <limits>
-#include <vector>
 
 #include <d3d11.h>
 #include <d3d11_4.h>
 #include <dxgiformat.h>
 #include <libplacebo/d3d11.h>
+#include <wrl/client.h>
 
 extern "C" {
 #include <libavutil/frame.h>
@@ -23,6 +23,8 @@ extern "C" {
 #include "video/libplacebo/LibplaceboFrameImporter.h"
 
 namespace {
+using Microsoft::WRL::ComPtr;
+
 struct PlaneFormats {
     DXGI_FORMAT resource = DXGI_FORMAT_UNKNOWN;
     DXGI_FORMAT luma = DXGI_FORMAT_UNKNOWN;
@@ -86,18 +88,14 @@ class D3D11LibplaceboFrameImporter final : public LibplaceboHardwareFrameImporte
             return;
         }
 
-        ID3D11DeviceContext* context = nullptr;
-        m_d3d11->device->GetImmediateContext(&context);
-        ID3D11Multithread* multithread = nullptr;
-        const HRESULT queryResult =
-            context ? context->QueryInterface(__uuidof(ID3D11Multithread), reinterpret_cast<void**>(&multithread))
-                    : E_NOINTERFACE;
-        if (SUCCEEDED(queryResult) && multithread) {
-            m_multithreadProtected = multithread->GetMultithreadProtected();
-            multithread->Release();
+        ComPtr<ID3D11DeviceContext> immediateContext;
+        m_d3d11->device->GetImmediateContext(&immediateContext);
+        if (immediateContext) {
+            immediateContext.As(&m_context);
         }
-        if (context) {
-            context->Release();
+        ComPtr<ID3D11Multithread> multithread;
+        if (m_context && SUCCEEDED(m_context.As(&multithread))) {
+            m_multithreadProtected = multithread->GetMultithreadProtected();
         }
     }
 
@@ -113,7 +111,7 @@ class D3D11LibplaceboFrameImporter final : public LibplaceboHardwareFrameImporte
             return false;
         };
 
-        if (!m_d3d11 || !m_d3d11->device) {
+        if (!m_d3d11 || !m_d3d11->device || !m_context) {
             return fail(QStringLiteral("The libplacebo D3D11 device is unavailable"));
         }
         if (!m_multithreadProtected) {
@@ -137,7 +135,7 @@ class D3D11LibplaceboFrameImporter final : public LibplaceboHardwareFrameImporte
         PlaneFormats formats;
         if (!planeFormats(framesContext->sw_format, formats)) {
             return fail(
-                QStringLiteral("D3D11 direct import does not support %1 surfaces").arg(frame.storage().softwareFormat));
+                QStringLiteral("D3D11 import does not support %1 surfaces").arg(frame.storage().softwareFormat));
         }
 
         auto* const texture = reinterpret_cast<ID3D11Texture2D*>(avFrame.data[0]);
@@ -164,87 +162,127 @@ class D3D11LibplaceboFrameImporter final : public LibplaceboHardwareFrameImporte
             description.Height == 0 || description.ArraySize == 0 || avFrame.width <= 0 || avFrame.height <= 0 ||
             static_cast<UINT>(avFrame.width) > description.Width ||
             static_cast<UINT>(avFrame.height) > description.Height ||
-            arraySlice >= static_cast<int>(description.ArraySize) ||
-            !(description.BindFlags & D3D11_BIND_SHADER_RESOURCE)) {
-            return fail(QStringLiteral("The decoded D3D11 surface cannot be sampled directly"));
+            arraySlice >= static_cast<int>(description.ArraySize)) {
+            return fail(QStringLiteral("The decoded D3D11 surface cannot be copied safely"));
         }
 
-        if (texture != m_cachedTexture || description.Format != m_cachedFormat || description.Width != m_cachedWidth ||
-            description.Height != m_cachedHeight || description.ArraySize != m_slicePlanes.size()) {
-            resetCache();
-            m_cachedTexture = texture;
-            m_cachedFormat = description.Format;
-            m_cachedWidth = description.Width;
-            m_cachedHeight = description.Height;
-            m_slicePlanes.resize(description.ArraySize);
+        VideoFrameGeometry const& geometry = frame.geometry();
+        UINT const copyLeft = static_cast<UINT>(geometry.crop.left());
+        UINT const copyTop = static_cast<UINT>(geometry.crop.top());
+        UINT const copyWidth = static_cast<UINT>(geometry.visibleSize.width());
+        UINT const copyHeight = static_cast<UINT>(geometry.visibleSize.height());
+        if (((copyLeft | copyTop | copyWidth | copyHeight) & 1U) != 0) {
+            return fail(QStringLiteral("The decoded D3D11 visible rectangle is not chroma-aligned"));
+        }
+        if (copyLeft + copyWidth > description.Width || copyTop + copyHeight > description.Height) {
+            return fail(QStringLiteral("The decoded D3D11 surface is smaller than its aligned visible rectangle"));
         }
 
-        std::array<pl_tex, 2>& planes = m_slicePlanes[static_cast<std::size_t>(arraySlice)];
-        if (!planes[0] || !planes[1]) {
-            pl_d3d11_wrap_params luma{};
-            luma.tex = texture;
-            luma.array_slice = arraySlice;
-            luma.fmt = formats.luma;
-            luma.w = static_cast<int>(description.Width);
-            luma.h = static_cast<int>(description.Height);
-            planes[0] = pl_d3d11_wrap(m_gpu, &luma);
-
-            pl_d3d11_wrap_params chroma{};
-            chroma.tex = texture;
-            chroma.array_slice = arraySlice;
-            chroma.fmt = formats.chroma;
-            chroma.w = static_cast<int>((description.Width + 1) / 2);
-            chroma.h = static_cast<int>((description.Height + 1) / 2);
-            planes[1] = pl_d3d11_wrap(m_gpu, &chroma);
-            if (!planes[0] || !planes[1]) {
-                pl_tex_destroy(m_gpu, &planes[0]);
-                pl_tex_destroy(m_gpu, &planes[1]);
-                return fail(QStringLiteral("Libplacebo could not wrap the decoded D3D11 planes"));
-            }
-        }
-
-        pl_frame_from_avframe(&mappedFrame, &avFrame);
-        if (mappedFrame.num_planes != 2) {
-            mappedFrame = {};
+        pl_frame preparedFrame{};
+        pl_frame_from_avframe(&preparedFrame, &avFrame);
+        if (preparedFrame.num_planes != 2) {
             return fail(QStringLiteral("The decoded D3D11 surface did not describe two planes"));
         }
-        mappedFrame.planes[0].texture = planes[0];
-        mappedFrame.planes[1].texture = planes[1];
-        mappedFrame.repr.bits.sample_depth = planes[0]->params.format->component_depth[0];
-        mappedFrame.repr.bits.color_depth = formats.colorDepth;
-        mappedFrame.repr.bits.bit_shift = formats.bitShift;
+        preparedFrame.crop = {
+            .x0 = 0.0f,
+            .y0 = 0.0f,
+            .x1 = static_cast<float>(geometry.visibleSize.width()),
+            .y1 = static_cast<float>(geometry.visibleSize.height()),
+        };
 #ifdef PL_HAVE_LAV_DOLBY_VISION
         m_doviMetadata = {};
         if (AVFrameSideData const* dovi =
                 mapDolbyVision ? av_frame_get_side_data(&avFrame, AV_FRAME_DATA_DOVI_METADATA) : nullptr) {
             if (dovi->size < sizeof(AVDOVIMetadata)) {
-                mappedFrame = {};
                 failure = VideoFrameImportFailure::General;
                 return fail(QStringLiteral("The decoded Dolby Vision metadata is truncated"));
             }
-            pl_map_avdovi_metadata(&mappedFrame.color, &mappedFrame.repr, &m_doviMetadata,
+            pl_map_avdovi_metadata(&preparedFrame.color, &preparedFrame.repr, &m_doviMetadata,
                                    reinterpret_cast<AVDOVIMetadata const*>(dovi->data));
         }
 #endif
 
+        if (description.Format != m_cachedFormat || copyWidth != m_cachedWidth || copyHeight != m_cachedHeight) {
+            resetCache();
+
+            D3D11_TEXTURE2D_DESC copyDescription{};
+            copyDescription.Width = copyWidth;
+            copyDescription.Height = copyHeight;
+            copyDescription.MipLevels = 1;
+            copyDescription.ArraySize = 1;
+            copyDescription.Format = description.Format;
+            copyDescription.SampleDesc.Count = 1;
+            copyDescription.Usage = D3D11_USAGE_DEFAULT;
+            copyDescription.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+            HRESULT const createResult =
+                m_d3d11->device->CreateTexture2D(&copyDescription, nullptr, m_copyTexture.GetAddressOf());
+            if (FAILED(createResult) || !m_copyTexture) {
+                resetCache();
+                return fail(QStringLiteral("Could not create the exact-size D3D11 video texture (0x%1)")
+                                .arg(static_cast<unsigned long>(createResult), 8, 16, QLatin1Char('0')));
+            }
+
+            pl_d3d11_wrap_params luma{};
+            luma.tex = m_copyTexture.Get();
+            luma.fmt = formats.luma;
+            luma.w = static_cast<int>(copyWidth);
+            luma.h = static_cast<int>(copyHeight);
+            m_copyPlanes[0] = pl_d3d11_wrap(m_gpu, &luma);
+
+            pl_d3d11_wrap_params chroma{};
+            chroma.tex = m_copyTexture.Get();
+            chroma.fmt = formats.chroma;
+            chroma.w = static_cast<int>(copyWidth / 2U);
+            chroma.h = static_cast<int>(copyHeight / 2U);
+            m_copyPlanes[1] = pl_d3d11_wrap(m_gpu, &chroma);
+            if (!m_copyPlanes[0] || !m_copyPlanes[1]) {
+                resetCache();
+                return fail(QStringLiteral("Libplacebo could not wrap the exact-size D3D11 video planes"));
+            }
+
+            m_cachedFormat = description.Format;
+            m_cachedWidth = copyWidth;
+            m_cachedHeight = copyHeight;
+        }
+
+        D3D11_BOX const sourceBox{
+            .left = copyLeft,
+            .top = copyTop,
+            .front = 0,
+            .right = copyLeft + copyWidth,
+            .bottom = copyTop + copyHeight,
+            .back = 1,
+        };
+        m_context->CopySubresourceRegion1(m_copyTexture.Get(), 0, 0, 0, 0, texture, static_cast<UINT>(arraySlice),
+                                          &sourceBox, D3D11_COPY_DISCARD);
+
+        preparedFrame.planes[0].texture = m_copyPlanes[0];
+        preparedFrame.planes[1].texture = m_copyPlanes[1];
+        preparedFrame.repr.bits.sample_depth = m_copyPlanes[0]->params.format->component_depth[0];
+        preparedFrame.repr.bits.color_depth = formats.colorDepth;
+        preparedFrame.repr.bits.bit_shift = formats.bitShift;
+        mappedFrame = preparedFrame;
+
         diagnostics = {
             .storageKind = frame.storage().kind,
-            .path = VideoFrameImportPath::DirectHardwareSurface,
+            .path = VideoFrameImportPath::SameDeviceGpuCopy,
             .hardwareFormat = frame.storage().hardwareFormat,
             .softwareFormat = frame.storage().softwareFormat,
             .sourceDescription = frame.signal().summary(),
             .metadataPath = describeLibplaceboMetadataPath(frame, &mappedFrame),
             .nativeResource =
-                QStringLiteral("DXGI %1 · array slice %2 · %3/%4 plane views")
+                QStringLiteral("DXGI %1 · array slice %2 · crop %3,%4 → %5x%6 exact-size %7/%8 plane views")
                     .arg(QString::fromLatin1(formats.resourceName), QString::number(arraySlice),
+                         QString::number(copyLeft), QString::number(copyTop), QString::number(copyWidth),
+                         QString::number(copyHeight),
                          formats.luma == DXGI_FORMAT_R8_UNORM ? QStringLiteral("R8") : QStringLiteral("R16"),
                          formats.chroma == DXGI_FORMAT_R8G8_UNORM ? QStringLiteral("R8G8") : QStringLiteral("R16G16")),
             .synchronizationMode = QStringLiteral("Shared D3D11 immediate context · "
-                                                  "ID3D11Multithread protection · retained AVFrame slice"),
+                                                  "ordered GPU copy · ID3D11Multithread protection"),
             .knownCpuDownloadsPerFrame = 0,
             .knownCpuUploadsPerFrame = 0,
-            .knownGpuCopiesPerFrame = 0,
-            .fallbackReason = {},
+            .knownGpuCopiesPerFrame = 1,
+            .fallbackReason = QStringLiteral("Decoder textures may expose undefined padding during filtered sampling"),
         };
         if (error) {
             error->clear();
@@ -253,18 +291,15 @@ class D3D11LibplaceboFrameImporter final : public LibplaceboHardwareFrameImporte
     }
 
     void unmap(pl_frame&) override {
-        // The retained DecodedVideoFrame reserves the decoder-pool slice.
-        // Cached pl_tex wrappers own only D3D11 resource/view references.
+        // Copy and sampling are ordered on the shared immediate context. The
+        // exact-size texture and its plane views are reused by the next frame.
     }
 
   private:
     void resetCache() {
-        for (std::array<pl_tex, 2>& planes : m_slicePlanes) {
-            pl_tex_destroy(m_gpu, &planes[0]);
-            pl_tex_destroy(m_gpu, &planes[1]);
-        }
-        m_slicePlanes.clear();
-        m_cachedTexture = nullptr;
+        pl_tex_destroy(m_gpu, &m_copyPlanes[0]);
+        pl_tex_destroy(m_gpu, &m_copyPlanes[1]);
+        m_copyTexture.Reset();
         m_cachedFormat = DXGI_FORMAT_UNKNOWN;
         m_cachedWidth = 0;
         m_cachedHeight = 0;
@@ -272,12 +307,13 @@ class D3D11LibplaceboFrameImporter final : public LibplaceboHardwareFrameImporte
 
     pl_gpu m_gpu = nullptr;
     pl_d3d11 m_d3d11 = nullptr;
+    ComPtr<ID3D11DeviceContext1> m_context;
     bool m_multithreadProtected = false;
-    ID3D11Texture2D* m_cachedTexture = nullptr;
+    ComPtr<ID3D11Texture2D> m_copyTexture;
+    std::array<pl_tex, 2> m_copyPlanes{};
     DXGI_FORMAT m_cachedFormat = DXGI_FORMAT_UNKNOWN;
     UINT m_cachedWidth = 0;
     UINT m_cachedHeight = 0;
-    std::vector<std::array<pl_tex, 2>> m_slicePlanes;
 #ifdef PL_HAVE_LAV_DOLBY_VISION
     struct pl_dovi_metadata m_doviMetadata{};
 #endif

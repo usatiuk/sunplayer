@@ -422,8 +422,9 @@ Initial additions should be narrowly tied to milestones:
   Matroska/H.264 fixture covers three-frame D3D11VA decode and retention,
   retained NV12 import, complete
   BT.709 signal metadata plus PTS, duration, time-base, derived frame-rate, and
-  SAR assertions, hardware/software output comparison, and zero-copy
-  input/output diagnostics. A second pinned Matroska/H.264 fixture contains
+  SAR assertions, crop-relative and complete-border hardware/software output
+  comparison, one input GPU copy, zero input CPU transfers, and zero-copy output
+  diagnostics. A second pinned Matroska/H.264 fixture contains
   closed sparse GOPs and B-frames for dependency-safe keyframe seek,
   presentation-order preroll, and exact requested-frame publication.
   A two-frame Matroska/FFV1 fixture places its second intra frame at 3000

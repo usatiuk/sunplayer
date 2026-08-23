@@ -102,6 +102,43 @@ void compareNear(float actual, float expected, float tolerance) {
              qPrintable(QStringLiteral("Expected %1 ± %2, got %3").arg(expected).arg(tolerance).arg(actual)));
 }
 
+void compareBorder(QRhiReadbackResult const& actual, QRhiReadbackResult const& expected, float tolerance,
+                   int borderWidth = 4) {
+    QCOMPARE(actual.format, QRhiTexture::RGBA16F);
+    QCOMPARE(expected.format, actual.format);
+    QCOMPARE(actual.pixelSize, expected.pixelSize);
+    int const width = actual.pixelSize.width();
+    int const height = actual.pixelSize.height();
+    QVERIFY(width >= borderWidth * 2);
+    QVERIFY(height >= borderWidth * 2);
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            if (x >= borderWidth && x < width - borderWidth && y >= borderWidth && y < height - borderWidth) {
+                continue;
+            }
+            FloatPixel const actualPixel = pixel(actual, x, y);
+            FloatPixel const expectedPixel = pixel(expected, x, y);
+            std::array const channels{actualPixel.red, actualPixel.green, actualPixel.blue};
+            std::array const expectedChannels{expectedPixel.red, expectedPixel.green, expectedPixel.blue};
+            for (std::size_t channel = 0; channel < channels.size(); ++channel) {
+                QVERIFY2(std::abs(channels[channel] - expectedChannels[channel]) <= tolerance,
+                         qPrintable(QStringLiteral("Border mismatch at (%1, %2), channel %3: expected %4 ± %5, got %6")
+                                        .arg(x)
+                                        .arg(y)
+                                        .arg(static_cast<int>(channel))
+                                        .arg(expectedChannels[channel])
+                                        .arg(tolerance)
+                                        .arg(channels[channel])));
+            }
+            QVERIFY2(
+                std::abs(actualPixel.alpha - 1.0f) <= 0.002f,
+                qPrintable(
+                    QStringLiteral("Border alpha mismatch at (%1, %2): got %3").arg(x).arg(y).arg(actualPixel.alpha)));
+        }
+    }
+}
+
 RenderedVideoSurfaceState surfaceState(GraphicsDeviceDomain& graphics, std::uint64_t contentRevision,
                                        float referenceWhiteNits = 203.0f, QSize pixelSize = {4, 4},
                                        float targetPeakHeadroom = 1.0f,
@@ -146,15 +183,19 @@ DecodedFrameCapture captureDecodedFrame(GraphicsDeviceDomain& graphics, std::sha
                                         float referenceWhiteNits = 203.0f, float targetPeakHeadroom = 1.0f,
                                         std::optional<ColorPrimaries> targetPrimaries = std::nullopt,
                                         float targetMinimumLuminanceNits = 0.0f,
-                                        std::optional<float> compositionSdrScale = std::nullopt) {
+                                        std::optional<float> compositionSdrScale = std::nullopt,
+                                        QSize targetPixelSize = {}) {
     DecodedFrameCapture result;
     GraphicsDeviceExecutionScope execution = graphics.acquireExecutionScope();
     QRhi& rhi = graphics.rhi();
     DecodedVideoSource source(std::move(frame), VideoTargetReadback::Enabled);
     LibplaceboDecodedVideoProducer producer(graphics, source, VideoTargetReadback::Enabled);
-    RenderedVideoSurfaceState const state = surfaceState(
-        graphics, source.contentRevision(), referenceWhiteNits, source.currentFrame()->geometry().visibleSize,
-        targetPeakHeadroom, targetPrimaries, targetMinimumLuminanceNits);
+    if (!targetPixelSize.isValid()) {
+        targetPixelSize = source.currentFrame()->geometry().visibleSize;
+    }
+    RenderedVideoSurfaceState const state =
+        surfaceState(graphics, source.contentRevision(), referenceWhiteNits, targetPixelSize, targetPeakHeadroom,
+                     targetPrimaries, targetMinimumLuminanceNits);
     if (producer.ensureSurface(state) != VideoOperationResult::Ready) {
         result.error = producer.diagnostics().target.fallbackReason;
         return result;
@@ -262,6 +303,12 @@ DecodedFrameCapture captureDecodedFrame(GraphicsDeviceDomain& graphics, std::sha
     return result;
 }
 
+DecodedFrameCapture captureDecodedFrameAtSize(GraphicsDeviceDomain& graphics,
+                                              std::shared_ptr<DecodedVideoFrame const> frame, QSize targetPixelSize) {
+    return captureDecodedFrame(graphics, std::move(frame), 203.0f, 1.0f, std::nullopt, 0.0f, std::nullopt,
+                               targetPixelSize);
+}
+
 std::array<FloatPixel, 4> neutralPatchPixels(QRhiReadbackResult const& readback) {
     return {
         pixel(readback, 32, 72),
@@ -321,7 +368,8 @@ class FfmpegFirstFrameTest final : public QObject {
     void continuousVideoToolboxDecodeAndImport();
     void metalTargetResizesBeforeFirstSubmission();
     void continuousD3d11DecodeRetainsBoundedFrames();
-    void d3d11HardwareDecodeDirectImport();
+    void d3d11HardwareDecodeSafeImport();
+    void d3d11P010HardwareDecodeSafeImport();
 };
 
 void FfmpegFirstFrameTest::retainsStreamHdr10PlusAtTheDecodeBoundary() {
@@ -1676,9 +1724,9 @@ void FfmpegFirstFrameTest::continuousD3d11DecodeRetainsBoundedFrames() {
 #endif
 }
 
-void FfmpegFirstFrameTest::d3d11HardwareDecodeDirectImport() {
+void FfmpegFirstFrameTest::d3d11HardwareDecodeSafeImport() {
 #ifndef Q_OS_WIN
-    QSKIP("D3D11VA direct import is Windows-specific");
+    QSKIP("D3D11VA import is Windows-specific");
 #else
     QString const fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-h264.mkv");
     QString const manifest = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-h264.toml");
@@ -1743,7 +1791,7 @@ void FfmpegFirstFrameTest::d3d11HardwareDecodeDirectImport() {
     QCOMPARE(software.frame->storage().kind, VideoFrameStorageKind::SoftwarePlanes);
     QCOMPARE(software.frame->storage().softwareFormat, QStringLiteral("yuv420p"));
 
-    DecodedFrameCapture hardwareCapture = captureDecodedFrame(*graphics, hardware.frame);
+    DecodedFrameCapture hardwareCapture = captureDecodedFrameAtSize(*graphics, hardware.frame, {1280, 720});
     QVERIFY2(hardwareCapture.isSuccess(), qPrintable(hardwareCapture.error));
 
     auto const freeFrame = [](AVFrame* frame) { av_frame_free(&frame); };
@@ -1771,20 +1819,21 @@ void FfmpegFirstFrameTest::d3d11HardwareDecodeDirectImport() {
     QCOMPARE(malformedCapture.producer.failureKind, VideoFailureKind::General);
     QVERIFY(malformedCapture.error.contains(QStringLiteral("Dolby Vision metadata is truncated")));
 
-    DecodedFrameCapture softwareCapture = captureDecodedFrame(*graphics, software.frame);
+    DecodedFrameCapture softwareCapture = captureDecodedFrameAtSize(*graphics, software.frame, {1280, 720});
     QVERIFY2(softwareCapture.isSuccess(), qPrintable(softwareCapture.error));
     QCOMPARE(hardwareCapture.readback.format, QRhiTexture::RGBA16F);
-    QCOMPARE(hardwareCapture.readback.pixelSize, QSize(640, 360));
+    QCOMPARE(hardwareCapture.readback.pixelSize, QSize(1280, 720));
     QCOMPARE(softwareCapture.readback.pixelSize, hardwareCapture.readback.pixelSize);
 
-    QCOMPARE(hardwareCapture.input.path, VideoFrameImportPath::DirectHardwareSurface);
+    QCOMPARE(hardwareCapture.input.path, VideoFrameImportPath::SameDeviceGpuCopy);
     QCOMPARE(hardwareCapture.input.knownCpuDownloadsPerFrame, 0U);
     QCOMPARE(hardwareCapture.input.knownCpuUploadsPerFrame, 0U);
-    QCOMPARE(hardwareCapture.input.knownGpuCopiesPerFrame, 0U);
+    QCOMPARE(hardwareCapture.input.knownGpuCopiesPerFrame, 1U);
+    QVERIFY(hardwareCapture.input.fallbackReason.contains(QStringLiteral("padding")));
     QVERIFY(hardwareCapture.input.nativeResource.contains(QStringLiteral("NV12")));
-    QVERIFY(hardwareCapture.producer.inputPath.contains(QStringLiteral("direct libplacebo import")));
+    QVERIFY(hardwareCapture.producer.inputPath.contains(QStringLiteral("same-device GPU copy")));
     QCOMPARE(hardwareCapture.producer.knownInputCpuTransfersPerInputFrame, 0U);
-    QCOMPARE(hardwareCapture.producer.knownInputGpuCopiesPerInputFrame, 0U);
+    QCOMPARE(hardwareCapture.producer.knownInputGpuCopiesPerInputFrame, 1U);
     QCOMPARE(hardwareCapture.producer.target.outputPath, VideoOutputPath::DirectRenderTarget);
     QCOMPARE(hardwareCapture.producer.target.knownOutputGpuCopiesPerRender, 0U);
     QCOMPARE(hardwareCapture.producer.target.knownOutputCpuTransfersPerRender, 0U);
@@ -1809,6 +1858,136 @@ void FfmpegFirstFrameTest::d3d11HardwareDecodeDirectImport() {
         compareNear(hardwarePixel.blue, softwarePixel.blue, 0.03f);
         compareNear(hardwarePixel.alpha, 1.0f, 0.002f);
     }
+    compareBorder(hardwareCapture.readback, softwareCapture.readback, 0.035f);
+
+    std::unique_ptr<AVFrame, decltype(freeFrame)> croppedHardwareSource(av_frame_clone(&hardware.frame->ffmpegFrame()),
+                                                                        freeFrame);
+    std::unique_ptr<AVFrame, decltype(freeFrame)> croppedSoftwareSource(av_frame_clone(&software.frame->ffmpegFrame()),
+                                                                        freeFrame);
+    QVERIFY(croppedHardwareSource);
+    QVERIFY(croppedSoftwareSource);
+    for (AVFrame* cropped : {croppedHardwareSource.get(), croppedSoftwareSource.get()}) {
+        cropped->crop_left = 2;
+        cropped->crop_top = 2;
+        cropped->crop_right = 2;
+        cropped->crop_bottom = 2;
+    }
+
+    QString croppedError;
+    std::shared_ptr<DecodedVideoFrame const> const croppedHardwareFrame = DecodedVideoFrame::clone(
+        *croppedHardwareSource,
+        {
+            .playbackGeneration = 26,
+            .decoderRevision = 1,
+            .frameId = 1,
+        },
+        hardware.frame->timing().timeBase, graphics->generation(), std::nullopt, &croppedError);
+    QVERIFY2(croppedHardwareFrame, qPrintable(croppedError));
+    std::shared_ptr<DecodedVideoFrame const> const croppedSoftwareFrame =
+        DecodedVideoFrame::clone(*croppedSoftwareSource,
+                                 {
+                                     .playbackGeneration = 27,
+                                     .decoderRevision = 1,
+                                     .frameId = 1,
+                                 },
+                                 software.frame->timing().timeBase, std::nullopt, std::nullopt, &croppedError);
+    QVERIFY2(croppedSoftwareFrame, qPrintable(croppedError));
+    QCOMPARE(croppedHardwareFrame->geometry().visibleSize, QSize(636, 356));
+
+    DecodedFrameCapture const croppedHardwareCapture =
+        captureDecodedFrameAtSize(*graphics, croppedHardwareFrame, {1272, 712});
+    QVERIFY2(croppedHardwareCapture.isSuccess(), qPrintable(croppedHardwareCapture.error));
+    DecodedFrameCapture const croppedSoftwareCapture =
+        captureDecodedFrameAtSize(*graphics, croppedSoftwareFrame, {1272, 712});
+    QVERIFY2(croppedSoftwareCapture.isSuccess(), qPrintable(croppedSoftwareCapture.error));
+    QCOMPARE(croppedHardwareCapture.input.path, VideoFrameImportPath::SameDeviceGpuCopy);
+    QCOMPARE(croppedHardwareCapture.input.knownGpuCopiesPerFrame, 1U);
+    QVERIFY(croppedHardwareCapture.input.nativeResource.contains(QStringLiteral("crop 2,2")));
+    QVERIFY(croppedHardwareCapture.input.nativeResource.contains(QStringLiteral("636x356")));
+    compareBorder(croppedHardwareCapture.readback, croppedSoftwareCapture.readback, 0.035f);
+    constexpr std::array cropSensitivePoints{QPoint{424, 200}, QPoint{850, 200}, QPoint{200, 358}};
+    for (QPoint const& sample : cropSensitivePoints) {
+        FloatPixel const hardwarePixel = pixel(croppedHardwareCapture.readback, sample.x(), sample.y());
+        FloatPixel const softwarePixel = pixel(croppedSoftwareCapture.readback, sample.x(), sample.y());
+        compareNear(hardwarePixel.red, softwarePixel.red, 0.035f);
+        compareNear(hardwarePixel.green, softwarePixel.green, 0.035f);
+        compareNear(hardwarePixel.blue, softwarePixel.blue, 0.035f);
+    }
+
+    croppedHardwareSource->crop_right = 1;
+    std::shared_ptr<DecodedVideoFrame const> const oddWidthHardwareFrame = DecodedVideoFrame::clone(
+        *croppedHardwareSource,
+        {
+            .playbackGeneration = 28,
+            .decoderRevision = 1,
+            .frameId = 1,
+        },
+        hardware.frame->timing().timeBase, graphics->generation(), std::nullopt, &croppedError);
+    QVERIFY2(oddWidthHardwareFrame, qPrintable(croppedError));
+    QCOMPARE(oddWidthHardwareFrame->geometry().visibleSize, QSize(637, 356));
+    DecodedFrameCapture const oddWidthCapture = captureDecodedFrame(*graphics, oddWidthHardwareFrame);
+    QVERIFY(!oddWidthCapture.isSuccess());
+    QCOMPARE(oddWidthCapture.input.failure, VideoFrameImportFailure::NativeHardwareImportUnavailable);
+    QVERIFY(oddWidthCapture.error.contains(QStringLiteral("visible rectangle is not chroma-aligned")));
+#endif
+}
+
+void FfmpegFirstFrameTest::d3d11P010HardwareDecodeSafeImport() {
+#ifndef Q_OS_WIN
+    QSKIP("D3D11VA P010 import is Windows-specific");
+#else
+    QString const fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/hdr10-pq-hevc.hevc");
+    QString const manifest = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/hdr10-pq-hevc.toml");
+    QCOMPARE(fixtureHash(fixture), expectedFixtureHash(manifest));
+
+    std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
+    QVERIFY2(graphics, "Could not create D3D11 graphics domain");
+    VideoHardwareDecodeCapability const& hardwareDecode = graphics->videoDecodeCapability();
+    if (!hardwareDecode.isAvailable()) {
+        QString const reason = QStringLiteral("D3D11VA unavailable: %1").arg(hardwareDecode.unavailableReason);
+        if (qEnvironmentVariableIntValue("SUNPLAYER_REQUIRE_D3D11VA") != 0) {
+            QFAIL(qPrintable(reason));
+        }
+        QSKIP(qPrintable(reason));
+    }
+
+    FfmpegFirstFrameResult const hardware = decodeFirstVideoFrame(fixture,
+                                                                  {
+                                                                      .playbackGeneration = 24,
+                                                                      .decoderRevision = 1,
+                                                                      .frameId = 1,
+                                                                  },
+                                                                  hardwareDecode);
+    QVERIFY2(hardware.isSuccess(), qPrintable(hardware.error));
+    QVERIFY(hardware.diagnostics.hardwareAccelerated);
+    QCOMPARE(hardware.diagnostics.decodePath, QStringLiteral("D3D11VA"));
+    QCOMPARE(hardware.frame->storage().kind, VideoFrameStorageKind::D3D11Surface);
+    QCOMPARE(hardware.frame->storage().softwareFormat, QStringLiteral("p010le"));
+    QCOMPARE(hardware.frame->signal().componentDepth, 10);
+
+    FfmpegFirstFrameResult const software = decodeFirstVideoFrame(fixture, {
+                                                                               .playbackGeneration = 25,
+                                                                               .decoderRevision = 1,
+                                                                               .frameId = 1,
+                                                                           });
+    QVERIFY2(software.isSuccess(), qPrintable(software.error));
+    QVERIFY(!software.diagnostics.hardwareAccelerated);
+
+    DecodedFrameCapture const hardwareCapture = captureDecodedFrameAtSize(*graphics, hardware.frame, {512, 288});
+    QVERIFY2(hardwareCapture.isSuccess(), qPrintable(hardwareCapture.error));
+    DecodedFrameCapture const softwareCapture = captureDecodedFrameAtSize(*graphics, software.frame, {512, 288});
+    QVERIFY2(softwareCapture.isSuccess(), qPrintable(softwareCapture.error));
+
+    QCOMPARE(hardwareCapture.input.path, VideoFrameImportPath::SameDeviceGpuCopy);
+    QCOMPARE(hardwareCapture.input.knownCpuDownloadsPerFrame, 0U);
+    QCOMPARE(hardwareCapture.input.knownCpuUploadsPerFrame, 0U);
+    QCOMPARE(hardwareCapture.input.knownGpuCopiesPerFrame, 1U);
+    QVERIFY(hardwareCapture.input.fallbackReason.contains(QStringLiteral("padding")));
+    QVERIFY(hardwareCapture.input.nativeResource.contains(QStringLiteral("P010")));
+    QVERIFY(hardwareCapture.input.nativeResource.contains(QStringLiteral("256x144")));
+    QCOMPARE(hardwareCapture.producer.knownInputCpuTransfersPerInputFrame, 0U);
+    QCOMPARE(hardwareCapture.producer.knownInputGpuCopiesPerInputFrame, 1U);
+    compareBorder(hardwareCapture.readback, softwareCapture.readback, 0.04f);
 #endif
 }
 

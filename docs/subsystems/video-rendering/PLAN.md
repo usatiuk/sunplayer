@@ -32,7 +32,8 @@ actually been validated.
 
 * [x] Retain reference-counted FFmpeg frames across decode and presentation.
 * [x] Keep one persistent libplacebo renderer and reusable software uploads.
-* [x] Import D3D11VA NV12 directly on the shared graphics device.
+* [x] Import D3D11VA NV12/P010 on the shared graphics device through one safe,
+  exact-size GPU copy.
 * [x] Render into an RGBA16F display-targeted surface and compose once through
   QRhi.
 * [x] Exercise analytic SDR and static-PQ reference-white changes.
@@ -266,13 +267,29 @@ physical check pass.
 
 ## Stage 5: Hardware-frame coverage
 
-* [ ] Capture P010, P012, and P016 D3D11VA direct import.
+Immediate Windows edge-corruption repair, grounded in
+[the D3D11VA diagnosis](../../research/2026-08-23-windows-d3d11va-edge-corruption.md):
+
+* [x] Replace unconditional sampling of padded D3D11 decoder surfaces with one
+  cached, exact-size same-device GPU copy. Keep hardware decode and zero CPU
+  transfers; report the copy accurately.
+* [x] Capture the complete 2× NV12 and P010 output boundary against software
+  decode, including the final row and right edge, and exercise a nonzero
+  crop-relative NV12 copy plus odd-extent software retry. Do not use
+  interior-only samples as the safety oracle.
+* [x] Validate representative affected P010 files on Windows. Keep zero-copy as
+  possible future advanced/experimental behavior, not the playback default.
+
+Broader hardware-frame work:
+
+* [ ] Capture P012 and P016 D3D11VA import through the safe copy path; NV12 and
+  P010 are covered.
 * [ ] Compare at least one metadata-bearing P010 HDR source through software
   decode and D3D11VA import, asserting equivalent effective color evidence,
   libplacebo mapping selection, and captured output within backend tolerance.
   Capability-gate any hardware format that has not passed this differential.
-* [ ] Implement and diagnose same-device GPU-copy and explicit CPU fallback
-  paths where needed.
+* [ ] Implement and diagnose an explicit CPU fallback only where a demonstrated
+  unsupported hardware boundary requires it.
 * [ ] Retain every decoder/native surface until GPU completion and reject
   adapter/device mismatches before recording commands.
 

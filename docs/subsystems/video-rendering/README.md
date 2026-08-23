@@ -15,14 +15,15 @@ producer/compositor handoff. VideoToolbox NV12 and P010 `CVPixelBuffer` planes
 map through retained CoreVideo Metal views without a CPU transfer or GPU copy.
 A real FFmpeg software `AVFrame` now maps through
 libplacebo with one reusable input upload and retains its source across
-target-only rerenders. Supported D3D11VA frames map their retained NV12, P010,
-P012, or P016 texture-array slice directly into libplacebo plane views with no
-input copy or CPU transfer. A deterministic Dolby Vision Profile 8.1 fixture
+target-only rerenders. Supported D3D11VA frames copy their active NV12, P010,
+P012, or P016 rectangle once into a cached exact-size texture on the same GPU,
+then map its planes into libplacebo with no CPU transfer. A deterministic Dolby
+Vision Profile 8.1 fixture
 proves that FFmpeg retains raw and parsed RPU metadata and libplacebo maps the
 reshape on the production software-frame path. This is not a claim of support
 for every Dolby Vision profile, enhancement layer, trim, or physical target.
-Same-device-copy and CPU target fallbacks, and Linux native importers, are not
-implemented.
+CPU input fallbacks and Linux native importers are not implemented. The direct
+RGBA16F output target remains zero-copy.
 
 The broad investigation in
 [../../ARCHITECTURE_NOTES.md](../../ARCHITECTURE_NOTES.md) is non-binding
@@ -67,10 +68,12 @@ The known seams are established with their first implementations:
   target-only rerenders; the work does not scale with the viewport.
 * The decoded-frame importer uses libplacebo's FFmpeg helper for software
   planes, retains the referenced `AVFrame`, and reuses its plane textures for
-  target-only rerenders. The D3D11 backend maps decoder-owned
-  NV12/P010/P012/P016 texture-array slices through `pl_d3d11_wrap`; the retained frame reserves
-  that slice. Its typed diagnostics distinguish direct hardware, software
-  upload, future GPU-copy/CPU-round-trip, and unavailable outcomes. Shared
+  target-only rerenders. The D3D11 backend copies the active rectangle from a
+  decoder-owned NV12/P010/P012/P016 texture-array slice into a cached exact-size
+  texture, then maps that texture through `pl_d3d11_wrap`; the retained frame
+  reserves the source slice while the copy is ordered. Its typed diagnostics
+  distinguish direct hardware, software upload, same-device GPU-copy,
+  CPU-round-trip, and unavailable outcomes. Shared
   policy rejects a hardware frame whose recorded graphics-device generation
   differs from the active domain. An unavailable hardware mapping is reported
   as a typed failure so playback can perform one software re-decode; the
@@ -303,7 +306,7 @@ need to converge to the newest semantic target.
 
 | Platform | Intended first path | Main unresolved risk |
 | --- | --- | --- |
-| Windows | Shared video-capable D3D11 device; D3D11VA plane import and direct RGBA16F target | P010/P012/P016 capture, real device-loss injection, and GPU/CPU copy fallbacks |
+| Windows | Shared video-capable D3D11 device; exact-size D3D11VA GPU copy and direct RGBA16F target | P012/P016 capture, affected-file validation, and real device-loss injection |
 | Wayland Linux | Shared Vulkan device and image | Layout, queue, semaphore ownership, and compositor color-management support |
 | macOS | QRhi Metal/EDR presentation plus same-device MoltenVK target and VideoToolbox NV12/P010 Metal-plane import | Physical EDR and unlike-display transitions, broader formats, and device recovery |
 
@@ -338,7 +341,8 @@ shared.
 10. [x] Add the retained FFmpeg `AVFrame` contract, software-plane importer,
     persistent upload reuse, and real decoded-frame capture.
 11. [x] Make the Windows graphics domain own a video-capable,
-    multithread-protected D3D11 device and add direct D3D11VA plane import.
+    multithread-protected D3D11 device and import D3D11VA planes through one
+    cached exact-size GPU copy.
 12. [ ] Add the Vulkan/DRM/VAAPI platform importer. The macOS VideoToolbox
     NV12/P010 importer is complete for its initial scope.
 
@@ -393,15 +397,16 @@ The FFV1 case proves real compressed-video demux, timestamp and metadata
 retention, exact limited-range BT.709 YUV420P samples, and tolerant
 libplacebo-converted linear RGB. Its SAR 32:27 produces a 16:9 Player content
 rectangle. A pinned H.264 case uses the production shared-device D3D11VA
-decoder and direct NV12 plane importer, asserts no input download/upload or GPU
-copy and no output copy/transfer, captures its display-targeted output, and
-compares representative pixels against the software decode. The Linux suite
+decoder and safe NV12 plane importer; a Main10 HEVC case exercises P010. Both
+assert zero input CPU transfers, one exact-size input GPU copy, and no output
+copy/transfer, then compare the complete four-pixel border at 2× output size
+against software decode; NV12 also exercises a nonzero crop. The Linux suite
 verifies system libplacebo's required Vulkan/shader capabilities and builds the
 production QRhi-owned Vulkan target; a WSLg llvmpipe smoke exercises software
 decode, direct rendering, composition, swapchain presentation, and teardown.
 Physical display correctness, physical Windows gamut verification,
 physical HLG/dynamic-HDR target accuracy, exact macOS ICC target
-chromaticities, native Wayland target-gamut behavior, P010/P012/P016 capture, general display-matrix
+chromaticities, native Wayland target-gamut behavior, P012/P016 capture, general display-matrix
 rotation, physical macOS EDR output above SDR white and unlike-display
 transitions, native-GPU Linux Vulkan coverage, and the broader Vulkan
 resize/surface-recreation synchronization matrix remain unproven.
