@@ -40,6 +40,7 @@ class PresentationWindow : public QWindow {
 
     bool startPresentation();
     Q_INVOKABLE void openMedia(QUrl const& url);
+    Q_INVOKABLE void chooseMedia();
     class MediaSession& mediaSession();
     const class MediaSession& mediaSession() const;
 
@@ -62,6 +63,7 @@ class PresentationWindow : public QWindow {
     void blankOtherDisplaysInFullscreenChanged();
     void relativeSeekRequested(qlonglong milliseconds);
     void mediaOpenRequested();
+    void mediaPickerRequested();
 
   protected:
     void exposeEvent(QExposeEvent* event) override;

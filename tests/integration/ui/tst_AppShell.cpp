@@ -126,7 +126,10 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(hdrLabFooterPanel);
     QObject* const emptyState = rootItem->findChild<QObject*>(QStringLiteral("emptyState"));
     QObject* const playerPage = rootItem->findChild<QObject*>(QStringLiteral("playerPage"));
+    QObject* const openMediaButton = rootItem->findChild<QObject*>(QStringLiteral("openMediaButton"));
     QObject* const openDialog = rootItem->findChild<QObject*>(QStringLiteral("openDialog"));
+    QObject* const windowsAppIsolationWarning =
+        rootItem->findChild<QObject*>(QStringLiteral("windowsAppIsolationWarning"));
     QObject* const playbackHoverHandler = rootItem->findChild<QObject*>(QStringLiteral("playbackHoverHandler"));
     QQuickItem* const fullscreenBackgroundMouseArea =
         rootItem->findChild<QQuickItem*>(QStringLiteral("fullscreenBackgroundMouseArea"));
@@ -196,7 +199,9 @@ void AppShellTest::publishesActiveViewport() {
     QObject* const seekForwardButton = rootItem->findChild<QObject*>(QStringLiteral("seekForwardButton"));
     QVERIFY(emptyState);
     QVERIFY(playerPage);
+    QVERIFY(openMediaButton);
     QVERIFY(openDialog);
+    QVERIFY(windowsAppIsolationWarning);
 #ifdef Q_OS_MACOS
     QCOMPARE(openDialog->property("parentWindow").value<QWindow*>(), &windowCommands);
 #else
@@ -297,6 +302,11 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_VERIFY(!videoViewport.visible());
     QTRY_VERIFY(emptyState->property("visible").toBool());
     QTRY_VERIFY(idleMoreButton->property("visible").toBool());
+    QVERIFY(!windowsAppIsolationWarning->property("visible").toBool());
+    QVERIFY(supportController.setProperty("windowsAppIsolationWarningVisible", true));
+    QTRY_VERIFY(windowsAppIsolationWarning->property("visible").toBool());
+    QVERIFY(supportController.setProperty("windowsAppIsolationWarningVisible", false));
+    QTRY_VERIFY(!windowsAppIsolationWarning->property("visible").toBool());
     QVERIFY(QMetaObject::invokeMethod(idleMoreButton, "clicked", Qt::DirectConnection));
     QTRY_VERIFY(transportMenu->property("visible").toBool());
     QVERIFY(QMetaObject::invokeMethod(reportBugMenuItem, "clicked", Qt::DirectConnection));
@@ -307,6 +317,10 @@ void AppShellTest::publishesActiveViewport() {
     QCOMPARE(clientSideWindowChrome->property("contentTop").toReal(), 0.0);
     QVERIFY(!clientSideWindowOutline->isVisible());
 
+    QVERIFY(QMetaObject::invokeMethod(openMediaButton, "clicked", Qt::DirectConnection));
+    QCOMPARE(windowCommands.chooseMediaCount(), 1);
+    QTRY_VERIFY(openDialog->property("visible").toBool());
+
     QTemporaryFile dialogMediaFile;
     QVERIFY(dialogMediaFile.open());
     QUrl const dialogMediaUrl = QUrl::fromLocalFile(dialogMediaFile.fileName());
@@ -315,6 +329,8 @@ void AppShellTest::publishesActiveViewport() {
     QCOMPARE(windowCommands.openCount(), 1);
     QCOMPARE(windowCommands.lastOpenedUrl(), dialogMediaUrl);
     QCOMPARE(mediaSession.openCount(), 0);
+    QVERIFY(QMetaObject::invokeMethod(openDialog, "close", Qt::DirectConnection));
+    QTRY_VERIFY(!openDialog->property("visible").toBool());
 
     windowCommands.windowChromeController().setState(true, false, false);
     QVERIFY(clientSideTitleBar->height() > 0.0);

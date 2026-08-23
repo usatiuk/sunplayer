@@ -4,8 +4,8 @@
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
-  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap uap3 rescap">
+  xmlns:uap18="http://schemas.microsoft.com/appx/manifest/uap/windows10/18"
+  IgnorableNamespaces="uap uap3 uap18">
 
   <Identity
     Name="@IDENTITY_NAME@"
@@ -22,7 +22,7 @@
     <TargetDeviceFamily
       Name="Windows.Desktop"
       MinVersion="10.0.26100.0"
-      MaxVersionTested="10.0.26200.0" />
+      MaxVersionTested="10.0.26226.0" />
     <PackageDependency
       Name="Microsoft.VCLibs.140.00.UWPDesktop"
       MinVersion="14.0.33728.0"
@@ -37,7 +37,9 @@
     <Application
       Id="SunPlayer"
       Executable="$targetnametoken$.exe"
-      EntryPoint="Windows.FullTrustApplication">
+      uap18:EntryPoint="Isolated.App"
+      uap18:TrustLevel="appContainer"
+      uap18:RuntimeBehavior="appSilo">
       <uap:VisualElements
         DisplayName="@DISPLAY_NAME@"
         Description="A focused modern video player"
@@ -70,7 +72,5 @@
     </Application>
   </Applications>
 
-  <Capabilities>
-    <rescap:Capability Name="runFullTrust" />
-  </Capabilities>
+  <Capabilities />
 </Package>

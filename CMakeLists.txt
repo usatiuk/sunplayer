@@ -504,6 +504,8 @@ if (WIN32)
     )
     target_sources(sunplayer PRIVATE
             packaging/windows/SunPlayer.rc
+            src/platform/windows/WindowsDesktopIntegration.cpp
+            src/platform/windows/WindowsDesktopIntegration.h
             src/platform/windows/WindowsDisplayStateProvider.cpp
             src/platform/windows/WindowsDisplayStateProvider.h
             src/platform/windows/WindowsPlaybackPowerInhibitor.cpp
@@ -679,7 +681,9 @@ set_target_properties(sunplayer PROPERTIES
 
 if (WIN32)
     target_link_libraries(sunplayer PRIVATE
+            Advapi32
             CoreMessaging
+            Ole32
             RuntimeObject
             WindowsApp
     )

@@ -19,10 +19,13 @@ class SupportController final : public QObject {
     Q_OBJECT
     QML_ELEMENT
     QML_UNCREATABLE("SupportController is owned by the application")
+    Q_PROPERTY(bool windowsAppIsolationWarningVisible READ windowsAppIsolationWarningVisible CONSTANT)
 
   public:
     explicit SupportController(bool debugLoggingEnabled, QObject* parent = nullptr);
     ~SupportController() override;
+
+    bool windowsAppIsolationWarningVisible() const;
 
     void attach(MediaSession& mediaSession, PresentationOutputState& outputState);
     void setParentWindow(QWindow* parentWindow);
@@ -45,7 +48,8 @@ class SupportController final : public QObject {
     void updateMediaSnapshot();
     SupportSnapshot snapshot() const;
     void setActionStatus(QString status);
-    bool openUrl(QUrl const& url, QString const& successMessage, QString const& failureMessage);
+    void openUrl(QUrl const& url, QString const& successMessage, QString const& failureMessage);
+    void finishOpenUrl(bool opened, QString const& successMessage, QString const& failureMessage);
 
     bool const m_debugLoggingEnabled;
     QPointer<QWindow> m_parentWindow;
@@ -55,6 +59,8 @@ class SupportController final : public QObject {
     std::optional<SupportMediaSnapshot> m_currentMedia;
     std::optional<SupportMediaSnapshot> m_lastMedia;
     std::optional<ApplicationError> m_error;
+    std::optional<bool> m_windowsAppContainerProcess;
+    std::optional<bool> m_windowsAppSiloProcess;
     QString m_privacyPolicy;
     QString m_thirdPartyNotices;
     QString m_actionStatus;

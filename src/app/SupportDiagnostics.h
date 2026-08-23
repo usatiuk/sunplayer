@@ -31,6 +31,8 @@ struct SupportSnapshot {
     QString qtVersion;
     QString operatingSystem;
     QString cpuArchitecture;
+    std::optional<bool> windowsAppContainerProcess;
+    std::optional<bool> windowsAppSiloProcess;
     bool debugLoggingEnabled = false;
     QString graphicsApi;
     QString swapChainFormat;

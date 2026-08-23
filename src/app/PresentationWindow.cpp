@@ -23,6 +23,7 @@
 #include <QWidget>
 
 #ifdef Q_OS_WIN
+#include "platform/windows/WindowsDesktopIntegration.h"
 #include <qt_windows.h>
 #endif
 
@@ -170,6 +171,16 @@ bool PresentationWindow::startPresentation() {
 void PresentationWindow::openMedia(QUrl const& url) {
     m_mediaSession->openMedia(url);
     emit mediaOpenRequested();
+}
+
+void PresentationWindow::chooseMedia() {
+#ifdef Q_OS_WIN
+    if (std::optional<QUrl> const selectedFile = WindowsDesktopIntegration::pickSingleMediaFile(*this)) {
+        openMedia(*selectedFile);
+    }
+#else
+    emit mediaPickerRequested();
+#endif
 }
 
 MediaSession& PresentationWindow::mediaSession() { return *m_mediaSession; }

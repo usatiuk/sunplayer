@@ -116,6 +116,8 @@ void SupportTest::reportIsBoundedAndDeterministic() {
     snapshot.qtVersion = QStringLiteral("6.11.1");
     snapshot.operatingSystem = QString::fromUtf8("Příliš žluťoučký kůň 🐴");
     snapshot.cpuArchitecture = QStringLiteral("x86 64");
+    snapshot.windowsAppContainerProcess = true;
+    snapshot.windowsAppSiloProcess = false;
     snapshot.videoColorPolicy = QString::fromUtf8("PQ · metadata-first / spline");
     snapshot.sdrWhiteKnown = true;
     snapshot.sdrWhiteNits = std::numeric_limits<float>::infinity();
@@ -127,6 +129,8 @@ void SupportTest::reportIsBoundedAndDeterministic() {
     QVERIFY(first.contains(u'…'));
     QVERIFY(first.contains(QString::fromUtf8("Operating system: Příliš žluťoučký kůň 🐴")));
     QVERIFY(first.contains(QString::fromUtf8("Video color policy: PQ · metadata-first / spline")));
+    QVERIFY(first.contains(QStringLiteral("Windows AppContainer token: yes")));
+    QVERIFY(first.contains(QStringLiteral("Windows appSilo token: no")));
     QVERIFY(first.contains(QStringLiteral("SDR white nits: unavailable")));
 }
 

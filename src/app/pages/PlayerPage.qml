@@ -65,6 +65,10 @@ VideoPage {
         function onRelativeSeekRequested(milliseconds) {
             root.seekBy(milliseconds)
         }
+
+        function onMediaPickerRequested() {
+            openDialog.open()
+        }
     }
 
     Connections {
@@ -353,6 +357,38 @@ VideoPage {
         onAccepted: root.windowCommands.openMedia(selectedFile)
     }
 
+    Rectangle {
+        id: windowsAppIsolationWarning
+        objectName: "windowsAppIsolationWarning"
+        anchors.top: parent.top
+        anchors.topMargin: 14
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: windowsAppIsolationWarningContent.implicitWidth + 20
+        height: windowsAppIsolationWarningContent.implicitHeight + 10
+        radius: 6
+        color: "#b3120f0a"
+        visible: root.supportController.windowsAppIsolationWarningVisible
+        z: 20
+
+        RowLayout {
+            id: windowsAppIsolationWarningContent
+            anchors.centerIn: parent
+            spacing: 7
+
+            Label {
+                text: "\u26a0"
+                color: "#f1a33c"
+                font.pixelSize: 15
+            }
+
+            Label {
+                text: qsTr("Windows App Isolation is unavailable. Open media may not work.")
+                color: "#f1a33c"
+                font.pixelSize: 13
+            }
+        }
+    }
+
     Timer {
         id: hideControlsTimer
 
@@ -435,7 +471,7 @@ VideoPage {
             Button {
                 objectName: "openMediaButton"
                 text: qsTr("Open media…")
-                onClicked: openDialog.open()
+                onClicked: root.windowCommands.chooseMedia()
             }
 
         }
@@ -577,7 +613,7 @@ VideoPage {
             Button {
                 objectName: "openAnotherMediaErrorButton"
                 text: qsTr("Open another…")
-                onClicked: openDialog.open()
+                onClicked: root.windowCommands.chooseMedia()
             }
 
             Button {
@@ -1029,7 +1065,7 @@ VideoPage {
 
             MenuItem {
                 text: qsTr("Open another…")
-                onClicked: openDialog.open()
+                onClicked: root.windowCommands.chooseMedia()
             }
 
             MenuItem {

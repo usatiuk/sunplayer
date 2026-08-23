@@ -101,6 +101,13 @@ QString SupportDiagnostics::detailedReport(SupportSnapshot const& snapshot) {
         QStringLiteral("Display HDR enabled: %1").arg(booleanValue(snapshot.displayHdrEnabled)),
         QStringLiteral("HDR presentation active: %1").arg(booleanValue(snapshot.hdrPresentationActive)),
     };
+    if (snapshot.windowsAppContainerProcess) {
+        lines.append(
+            QStringLiteral("Windows AppContainer token: %1").arg(booleanValue(*snapshot.windowsAppContainerProcess)));
+    }
+    if (snapshot.windowsAppSiloProcess) {
+        lines.append(QStringLiteral("Windows appSilo token: %1").arg(booleanValue(*snapshot.windowsAppSiloProcess)));
+    }
     if (snapshot.sdrWhiteKnown && std::isfinite(snapshot.sdrWhiteNits) && snapshot.sdrWhiteNits > 0.0f) {
         lines.append(QStringLiteral("SDR white nits: %1").arg(snapshot.sdrWhiteNits, 0, 'f', 1));
     } else {

@@ -176,6 +176,7 @@ class ShellTestWindowCommands final : public QWindow {
 
     int toggleCount() const { return m_toggleCount; }
     int openCount() const { return m_openCount; }
+    int chooseMediaCount() const { return m_chooseMediaCount; }
     int restartCount() const { return m_restartCount; }
     int quitCount() const { return m_quitCount; }
     QUrl lastOpenedUrl() const { return m_lastOpenedUrl; }
@@ -212,6 +213,10 @@ class ShellTestWindowCommands final : public QWindow {
         m_lastOpenedUrl = url;
         emit mediaOpenRequested();
     }
+    Q_INVOKABLE void chooseMedia() {
+        ++m_chooseMediaCount;
+        emit mediaPickerRequested();
+    }
     QObject* windowChrome() { return &m_windowChrome; }
 
   signals:
@@ -219,11 +224,13 @@ class ShellTestWindowCommands final : public QWindow {
     void blankOtherDisplaysInFullscreenChanged();
     void relativeSeekRequested(qlonglong milliseconds);
     void mediaOpenRequested();
+    void mediaPickerRequested();
 
   private:
     ShellTestWindowChromeController m_windowChrome;
     int m_toggleCount = 0;
     int m_openCount = 0;
+    int m_chooseMediaCount = 0;
     int m_restartCount = 0;
     int m_quitCount = 0;
     QUrl m_lastOpenedUrl;
@@ -666,6 +673,8 @@ class ShellTestSupportController final : public QObject {
     Q_OBJECT
     QML_NAMED_ELEMENT(SupportController)
     QML_UNCREATABLE("Test support controller is supplied by the component harness")
+    Q_PROPERTY(bool windowsAppIsolationWarningVisible MEMBER m_windowsAppIsolationWarningVisible NOTIFY
+                   windowsAppIsolationWarningVisibleChanged)
 
   public:
     explicit ShellTestSupportController(QObject* parent) : QObject(parent) {}
@@ -679,10 +688,12 @@ class ShellTestSupportController final : public QObject {
 
   signals:
     void hdrLabRequested();
+    void windowsAppIsolationWarningVisibleChanged();
 
   private:
     int m_reportCount = 0;
     int m_aboutCount = 0;
+    bool m_windowsAppIsolationWarningVisible = false;
 };
 
 class ShellTestActiveVideoSource final : public QObject {

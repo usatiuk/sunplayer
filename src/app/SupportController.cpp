@@ -18,8 +18,13 @@
 #include <QTabWidget>
 #include <QVBoxLayout>
 
+#include "diagnostics/LogCategories.h"
 #include "playback/MediaSession.h"
 #include "presentation/PresentationOutputState.h"
+
+#ifdef Q_OS_WIN
+#include "platform/windows/WindowsDesktopIntegration.h"
+#endif
 
 #ifndef SUNPLAYER_VERSION
 #define SUNPLAYER_VERSION "unknown"
@@ -69,9 +74,21 @@ SupportController::SupportController(bool debugLoggingEnabled, QObject* parent)
     if (m_thirdPartyNotices.isEmpty()) {
         m_thirdPartyNotices = QStringLiteral("Third-party notices are not included in this build.");
     }
+#ifdef Q_OS_WIN
+    WindowsDesktopIntegration::IsolationState const isolation = WindowsDesktopIntegration::isolationState();
+    m_windowsAppContainerProcess = isolation.appContainer;
+    m_windowsAppSiloProcess = isolation.appSilo;
+    if (m_windowsAppContainerProcess == true && m_windowsAppSiloProcess == false) {
+        qCWarning(sunplayerLogPlatform) << "The process has an AppContainer token but not an appSilo token.";
+    }
+#endif
 }
 
 SupportController::~SupportController() { delete m_aboutDialog; }
+
+bool SupportController::windowsAppIsolationWarningVisible() const {
+    return m_windowsAppContainerProcess == true && m_windowsAppSiloProcess == false;
+}
 
 void SupportController::attach(MediaSession& mediaSession, PresentationOutputState& outputState) {
     Q_ASSERT(!m_mediaSession);
@@ -242,6 +259,8 @@ SupportSnapshot SupportController::snapshot() const {
         .currentMedia = m_currentMedia,
         .lastMedia = m_lastMedia,
     };
+    result.windowsAppContainerProcess = m_windowsAppContainerProcess;
+    result.windowsAppSiloProcess = m_windowsAppSiloProcess;
     if (m_outputState) {
         result.graphicsApi = m_outputState->graphicsApi();
         result.swapChainFormat = m_outputState->swapChainFormat();
@@ -269,15 +288,24 @@ void SupportController::setActionStatus(QString status) {
     emit actionStatusChanged();
 }
 
-bool SupportController::openUrl(QUrl const& url, QString const& successMessage, QString const& failureMessage) {
-    if (QDesktopServices::openUrl(url)) {
-        setActionStatus(std::move(successMessage));
-        return true;
+void SupportController::openUrl(QUrl const& url, QString const& successMessage, QString const& failureMessage) {
+#ifdef Q_OS_WIN
+    WindowsDesktopIntegration::openExternalUrl(*this, url, [this, successMessage, failureMessage](bool opened) {
+        finishOpenUrl(opened, successMessage, failureMessage);
+    });
+#else
+    finishOpenUrl(QDesktopServices::openUrl(url), successMessage, failureMessage);
+#endif
+}
+
+void SupportController::finishOpenUrl(bool opened, QString const& successMessage, QString const& failureMessage) {
+    if (opened) {
+        setActionStatus(successMessage);
+        return;
     }
     setActionStatus(failureMessage);
     QMessageBox dialog(QMessageBox::Warning, tr("Could not open browser"), failureMessage, QMessageBox::Ok);
     dialog.setWindowModality(Qt::WindowModal);
     parentNativeDialog(dialog, m_parentWindow);
     dialog.exec();
-    return false;
 }

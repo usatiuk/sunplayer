@@ -5,7 +5,14 @@ SunPlayer packages the Windows Store payload produced by
 `winapp` owns manifest processing, PRI generation, architecture stamping,
 packing, and optional signing.
 
-The manifest requires Windows 11 24H2 (build 26100) or newer and declares
+The manifest requires Windows 11 24H2 (build 26100) or newer and requests
+strict Win32 App Isolation (`appSilo`). It contains no FullTrust entry point or
+capability. The Windows feature is currently Preview. Copied support diagnostics
+report the actual AppContainer and appSilo token state. Startup is never gated;
+the specifically broken AppContainer-without-appSilo state shows only a small
+non-modal warning on the Player screen.
+
+The package also declares
 `Microsoft.VCLibs.140.00.UWPDesktop` at minimum version `14.0.33728.0`. The
 Store installs and services that Visual C++ runtime framework. Qt's VCRedist
 deployment is disabled, so neither its installer nor app-local runtime DLLs are
@@ -196,19 +203,23 @@ Clear-Variable password, securePassword
 
 ## Maintained scope
 
-The checked-in manifest is an x64 packaged-classic desktop application using
-`Windows.FullTrustApplication` and only the required `runFullTrust` capability.
+The checked-in manifest is an x64 appSilo desktop application using
+`Isolated.App` with `appContainer` trust. It declares no capabilities.
 It declares one common-video-container file-type association for `.avi`,
 `.flv`, `.m2ts`, `.m4v`, `.mkv`, `.mov`, `.mp4`, `.mpeg`, `.mpg`, `.mts`,
 `.ts`, `.webm`, and `.wmv`, with
 `MultiSelectModel="Single"`. Package installation makes SunPlayer available to
 Windows Open with/default-app selection without taking over the user's default;
-Windows launches the full-trust executable with the selected local path through
+Windows launches the isolated executable with a consented local path through
 the same positional-argument boundary as direct startup. The manifest
-intentionally has no AppContainer variant, custom verb or activation handler,
+intentionally has no fallback variant, custom verb or activation handler,
 execution alias, background task, or Store-submission automation. Additional
 specialist, raw-stream, playlist, image, and audio-only extensions are not
-claimed merely because FFmpeg can demux them. The FFmpeg dependency test pins
+claimed merely because FFmpeg can demux them. Before release, copied diagnostics
+must report `Windows AppContainer token: yes` and `Windows appSilo token: yes`.
+Open media, Open with, drag/drop, external browser links, local and UNC media,
+audio, seeking, and SDR/HDR presentation must then work unchanged. The FFmpeg
+dependency test pins
 availability of every advertised container family; representative playback
 and packaged activation remain release validation. The shared authored icon is
 also the Qt runtime icon. Its checked-in Windows package assets and executable
