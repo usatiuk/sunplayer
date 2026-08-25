@@ -28,6 +28,7 @@ class SubtitleRenderer;
 class RenderedVideoProducer;
 class VideoViewportState;
 class SupportController;
+class SubtitleSettings;
 enum class VideoOperationResult;
 
 // Owns one presentation domain and sequences its QRhi work.
@@ -38,8 +39,9 @@ class RhiPresentationEngine final : public QObject {
     RhiPresentationEngine(QWindow& window, PresentationOutputState& outputState, PresentationSettings& settings,
                           ActiveVideoSource& videoSource, DiagnosticVideoSource& diagnosticSource,
                           MediaSession& mediaSession, VideoViewportState& videoViewport,
-                          SupportController& supportController, PresentationSurfaceContract surfaceContract,
-                          PresentationSurfaceController* surfaceController, QObject* parent = nullptr);
+                          SubtitleSettings& subtitleSettings, SupportController& supportController,
+                          PresentationSurfaceContract surfaceContract, PresentationSurfaceController* surfaceController,
+                          QObject* parent = nullptr);
     ~RhiPresentationEngine() override;
 
     bool start();
@@ -94,6 +96,7 @@ class RhiPresentationEngine final : public QObject {
     DiagnosticVideoSource& m_diagnosticSource;
     MediaSession& m_mediaSession;
     VideoViewportState& m_videoViewport;
+    SubtitleSettings& m_subtitleSettings;
     SupportController& m_supportController;
     PresentationSurfaceContract m_surfaceContract;
     PresentationSurfaceController* m_surfaceController = nullptr;

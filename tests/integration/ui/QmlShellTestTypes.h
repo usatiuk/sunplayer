@@ -179,6 +179,7 @@ class ShellTestWindowCommands final : public QWindow {
     int chooseMediaCount() const { return m_chooseMediaCount; }
     int restartCount() const { return m_restartCount; }
     int quitCount() const { return m_quitCount; }
+    int settingsPage() const { return m_settingsPage; }
     QUrl lastOpenedUrl() const { return m_lastOpenedUrl; }
     bool cursorHidden() const { return m_cursorHidden; }
     void setCursorHidden(bool hidden) { m_cursorHidden = hidden; }
@@ -208,6 +209,7 @@ class ShellTestWindowCommands final : public QWindow {
     Q_INVOKABLE void toggleFullscreen() { ++m_toggleCount; }
     Q_INVOKABLE void restartApplication() { ++m_restartCount; }
     Q_INVOKABLE void quitApplication() { ++m_quitCount; }
+    Q_INVOKABLE void showSettings(int page) { m_settingsPage = page; }
     Q_INVOKABLE void openMedia(QUrl const& url) {
         ++m_openCount;
         m_lastOpenedUrl = url;
@@ -233,6 +235,7 @@ class ShellTestWindowCommands final : public QWindow {
     int m_chooseMediaCount = 0;
     int m_restartCount = 0;
     int m_quitCount = 0;
+    int m_settingsPage = -1;
     QUrl m_lastOpenedUrl;
     bool m_cursorHidden = false;
     bool m_windowShortcutsBlocked = false;

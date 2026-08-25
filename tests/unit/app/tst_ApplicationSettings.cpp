@@ -65,6 +65,9 @@ class ApplicationSettingsTest final : public QObject {
     void defaultsAndRoundTrip();
     void rejectsInvalidValues();
     void acceptsPortableBooleanRepresentations();
+    void subtitleAppearanceRoundTripAndReset();
+    void subtitleAppearanceMaskedWritePreservesNeighbors();
+    void subtitleAppearanceKeepsValidNeighbors();
     void rejectsPartiallyParsedFile();
     void reportsAccessFailureOnce();
 };
@@ -155,6 +158,106 @@ void ApplicationSettingsTest::acceptsPortableBooleanRepresentations() {
         QVERIFY(values.blankOtherDisplaysInFullscreen);
         QCOMPARE(*values.blankOtherDisplaysInFullscreen, representations.at(index).second);
     }
+}
+
+void ApplicationSettingsTest::subtitleAppearanceRoundTripAndReset() {
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QString const path = settingsPath(directory);
+
+    SubtitleAppearanceValues expected;
+    expected.appearanceMode = SubtitleAppearanceValues::AppearanceMode::Custom;
+    expected.textColor = QColor(QStringLiteral("#12ab34"));
+    expected.textOpacity = 0.42;
+    expected.backgroundEnabled = false;
+    expected.backgroundColor = QColor(QStringLiteral("#234567"));
+    expected.backgroundOpacity = 0.0;
+    expected.edgeStyle = SubtitleAppearanceValues::EdgeStyle::Shadow;
+    expected.edgeColor = QColor(QStringLiteral("#abcdef"));
+    expected.edgeOpacity = 0.67;
+    expected.sizeMode = SubtitleAppearanceValues::SizeMode::Custom;
+    expected.scale = 2.0;
+    expected.positionMode = SubtitleAppearanceValues::PositionMode::Custom;
+    expected.verticalPosition = 1.0;
+    expected.overallOpacity = 0.25;
+
+    {
+        ApplicationSettings settings(path);
+        settings.setSubtitleAppearance(expected, SubtitleAppearanceField::All);
+        settings.sync();
+    }
+    {
+        QSettings stored(path, QSettings::IniFormat);
+        QCOMPARE(stored.value(QStringLiteral("subtitles/appearance/mode")).toString(), QStringLiteral("custom"));
+        QCOMPARE(stored.value(QStringLiteral("subtitles/appearance/textColor")).toString(), QStringLiteral("#12AB34"));
+        QCOMPARE(stored.value(QStringLiteral("subtitles/appearance/edgeStyle")).toString(), QStringLiteral("shadow"));
+        QCOMPARE(stored.value(QStringLiteral("subtitles/appearance/scale")).toDouble(), 2.0);
+        stored.setValue(QStringLiteral("subtitles/appearance/futureOption"), 73);
+        stored.setValue(QStringLiteral("future/value"), 17);
+        stored.sync();
+    }
+    {
+        ApplicationSettings settings(path);
+        auto const restored = settings.load().subtitleAppearance;
+        QVERIFY(restored);
+        QVERIFY(*restored == expected);
+        settings.removeSubtitleAppearance();
+        settings.sync();
+    }
+
+    QSettings stored(path, QSettings::IniFormat);
+    QVERIFY(!stored.contains(QStringLiteral("subtitles/appearance/mode")));
+    QVERIFY(!stored.contains(QStringLiteral("subtitles/appearance/futureOption")));
+    QCOMPARE(stored.value(QStringLiteral("future/value")).toInt(), 17);
+}
+
+void ApplicationSettingsTest::subtitleAppearanceMaskedWritePreservesNeighbors() {
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QString const path = settingsPath(directory);
+
+    SubtitleAppearanceValues initial;
+    initial.appearanceMode = SubtitleAppearanceValues::AppearanceMode::Custom;
+    initial.textColor = QColor(QStringLiteral("#112233"));
+    initial.textOpacity = 0.8;
+    {
+        ApplicationSettings settings(path);
+        settings.setSubtitleAppearance(initial, SubtitleAppearanceField::All);
+        settings.sync();
+    }
+
+    SubtitleAppearanceValues changed = initial;
+    changed.textColor = QColor(QStringLiteral("#abcdef"));
+    changed.textOpacity = 0.25;
+    {
+        ApplicationSettings settings(path);
+        settings.setSubtitleAppearance(changed, SubtitleAppearanceField::TextOpacity);
+        settings.sync();
+    }
+
+    QSettings stored(path, QSettings::IniFormat);
+    QCOMPARE(stored.value(QStringLiteral("subtitles/appearance/textOpacity")).toDouble(), 0.25);
+    QCOMPARE(stored.value(QStringLiteral("subtitles/appearance/textColor")).toString(), QStringLiteral("#112233"));
+    QCOMPARE(stored.value(QStringLiteral("subtitles/appearance/mode")).toString(), QStringLiteral("custom"));
+}
+
+void ApplicationSettingsTest::subtitleAppearanceKeepsValidNeighbors() {
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QString const path = settingsPath(directory);
+    writeValue(path, QStringLiteral("subtitles/appearance/mode"), QStringLiteral("custom"));
+    writeValue(path, QStringLiteral("subtitles/appearance/textColor"), QStringLiteral("not-a-color"));
+    writeValue(path, QStringLiteral("subtitles/appearance/textOpacity"), 0.35);
+
+    MessageCapture messages;
+    ApplicationSettings settings(path);
+    auto const restored = settings.load().subtitleAppearance;
+    QVERIFY(restored);
+    QCOMPARE(restored->appearanceMode, SubtitleAppearanceValues::AppearanceMode::Custom);
+    QCOMPARE(restored->textColor, QColor(Qt::white));
+    QCOMPARE(restored->textOpacity, 0.35);
+    QCOMPARE(messages.settingsFaultCount(), 1);
+    QVERIFY(messages.hasSettingsFault(QStringLiteral("invalid_value")));
 }
 
 void ApplicationSettingsTest::rejectsPartiallyParsedFile() {

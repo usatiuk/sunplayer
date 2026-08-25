@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 
+#include <QPointer>
 #include <QUrl>
 #include <QWindow>
 #include <QtQml/qqmlregistration.h>
@@ -48,6 +49,7 @@ class PresentationWindow : public QWindow {
     Q_INVOKABLE void exitFullscreen();
     Q_INVOKABLE void restartApplication();
     Q_INVOKABLE void quitApplication();
+    Q_INVOKABLE void showSettings(int page = 0);
 
     bool cursorHidden() const;
     void setCursorHidden(bool hidden);
@@ -112,6 +114,8 @@ class PresentationWindow : public QWindow {
     std::unique_ptr<class PlaybackPowerInhibitor> m_playbackPowerInhibitor;
     std::unique_ptr<class ActiveVideoSource> m_activeVideoSource;
     std::unique_ptr<class VideoViewportState> m_videoViewport;
+    std::unique_ptr<class SubtitleSettings> m_subtitleSettings;
+    QPointer<class SettingsDialog> m_settingsDialog;
     std::unique_ptr<class RhiPresentationEngine> m_engine;
     PresentationSurfaceContract m_surfaceContract;
     PresentationSurfaceController* m_surfaceController = nullptr;

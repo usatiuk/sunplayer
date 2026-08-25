@@ -30,6 +30,7 @@
 #include "app/ApplicationSettings.h"
 #include "app/LocalMediaDrop.h"
 #include "app/PresentationSettings.h"
+#include "app/SettingsDialog.h"
 #include "app/SupportController.h"
 #include "app/VideoViewportState.h"
 #include "app/WindowShortcut.h"
@@ -40,6 +41,7 @@
 #include "playback/MediaSession.h"
 #include "presentation/PresentationOutputState.h"
 #include "presentation/RhiPresentationEngine.h"
+#include "subtitles/SubtitleSettings.h"
 #include "video/ActiveVideoSource.h"
 #include "video/DiagnosticVideoSource.h"
 
@@ -104,6 +106,7 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
     m_settings = std::make_unique<PresentationSettings>(nullptr);
     m_diagnosticVideoSource = std::make_unique<DiagnosticVideoSource>(VideoTargetReadback::Disabled);
     m_mediaSession = std::make_unique<MediaSession>(VideoTargetReadback::Disabled);
+    m_subtitleSettings = std::make_unique<SubtitleSettings>();
     m_playbackPowerInhibitor = createPlaybackPowerInhibitor();
     connect(m_mediaSession.get(), &MediaSession::sessionChanged, this,
             [this] { m_playbackPowerInhibitor->reconcile(*m_mediaSession); });
@@ -114,10 +117,19 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
     if (storedSettings.blankOtherDisplaysInFullscreen && otherDisplayBlankingAvailable()) {
         setBlankOtherDisplaysInFullscreen(*storedSettings.blankOtherDisplaysInFullscreen);
     }
+    if (storedSettings.subtitleAppearance) {
+        m_subtitleSettings->restore(*storedSettings.subtitleAppearance);
+    }
     connect(m_mediaSession.get(), &MediaSession::volumeChanged, this,
             [this] { m_applicationSettings.setVolume(m_mediaSession->volume()); });
     connect(this, &PresentationWindow::blankOtherDisplaysInFullscreenChanged, this,
             [this] { m_applicationSettings.setBlankOtherDisplaysInFullscreen(m_blankOtherDisplaysInFullscreen); });
+    connect(m_subtitleSettings.get(), &SubtitleSettings::persistenceChanged, this,
+            [this](SubtitleAppearanceFields dirtyFields) {
+                m_applicationSettings.setSubtitleAppearance(m_subtitleSettings->values(), dirtyFields);
+            });
+    connect(m_subtitleSettings.get(), &SubtitleSettings::persistenceResetRequested, this,
+            [this] { m_applicationSettings.removeSubtitleAppearance(); });
     m_activeVideoSource = std::make_unique<ActiveVideoSource>(m_mediaSession->videoSource(), *m_diagnosticVideoSource);
     m_videoViewport = std::make_unique<VideoViewportState>(nullptr);
     m_supportController.attach(*m_mediaSession, *m_outputState);
@@ -156,6 +168,7 @@ PresentationWindow::~PresentationWindow() {
     // before Qt destroys that surface and its QVulkanInstance association.
     Q_ASSERT(m_presentationLifecycle != PresentationLifecycle::Releasing);
     m_presentationLifecycle = PresentationLifecycle::Releasing;
+    delete m_settingsDialog;
     m_engine.reset();
 #ifdef Q_OS_LINUX
     m_outputState.reset();
@@ -221,6 +234,32 @@ void PresentationWindow::restartApplication() {
 }
 
 void PresentationWindow::quitApplication() { QCoreApplication::quit(); }
+
+void PresentationWindow::showSettings(int page) {
+    if (m_settingsDialog) {
+        m_settingsDialog->showPage(page);
+        m_settingsDialog->raise();
+        m_settingsDialog->activateWindow();
+        return;
+    }
+
+    auto* const dialog = new SettingsDialog(*m_subtitleSettings);
+    m_settingsDialog = dialog;
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    auto const refreshPlayback = [this, dialog] {
+        dialog->setPlaybackState(m_mediaSession->volume(), otherDisplayBlankingAvailable(),
+                                 blankOtherDisplaysInFullscreen());
+    };
+    connect(dialog, &SettingsDialog::volumeEdited, m_mediaSession.get(), &MediaSession::setVolume);
+    connect(dialog, &SettingsDialog::blankOtherDisplaysEdited, this,
+            &PresentationWindow::setBlankOtherDisplaysInFullscreen);
+    connect(m_mediaSession.get(), &MediaSession::volumeChanged, dialog, refreshPlayback);
+    connect(this, &PresentationWindow::blankOtherDisplaysInFullscreenChanged, dialog, refreshPlayback);
+    refreshPlayback();
+    dialog->showPage(page);
+    parentNativeDialog(*dialog, *this);
+    dialog->open();
+}
 
 bool PresentationWindow::cursorHidden() const { return m_cursorHidden; }
 
@@ -478,9 +517,9 @@ bool PresentationWindow::createPresentationEngine() {
     Q_ASSERT(m_presentationLifecycle == PresentationLifecycle::Initializing ||
              m_presentationLifecycle == PresentationLifecycle::Suspended);
     m_presentationLifecycle = PresentationLifecycle::Initializing;
-    m_engine = std::make_unique<RhiPresentationEngine>(*this, *m_outputState, *m_settings, *m_activeVideoSource,
-                                                       *m_diagnosticVideoSource, *m_mediaSession, *m_videoViewport,
-                                                       m_supportController, m_surfaceContract, m_surfaceController);
+    m_engine = std::make_unique<RhiPresentationEngine>(
+        *this, *m_outputState, *m_settings, *m_activeVideoSource, *m_diagnosticVideoSource, *m_mediaSession,
+        *m_videoViewport, *m_subtitleSettings, m_supportController, m_surfaceContract, m_surfaceController);
     connect(m_engine.get(), &RhiPresentationEngine::videoFramePresented, this,
             &PresentationWindow::videoFramePresented);
     connect(m_engine.get(), &RhiPresentationEngine::terminalError, this, &PresentationWindow::handlePresentationError);

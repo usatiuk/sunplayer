@@ -1042,6 +1042,7 @@ VideoPage {
         Menu {
             id: transportMenu
             objectName: "transportMenu"
+            popupType: Popup.Item
 
             MenuItem {
                 text: qsTr("Open another…")
@@ -1172,6 +1173,22 @@ VideoPage {
                     text: qsTr("No subtitles available")
                     enabled: false
                 }
+
+                MenuSeparator {}
+
+                MenuItem {
+                    objectName: "subtitleSettingsMenuItem"
+                    text: qsTr("Subtitle settings…")
+                    onClicked: root.windowCommands.showSettings(1)
+                }
+            }
+
+            MenuSeparator {}
+
+            MenuItem {
+                objectName: "settingsMenuItem"
+                text: qsTr("Settings…")
+                onClicked: root.windowCommands.showSettings(0)
             }
 
             MenuSeparator {}

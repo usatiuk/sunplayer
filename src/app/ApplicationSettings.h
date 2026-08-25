@@ -5,11 +5,14 @@
 #include <QSettings>
 #include <QString>
 
+#include "subtitles/SubtitleAppearance.h"
+
 class ApplicationSettings final {
   public:
     struct Values {
         std::optional<qreal> volume;
         std::optional<bool> blankOtherDisplaysInFullscreen;
+        std::optional<SubtitleAppearanceValues> subtitleAppearance;
     };
 
     ApplicationSettings();
@@ -18,6 +21,8 @@ class ApplicationSettings final {
     Values load();
     void setVolume(qreal volume);
     void setBlankOtherDisplaysInFullscreen(bool enabled);
+    void setSubtitleAppearance(SubtitleAppearanceValues const& values, SubtitleAppearanceFields dirtyFields);
+    void removeSubtitleAppearance();
     void sync();
 
   private:

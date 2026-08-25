@@ -15,6 +15,22 @@ qt_add_executable(sunplayer_application_settings_tests
         ../src/app/ApplicationSettings.h
 )
 
+qt_add_executable(sunplayer_subtitle_settings_tests
+        unit/subtitles/tst_SubtitleSettings.cpp
+        ../src/subtitles/SubtitleSettings.cpp
+        ../src/subtitles/SubtitleSettings.h
+        ../src/subtitles/SubtitleAppearance.h
+)
+
+qt_add_executable(sunplayer_settings_dialog_tests
+        unit/app/tst_SettingsDialog.cpp
+        ../src/app/SettingsDialog.cpp
+        ../src/app/SettingsDialog.h
+        ../src/subtitles/SubtitleSettings.cpp
+        ../src/subtitles/SubtitleSettings.h
+        ../src/subtitles/SubtitleAppearance.h
+)
+
 qt_add_executable(sunplayer_support_tests
         unit/app/tst_Support.cpp
         ../src/app/ApplicationError.cpp
@@ -259,6 +275,16 @@ target_include_directories(sunplayer_application_settings_tests
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
 )
 
+target_include_directories(sunplayer_subtitle_settings_tests
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+)
+
+target_include_directories(sunplayer_settings_dialog_tests
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src"
+)
+
 target_include_directories(sunplayer_support_tests
         PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
@@ -356,8 +382,22 @@ target_link_libraries(sunplayer_application_log_tests
 
 target_link_libraries(sunplayer_application_settings_tests
         PRIVATE
+        Qt6::Gui
         Qt6::Test
         sunplayer_diagnostics
+)
+
+target_link_libraries(sunplayer_subtitle_settings_tests
+        PRIVATE
+        Qt6::Gui
+        Qt6::Qml
+        Qt6::Test
+)
+
+target_link_libraries(sunplayer_settings_dialog_tests
+        PRIVATE
+        Qt6::Test
+        Qt6::Widgets
 )
 
 target_link_libraries(sunplayer_support_tests
@@ -547,6 +587,8 @@ if (WIN32)
             sunplayer_presentation_target_tests
             sunplayer_application_log_tests
             sunplayer_application_settings_tests
+            sunplayer_subtitle_settings_tests
+            sunplayer_settings_dialog_tests
             sunplayer_support_tests
             sunplayer_local_media_drop_tests
             sunplayer_controlled_audio_sink_tests
@@ -595,6 +637,16 @@ add_test(
 add_test(
         NAME application-settings
         COMMAND sunplayer_application_settings_tests
+)
+
+add_test(
+        NAME subtitle-settings
+        COMMAND sunplayer_subtitle_settings_tests
+)
+
+add_test(
+        NAME settings-dialog
+        COMMAND sunplayer_settings_dialog_tests
 )
 
 add_test(
@@ -799,6 +851,8 @@ set_tests_properties(
         presentation-target
         application-log
         application-settings
+        subtitle-settings
+        settings-dialog
         local-media-drop
         rendered-video-surface
         video-viewport

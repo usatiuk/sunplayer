@@ -187,6 +187,8 @@ void AppShellTest::publishesActiveViewport() {
     QObject* const subtitleEnglishItem = rootItem->findChild<QObject*>(QStringLiteral("subtitleTrack_2"));
     QObject* const reportBugMenuItem = rootItem->findChild<QObject*>(QStringLiteral("reportBugMenuItem"));
     QObject* const aboutMenuItem = rootItem->findChild<QObject*>(QStringLiteral("aboutMenuItem"));
+    QObject* const settingsMenuItem = rootItem->findChild<QObject*>(QStringLiteral("settingsMenuItem"));
+    QObject* const subtitleSettingsMenuItem = rootItem->findChild<QObject*>(QStringLiteral("subtitleSettingsMenuItem"));
     QObject* const idleMoreButton = rootItem->findChild<QObject*>(QStringLiteral("idleMoreButton"));
     QObject* const restartMediaErrorButton = rootItem->findChild<QObject*>(QStringLiteral("restartMediaErrorButton"));
     QObject* const reportMediaErrorButton = rootItem->findChild<QObject*>(QStringLiteral("reportMediaErrorButton"));
@@ -257,6 +259,8 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(!rootItem->findChild<QObject*>(QStringLiteral("hdrLabMenuItem")));
     QVERIFY(reportBugMenuItem);
     QVERIFY(aboutMenuItem);
+    QVERIFY(settingsMenuItem);
+    QVERIFY(subtitleSettingsMenuItem);
     QCOMPARE(clientSideApplicationTitle->property("text").toString(), QStringLiteral("SunPlayer (Test)"));
     QCOMPARE(aboutMenuItem->property("text").toString(), QStringLiteral("About SunPlayer (Test)"));
     QVERIFY(idleMoreButton);
@@ -313,6 +317,10 @@ void AppShellTest::publishesActiveViewport() {
     QCOMPARE(supportController.reportCount(), 1);
     QVERIFY(QMetaObject::invokeMethod(aboutMenuItem, "clicked", Qt::DirectConnection));
     QCOMPARE(supportController.aboutCount(), 1);
+    QVERIFY(QMetaObject::invokeMethod(settingsMenuItem, "clicked", Qt::DirectConnection));
+    QCOMPARE(windowCommands.settingsPage(), 0);
+    QVERIFY(QMetaObject::invokeMethod(subtitleSettingsMenuItem, "clicked", Qt::DirectConnection));
+    QCOMPARE(windowCommands.settingsPage(), 1);
     QVERIFY(QMetaObject::invokeMethod(transportMenu, "close", Qt::DirectConnection));
     QCOMPARE(clientSideWindowChrome->property("contentTop").toReal(), 0.0);
     QVERIFY(!clientSideWindowOutline->isVisible());

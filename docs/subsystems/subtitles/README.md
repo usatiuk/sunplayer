@@ -16,6 +16,13 @@ placement, and generation-failure recovery. A Linux QRhi subtitle-surface
 capture still needs to be added before claiming GPU rendering equivalence on
 that backend.
 
+Global subtitle appearance preferences are also implemented. A native Settings
+dialog applies them live to the current cue, persists validated values, and
+restores authored behavior by default. Text styling uses libass selective
+dialogue overrides; size and bottom-to-top position are independently
+optional. Bitmap subtitles keep authored pixels while whole-composition scale,
+vertical position, and compositor opacity remain available.
+
 ## Responsibility
 
 The subtitle subsystem owns:
@@ -75,10 +82,11 @@ transparent without stopping audio or video. Returning to the Player route
 rerasterizes the current paused subtitle rather than relying on an earlier GPU
 surface.
 
-Text appearance and authored events stay separate. Future user preferences can
-rerender retained text events without changing decoded timing. Bitmap subtitle
-pixels and placement remain authored; only whole-layer scale/offset/opacity are
-reasonable future overrides.
+Text appearance and authored events stay separate. `SubtitleSettings` advances
+a raster revision for style, size, and position edits, so retained text events
+and unchanged bitmap compositions rerender at the current paused or playing
+time without changing decoded timing. Overall opacity is compositor-only and
+does not invalidate the CPU raster or GPU texture identity.
 
 Subtitle RGB is scaled to `0.8` in linear light while its authored alpha and
 edge coverage remain unchanged. Ordinary UI and SDR reference white remain
@@ -91,11 +99,14 @@ responsible for final display calibration.
 * Embedded tracks only; external sidecars, downloads, and server subtitle APIs
   are deferred.
 * One selected subtitle track at a time.
-* No user font, color, position, scale, opacity, delay, or forced-only controls.
+* No user font, subtitle delay, forced-only, or control-overlay avoidance
+  controls. Text/background/edge color, component opacity, size, vertical
+  position, and overall opacity are implemented.
 * ASS rendering uses decoded video storage geometry. Non-square-pixel ASS script
   geometry is not yet separately communicated to libass.
-* Bitmap pixels keep their authored colors and placement; exact VSFilter color
-  compatibility is not attempted.
+* Bitmap pixels keep their authored colors and relative region geometry; a
+  viewer-selected whole-layer scale or vertical position can transform the
+  final composition. Exact VSFilter color compatibility is not attempted.
 * A seek does not reread prior subtitle history to reconstruct a cue that began
   before the seek.
 
@@ -113,5 +124,6 @@ embedded-font delivery, multi-region bitmap color and placement,
 open-ended/replace/clear behavior, nonfatal subtitle-output rejection while
 audio/video drain, generation-scoped selection and seek, the production
 libass/bitmap renderer, failure latching, scaled/offset video-viewport
-placement, route restoration at a paused clock, final video-subtitle-UI layer
-order, and the dynamic QML track menu.
+placement, live paused-cue color/scale/position invalidation, route restoration
+at a paused clock, compositor-level opacity and final video-subtitle-UI layer
+order, persistence/reset, and the dynamic QML track/settings menu.

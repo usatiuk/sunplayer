@@ -4,7 +4,7 @@ function(sunplayer_configure_libass)
             SUNPLAYER_LIBASS
             REQUIRED
             IMPORTED_TARGET
-            libass
+            libass>=0.17.4
     )
 
     add_library(sunplayer_libass INTERFACE)

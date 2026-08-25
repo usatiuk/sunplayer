@@ -1,7 +1,9 @@
 #include "presentation/SubtitleRenderer.h"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
+#include <vector>
 
 #include <QPainter>
 #include <rhi/qrhi.h>
@@ -58,20 +60,74 @@ void blendAssImage(QImage& target, ASS_Image const& image, QPoint offset) {
     painter.drawImage(offset + QPoint(image.dst_x, image.dst_y), layer);
 }
 
-void drawBitmapComposition(QImage& target, SubtitleBitmapComposition const& composition, QRect const& videoRect) {
+std::uint32_t assColor(QColor const& color, qreal opacity) {
+    unsigned int const alpha = 255U - static_cast<unsigned int>(std::lround(std::clamp(opacity, 0.0, 1.0) * 255.0));
+    return static_cast<std::uint32_t>(color.red()) << 24U | static_cast<std::uint32_t>(color.green()) << 16U |
+           static_cast<std::uint32_t>(color.blue()) << 8U | alpha;
+}
+
+void drawBitmapComposition(QImage& target, SubtitleBitmapComposition const& composition,
+                           SubtitleAppearanceSnapshot const& appearance, QRect const& videoRect) {
     if (!composition.isValid() || videoRect.isEmpty()) {
         return;
     }
     qreal const scaleX = static_cast<qreal>(videoRect.width()) / composition.canvasSize.width();
     qreal const scaleY = static_cast<qreal>(videoRect.height()) / composition.canvasSize.height();
-    QPainter painter(&target);
-    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    struct RegionImage {
+        QImage source;
+        QRectF destination;
+    };
+    std::vector<RegionImage> regions;
+    regions.reserve(static_cast<std::size_t>(composition.regions.size()));
+    QRectF bounds;
+    bool first = true;
     for (SubtitleBitmapRegion const& region : composition.regions) {
         QImage source(reinterpret_cast<uchar const*>(region.rgba.constData()), region.size.width(),
                       region.size.height(), region.size.width() * 4, QImage::Format_RGBA8888);
         QRectF const destination(videoRect.x() + region.x * scaleX, videoRect.y() + region.y * scaleY,
                                  region.size.width() * scaleX, region.size.height() * scaleY);
-        painter.drawImage(destination, source);
+        bounds = first ? destination : bounds.united(destination);
+        first = false;
+        regions.push_back({source, destination});
+    }
+    if (bounds.isEmpty()) {
+        return;
+    }
+
+    qreal const subtitleScale =
+        appearance.sizeMode == SubtitleAppearanceValues::SizeMode::Custom ? appearance.scale : 1.0;
+    QPointF const authoredCenter = bounds.center();
+    for (RegionImage& region : regions) {
+        QPointF const center = authoredCenter + (region.destination.center() - authoredCenter) * subtitleScale;
+        QSizeF const size = region.destination.size() * subtitleScale;
+        region.destination = QRectF(center - QPointF(size.width() / 2.0, size.height() / 2.0), size);
+    }
+    bounds = {};
+    first = true;
+    for (RegionImage const& region : regions) {
+        bounds = first ? region.destination : bounds.united(region.destination);
+        first = false;
+    }
+    qreal translationY = 0.0;
+    if (appearance.positionMode == SubtitleAppearanceValues::PositionMode::Custom) {
+        qreal const safeTop = videoRect.top() + videoRect.height() * 0.05;
+        qreal const safeBottom = videoRect.top() + videoRect.height() * 0.95;
+        qreal targetCenter;
+        if (bounds.height() <= safeBottom - safeTop) {
+            qreal const bottomCenter = safeBottom - bounds.height() / 2.0;
+            qreal const topCenter = safeTop + bounds.height() / 2.0;
+            targetCenter = bottomCenter + (topCenter - bottomCenter) * appearance.verticalPosition;
+        } else {
+            targetCenter = videoRect.center().y();
+        }
+        translationY = targetCenter - bounds.center().y();
+    }
+
+    QPainter painter(&target);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    painter.setClipRect(videoRect);
+    for (RegionImage const& region : regions) {
+        painter.drawImage(region.destination.translated(0.0, translationY), region.source);
     }
 }
 } // namespace
@@ -101,13 +157,16 @@ SubtitleRenderer::SubtitleRenderer(QRhi& rhi) : m_rhi(rhi) {
 
 SubtitleRenderer::~SubtitleRenderer() = default;
 
-bool SubtitleRenderer::prepare(SubtitlePresentationSnapshot const& snapshot, QRect const& videoRect,
+bool SubtitleRenderer::prepare(SubtitlePresentationSnapshot const& snapshot,
+                               SubtitleAppearanceSnapshot const& appearance, QRect const& videoRect,
                                QSize const& targetSize, bool active) {
     if (!active || !snapshot.state.isEnabled() || targetSize.isEmpty() || videoRect.isEmpty()) {
         bool const wasVisible = m_contentVisible;
         m_contentVisible = false;
         m_generation = snapshot.state.playbackGeneration;
         m_ass.reset();
+        m_configuredAssRasterRevision.reset();
+        m_renderedRasterRevision.reset();
         m_processedEventCount = 0;
         m_renderedBitmap.reset();
         if (wasVisible || m_textureSize != QSize(1, 1)) {
@@ -125,6 +184,8 @@ bool SubtitleRenderer::prepare(SubtitlePresentationSnapshot const& snapshot, QRe
         m_renderedBitmap.reset();
         m_renderedTimeMicroseconds = -1;
         m_ass.reset();
+        m_configuredAssRasterRevision.reset();
+        m_renderedRasterRevision.reset();
         m_error.clear();
     }
     if (m_failedGeneration == m_generation) {
@@ -135,10 +196,12 @@ bool SubtitleRenderer::prepare(SubtitlePresentationSnapshot const& snapshot, QRe
         fail(QStringLiteral("Subtitle raster exceeds its size budget"));
         return false;
     }
-    bool const forceRaster = m_textureSize != targetSize || m_renderedVideoRect != videoRect;
+    bool const appearanceChanged = !m_renderedRasterRevision || *m_renderedRasterRevision != appearance.rasterRevision;
+    bool const forceRaster = m_textureSize != targetSize || m_renderedVideoRect != videoRect || appearanceChanged;
     if (!processNewEvents(snapshot.state) || !ensureTexture(targetSize)) {
         return false;
     }
+    configureAssAppearance(appearance);
     m_error.clear();
 
     bool const requiresRaster = forceRaster || m_sourceRevision != snapshot.state.revision ||
@@ -147,12 +210,13 @@ bool SubtitleRenderer::prepare(SubtitlePresentationSnapshot const& snapshot, QRe
     if (!requiresRaster) {
         return true;
     }
-    if (!rasterize(snapshot, videoRect, targetSize, forceRaster)) {
+    if (!rasterize(snapshot, appearance, videoRect, targetSize, forceRaster)) {
         return false;
     }
     m_sourceRevision = snapshot.state.revision;
     m_renderedTimeMicroseconds = snapshot.mediaTimeMicroseconds;
     m_renderedVideoRect = videoRect;
+    m_renderedRasterRevision = appearance.rasterRevision;
     return true;
 }
 
@@ -224,6 +288,7 @@ bool SubtitleRenderer::ensureAssBundle(SubtitleStreamConfiguration const& config
     QByteArray const& header = configuration.codecPrivate.isEmpty() ? defaultAssHeader : configuration.codecPrivate;
     ass_process_codec_private(bundle->track, const_cast<char*>(header.constData()), header.size());
     m_ass = std::move(bundle);
+    m_configuredAssRasterRevision.reset();
     return true;
 }
 
@@ -253,7 +318,62 @@ bool SubtitleRenderer::processNewEvents(SubtitleStateSnapshot const& state) {
     return true;
 }
 
-bool SubtitleRenderer::rasterize(SubtitlePresentationSnapshot const& snapshot, QRect const& videoRect,
+void SubtitleRenderer::configureAssAppearance(SubtitleAppearanceSnapshot const& appearance) {
+    if (!m_ass || (m_configuredAssRasterRevision && *m_configuredAssRasterRevision == appearance.rasterRevision)) {
+        return;
+    }
+
+    int overrideBits = ASS_OVERRIDE_DEFAULT;
+    bool const customSize = appearance.sizeMode == SubtitleAppearanceValues::SizeMode::Custom;
+    ass_set_font_scale(m_ass->renderer, customSize ? appearance.scale : 1.0);
+    if (customSize) {
+        overrideBits |= ASS_OVERRIDE_BIT_SELECTIVE_FONT_SCALE;
+    }
+    ass_set_line_position(m_ass->renderer,
+                          appearance.positionMode == SubtitleAppearanceValues::PositionMode::Custom
+                              ? std::clamp(static_cast<double>(appearance.verticalPosition * 100.0), 0.0, 100.0)
+                              : 0.0);
+
+    if (appearance.appearanceMode == SubtitleAppearanceValues::AppearanceMode::Custom) {
+        static char styleName[] = "SunPlayer override";
+        static char fontName[] = "Arial";
+        ASS_Style style{};
+        style.Name = styleName;
+        style.FontName = fontName;
+        style.PrimaryColour = assColor(appearance.textColor, appearance.textOpacity);
+        style.SecondaryColour = style.PrimaryColour;
+        bool const hasBackground = appearance.backgroundEnabled && appearance.backgroundOpacity > 0.0;
+        switch (appearance.edgeStyle) {
+        case SubtitleAppearanceValues::EdgeStyle::None:
+            style.BorderStyle = hasBackground ? 3 : 1;
+            style.Outline = hasBackground ? 2.0 : 0.0;
+            style.Shadow = 0.0;
+            style.OutlineColour = assColor(appearance.backgroundColor, appearance.backgroundOpacity);
+            break;
+        case SubtitleAppearanceValues::EdgeStyle::Outline:
+            style.BorderStyle = hasBackground ? 4 : 1;
+            style.Outline = 1.0;
+            style.Shadow = hasBackground ? 2.0 : 0.0;
+            style.OutlineColour = assColor(appearance.edgeColor, appearance.edgeOpacity);
+            style.BackColour = assColor(appearance.backgroundColor, appearance.backgroundOpacity);
+            break;
+        case SubtitleAppearanceValues::EdgeStyle::Shadow:
+            style.BorderStyle = hasBackground ? 3 : 1;
+            style.Outline = hasBackground ? 2.0 : 0.0;
+            style.Shadow = 1.0;
+            style.OutlineColour = assColor(appearance.backgroundColor, appearance.backgroundOpacity);
+            style.BackColour = assColor(appearance.edgeColor, appearance.edgeOpacity);
+            break;
+        }
+        ass_set_selective_style_override(m_ass->renderer, &style);
+        overrideBits |= ASS_OVERRIDE_BIT_COLORS | ASS_OVERRIDE_BIT_BORDER;
+    }
+    ass_set_selective_style_override_enabled(m_ass->renderer, overrideBits);
+    m_configuredAssRasterRevision = appearance.rasterRevision;
+}
+
+bool SubtitleRenderer::rasterize(SubtitlePresentationSnapshot const& snapshot,
+                                 SubtitleAppearanceSnapshot const& appearance, QRect const& videoRect,
                                  QSize const& targetSize, bool forceRaster) {
     if (m_image.size() != targetSize) {
         m_image = QImage(targetSize, QImage::Format_RGBA8888_Premultiplied);
@@ -291,7 +411,7 @@ bool SubtitleRenderer::rasterize(SubtitlePresentationSnapshot const& snapshot, Q
 
     m_image.fill(Qt::transparent);
     if (bitmap) {
-        drawBitmapComposition(m_image, *bitmap, videoRect);
+        drawBitmapComposition(m_image, *bitmap, appearance, videoRect);
     }
     for (ASS_Image* current = assImage; current; current = current->next) {
         blendAssImage(m_image, *current, videoRect.topLeft());
@@ -318,6 +438,8 @@ void SubtitleRenderer::fail(QString error) {
     m_error = std::move(error);
     m_failedGeneration = m_generation;
     m_ass.reset();
+    m_configuredAssRasterRevision.reset();
+    m_renderedRasterRevision.reset();
     m_sourceRevision = 0;
     m_processedEventCount = 0;
     m_renderedBitmap.reset();

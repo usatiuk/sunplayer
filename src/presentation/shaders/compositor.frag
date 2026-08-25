@@ -14,6 +14,7 @@ layout(std140, binding = 3) uniform CompositorParams {
     float sdrScale;
     float ndcYUp;
     float outputEncoding;
+    float subtitleOpacity;
 };
 
 vec3 srgbToLinear(vec3 value)
@@ -65,14 +66,16 @@ vec3 linearToPq(vec3 value)
 }
 
 vec3 compositeSrgbPremultiplied(
-    vec3 background, vec4 layer, float brightness)
+    vec3 background, vec4 layer, float brightness, float layerOpacity)
 {
     float alpha = clamp(layer.a, 0.0, 1.0);
     vec3 encodedStraight = alpha > 0.00001
         ? clamp(layer.rgb / alpha, 0.0, 1.0)
         : vec3(0.0);
     vec3 linear = srgbToLinear(encodedStraight);
-    return linear * (brightness * alpha) + background * (1.0 - alpha);
+    float effectiveAlpha = alpha * clamp(layerOpacity, 0.0, 1.0);
+    return linear * (brightness * effectiveAlpha)
+        + background * (1.0 - effectiveAlpha);
 }
 
 void main()
@@ -88,9 +91,9 @@ void main()
     }
 
     color = compositeSrgbPremultiplied(
-        color, texture(subtitleTexture, displayUv), 0.8);
+        color, texture(subtitleTexture, displayUv), 0.8, subtitleOpacity);
     color = compositeSrgbPremultiplied(
-        color, texture(uiTexture, displayUv), 1.0);
+        color, texture(uiTexture, displayUv), 1.0, 1.0);
     color *= sdrScale;
     vec3 encodedColor = clamp(color, 0.0, 1.0);
     vec3 outputColor;

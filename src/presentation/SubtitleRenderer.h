@@ -3,10 +3,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 #include <QImage>
 #include <QRect>
 
+#include "subtitles/SubtitleAppearance.h"
 #include "subtitles/SubtitleTypes.h"
 
 struct ass_library;
@@ -24,8 +26,12 @@ class SubtitleRenderer final {
     SubtitleRenderer(SubtitleRenderer const&) = delete;
     SubtitleRenderer& operator=(SubtitleRenderer const&) = delete;
 
+    bool prepare(SubtitlePresentationSnapshot const& snapshot, SubtitleAppearanceSnapshot const& appearance,
+                 QRect const& videoRect, QSize const& targetSize, bool active);
     bool prepare(SubtitlePresentationSnapshot const& snapshot, QRect const& videoRect, QSize const& targetSize,
-                 bool active);
+                 bool active) {
+        return prepare(snapshot, SubtitleAppearanceSnapshot{}, videoRect, targetSize, active);
+    }
     void uploadIfNeeded(QRhiCommandBuffer& commandBuffer);
 
     QRhiTexture* texture() const;
@@ -38,8 +44,9 @@ class SubtitleRenderer final {
     bool ensureTexture(QSize const& size);
     bool ensureAssBundle(SubtitleStreamConfiguration const& configuration);
     bool processNewEvents(SubtitleStateSnapshot const& state);
-    bool rasterize(SubtitlePresentationSnapshot const& snapshot, QRect const& videoRect, QSize const& targetSize,
-                   bool forceRaster);
+    void configureAssAppearance(SubtitleAppearanceSnapshot const& appearance);
+    bool rasterize(SubtitlePresentationSnapshot const& snapshot, SubtitleAppearanceSnapshot const& appearance,
+                   QRect const& videoRect, QSize const& targetSize, bool forceRaster);
     void clearImage();
     void fail(QString error);
     void advanceTextureRevision();
@@ -53,6 +60,8 @@ class SubtitleRenderer final {
     std::uint64_t m_failedGeneration = 0;
     std::uint64_t m_sourceRevision = 0;
     std::uint64_t m_textureRevision = 0;
+    std::optional<std::uint64_t> m_configuredAssRasterRevision;
+    std::optional<std::uint64_t> m_renderedRasterRevision;
     std::size_t m_processedEventCount = 0;
     std::shared_ptr<SubtitleBitmapComposition const> m_renderedBitmap;
     std::int64_t m_renderedTimeMicroseconds = -1;

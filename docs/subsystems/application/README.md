@@ -237,20 +237,24 @@ source-specific state and producer choice out of the presentation engine.
 HDR Lab. QML selects only the semantic Player/Diagnostics route; it never sees
 native textures, producers, or backends.
 
-`ApplicationSettings` persists only playback volume and the supported
-fullscreen display-blanking preference. It default-constructs `QSettings` in
+`ApplicationSettings` persists playback volume, the supported fullscreen
+display-blanking preference, and global subtitle appearance. It
+default-constructs `QSettings` in
 user-scoped native format, so Qt selects the Windows registry, macOS
 preferences, or an XDG configuration file without platform-specific storage
 code in SunPlayer. Organization and system fallbacks are disabled.
 
 Stored values are validated before the existing runtime owners receive them:
 finite volume in `[0, 1]` goes to `MediaSession`, while display blanking is
-applied only where the window exposes that capability. Those owners remain the
-live sources of truth; their existing change signals write individual keys
-back to the adapter. Missing or invalid values retain product defaults, and a
-corrupt or inaccessible store produces one bounded warning without preventing
-playback. `QSettings` batches ordinary writes and is explicitly synchronized
-on orderly shutdown.
+applied only where the window exposes that capability. Subtitle enum strings,
+opaque `#RRGGBB` colors, booleans, `0–1` opacity/position values, and `0.5–2.0`
+scale values are validated independently before restoration into the
+window-owned `SubtitleSettings`. Those owners remain the live sources of
+truth; change signals write only dirty keys back to the adapter. Restore
+defaults removes the complete `subtitles/appearance` group. Missing or invalid
+values retain product defaults, and a corrupt or inaccessible store produces
+one bounded warning without preventing playback. `QSettings` batches ordinary
+writes and is explicitly synchronized on orderly shutdown.
 
 The application smoke modes retain a `QTemporaryDir` for the complete lifetime
 of an explicit INI-backed adapter, so verification neither reads nor changes a

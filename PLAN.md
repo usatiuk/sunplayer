@@ -93,11 +93,11 @@ playback:
   playback fallback or player preference. Its manual target override is applied
   only on the Diagnostics route, so Player always follows the live platform
   target.
-* A narrow application settings boundary restores and records playback volume
-  and the supported fullscreen display-blanking preference through Qt's native
-  per-user store. Runtime owners remain canonical, application smoke modes use
-  isolated temporary stores, and mute and playback-session state remain
-  unpersisted.
+* A narrow application settings boundary restores and records playback volume,
+  the supported fullscreen display-blanking preference, and validated subtitle
+  appearance preferences through Qt's native per-user store. Runtime owners
+  remain canonical, application smoke modes use isolated temporary stores, and
+  mute and playback-session state remain unpersisted.
 * Both diagnostic producers render the same grayscale, color-spectrum, and
   stepped pattern through the shared source, producer, and target lifecycle
   contracts. The QRhi implementation uses its temporary diagnostic shader.
@@ -471,7 +471,8 @@ Documentation: `docs/subsystems/audio/`
 * [x] Embedded fonts and attachments
 * [x] Bitmap subtitle rendering
 * [x] Authored positioning
-* [ ] User-controlled positioning, scale, style, and delay
+* [x] User-controlled color, opacity, positioning, and scale
+* [ ] User font, delay, and forced-only controls
 * [x] Scaling authored subtitle geometry to the video viewport
 * [x] Subtitle luminance in HDR
 * [ ] Control-overlay avoidance
@@ -498,7 +499,7 @@ Documentation: `docs/subsystems/subtitles/`
 * [x] Initial audio-buffering status presentation
 * [ ] General source-buffering presentation
 * [x] Initial F11/Escape fullscreen shortcuts beyond Space play/pause
-* [ ] Minimal settings surface
+* [x] Native settings surface for playback and subtitle appearance
 * [x] Selected-track, source-signal, presentation, and playback-pipeline details view
 
 Documentation: `docs/subsystems/ui/`

@@ -5,6 +5,8 @@ extern "C" {
 #include <ass/ass.h>
 }
 
+static_assert(LIBASS_VERSION >= 0x01704000);
+
 #ifdef Q_OS_WIN
 #include <qt_windows.h>
 #endif
@@ -24,7 +26,7 @@ class LibassDependencyTest final : public QObject {
 };
 
 void LibassDependencyTest::rendersEmbeddedFontAssCue() {
-    QVERIFY(ass_library_version() > 0);
+    QVERIFY(ass_library_version() >= 0x01704000);
     ASS_Library* library = ass_library_init();
     QVERIFY(library);
     QFile font(QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/Ahem.ttf"));

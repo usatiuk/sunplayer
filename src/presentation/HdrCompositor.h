@@ -26,7 +26,8 @@ struct alignas(16) HdrCompositorParameters {
     float ndcYUp = 1.0f;
     // Matches PresentationOutputEncoding's stable shader values.
     float outputEncoding = 2.0f;
-    std::array<float, 3> padding{};
+    float subtitleOpacity = 1.0f;
+    std::array<float, 2> padding{};
 };
 
 static_assert(std::is_standard_layout_v<HdrCompositorParameters>);
@@ -34,6 +35,7 @@ static_assert(sizeof(HdrCompositorParameters) == 48);
 static_assert(offsetof(HdrCompositorParameters, sdrScale) == 24);
 static_assert(offsetof(HdrCompositorParameters, ndcYUp) == 28);
 static_assert(offsetof(HdrCompositorParameters, outputEncoding) == 32);
+static_assert(offsetof(HdrCompositorParameters, subtitleOpacity) == 36);
 
 // Final presentation pass; source color processing belongs to video producers.
 class HdrCompositor final {

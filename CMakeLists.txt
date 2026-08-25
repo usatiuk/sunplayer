@@ -354,6 +354,7 @@ add_library(sunplayer_video_pipeline STATIC
         src/presentation/HdrCompositor.h
         src/presentation/SubtitleRenderer.cpp
         src/presentation/SubtitleRenderer.h
+        src/subtitles/SubtitleAppearance.h
         src/presentation/VideoPresentationGeometry.cpp
         src/presentation/VideoPresentationGeometry.h
         src/video/DiagnosticVideoProducer.cpp
@@ -458,6 +459,8 @@ qt_add_executable(sunplayer
         src/app/main.cpp
         src/app/PresentationSettings.cpp
         src/app/PresentationSettings.h
+        src/app/SettingsDialog.cpp
+        src/app/SettingsDialog.h
         src/app/PresentationWindow.cpp
         src/app/PresentationWindow.h
         src/app/SupportController.cpp
@@ -467,6 +470,8 @@ qt_add_executable(sunplayer
         src/app/WindowShortcut.h
         src/app/VideoViewportState.cpp
         src/app/VideoViewportState.h
+        src/subtitles/SubtitleSettings.cpp
+        src/subtitles/SubtitleSettings.h
         src/app/windowchrome/WindowChromeController.cpp
         src/app/windowchrome/WindowChromeController.h
         src/platform/ColorPrimaries.h

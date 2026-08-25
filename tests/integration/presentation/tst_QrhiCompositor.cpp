@@ -554,7 +554,9 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     QCOMPARE(producer->prepareForComposition(*commandBuffer), VideoOperationResult::Ready);
     HdrCompositorParameters linearParameters = compositorParameters;
     constexpr float linearSdrScale = 1.5f;
+    constexpr float subtitleLayerOpacity = 0.5f;
     linearParameters.sdrScale = linearSdrScale;
+    linearParameters.subtitleOpacity = subtitleLayerOpacity;
     linearParameters.outputEncoding = 2.0f;
     linearOutputCompositor.render(*commandBuffer, *linearOutputTarget, outputSize, linearParameters);
 
@@ -575,9 +577,11 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     float const encodedStraightRed = (64.0f / 255.0f) / alpha;
     constexpr float subtitleBrightness = 0.8f;
     auto const expectedLinearBlend =
-        [alpha, subtitleBrightness](float baseLinear, float encodedSubtitle, float encodedUi, float scale) {
-            float const withSubtitle =
-                srgbToLinear(encodedSubtitle) * (subtitleBrightness * alpha) + baseLinear * (1.0f - alpha);
+        [alpha, subtitleBrightness, subtitleLayerOpacity](float baseLinear, float encodedSubtitle, float encodedUi,
+                                                         float scale) {
+            float const subtitleAlpha = alpha * subtitleLayerOpacity;
+            float const withSubtitle = srgbToLinear(encodedSubtitle) * (subtitleBrightness * subtitleAlpha) +
+                                       baseLinear * (1.0f - subtitleAlpha);
             return (srgbToLinear(encodedUi) * alpha + withSubtitle * (1.0f - alpha)) * scale;
         };
 

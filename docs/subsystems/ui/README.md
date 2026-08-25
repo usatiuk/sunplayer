@@ -30,6 +30,15 @@ persisted checked action to blank every other display while Player is
 fullscreen. It is hidden and its stored value remains unapplied on other
 platforms for now.
 
+The active and idle overflow menu also opens a window-modal native Qt Widgets
+Settings dialog, matching the existing About/support surface. Its Playback tab
+shares canonical volume and display-blanking owners. Its Subtitles tab exposes
+authored/high-contrast/large-text presets plus unrestricted RGB colors,
+component opacity, background and edge choices, 50–200% scale, bottom-to-top
+position, overall opacity, and reset. The subtitle submenu opens that tab
+directly. Every edit writes through immediately and updates the real active cue
+without pausing playback; there is no Apply/Cancel draft state.
+
 The native presentation window handles non-repeating `F11`/`Escape`, gated
 Space play/pause, and unmodified Left/Right ten-second seeks (including native
 key repeat) because the

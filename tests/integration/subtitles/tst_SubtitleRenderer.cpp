@@ -71,6 +71,18 @@ QRect visibleBounds(QRhiReadbackResult const& result, QRhi const& rhi) {
     return bounds;
 }
 
+bool hasYellowPixel(QRhiReadbackResult const& result, QRhi const& rhi) {
+    for (int y = 0; y < result.pixelSize.height(); ++y) {
+        for (int x = 0; x < result.pixelSize.width(); ++x) {
+            BytePixel const value = pixel(result, rhi, x, y);
+            if (value.a > 100 && value.r > 150 && value.g > 150 && value.b < 80) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 std::shared_ptr<SubtitleBitmapComposition const> bitmap(QPoint origin, QSize size, QByteArray rgba) {
     return std::make_shared<SubtitleBitmapComposition const>(SubtitleBitmapComposition{
         .canvasSize = {32, 18},
@@ -109,6 +121,7 @@ class SubtitleRendererTest final : public QObject {
   private slots:
     void rendersAssAndRestoresThePausedRoute();
     void replacesAndClearsBitmapCompositions();
+    void appliesBitmapAppearanceLiveAtPausedTime();
     void failureIsLatchedUntilNextGeneration();
 };
 
@@ -178,6 +191,25 @@ void SubtitleRendererTest::rendersAssAndRestoresThePausedRoute() {
     QVERIFY(assBounds.width() > assBounds.height() * 2);
     QVERIFY(std::abs(assBounds.center().x() - targetSize.width() / 2) < 30);
 
+    std::uint64_t const textureRevision = renderer.textureRevision();
+    SubtitleAppearanceSnapshot customAppearance;
+    customAppearance.rasterRevision = 1;
+    customAppearance.appearanceMode = SubtitleAppearanceValues::AppearanceMode::Custom;
+    customAppearance.textColor = Qt::yellow;
+    customAppearance.backgroundEnabled = false;
+    QVERIFY(renderer.prepare(snapshot, customAppearance, videoRect, targetSize, true));
+    QRhiReadbackResult recolored;
+    QVERIFY(readTexture(rhi, renderer, recolored));
+    QVERIFY(hasYellowPixel(recolored, rhi));
+    QCOMPARE(renderer.textureRevision(), textureRevision);
+
+    SubtitleAppearanceSnapshot authoredAppearance;
+    authoredAppearance.rasterRevision = 2;
+    QVERIFY(renderer.prepare(snapshot, authoredAppearance, videoRect, targetSize, true));
+    QRhiReadbackResult authoredAgain;
+    QVERIFY(readTexture(rhi, renderer, authoredAgain));
+    QVERIFY(!hasYellowPixel(authoredAgain, rhi));
+
     snapshot.mediaTimeMicroseconds = 4'000'000;
     QVERIFY(renderer.prepare(snapshot, videoRect, targetSize, true));
     QRhiReadbackResult animated;
@@ -198,6 +230,72 @@ void SubtitleRendererTest::rendersAssAndRestoresThePausedRoute() {
     QCOMPARE(restored.pixelSize, targetSize);
     QVERIFY(visiblePixelCount(restored) > 100);
     QVERIFY2(renderer.error().isEmpty(), qPrintable(renderer.error()));
+#endif
+}
+
+void SubtitleRendererTest::appliesBitmapAppearanceLiveAtPausedTime() {
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
+    QSKIP("This test requires a D3D11 or Metal graphics domain");
+#else
+    std::unique_ptr<GraphicsDeviceDomain> graphicsDevice = GraphicsBackendFactory::createDeviceDomain();
+    QVERIFY(graphicsDevice);
+    QRhi& rhi = graphicsDevice->rhi();
+    SubtitleRenderer renderer(rhi);
+    QSize const targetSize{64, 40};
+    QRect const videoRect(8, 4, 48, 27);
+    auto events = std::make_shared<std::vector<SubtitleEvent> const>(std::vector<SubtitleEvent>{{
+        .playbackGeneration = 7,
+        .startMicroseconds = 0,
+        .type = SubtitlePayloadType::Bitmap,
+        .bitmap = bitmap({12, 12}, {8, 3}, solidRgba({8, 3}, 20, 220, 80)),
+    }});
+    SubtitlePresentationSnapshot snapshot{
+        .state =
+            {
+                .playbackGeneration = 7,
+                .revision = 1,
+                .configuration = std::make_shared<SubtitleStreamConfiguration const>(SubtitleStreamConfiguration{
+                    .playbackGeneration = 7,
+                    .streamIndex = 4,
+                    .codec = QStringLiteral("hdmv_pgs_subtitle"),
+                    .canvasSize = {32, 18},
+                }),
+                .events = std::move(events),
+            },
+        .mediaTimeMicroseconds = 500'000,
+    };
+
+    SubtitleAppearanceSnapshot authored;
+    QVERIFY(renderer.prepare(snapshot, authored, videoRect, targetSize, true));
+    QRhiReadbackResult original;
+    QVERIFY(readTexture(rhi, renderer, original));
+    QRect const originalBounds = visibleBounds(original, rhi);
+    QVERIFY(!originalBounds.isEmpty());
+    std::uint64_t const textureRevision = renderer.textureRevision();
+
+    SubtitleAppearanceSnapshot enlarged = authored;
+    enlarged.rasterRevision = 1;
+    enlarged.sizeMode = SubtitleAppearanceValues::SizeMode::Custom;
+    enlarged.scale = 2.0;
+    QVERIFY(renderer.prepare(snapshot, enlarged, videoRect, targetSize, true));
+    QRhiReadbackResult scaled;
+    QVERIFY(readTexture(rhi, renderer, scaled));
+    QRect const scaledBounds = visibleBounds(scaled, rhi);
+    QVERIFY(scaledBounds.width() > originalBounds.width());
+    QVERIFY(scaledBounds.height() > originalBounds.height());
+    QCOMPARE(renderer.textureRevision(), textureRevision);
+
+    SubtitleAppearanceSnapshot moved = enlarged;
+    moved.rasterRevision = 2;
+    moved.positionMode = SubtitleAppearanceValues::PositionMode::Custom;
+    moved.verticalPosition = 1.0;
+    QVERIFY(renderer.prepare(snapshot, moved, videoRect, targetSize, true));
+    QRhiReadbackResult positioned;
+    QVERIFY(readTexture(rhi, renderer, positioned));
+    QRect const positionedBounds = visibleBounds(positioned, rhi);
+    QVERIFY(positionedBounds.top() < scaledBounds.top());
+    QCOMPARE(positionedBounds.size(), scaledBounds.size());
+    QCOMPARE(renderer.textureRevision(), textureRevision);
 #endif
 }
 

@@ -23,6 +23,7 @@
 #include "presentation/QuickUiLayer.h"
 #include "presentation/SubtitleRenderer.h"
 #include "presentation/VideoPresentationGeometry.h"
+#include "subtitles/SubtitleSettings.h"
 #include "video/ActiveVideoSource.h"
 #include "video/DiagnosticVideoSource.h"
 #include "video/RenderedVideoProducer.h"
@@ -82,17 +83,19 @@ QRhiSwapChain::Format desiredSwapChainFormat(PresentationSurfaceContract const& 
 RhiPresentationEngine::RhiPresentationEngine(QWindow& window, PresentationOutputState& outputState,
                                              PresentationSettings& settings, ActiveVideoSource& videoSource,
                                              DiagnosticVideoSource& diagnosticSource, MediaSession& mediaSession,
-                                             VideoViewportState& videoViewport, SupportController& supportController,
+                                             VideoViewportState& videoViewport, SubtitleSettings& subtitleSettings,
+                                             SupportController& supportController,
                                              PresentationSurfaceContract surfaceContract,
                                              PresentationSurfaceController* surfaceController, QObject* parent)
     : QObject(parent), m_window(window), m_outputState(outputState), m_settings(settings), m_videoSource(videoSource),
       m_diagnosticSource(diagnosticSource), m_mediaSession(mediaSession), m_videoViewport(videoViewport),
-      m_supportController(supportController), m_surfaceContract(surfaceContract),
+      m_subtitleSettings(subtitleSettings), m_supportController(supportController), m_surfaceContract(surfaceContract),
       m_surfaceController(surfaceController) {
     Q_ASSERT((m_surfaceController != nullptr) ==
              (m_surfaceContract.mode != PresentationSurfaceMode::AdaptiveExtendedLinear));
     m_deviceRecoveryTimer.setSingleShot(true);
     m_swapChainRecoveryTimer.setSingleShot(true);
+    connect(&m_subtitleSettings, &SubtitleSettings::settingsChanged, this, &RhiPresentationEngine::requestFrame);
 
     connect(&m_settings, &PresentationSettings::settingsChanged, this, &RhiPresentationEngine::requestFrame);
     connect(&m_videoSource, &RenderedVideoSource::updateRequested, this, &RhiPresentationEngine::requestFrame);
@@ -277,8 +280,10 @@ void RhiPresentationEngine::renderFrame() {
         requestedSurface ? m_videoProducer->compositionTextureRevision() : 0;
     Q_ASSERT(m_subtitleRenderer);
     bool const subtitleActive = videoViewportActive && m_videoSource.route() == ActiveVideoSource::Route::Player;
-    bool const subtitlePrepared = m_subtitleRenderer->prepare(
-        m_mediaSession.subtitlePresentationSnapshot(presentationTime), videoRect, pixelSize, subtitleActive);
+    SubtitleAppearanceSnapshot const subtitleAppearance = m_subtitleSettings.snapshot();
+    bool const subtitlePrepared =
+        m_subtitleRenderer->prepare(m_mediaSession.subtitlePresentationSnapshot(presentationTime), subtitleAppearance,
+                                    videoRect, pixelSize, subtitleActive);
     QString const subtitleError = m_subtitleRenderer->error();
     if (!subtitlePrepared && subtitleError != m_reportedSubtitleError) {
         m_reportedSubtitleError = subtitleError;
@@ -414,6 +419,7 @@ void RhiPresentationEngine::renderFrame() {
         static_cast<float>(videoRect.height()),
     };
     parameters.sdrScale = sdrScale;
+    parameters.subtitleOpacity = static_cast<float>(subtitleAppearance.overallOpacity);
     parameters.ndcYUp = m_rhi->isYUpInNDC() ? 1.0f : 0.0f;
     // Final encoding follows the successfully created presentation path, not
     // asynchronous OS HDR metadata that may already describe another output.

@@ -312,11 +312,14 @@ is user-confirmed audible; macOS packaging remains separate.
 Embedded subtitle discovery, selection, text/ASS rendering, embedded fonts, and
 FFmpeg-decoded bitmap composition are integrated. Deferred work includes
 external sidecar discovery and downloads, Jellyfin/server subtitle APIs, two
-simultaneous tracks, user font/color/position/scale/opacity/delay settings,
-forced-only policy, control-overlay avoidance, non-square-pixel ASS script
-geometry, and exact VSFilter color behavior. Seeking deliberately does not scan
-or reread subtitle history; an already-active cue may remain absent until the
-next naturally decoded update.
+simultaneous tracks, user font and delay settings, forced-only policy,
+control-overlay avoidance, non-square-pixel ASS script geometry, independent
+authored/custom mixing for each libass color subgroup, configurable
+outline/shadow thickness, and exact VSFilter color behavior. Global
+text/background/edge color and opacity, size, vertical position, and overall
+opacity are implemented. Seeking deliberately does not scan or reread subtitle
+history; an already-active cue may remain absent until the next naturally
+decoded update.
 
 Cubeb's WASAPI, AudioUnit, and Pulse-family backends can follow a null-device
 stream through ordinary system-default routing, but they do not expose one
