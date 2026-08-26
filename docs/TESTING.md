@@ -298,20 +298,25 @@ Early tests can call public subsystem APIs in-process. The out-of-process
 channel is justified when it removes duplicated orchestration and proves
 startup, shutdown, and application wiring that in-process tests cannot.
 
-The current `--verify-initial-background`, `--playback-smoke`, and
-`--fullscreen-smoke` modes are deliberately narrower than that future channel.
-The Windows-only background probe sends native erase to the real unshown
-presentation window with a contrasting memory DC and requires black output.
-The other modes each open one positional file and observe production
-application state directly. Playback smoke waits for distinct video
+The current `--verify-initial-background`, `--playback-smoke`,
+`--fullscreen-smoke`, and Windows-only `--file-drop-smoke` modes are
+deliberately narrower than that future channel.
+The Windows-only initial-window probe sends native erase to the real unshown
+presentation window with a contrasting memory DC and requires black output. It
+also requires that HWND to be unowned, neither child nor popup, and retain its
+native resize and maximize capabilities.
+The media scenarios each open one positional file and observe production
+application state directly. File-drop smoke injects one native copy drop;
+playback smoke waits for distinct video
 revisions plus live Cubeb-derived audio-master clock progress; fullscreen smoke
 drives native F11, Escape, Space, and redirected background double-click input
-while checking normal/maximized restoration, native cursor hiding, and continued
-video and audio-clock presentation through both fullscreen transitions. Both
-report a process result and exit. Keep these modes small until scenarios need
-shared interactive command/event orchestration.
+while checking normal/maximized restoration, the framed native-window contract
+after each restoration, native cursor hiding, and continued video and
+audio-clock presentation through both fullscreen transitions. All four report
+a process result and exit. Keep these modes small until scenarios need shared
+interactive command/event orchestration.
 
-All three real-window verification modes select an explicit INI settings file
+All four real-window verification modes select an explicit INI settings file
 inside a retained `QTemporaryDir`. The directory outlives final settings
 synchronization, and the scenarios neither inherit nor modify the user's
 native registry, macOS preferences, or XDG configuration.

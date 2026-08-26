@@ -59,6 +59,26 @@ bool hasExactArgument(int argc, char* argv[], std::string_view expected) {
     return false;
 }
 
+bool verifyWindowsFramedWindowContract(PresentationWindow& window, char const* stage) {
+    HWND const windowHandle = reinterpret_cast<HWND>(window.winId());
+    SetLastError(ERROR_SUCCESS);
+    LONG_PTR const style = windowHandle ? GetWindowLongPtrW(windowHandle, GWL_STYLE) : 0;
+    DWORD const styleError = GetLastError();
+    HWND const owner = windowHandle ? GetWindow(windowHandle, GW_OWNER) : nullptr;
+    bool const styleRead = windowHandle && (style != 0 || styleError == ERROR_SUCCESS);
+    bool const passed = styleRead && (style & (WS_POPUP | WS_CHILD)) == 0 && (style & WS_THICKFRAME) != 0 &&
+                        (style & WS_MAXIMIZEBOX) != 0 && owner == nullptr;
+    if (!passed) {
+        std::fprintf(stderr,
+                     "SunPlayer Windows framed-window contract failed: stage=%s, "
+                     "style=0x%llx, error=%lu, owner=%p\n",
+                     stage, static_cast<unsigned long long>(style), static_cast<unsigned long>(styleError),
+                     static_cast<void*>(owner));
+        std::fflush(stderr);
+    }
+    return passed;
+}
+
 bool verifyInitialWindowBackground(PresentationWindow& window) {
     HWND const windowHandle = reinterpret_cast<HWND>(window.winId());
     HDC const screenDeviceContext = GetDC(nullptr);
@@ -88,10 +108,12 @@ bool verifyInitialWindowBackground(PresentationWindow& window) {
         ReleaseDC(nullptr, screenDeviceContext);
     }
 
-    std::fprintf(passed ? stdout : stderr, "SunPlayer initial window background verification %s.\n",
-                 passed ? "passed" : "failed");
-    std::fflush(passed ? stdout : stderr);
-    return passed;
+    bool const windowContractPassed = verifyWindowsFramedWindowContract(window, "initial");
+    bool const verificationPassed = passed && windowContractPassed;
+    std::fprintf(verificationPassed ? stdout : stderr, "SunPlayer initial Windows window verification %s.\n",
+                 verificationPassed ? "passed" : "failed");
+    std::fflush(verificationPassed ? stdout : stderr);
+    return verificationPassed;
 }
 } // namespace
 #endif
@@ -318,6 +340,14 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
                 otherDisplayBlankingWindowCount(window) != 0) {
                 return;
             }
+#ifdef Q_OS_WIN
+            if (!verifyWindowsFramedWindowContract(window, "restored-normal")) {
+                deadline->stop();
+                poll->stop();
+                app.exit(EXIT_FAILURE);
+                return;
+            }
+#endif
             waitForNextFrame();
             sendAutoRepeatKeyPress(window, Qt::Key_F11);
             if (window.windowState() != Qt::WindowNoState) {
@@ -404,6 +434,14 @@ void startFullscreenSmokeScenario(QGuiApplication& app, PresentationWindow& wind
                 otherDisplayBlankingWindowCount(window) != 0) {
                 return;
             }
+#ifdef Q_OS_WIN
+            if (!verifyWindowsFramedWindowContract(window, "restored-maximized")) {
+                deadline->stop();
+                poll->stop();
+                app.exit(EXIT_FAILURE);
+                return;
+            }
+#endif
             window.setBlankOtherDisplaysInFullscreen(false);
             ApplicationSettings::Values const persistedSettings = applicationSettings.load();
             bool const expectedPersistedBlanking = !window.otherDisplayBlankingAvailable();
@@ -509,7 +547,7 @@ int main(int argc, char* argv[]) {
 #ifdef Q_OS_WIN
     QCommandLineOption const verifyInitialBackgroundOption(
         QStringLiteral("verify-initial-background"),
-        QStringLiteral("Verify the Windows pre-presentation client background and exit."));
+        QStringLiteral("Verify the initial Windows window and pre-presentation background contract, then exit."));
     parser.addOption(verifyInitialBackgroundOption);
     QCommandLineOption const fileDropSmokeOption(
         QStringLiteral("file-drop-smoke"),

@@ -50,7 +50,12 @@ Startup currently:
    creates the window-scoped `QVulkanInstance`.
 7. Constructs and shows one `PresentationWindow`, then enters the event loop.
    On Windows, native background erase paints black until that surface's first
-   successful QRhi presentation; D3D owns the client area from then on.
+   successful QRhi presentation; D3D owns the client area from then on. Before
+   showing the window, SunPlayer makes a best-effort removal of Qt's extra
+   `WS_POPUP` classification while preserving the ordinary native frame so
+   Windows and third-party desktop managers treat it as a normal resizable
+   top-level window. A native API failure is logged and leaves Qt's usable but
+   less compatible classification intact.
 
 One optional positional command-line path opens local media after construction;
 additional paths are rejected instead of being silently ignored. Windows uses
@@ -194,8 +199,10 @@ remember only whether the prior non-fullscreen state was maximized. QML still
 decides when idle playback should hide the cursor, while the real window
 applies and reapplies that state after fullscreen transitions. Leaving
 fullscreen restores normal or maximized state without custom geometry, native
-window-style edits, display-mode switching, or exclusive fullscreen. Existing
-Qt resize, exposure, surface, and QRhi paths handle the asynchronous change.
+window-style edits during the transition, display-mode switching, or exclusive
+fullscreen. The one-time Windows startup correction remains part of the style
+Qt saves and restores around fullscreen. Existing Qt resize, exposure, surface,
+and QRhi paths handle the asynchronous change.
 
 On Windows, a persisted QML command can ask `PresentationWindow` to blank the
 other displays whenever it is fullscreen. The window then owns one opaque black
@@ -333,9 +340,13 @@ offered; it requires copy acceptance and the exact session URL. A separate
 process check proves two positional paths fail rather than opening only the
 first. A second bounded real-window scenario verifies native
 keyboard/gesture routing, fullscreen state/restoration, cursor hiding, video
-presentation after each transition, and an unchanged advancing cubeb audio
-epoch. The 2026-08-09 Windows run passes alongside the initial-background and
-playback scenarios. On Linux, a prior video-only WSLg run verified
+presentation after each transition, the framed non-popup HWND contract after
+normal and maximized restoration, and an unchanged advancing cubeb audio epoch.
+The initial Windows native-message probe verifies that same unowned,
+non-child/non-popup, resizable/maximizable contract before show alongside its
+black-background assertion. The augmented initial-window and fullscreen
+scenarios pass on Windows on 2026-08-26; the playback scenario retains its
+earlier passing evidence. On Linux, a prior video-only WSLg run verified
 continued presentation and teardown once, while two attempts timed out on
 cursor convergence. The current audio-bearing explicit run ended in an
 unresolved buffer/configure protocol failure before its final assertion. WSLg

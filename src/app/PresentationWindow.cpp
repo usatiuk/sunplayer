@@ -75,6 +75,46 @@ void parentNativeDialog(QWidget& dialog, QWindow& parent) {
     }
 }
 
+#ifdef Q_OS_WIN
+void applyWindowsOverlappedWindowStyle(QWindow& window) {
+    HWND const windowHandle = reinterpret_cast<HWND>(window.winId());
+    if (!windowHandle) {
+        qCWarning(sunplayerLogPlatform).noquote()
+            << "event=application.windows_window_style_failed stage=handle error=invalid_handle";
+        return;
+    }
+
+    SetLastError(ERROR_SUCCESS);
+    LONG_PTR const style = GetWindowLongPtrW(windowHandle, GWL_STYLE);
+    DWORD const readError = GetLastError();
+    if (style == 0 && readError != ERROR_SUCCESS) {
+        qCWarning(sunplayerLogPlatform).noquote()
+            << "event=application.windows_window_style_failed stage=read error=" + QString::number(readError);
+        return;
+    }
+    if ((style & WS_POPUP) == 0) {
+        return;
+    }
+
+    // Qt adds WS_POPUP to framed top-level Qt::Window instances. Preserve the
+    // native frame but classify SunPlayer as an ordinary desktop window.
+    LONG_PTR const desiredStyle = style & ~static_cast<LONG_PTR>(WS_POPUP);
+    SetLastError(ERROR_SUCCESS);
+    LONG_PTR const previousStyle = SetWindowLongPtrW(windowHandle, GWL_STYLE, desiredStyle);
+    DWORD const writeError = GetLastError();
+    if (previousStyle == 0 && writeError != ERROR_SUCCESS) {
+        qCWarning(sunplayerLogPlatform).noquote()
+            << "event=application.windows_window_style_failed stage=write error=" + QString::number(writeError);
+        return;
+    }
+    if (!SetWindowPos(windowHandle, nullptr, 0, 0, 0, 0,
+                      SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER)) {
+        qCWarning(sunplayerLogPlatform).noquote()
+            << "event=application.windows_window_style_failed stage=refresh error=" + QString::number(GetLastError());
+    }
+}
+#endif
+
 } // namespace
 
 #ifdef Q_OS_LINUX
@@ -161,6 +201,9 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
     // Attaching may create the native window and synchronously deliver events;
     // the lifecycle remains Initializing until startPresentation() owns an engine.
     m_outputState->attach(*this);
+#ifdef Q_OS_WIN
+    applyWindowsOverlappedWindowStyle(*this);
+#endif
 }
 
 PresentationWindow::~PresentationWindow() {
