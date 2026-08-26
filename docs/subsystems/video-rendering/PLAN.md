@@ -113,6 +113,10 @@ surface.
   100-nit SDR only at headroom one and apply the fixed `203 / 100` coordinate
   conversion. Do not install a live-reference-white producer scale at HDR
   headroom.
+* [x] Preserve unknown SDR target-black semantics at the libplacebo boundary.
+  Pass numeric zero only for unknown no-headroom SDR so the pinned library
+  infers 1000:1 contrast; retain the effectively-zero sentinel for known zero
+  and conservatively for unknown extended-linear HDR/EDR.
 * [x] Render a controlled HLG fixture through the current adapter at two
   reference-white/headroom targets. The captured OOTF response changes with
   the virtual target as pinned libplacebo source predicts. V1 accepts that
@@ -143,7 +147,8 @@ surface.
   metadata, the explicit color policy, finite/monotonic/bounded captures,
   static-PQ analytical values, independent BT.2446A and ST 2094-40 vectors,
   metadata-less PQ render-boundary output on SDR and HDR, two HLG target
-  responses, frame-local HDR10+ scene progression and OOTF dispatch on nominal
+  responses, numeric and production-path PQ near-black separation under an
+  unknown SDR minimum, frame-local HDR10+ scene progression and OOTF dispatch on nominal
   SDR, fixed-headroom producer invariance across reference-white coordinates,
   exact production-surface composition under the distinct Windows/macOS scale
   laws, coherent Dolby/base selection, mapped Dolby

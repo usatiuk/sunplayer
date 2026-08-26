@@ -6,8 +6,9 @@
   [0008: Anchor normal HDR playback to the platform reference white](0008-reference-white-adaptive-hdr-display-mapping.md),
   [0016: Reconcile output changes by semantic value](0016-reconcile-output-changes-semantically.md),
   [0024: Map PQ against absolute target luminance](0024-map-pq-against-absolute-target-luminance.md),
+  [0025: Keep normal HDR reference-white adaptive](0025-keep-normal-hdr-reference-white-adaptive.md),
   and
-  [0025: Keep normal HDR reference-white adaptive](0025-keep-normal-hdr-reference-white-adaptive.md)
+  [0026: Preserve unknown SDR target black at the libplacebo boundary](0026-preserve-unknown-sdr-target-black.md)
 * Related:
   [0013: Rely on system display calibration on managed presentation paths](0013-rely-on-system-display-calibration.md)
 

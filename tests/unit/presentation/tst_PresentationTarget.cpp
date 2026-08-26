@@ -56,6 +56,25 @@ void PresentationTargetTest::calculation_data() {
     }
 
     {
+        DisplayState display;
+        display.valid = true;
+        display.colorMode = DisplayColorMode::StandardDynamicRange;
+        // Windows may return numeric luminance properties in SDR, but the
+        // current provider does not mark that range authoritative.
+        display.minLuminanceNits = 0.1f;
+        display.maxLuminanceNits = 100.0f;
+
+        PresentationBackendState backend;
+        backend.hdrPresentationActive = true;
+        backend.sceneReferred = false;
+
+        PresentationTarget expected;
+        expected.hdrPresentationActive = true;
+
+        QTest::newRow("windows-sdr-keeps-target-luminance-unknown") << display << backend << expected;
+    }
+
+    {
         PresentationBackendState backend;
         backend.hdrPresentationActive = true;
         backend.sceneReferred = true;

@@ -10,6 +10,8 @@
   [0008: Anchor normal HDR playback to the platform reference white](0008-reference-white-adaptive-hdr-display-mapping.md),
   and
   [0023: Use a metadata-first HDR-to-SDR policy](0023-use-metadata-first-hdr-to-sdr-policy.md)
+* Amended by:
+  [0026: Preserve unknown SDR target black at the libplacebo boundary](0026-preserve-unknown-sdr-target-black.md)
 
 ## Context
 

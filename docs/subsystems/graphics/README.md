@@ -540,7 +540,10 @@ The surface preserves whether the target minimum is known. The backend converts
 a positive physical minimum by the same ratio as the selected target maximum.
 Libplacebo treats
 numeric zero as unknown and otherwise infers a linear-target contrast ratio, so
-the adapter uses `PL_COLOR_HDR_BLACK` for an unknown or known-zero minimum.
+the adapter passes numeric zero for an unknown no-headroom SDR minimum and uses
+`PL_COLOR_HDR_BLACK` for a known physical zero. Unknown extended-linear HDR/EDR
+retains the sentinel conservatively to avoid inferring `targetPeak / 1000`
+through the linear target transfer.
 
 The texture's BT.709 primaries define its extended-linear RGB coordinate basis,
 not necessarily the usable target gamut. Windows Advanced Color supplies

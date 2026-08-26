@@ -515,6 +515,12 @@ production surfaces must cross the final compositor: Windows expects the
 headroom at the same time is a compression test, not a valid white-scaling
 oracle.
 
+Target-black regressions must distinguish unknown minimum from known physical
+zero. Coverage includes pinned libplacebo nominal-luminance inference, numeric
+BT.2446A samples below 1 nit, and an in-memory high-bit-depth PQ ramp through
+the production decoded producer with diagnostics asserting the selected
+mapper. Bright-patch monotonicity alone is not a near-black oracle.
+
 QRhi supports asynchronous raw texture readback through
 `QRhiResourceUpdateBatch::readBackTexture()`. Capture textures must be created
 with `UsedAsTransferSource`; multisample targets cannot be read back directly.

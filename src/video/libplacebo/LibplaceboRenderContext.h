@@ -19,6 +19,12 @@ struct LibplaceboTargetLuminance {
 // Every other destination stays in libplacebo's 203-nit relative coordinate.
 LibplaceboTargetLuminance calculateLibplaceboTargetLuminance(pl_frame const& source, float targetPeakHeadroom);
 
+// Translates the surface's known/value pair into libplacebo target metadata.
+// Numeric zero means unknown to libplacebo; PL_COLOR_HDR_BLACK means known
+// effectively-zero black, and conservatively preserves legacy behavior for an
+// unknown extended-linear HDR/EDR target (ADR 0026).
+float calculateLibplaceboTargetMinimumNits(RenderedVideoSurfaceDescription const& description, float targetMaximumNits);
+
 // Shared libplacebo renderer boundary for analytic and decoded inputs. It owns
 // target color construction and applies the caller's tone-mapping selection.
 // Target allocation and synchronization remain in VideoTargetInterop.

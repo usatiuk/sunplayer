@@ -5,6 +5,8 @@
 * Scope amendments: 2026-08-01, 2026-08-15, 2026-08-22
 * Amended by:
   [0025: Keep normal HDR reference-white adaptive](0025-keep-normal-hdr-reference-white-adaptive.md)
+  and
+  [0026: Preserve unknown SDR target black at the libplacebo boundary](0026-preserve-unknown-sdr-target-black.md)
 
 ## Context
 

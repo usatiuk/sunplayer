@@ -143,7 +143,8 @@ RenderedVideoSurfaceState surfaceState(GraphicsDeviceDomain& graphics, std::uint
                                        float referenceWhiteNits = 203.0f, QSize pixelSize = {4, 4},
                                        float targetPeakHeadroom = 1.0f,
                                        std::optional<ColorPrimaries> targetPrimaries = std::nullopt,
-                                       float targetMinimumLuminanceNits = 0.0f) {
+                                       float targetMinimumLuminanceNits = 0.0f,
+                                       bool targetMinimumLuminanceKnown = true) {
     RenderedVideoSurfaceState state{
         .description =
             {
@@ -153,7 +154,7 @@ RenderedVideoSurfaceState surfaceState(GraphicsDeviceDomain& graphics, std::uint
                 .luminance = RenderedVideoLuminance::DisplayTargetedSdrWhiteRelative,
                 .alphaMode = RenderedVideoAlphaMode::Opaque,
                 .referenceWhiteNits = referenceWhiteNits,
-                .targetMinimumLuminanceKnown = true,
+                .targetMinimumLuminanceKnown = targetMinimumLuminanceKnown,
                 .targetMinimumLuminanceNits = targetMinimumLuminanceNits,
                 .targetPeakHeadroom = targetPeakHeadroom,
             },
@@ -184,7 +185,7 @@ DecodedFrameCapture captureDecodedFrame(GraphicsDeviceDomain& graphics, std::sha
                                         std::optional<ColorPrimaries> targetPrimaries = std::nullopt,
                                         float targetMinimumLuminanceNits = 0.0f,
                                         std::optional<float> compositionSdrScale = std::nullopt,
-                                        QSize targetPixelSize = {}) {
+                                        QSize targetPixelSize = {}, bool targetMinimumLuminanceKnown = true) {
     DecodedFrameCapture result;
     GraphicsDeviceExecutionScope execution = graphics.acquireExecutionScope();
     QRhi& rhi = graphics.rhi();
@@ -195,7 +196,7 @@ DecodedFrameCapture captureDecodedFrame(GraphicsDeviceDomain& graphics, std::sha
     }
     RenderedVideoSurfaceState const state =
         surfaceState(graphics, source.contentRevision(), referenceWhiteNits, targetPixelSize, targetPeakHeadroom,
-                     targetPrimaries, targetMinimumLuminanceNits);
+                     targetPrimaries, targetMinimumLuminanceNits, targetMinimumLuminanceKnown);
     if (producer.ensureSurface(state) != VideoOperationResult::Ready) {
         result.error = producer.diagnostics().target.fallbackReason;
         return result;
@@ -356,6 +357,7 @@ class FfmpegFirstFrameTest final : public QObject {
     void hdrInputAcceptance_data();
     void hdrInputAcceptance();
     void nominalSdrTargetPreservesWcg();
+    void unknownSdrBlackPreservesPqNearBlack();
     void dualFormatTargetChangeRemapsPausedFrame();
     void realDemuxDecodeImportAndComposition();
     void compressedYuvMetadataAndRendering();
@@ -920,6 +922,87 @@ void FfmpegFirstFrameTest::nominalSdrTargetPreservesWcg() {
     compareNear(white[1], 0.0f, 0.03f);
     compareNear(white[2], 0.0f, 0.03f);
     QVERIFY(pixel(capture.readback, 3, 2).red > 1.1f);
+#endif
+}
+
+void FfmpegFirstFrameTest::unknownSdrBlackPreservesPqNearBlack() {
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
+    QSKIP("This test requires a D3D11 or Metal graphics domain");
+#else
+    constexpr std::array inputNits{0.01f, 0.05f, 0.1f, 0.5f, 1.0f, 5.0f};
+    auto const freeFrame = [](AVFrame* frame) { av_frame_free(&frame); };
+    std::unique_ptr<AVFrame, decltype(freeFrame)> source(av_frame_alloc(), freeFrame);
+    QVERIFY(source);
+    source->format = AV_PIX_FMT_GBRP16LE;
+    source->width = static_cast<int>(inputNits.size());
+    source->height = 2;
+    source->color_primaries = AVCOL_PRI_BT2020;
+    source->color_trc = AVCOL_TRC_SMPTE2084;
+    source->colorspace = AVCOL_SPC_RGB;
+    source->color_range = AVCOL_RANGE_JPEG;
+    source->chroma_location = AVCHROMA_LOC_UNSPECIFIED;
+    QVERIFY(av_frame_get_buffer(source.get(), 0) >= 0);
+    QVERIFY(av_frame_make_writable(source.get()) >= 0);
+
+    auto const pqCode = [](float nits) {
+        return static_cast<std::uint16_t>(std::lround(65535.0f * pl_hdr_rescale(PL_HDR_NITS, PL_HDR_PQ, nits)));
+    };
+    for (int plane = 0; plane < 3; ++plane) {
+        for (int y = 0; y < source->height; ++y) {
+            auto* const row = reinterpret_cast<std::uint16_t*>(source->data[plane] + y * source->linesize[plane]);
+            for (std::size_t x = 0; x < inputNits.size(); ++x) {
+                row[x] = pqCode(inputNits[x]);
+            }
+        }
+    }
+
+    AVFrameSideData* const lightSideData =
+        av_frame_new_side_data(source.get(), AV_FRAME_DATA_CONTENT_LIGHT_LEVEL, sizeof(AVContentLightMetadata));
+    QVERIFY(lightSideData);
+    std::memset(lightSideData->data, 0, lightSideData->size);
+    auto* const light = reinterpret_cast<AVContentLightMetadata*>(lightSideData->data);
+    light->MaxCLL = 1000;
+
+    QString cloneError;
+    std::shared_ptr<DecodedVideoFrame const> const frame =
+        DecodedVideoFrame::clone(*source,
+                                 {
+                                     .playbackGeneration = 96,
+                                     .decoderRevision = 1,
+                                     .frameId = 1,
+                                 },
+                                 {1, 24}, std::nullopt, std::nullopt, &cloneError);
+    QVERIFY2(frame, qPrintable(cloneError));
+
+    std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
+    QVERIFY2(graphics, "Could not create the graphics domain");
+    DecodedFrameCapture const knownZero = captureDecodedFrame(*graphics, frame);
+    DecodedFrameCapture const unknown =
+        captureDecodedFrame(*graphics, frame, PL_COLOR_SDR_WHITE, 1.0f, std::nullopt, 0.0f, std::nullopt, {}, false);
+    QVERIFY2(knownZero.isSuccess(), qPrintable(knownZero.error));
+    QVERIFY2(unknown.isSuccess(), qPrintable(unknown.error));
+    QVERIFY(knownZero.producer.colorPolicy.contains(QStringLiteral("BT.2446A EETF")));
+    QVERIFY(unknown.producer.colorPolicy.contains(QStringLiteral("BT.2446A EETF")));
+    QVERIFY(unknown.producer.colorPolicy.contains(QStringLiteral("MaxCLL 1000 nits")));
+
+    constexpr std::array knownZeroExpected{0.00480f, 0.02253f, 0.04383f, 0.20252f, 0.38763f, 1.69323f};
+    constexpr std::array unknownExpected{0.17368f, 0.26449f, 0.33837f, 0.70709f, 1.03957f, 2.88958f};
+    for (std::size_t index = 0; index < inputNits.size(); ++index) {
+        FloatPixel const knownZeroPixel = pixel(knownZero.readback, static_cast<int>(index), 0);
+        FloatPixel const unknownPixel = pixel(unknown.readback, static_cast<int>(index), 0);
+        float const knownZeroSurface = knownZeroExpected[index] / 100.0f;
+        float const unknownSurface = unknownExpected[index] / 100.0f;
+        compareNear(knownZeroPixel.red, knownZeroSurface, std::max(0.00005f, knownZeroSurface * 0.06f));
+        compareNear(unknownPixel.red, unknownSurface, std::max(0.00015f, unknownSurface * 0.06f));
+        compareNear(knownZeroPixel.green, knownZeroPixel.red, 0.0001f);
+        compareNear(knownZeroPixel.blue, knownZeroPixel.red, 0.0001f);
+        compareNear(unknownPixel.green, unknownPixel.red, 0.0001f);
+        compareNear(unknownPixel.blue, unknownPixel.red, 0.0001f);
+        QVERIFY2(
+            unknownPixel.red > knownZeroPixel.red,
+            qPrintable(
+                QStringLiteral("Unknown SDR black did not lift %1-nit PQ above known zero").arg(inputNits[index])));
+    }
 #endif
 }
 

@@ -180,6 +180,7 @@ class LibplaceboColorPolicyTest final : public QObject {
 
   private slots:
     void calculatesTargetLuminanceFromSourceAndHeadroom();
+    void translatesTargetMinimumLuminance();
     void preservesRelativeSourcesAndBoundsMissingPq();
     void resolvesBaseMetadataInContentSpecificOrder();
     void usesOnlyPinnedRepresentableHdr10PlusOotfs();
@@ -215,6 +216,23 @@ void LibplaceboColorPolicyTest::calculatesTargetLuminanceFromSourceAndHeadroom()
     QCOMPARE(relative.coordinateWhiteNits, PL_COLOR_SDR_WHITE);
     QCOMPARE(relative.maximumNits, PL_COLOR_SDR_WHITE);
     QCOMPARE(relative.outputNormalizationScale, 1.0f);
+}
+
+void LibplaceboColorPolicyTest::translatesTargetMinimumLuminance() {
+    RenderedVideoSurfaceDescription description = target(1.0f);
+    description.targetMinimumLuminanceKnown = false;
+    description.targetMinimumLuminanceNits = 0.0f;
+    QCOMPARE(calculateLibplaceboTargetMinimumNits(description, 100.0f), 0.0f);
+
+    description.targetPeakHeadroom = 4.0f;
+    QCOMPARE(calculateLibplaceboTargetMinimumNits(description, PL_COLOR_SDR_WHITE * 4.0f), PL_COLOR_HDR_BLACK);
+
+    description.targetMinimumLuminanceKnown = true;
+    QCOMPARE(calculateLibplaceboTargetMinimumNits(description, PL_COLOR_SDR_WHITE * 4.0f), PL_COLOR_HDR_BLACK);
+
+    description.targetMinimumLuminanceNits = 2.0f;
+    float const converted = calculateLibplaceboTargetMinimumNits(description, PL_COLOR_SDR_WHITE * 4.0f);
+    QCOMPARE(converted, 2.0f);
 }
 
 void LibplaceboColorPolicyTest::preservesRelativeSourcesAndBoundsMissingPq() {
@@ -556,6 +574,59 @@ void LibplaceboColorPolicyTest::keepsDualFormatRepresentationStable() {
 }
 
 void LibplaceboColorPolicyTest::bt2446aMatchesTheIndependentReferenceEetf() {
+    pl_color_space inferredSdr{};
+    inferredSdr.transfer = PL_COLOR_TRC_LINEAR;
+    inferredSdr.hdr.max_luma = 100.0f;
+    float inferredMinimum = 0.0f;
+    float inferredMaximum = 0.0f;
+    pl_nominal_luma_params inferredParameters{};
+    inferredParameters.color = &inferredSdr;
+    inferredParameters.metadata = PL_HDR_METADATA_HDR10;
+    inferredParameters.scaling = PL_HDR_NITS;
+    inferredParameters.out_min = &inferredMinimum;
+    inferredParameters.out_max = &inferredMaximum;
+    pl_color_space_nominal_luma_ex(&inferredParameters);
+    QCOMPARE(inferredMinimum, 0.1f);
+    QCOMPARE(inferredMaximum, 100.0f);
+
+    inferredSdr.hdr.min_luma = PL_COLOR_HDR_BLACK;
+    float knownZeroMinimum = 0.0f;
+    inferredParameters.out_min = &knownZeroMinimum;
+    pl_color_space_nominal_luma_ex(&inferredParameters);
+    QCOMPARE(knownZeroMinimum, PL_COLOR_HDR_BLACK);
+
+    auto const sampleNearBlack = [](float outputMinimumNits, float inputNits) {
+        pl_tone_map_params parameters{};
+        parameters.function = &pl_tone_map_bt2446a;
+        parameters.constants = pl_color_map_default_params.tone_constants;
+        parameters.input_scaling = PL_HDR_NITS;
+        parameters.output_scaling = PL_HDR_NITS;
+        parameters.input_min = PL_COLOR_HDR_BLACK;
+        parameters.input_max = 1000.0f;
+        parameters.output_min = outputMinimumNits;
+        parameters.output_max = 100.0f;
+        pl_tone_map_params_infer(&parameters);
+        return pl_tone_map_sample(inputNits, &parameters);
+    };
+    constexpr std::array nearBlackInputs{0.01f, 0.05f, 0.1f, 0.5f, 1.0f, 5.0f};
+    constexpr std::array knownZeroExpected{0.00480f, 0.02253f, 0.04383f, 0.20252f, 0.38763f, 1.69323f};
+    constexpr std::array inferredExpected{0.17368f, 0.26449f, 0.33837f, 0.70709f, 1.03957f, 2.88958f};
+    for (std::size_t index = 0; index < nearBlackInputs.size(); ++index) {
+        float const knownZero = sampleNearBlack(PL_COLOR_HDR_BLACK, nearBlackInputs[index]);
+        float const inferred = sampleNearBlack(inferredMinimum, nearBlackInputs[index]);
+        QVERIFY2(std::abs(knownZero - knownZeroExpected[index]) <= 0.002f,
+                 qPrintable(QStringLiteral("Known-zero BT.2446A at %1 nits: expected %2, got %3")
+                                .arg(nearBlackInputs[index])
+                                .arg(knownZeroExpected[index])
+                                .arg(knownZero)));
+        QVERIFY2(std::abs(inferred - inferredExpected[index]) <= 0.002f,
+                 qPrintable(QStringLiteral("Inferred-black BT.2446A at %1 nits: expected %2, got %3")
+                                .arg(nearBlackInputs[index])
+                                .arg(inferredExpected[index])
+                                .arg(inferred)));
+        QVERIFY(inferred > knownZero);
+    }
+
     auto verifyRange = [](float outputPeakNits) {
         pl_tone_map_params parameters{};
         parameters.function = &pl_tone_map_bt2446a;

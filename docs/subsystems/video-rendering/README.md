@@ -226,10 +226,13 @@ Target headroom and whether its minimum is known are separate parts of the
 surface description supplied to libplacebo. Normal playback does not carry a
 second physical-peak-authority flag. SunPlayer preserves a measured physical
 zero as distinct from unavailable metadata.
-Because libplacebo reserves numeric
-zero for unknown minimum luminance and otherwise infers a linear-target
-contrast ratio, the adapter uses `PL_COLOR_HDR_BLACK` at that API boundary for
-an unknown or known-zero minimum; shared physical state remains unchanged.
+Because libplacebo reserves numeric zero for unknown minimum luminance, an
+unknown no-headroom SDR target reaches that API as zero and receives the
+library's 1000:1 default contrast. A known physical zero uses
+`PL_COLOR_HDR_BLACK`. Unknown extended-linear HDR/EDR targets retain that same
+sentinel conservatively so the linear-transfer fallback does not invent
+`targetPeak / 1000` black there. Positive physical minima keep the existing
+target-range conversion. Shared physical state remains unchanged.
 
 Software and hardware decoded frames share semantic metadata and scheduling
 contracts, but not storage behavior. Software planes require observable

@@ -28,16 +28,6 @@ void configureRgbRepresentation(pl_color_repr& representation) {
 
 constexpr float nominalSdrMaximumNits = 100.0f;
 
-float targetMinimumNits(RenderedVideoSurfaceDescription const& description, float targetMaximumNits) {
-    if (!description.targetMinimumLuminanceKnown || description.targetMinimumLuminanceNits == 0.0f) {
-        return PL_COLOR_HDR_BLACK;
-    }
-
-    float const physicalTargetMaximum = description.referenceWhiteNits * description.targetPeakHeadroom;
-    return std::max(PL_COLOR_HDR_BLACK,
-                    targetMaximumNits * description.targetMinimumLuminanceNits / physicalTargetMaximum);
-}
-
 pl_raw_primaries rawPrimaries(ColorPrimaries const& primaries) {
     return {
         .red = {primaries.red.x, primaries.red.y},
@@ -80,6 +70,20 @@ pl_hook_res normalizeNominalSdrOutputHook(void* privateData, pl_hook_params cons
 }
 
 } // namespace
+
+float calculateLibplaceboTargetMinimumNits(RenderedVideoSurfaceDescription const& description,
+                                           float targetMaximumNits) {
+    if (!description.targetMinimumLuminanceKnown) {
+        return description.targetPeakHeadroom <= 1.0f ? 0.0f : PL_COLOR_HDR_BLACK;
+    }
+    if (description.targetMinimumLuminanceNits == 0.0f) {
+        return PL_COLOR_HDR_BLACK;
+    }
+
+    float const physicalTargetMaximum = description.referenceWhiteNits * description.targetPeakHeadroom;
+    return std::max(PL_COLOR_HDR_BLACK,
+                    targetMaximumNits * description.targetMinimumLuminanceNits / physicalTargetMaximum);
+}
 
 LibplaceboTargetLuminance calculateLibplaceboTargetLuminance(pl_frame const& source, float targetPeakHeadroom) {
     Q_ASSERT(std::isfinite(targetPeakHeadroom) && targetPeakHeadroom >= 1.0f);
@@ -183,7 +187,7 @@ bool LibplaceboRenderContext::renderWithPolicy(pl_frame const& source, pl_tex ta
     Q_ASSERT(pl_primaries_valid(&target.color.hdr.prim));
     LibplaceboTargetLuminance const targetLuminance =
         calculateLibplaceboTargetLuminance(effectiveSource, targetDescription.targetPeakHeadroom);
-    target.color.hdr.min_luma = targetMinimumNits(targetDescription, targetLuminance.maximumNits);
+    target.color.hdr.min_luma = calculateLibplaceboTargetMinimumNits(targetDescription, targetLuminance.maximumNits);
     target.color.hdr.max_luma = targetLuminance.maximumNits;
     target.crop = {
         0.0f,
