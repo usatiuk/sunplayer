@@ -673,3 +673,6 @@ Subsystem folders and subsystem plans should be created when enough concrete arc
 * `docs/decisions/` records significant architectural decisions.
 * `docs/research/` records investigations and experiments.
 * `docs/DEFERRED.md` records known issues and intentionally postponed work.
+
+The HDR10+ format preference and adaptive authored-curve support are tracked in
+[the delivery plan](docs/plans/video-rendering/2026-09-20-hdr10plus-preference.md).

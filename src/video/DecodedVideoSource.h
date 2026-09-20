@@ -34,6 +34,8 @@ class DecodedVideoSource final : public RenderedVideoSource {
     void requestFrameSelection();
     void setFrame(std::shared_ptr<DecodedVideoFrame const> frame);
     void clearFrame();
+    bool preferHdr10Plus() const;
+    void setPreferHdr10Plus(bool enabled);
 
     void prepareForPresentation(std::chrono::steady_clock::time_point now) override;
     std::uint64_t contentRevision() const override;
@@ -45,6 +47,7 @@ class DecodedVideoSource final : public RenderedVideoSource {
 
   signals:
     void frameChanged();
+    void preferHdr10PlusChanged();
     void presentationFailed(VideoFailure const& failure);
 
   private:
@@ -54,6 +57,7 @@ class DecodedVideoSource final : public RenderedVideoSource {
     std::shared_ptr<DecodedVideoFrame const> m_frame;
     DecodedVideoFrameSelector* m_selector = nullptr;
     VideoTargetReadback m_readback;
+    bool m_preferHdr10Plus = false;
     std::uint64_t m_contentRevision = 1;
     std::uint64_t m_producerConfigurationRevision = 1;
 };

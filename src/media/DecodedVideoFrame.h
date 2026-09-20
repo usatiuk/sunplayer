@@ -123,6 +123,7 @@ class DecodedVideoFrame final {
     VideoFrameStorageDescription const& storage() const;
     VideoSignalDescription const& signal() const;
     VideoDynamicRange dynamicRange() const;
+    bool hasHdr10PlusMetadata() const;
     std::optional<bool> dolbyVisionBaseIsHdr10Compatible() const;
     AVFrame const& ffmpegFrame() const;
 

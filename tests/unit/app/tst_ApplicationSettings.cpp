@@ -82,8 +82,10 @@ void ApplicationSettingsTest::defaultsAndRoundTrip() {
         ApplicationSettings settings(path);
         ApplicationSettings::Values const defaults = settings.load();
         QVERIFY(!defaults.volume);
+        QVERIFY(!defaults.preferHdr10Plus);
         QVERIFY(!defaults.blankOtherDisplaysInFullscreen);
 
+        settings.setPreferHdr10Plus(false);
         settings.setVolume(0.35);
         settings.setBlankOtherDisplaysInFullscreen(true);
         settings.sync();
@@ -92,6 +94,8 @@ void ApplicationSettingsTest::defaultsAndRoundTrip() {
     {
         ApplicationSettings settings(path);
         ApplicationSettings::Values const restored = settings.load();
+        QCOMPARE(restored.preferHdr10Plus, std::optional<bool>(false));
+        settings.setPreferHdr10Plus(true);
         QVERIFY(restored.volume);
         QCOMPARE(*restored.volume, 0.35);
         QVERIFY(restored.blankOtherDisplaysInFullscreen);
@@ -101,6 +105,7 @@ void ApplicationSettingsTest::defaultsAndRoundTrip() {
         settings.sync();
     }
 
+    QCOMPARE(ApplicationSettings(path).load().preferHdr10Plus, std::optional<bool>(true));
     QSettings stored(path, QSettings::IniFormat);
     QCOMPARE(stored.value(QStringLiteral("playback/volume")).toDouble(), 0.7);
     QCOMPARE(stored.value(QStringLiteral("fullscreen/blankOtherDisplays")).toBool(), true);

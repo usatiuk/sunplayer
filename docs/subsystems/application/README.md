@@ -244,6 +244,10 @@ source-specific state and producer choice out of the presentation engine.
 HDR Lab. QML selects only the semantic Player/Diagnostics route; it never sees
 native textures, producers, or backends.
 
+`ApplicationSettings` also persists the default-disabled HDR10+ preference.
+`DecodedVideoSource` owns its live value; the existing content-revision and
+update-request path rerenders paused video when it changes.
+
 `ApplicationSettings` persists playback volume, the supported fullscreen
 display-blanking preference, and global subtitle appearance. It
 default-constructs `QSettings` in

@@ -85,10 +85,8 @@ disabled. The resulting decision is visible in HDR Lab and protected at the
 production capture boundary without adding another mapper or quality-preset
 surface.
 
-* [x] Use pinned-representable HDR10+ OOTFs through ST 2094-40 on nominal SDR.
-  On reference-white-adaptive HDR retain validated scene/static guidance with
-  spline rather than applying the authored OOTF against an invented physical
-  target.
+* [x] Use pinned-representable HDR10+ OOTFs through ST 2094-40 on nominal SDR
+  and the existing 203H reference-white-adaptive HDR destination.
   Use libplacebo's generalized BT.2446A EETF for other coherent PQ-to-SDR
   dynamic/static ranges, and retain spline for ordinary HDR. Use an explicit,
   diagnosed 1,000-nit maximum with the same SDR/adaptive mapper when ordinary
@@ -97,9 +95,9 @@ surface.
   off, and dithering off for the RGBA16F target. Report the exact operator,
   metadata provenance, unsupported guidance, and fallback in diagnostics.
 * [x] Keep Dolby and HDR10-compatible base metadata coherent. Retain the
-  narrow typed Profile 8.1 compatibility fact, latch a supported HDR10+ base
-  choice per playback generation for SDR/WCG, and include it in importer-cache
-  reuse so a paused HDR/SDR target transition remaps the frame.
+  narrow typed base compatibility fact and one default-disabled HDR10+ preference.
+  Latch a recognized HDR10+ base choice per playback generation/preference,
+  independently of the display, and remap paused frames on preference changes.
 * [x] Do not add a no-op source-discontinuity hook while peak detection and
   other source-temporal renderer features are disabled. If one is enabled,
   open, seek, track change, and generation replacement must reset its state;
@@ -125,7 +123,7 @@ surface.
   physical peak from destination coordinates.
 * [x] Keep HDR10+ source metadata unchanged, including its source-authored
   targeted-system-display luminance. Use its representable OOTF on nominal SDR
-  and scene guidance on reference-white-adaptive HDR.
+  and reference-white-adaptive HDR, delegating target adaptation to libplacebo.
 * [x] Report whether libplacebo applied Dolby Vision reshaping or displayed the
   decoder's proven HDR10-compatible base-layer result. Parse only the typed
   decoder configuration needed for that narrow choice; do not implement

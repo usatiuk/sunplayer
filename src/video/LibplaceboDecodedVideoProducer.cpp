@@ -87,12 +87,12 @@ VideoOperationResult LibplaceboDecodedVideoProducer::render(QRhiCommandBuffer& c
     VideoOperationResult const beginResult = m_target->beginProducerAccess(commandBuffer);
     if (beginResult != VideoOperationResult::Ready) {
         return beginResult == VideoOperationResult::Unavailable ? unavailable(m_target->diagnostics().fallbackReason)
-                                                                 : beginResult;
+                                                                : beginResult;
     }
 
     QString renderError;
     VideoFrameImportFailure importFailure = VideoFrameImportFailure::None;
-    bool const mapDolbyVision = m_colorPolicy.shouldMapDolbyVision(*frame, requestedState.description);
+    bool const mapDolbyVision = m_colorPolicy.shouldMapDolbyVision(*frame, m_source.preferHdr10Plus());
     if (!m_mapping || m_mappedSourceFrame != frame || m_mappingMapsDolbyVision != mapDolbyVision) {
         m_mapping.reset();
         m_mappedSourceFrame.reset();

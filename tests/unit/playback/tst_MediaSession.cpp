@@ -3,6 +3,7 @@
 #include <cmath>
 #include <condition_variable>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <mutex>
 #include <numeric>
@@ -15,7 +16,9 @@
 #include <QtTest>
 
 extern "C" {
+#include <libavutil/dovi_meta.h>
 #include <libavutil/frame.h>
+#include <libavutil/hdr_dynamic_metadata.h>
 }
 
 #ifdef Q_OS_WIN
@@ -152,6 +155,7 @@ class MediaSessionTest final : public QObject {
 
   private slots:
     void opensRealMediaOffThread();
+    void publishesDualFormatMetadataChanges();
     void synchronizedPlaybackUsesPresentedAudioClock();
     void mutedPlaybackKeepsPresentedAudioAsMaster();
     void staggeredStarts_data();
@@ -192,6 +196,46 @@ class MediaSessionTest final : public QObject {
     void graphicsRecoveryPreservesPendingSeek();
     void graphicsRecoverySupersedesOpening();
 };
+
+void MediaSessionTest::publishesDualFormatMetadataChanges() {
+    MediaSession session(VideoTargetReadback::Disabled, [](FfmpegVideoDecodeRequest const& request,
+                                                           FfmpegVideoFrameSink const& sink, std::stop_token stop) {
+        return decodeVideoFrames(
+            request,
+            [&sink](auto frame, auto const& diagnostics) {
+                AVFrame* source = av_frame_clone(&frame->ffmpegFrame());
+                Q_ASSERT(source);
+                size_t size = 0;
+                AVDOVIMetadata* dolby = av_dovi_metadata_alloc(&size);
+                Q_ASSERT(dolby);
+                AVFrameSideData* side = av_frame_new_side_data(source, AV_FRAME_DATA_DOVI_METADATA, size);
+                Q_ASSERT(side);
+                std::memcpy(side->data, dolby, size);
+                av_free(dolby);
+                if (frame->identity().frameId > 1) {
+                    auto* hdr = av_dynamic_hdr_plus_create_side_data(source);
+                    Q_ASSERT(hdr);
+                    hdr->application_version = 1;
+                    hdr->num_windows = 1;
+                }
+                auto const decorated =
+                    DecodedVideoFrame::clone(*source, frame->identity(), frame->timing().timeBase, std::nullopt, true);
+                av_frame_free(&source);
+                Q_ASSERT(decorated);
+                return sink(decorated, diagnostics);
+            },
+            stop);
+    });
+    QString notifiedFormat;
+    connect(&session, &MediaSession::sessionChanged, &session, [&] { notifiedFormat = session.videoDynamicRange(); });
+    session.openMedia(QUrl::fromLocalFile(playbackFixturePath()));
+    QTRY_COMPARE_WITH_TIMEOUT(session.state(), MediaSession::State::Ready, 5000);
+    QCOMPARE(session.videoDynamicRange(), QStringLiteral("Dolby Vision"));
+    QTRY_VERIFY_WITH_TIMEOUT(session.decodedFrameCount() >= 2, 5000);
+    session.videoSource().prepareForPresentation(std::chrono::steady_clock::now() + std::chrono::milliseconds(500));
+    QCOMPARE(session.videoDynamicRange(), QStringLiteral("Dolby Vision + HDR10+"));
+    QCOMPARE(notifiedFormat, QStringLiteral("Dolby Vision + HDR10+"));
+}
 
 void MediaSessionTest::opensRealMediaOffThread() {
     QThread* const ownerThread = QThread::currentThread();

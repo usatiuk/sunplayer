@@ -168,7 +168,7 @@ providers.
 Decoded playback uses the shared metadata-first policy accepted in
 [ADR 0023](../../decisions/0023-use-metadata-first-hdr-to-sdr-policy.md).
 Supported one-window HDR10+ OOTFs on the selected non-Dolby or
-HDR10-compatible base use libplacebo's ST 2094-40 EETF on nominal SDR. For SDR,
+HDR10-compatible base use libplacebo's ST 2094-40 EETF on SDR and adaptive HDR. For other SDR mapping,
 HDR10+ scene values, static
 MaxCLL/mastering range, and mapped Dolby L1/source range use libplacebo's
 generalized BT.2446A EETF. HDR otherwise retains spline, while carrying the
@@ -177,17 +177,24 @@ Ordinary base PQ without usable luminance metadata uses an explicit, diagnosed
 1,000-nit maximum with the same BT.2446A SDR / spline adaptive-HDR choice. A mapped Dolby image is
 never combined with HDR10+ or static values from its base representation.
 
-A proven Profile 8.1 HDR10-compatible base carrying a supported HDR10+ OOTF
-can be selected coherently for an SDR/WCG target. That one-bit representation
-choice is stable for the playback generation and participates in imported-
-frame reuse, so moving a paused frame between HDR and SDR targets remaps it.
-Unknown compatibility remains on the existing mapped-Dolby path. Pinned
-libplacebo's unsupported zero-anchor and local-window OOTFs are diagnosed and
-fall back within the already selected metadata family. A supported OOTF uses
-scene-guided spline on reference-white-adaptive HDR rather than adapting the
-authored curve against an invented physical target.
+The persistent “Prefer HDR10+ over Dolby Vision” setting defaults to disabled.
+A proven HDR10-compatible Dolby base carrying recognized HDR10+ metadata
+selects the base representation, with or without an authored curve. Disabling
+the preference retains Dolby; single-format playback is unaffected. Selection
+is independent of target mode and headroom and remains stable across missing
+frame metadata until playback generation or preference changes. The existing
+content-revision/update path rerenders paused video, and the importer remaps
+when representation changes. Unknown/incompatible bases retain Dolby.
+Pinned libplacebo's unsupported zero-anchor and local-window OOTFs are diagnosed
+and fall back within the selected metadata family. Authored-curve availability
+is independent of scene averages. Libplacebo owns source-luminance inference
+and curve adaptation, including its static-range fallback when scene statistics
+are unavailable. SunPlayer does not substitute MaxSCL for its inferred luminance.
+Imported curve parameters are validated once, with version-specific
+anchor bounds (15/9) and no custom ascending-control-value restriction. See
+[ADR 0028](../../decisions/0028-prefer-hdr10plus-on-compatible-dual-format-video.md).
 
-SDR and HLG retain the existing clip/spline paths. HDR retains spline while
+SDR and HLG retain the existing clip/spline paths. HDR without a supported authored curve retains spline while
 carrying the selected scene/static metadata family. Perceptual gamut
 mapping remains selected for every path. Inverse mapping, peak detection, and
 dithering remain disabled, and the exact decision and fallback provenance are
@@ -205,8 +212,9 @@ virtual-peak inference continuously to headroom one. Decoded neutral/color
 captures cover that endpoint. This is a documented relative playback model,
 not an independent physical-reference HLG appearance oracle.
 HDR10+'s source-provided targeted-display luminance
-stays unchanged. Its OOTF is used against nominal SDR; normal HDR keeps the
-scene values but uses spline against the reference-white-relative destination.
+stays unchanged. Libplacebo adapts its supported OOTF to nominal SDR or the
+203H virtual adaptive target. This preserves the white-relative convention; it
+does not establish physical reference-display equivalence.
 The pinned Dolby Vision helper supports the tested Profile 8.1 reshape but not
 all target trims or enhancement-layer residual processing.
 

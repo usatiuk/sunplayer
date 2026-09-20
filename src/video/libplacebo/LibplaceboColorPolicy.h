@@ -41,17 +41,18 @@ struct LibplaceboColorPolicyDecision {
 
 // Stateful only for one representation choice: a proven dual Dolby Vision
 // Profile 8.1/HDR10+ source stays on its HDR10-compatible base representation
-// for the whole playback generation while targeting SDR/WCG. Everything else
+// until the playback generation or user preference changes. Everything else
 // is resolved from the current frame and normalized target description.
 class LibplaceboColorPolicy final {
   public:
     static constexpr float pqCompatibilityMaximumNits = 1000.0f;
 
-    bool shouldMapDolbyVision(DecodedVideoFrame const& frame, RenderedVideoSurfaceDescription const& targetDescription);
+    bool shouldMapDolbyVision(DecodedVideoFrame const& frame, bool preferHdr10Plus);
     LibplaceboColorPolicyDecision resolve(DecodedVideoFrame const& frame, pl_frame const& mappedFrame,
                                           RenderedVideoSurfaceDescription const& targetDescription) const;
 
   private:
     std::optional<std::uint64_t> m_playbackGeneration;
-    std::optional<bool> m_useHdr10BaseForSdr;
+    bool m_preferHdr10Plus = false;
+    bool m_useHdr10Base = false;
 };

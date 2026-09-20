@@ -26,63 +26,19 @@ bool finiteInRange(double value, double minimum, double maximum) {
 
 bool validMaximum(float value) { return finiteInRange(value, std::numeric_limits<float>::min(), maximumPqNits); }
 
-std::optional<double> rationalValueInRange(AVRational value, double minimum, double maximum) {
-    if (value.den <= 0) {
-        return std::nullopt;
-    }
-    double const converted = av_q2d(value);
-    return finiteInRange(converted, minimum, maximum) ? std::optional<double>(converted) : std::nullopt;
-}
-
 bool sdrLikeTarget(RenderedVideoSurfaceDescription const& description) {
     return description.renderingMode == VideoRenderingMode::SdrCompatibility;
 }
 
-bool validMappedOotf(pl_hdr_bezier const& ootf) {
+bool validMappedOotf(pl_hdr_bezier const& ootf, std::uint8_t maximumAnchors) {
     if (!validMaximum(ootf.target_luma) || !finiteInRange(ootf.knee_x, 0.0, 1.0) ||
-        !finiteInRange(ootf.knee_y, 0.0, 1.0) || ootf.num_anchors == 0 || ootf.num_anchors > 15) {
+        !finiteInRange(ootf.knee_y, 0.0, 1.0) || ootf.num_anchors == 0 || ootf.num_anchors > maximumAnchors) {
         return false;
     }
-    float previous = 0.0f;
     for (std::uint8_t index = 0; index < ootf.num_anchors; ++index) {
-        if (!finiteInRange(ootf.anchors[index], previous, 1.0)) {
+        if (!finiteInRange(ootf.anchors[index], 0.0, 1.0)) {
             return false;
         }
-        previous = ootf.anchors[index];
-    }
-    return true;
-}
-
-bool validHdr10PlusScene(AVHDRPlusColorTransformParams const& global) {
-    double maximum = 0.0;
-    for (AVRational const component : global.maxscl) {
-        std::optional<double> const value = rationalValueInRange(component, 0.0, 1.0);
-        if (!value) {
-            return false;
-        }
-        maximum = std::max(maximum, *value);
-    }
-    std::optional<double> const average = rationalValueInRange(global.average_maxrgb, 0.0, 1.0);
-    return maximum > 0.0 && average && *average > 0.0 && *average <= maximum;
-}
-
-bool validHdr10PlusOotf(AVDynamicHDRPlus const& metadata, AVHDRPlusColorTransformParams const& global,
-                        std::uint8_t maximumAnchors) {
-    if (!validHdr10PlusScene(global) ||
-        !rationalValueInRange(metadata.targeted_system_display_maximum_luminance, std::numeric_limits<double>::min(),
-                              maximumPqNits) ||
-        !rationalValueInRange(global.knee_point_x, 0.0, 1.0) || !rationalValueInRange(global.knee_point_y, 0.0, 1.0) ||
-        global.num_bezier_curve_anchors == 0 || global.num_bezier_curve_anchors > maximumAnchors) {
-        return false;
-    }
-
-    double previous = 0.0;
-    for (std::uint8_t index = 0; index < global.num_bezier_curve_anchors; ++index) {
-        std::optional<double> const anchor = rationalValueInRange(global.bezier_curve_anchors[index], previous, 1.0);
-        if (!anchor) {
-            return false;
-        }
-        previous = *anchor;
     }
     return true;
 }
@@ -90,43 +46,35 @@ bool validHdr10PlusOotf(AVDynamicHDRPlus const& metadata, AVHDRPlusColorTransfor
 struct Hdr10PlusEvidence {
     bool present = false;
     bool valid = false;
-    bool sceneValid = false;
     bool sourceOotfPresent = false;
-    bool sourceOotfCandidate = false;
     bool pinnedOotfRepresentable = false;
     bool zeroAnchorOotf = false;
     bool multipleWindows = false;
     bool invalidVersionOneWindows = false;
 };
 
-Hdr10PlusEvidence hdr10PlusEvidence(AVFrame const& frame, pl_frame const* mappedFrame = nullptr) {
+Hdr10PlusEvidence hdr10PlusEvidence(DecodedVideoFrame const& frame, pl_frame const& mappedFrame) {
     Hdr10PlusEvidence result;
-    AVDynamicHDRPlus const* const metadata = sideDataPayload<AVDynamicHDRPlus>(frame, AV_FRAME_DATA_DYNAMIC_HDR_PLUS);
+    AVDynamicHDRPlus const* const metadata =
+        sideDataPayload<AVDynamicHDRPlus>(frame.ffmpegFrame(), AV_FRAME_DATA_DYNAMIC_HDR_PLUS);
     result.present = metadata;
     if (!metadata) {
         return result;
     }
 
-    bool const recognizedEnvelope = metadata->itu_t_t35_country_code == 0 || metadata->itu_t_t35_country_code == 0xb5;
     result.multipleWindows = metadata->num_windows > 1;
     result.invalidVersionOneWindows = metadata->application_version == 1 && metadata->num_windows != 1;
-    if (!recognizedEnvelope || metadata->application_version > 1 || metadata->num_windows < 1 ||
-        metadata->num_windows > 3 || result.invalidVersionOneWindows) {
+    if (!frame.hasHdr10PlusMetadata()) {
         return result;
     }
 
-    result.valid = true;
     AVHDRPlusColorTransformParams const& global = metadata->params[0];
-    std::uint8_t const maximumAnchors = metadata->application_version == 0 ? 15 : 9;
-    result.sceneValid = validHdr10PlusScene(global);
+    result.valid = true;
     result.sourceOotfPresent = global.tone_mapping_flag == 1;
     result.zeroAnchorOotf = result.sourceOotfPresent && global.num_bezier_curve_anchors == 0;
-    result.sourceOotfCandidate =
-        !result.multipleWindows && result.sourceOotfPresent && validHdr10PlusOotf(*metadata, global, maximumAnchors);
-    result.pinnedOotfRepresentable = mappedFrame && result.sourceOotfCandidate &&
-                                     mappedFrame->color.hdr.ootf.num_anchors == global.num_bezier_curve_anchors &&
-                                     validMappedOotf(mappedFrame->color.hdr.ootf) &&
-                                     pl_hdr_metadata_contains(&mappedFrame->color.hdr, PL_HDR_METADATA_HDR10PLUS);
+    result.pinnedOotfRepresentable =
+        !result.multipleWindows && result.sourceOotfPresent &&
+        validMappedOotf(mappedFrame.color.hdr.ootf, metadata->application_version == 0 ? 15 : 9);
     return result;
 }
 
@@ -150,19 +98,13 @@ QString hdr10PlusLimitation(Hdr10PlusEvidence const& evidence) {
     if (!evidence.valid) {
         return QStringLiteral("HDR10+ metadata invalid");
     }
-    if (!evidence.sceneValid) {
-        return QStringLiteral("HDR10+ scene values invalid");
-    }
     if (evidence.multipleWindows) {
         return QStringLiteral("local-window HDR10+ metadata unsupported by pinned libplacebo");
     }
     if (evidence.zeroAnchorOotf) {
         return QStringLiteral("zero-anchor OOTF unsupported by pinned libplacebo");
     }
-    if (evidence.sourceOotfPresent && !evidence.sourceOotfCandidate) {
-        return QStringLiteral("source OOTF invalid or conservatively unsupported");
-    }
-    if (evidence.sourceOotfCandidate && !evidence.pinnedOotfRepresentable) {
+    if (evidence.sourceOotfPresent && !evidence.pinnedOotfRepresentable) {
         return QStringLiteral("source OOTF unavailable to pinned libplacebo");
     }
     return {};
@@ -194,19 +136,13 @@ std::optional<float> masteringMaximumNits(AVFrame const& frame) {
 }
 
 std::optional<float> hdr10PlusMaximumNits(pl_hdr_metadata const& metadata) {
-    if (!pl_hdr_metadata_contains(&metadata, PL_HDR_METADATA_HDR10PLUS)) {
-        return std::nullopt;
-    }
-    for (float const componentMaximum : metadata.scene_max) {
-        if (!finiteInRange(componentMaximum, 0.0, maximumPqNits)) {
+    for (float const component : metadata.scene_max) {
+        if (!finiteInRange(component, 0.0, maximumPqNits)) {
             return std::nullopt;
         }
     }
     float const maximum = std::max({metadata.scene_max[0], metadata.scene_max[1], metadata.scene_max[2]});
-    if (!validMaximum(maximum) || !validMaximum(metadata.scene_avg) || metadata.scene_avg > maximum) {
-        return std::nullopt;
-    }
-    return maximum;
+    return validMaximum(maximum) ? std::optional<float>(maximum) : std::nullopt;
 }
 
 std::optional<float> sourceAverageNits(pl_hdr_metadata const& metadata, enum pl_hdr_metadata_type type) {
@@ -322,29 +258,20 @@ QString LibplaceboColorPolicyDecision::description() const {
     return result;
 }
 
-bool LibplaceboColorPolicy::shouldMapDolbyVision(DecodedVideoFrame const& frame,
-                                                 RenderedVideoSurfaceDescription const& targetDescription) {
-    Q_ASSERT(targetDescription.isValid());
+bool LibplaceboColorPolicy::shouldMapDolbyVision(DecodedVideoFrame const& frame, bool preferHdr10Plus) {
     std::uint64_t const generation = frame.identity().playbackGeneration;
-    if (!m_playbackGeneration || *m_playbackGeneration != generation) {
+    if (m_playbackGeneration != generation || m_preferHdr10Plus != preferHdr10Plus) {
         m_playbackGeneration = generation;
-        m_useHdr10BaseForSdr.reset();
+        m_preferHdr10Plus = preferHdr10Plus;
+        m_useHdr10Base = false;
     }
-
-    if (!m_useHdr10BaseForSdr.has_value()) {
-        bool const compatibleBase = frame.dolbyVisionBaseIsHdr10Compatible().value_or(false);
-        bool const dualMetadataEstablished = frame.dynamicRange() == VideoDynamicRange::DolbyVision &&
-                                             hdr10PlusEvidence(frame.ffmpegFrame()).sourceOotfCandidate;
-        if (compatibleBase && dualMetadataEstablished) {
-            m_useHdr10BaseForSdr = true;
-        } else if (sdrLikeTarget(targetDescription)) {
-            m_useHdr10BaseForSdr = false;
-        }
-    }
-    if (!sdrLikeTarget(targetDescription)) {
+    if (!preferHdr10Plus || !frame.dolbyVisionBaseIsHdr10Compatible().value_or(false)) {
         return true;
     }
-    return !*m_useHdr10BaseForSdr;
+    if (frame.dynamicRange() == VideoDynamicRange::DolbyVision && frame.hasHdr10PlusMetadata()) {
+        m_useHdr10Base = true;
+    }
+    return !m_useHdr10Base;
 }
 
 LibplaceboColorPolicyDecision
@@ -364,12 +291,12 @@ LibplaceboColorPolicy::resolve(DecodedVideoFrame const& frame, pl_frame const& m
     bool const sdrTarget = sdrLikeTarget(targetDescription);
     LibplaceboToneMappingFunction const toneMapping =
         sdrTarget ? LibplaceboToneMappingFunction::Bt2446a : LibplaceboToneMappingFunction::Spline;
-    Hdr10PlusEvidence const dynamic = hdr10PlusEvidence(source, &mappedFrame);
+    Hdr10PlusEvidence const dynamic = hdr10PlusEvidence(frame, mappedFrame);
     std::optional<float> const dynamicMaximum = hdr10PlusMaximumNits(mappedFrame.color.hdr);
 
     if (mappedDolbyVision) {
         QString ignoredBaseGuidance = hdr10PlusLimitation(dynamic);
-        if (dynamic.valid && (dynamic.sceneValid || dynamic.sourceOotfPresent)) {
+        if (dynamic.valid) {
             appendQualification(ignoredBaseGuidance,
                                 QStringLiteral("concurrent HDR10+ guidance ignored for mapped Dolby representation"));
         }
@@ -414,15 +341,12 @@ LibplaceboColorPolicy::resolve(DecodedVideoFrame const& frame, pl_frame const& m
     std::optional<float> const maxCll = contentMaximumNits(source);
     std::optional<float> const masteringMaximum = masteringMaximumNits(source);
     QString metadataQualification = hdr10PlusLimitation(dynamic);
-    if (!sdrTarget && dynamic.sceneValid && dynamic.pinnedOotfRepresentable && dynamicMaximum) {
-        appendQualification(metadataQualification,
-                            QStringLiteral("source OOTF not applied on reference-white-adaptive HDR target"));
-    }
-
-    if (sdrTarget && dynamic.sceneValid && dynamic.pinnedOotfRepresentable && dynamicMaximum) {
+    if (dynamic.pinnedOotfRepresentable) {
         return hdr10PlusOotfDecision(mappedFrame);
     }
-    if (dynamic.valid && dynamic.sceneValid && dynamicMaximum) {
+    if (dynamic.valid && dynamicMaximum &&
+        pl_hdr_metadata_contains(&mappedFrame.color.hdr, PL_HDR_METADATA_HDR10PLUS) &&
+        validMaximum(mappedFrame.color.hdr.scene_avg) && mappedFrame.color.hdr.scene_avg <= *dynamicMaximum) {
         QString qualification = metadataQualification;
         if (!qualification.isEmpty()) {
             appendQualification(qualification, QStringLiteral("global scene values used"));

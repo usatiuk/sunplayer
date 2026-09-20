@@ -113,7 +113,7 @@ bool hasValidHdr10PlusMetadata(AVFrame const& frame) {
     bool const recognizedEnvelope =
         metadata && (metadata->itu_t_t35_country_code == 0 || metadata->itu_t_t35_country_code == 0xb5);
     return recognizedEnvelope && metadata->application_version <= 1 && metadata->num_windows >= 1 &&
-           metadata->num_windows <= 3;
+           metadata->num_windows <= 3 && (metadata->application_version != 1 || metadata->num_windows == 1);
 }
 
 bool hasValidDolbyVisionMetadata(AVFrame const& frame) {
@@ -200,12 +200,14 @@ QString VideoSignalDescription::summary() const {
              chromaLocation);
 }
 
+bool DecodedVideoFrame::hasHdr10PlusMetadata() const { return hasValidHdr10PlusMetadata(*m_frame); }
+
 VideoDynamicRange DecodedVideoFrame::dynamicRange() const {
     Q_ASSERT(m_frame);
     if (hasValidDolbyVisionMetadata(*m_frame)) {
         return VideoDynamicRange::DolbyVision;
     }
-    if (hasValidHdr10PlusMetadata(*m_frame)) {
+    if (hasHdr10PlusMetadata()) {
         return VideoDynamicRange::Hdr10Plus;
     }
     if (m_frame->color_trc == AVCOL_TRC_ARIB_STD_B67) {

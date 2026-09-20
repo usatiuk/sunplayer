@@ -354,3 +354,10 @@ the harness.
 Extend Qt Quick component coverage as commands gain behavior. Add
 actual-application scenarios for file open, navigation, diagnostics access,
 and shutdown when the private scenario-control boundary exists.
+
+The Playback settings page includes a default-disabled “Prefer HDR10+ over Dolby
+Vision” checkbox. It changes the compatible dual-format representation live,
+including while paused, and persists through the existing application settings.
+
+Video details identify both Dolby Vision and HDR10+ on dual-format frames. Output
+details refresh after successful presentation, including paused settings edits.

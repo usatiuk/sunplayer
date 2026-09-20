@@ -734,3 +734,22 @@ SDR remains separate. Policy tests compare generic curves with identical inputs;
 Wayland tests cover capability gating and whole-composition encoded volume.
 These checks do not measure native display luminance or prove compositor
 pass-through; managed compositor transitions remain native acceptance work.
+
+The HDR10+ preference regressions cover settings persistence and UI editing,
+compatible dual-format selection (including scene-only and late metadata),
+paused preference remapping, and authored curves on both SDR and adaptive HDR.
+The existing decoded HDR headroom-one sweep now exercises ST2094-40 on HDR10+.
+
+The real-producer tests also retain authored HDR10+ curves when scene average
+is zero, checking finite/bounded captured pixels on SDR and HDR. Policy tests
+accept version-0 fifteen anchors, version-1 nine anchors, and nonascending
+control values while rejecting nonfinite values and unsupported window layouts. A session regression verifies dual-format
+label notifications when only HDR10+ presence changes. Output diagnostics now
+publish after successful presentation; the Settings-open visual refresh remains
+a native manual check rather than a claim of automated UI coverage.
+
+The preference defaults to disabled. Dual-format tests explicitly opt into
+HDR10+ and verify paused remapping in both directions. Authored-curve tests
+retain ST2094-40 when average metadata is zero, with library-owned luminance
+inference and finite output. They do not assert equal brightness across changing
+metadata. Native appearance and physical display output remain manual checks.

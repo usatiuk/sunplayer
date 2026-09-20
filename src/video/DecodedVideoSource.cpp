@@ -55,6 +55,19 @@ void DecodedVideoSource::clearFrame() {
     emit updateRequested();
 }
 
+bool DecodedVideoSource::preferHdr10Plus() const { return m_preferHdr10Plus; }
+
+void DecodedVideoSource::setPreferHdr10Plus(bool enabled) {
+    Q_ASSERT(QThread::currentThread() == thread());
+    if (m_preferHdr10Plus == enabled) {
+        return;
+    }
+    m_preferHdr10Plus = enabled;
+    advanceContentRevision();
+    emit preferHdr10PlusChanged();
+    emit updateRequested();
+}
+
 void DecodedVideoSource::advanceContentRevision() {
     ++m_contentRevision;
     if (m_contentRevision == 0) {

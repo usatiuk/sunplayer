@@ -292,17 +292,17 @@ void LibplaceboColorPolicyTest::preservesRelativeSourcesAndBoundsMissingPq() {
     QVERIFY(pq);
     pl_frame mapped = pqMappedFrame();
 
-    QVERIFY(policy.shouldMapDolbyVision(*sdr, target(1.0f)));
+    QVERIFY(policy.shouldMapDolbyVision(*sdr, true));
     LibplaceboColorPolicyDecision const sdrDecision = policy.resolve(*sdr, mapped, target(1.0f));
     QCOMPARE(sdrDecision.toneMapping, LibplaceboToneMappingFunction::Clip);
     QCOMPARE(sdrDecision.metadata, PL_HDR_METADATA_NONE);
 
-    QVERIFY(policy.shouldMapDolbyVision(*hlg, target(1.0f)));
+    QVERIFY(policy.shouldMapDolbyVision(*hlg, true));
     LibplaceboColorPolicyDecision const hlgDecision = policy.resolve(*hlg, mapped, target(1.0f));
     QCOMPARE(hlgDecision.toneMapping, LibplaceboToneMappingFunction::Spline);
     QCOMPARE(hlgDecision.metadata, PL_HDR_METADATA_ANY);
 
-    QVERIFY(policy.shouldMapDolbyVision(*pq, target(4.0f)));
+    QVERIFY(policy.shouldMapDolbyVision(*pq, true));
     LibplaceboColorPolicyDecision const hdrDecision = policy.resolve(*pq, mapped, target(4.0f));
     QCOMPARE(hdrDecision.toneMapping, LibplaceboToneMappingFunction::Spline);
     QCOMPARE(hdrDecision.metadata, PL_HDR_METADATA_HDR10);
@@ -321,7 +321,7 @@ void LibplaceboColorPolicyTest::resolvesBaseMetadataInContentSpecificOrder() {
         });
     QVERIFY(maxCll);
     pl_frame mapped = pqMappedFrame(0.005f, 4000.0f);
-    QVERIFY(policy.shouldMapDolbyVision(*maxCll, target(1.0f)));
+    QVERIFY(policy.shouldMapDolbyVision(*maxCll, true));
     LibplaceboColorPolicyDecision decision = policy.resolve(*maxCll, mapped, target(1.0f));
     QCOMPARE(decision.toneMapping, LibplaceboToneMappingFunction::Bt2446a);
     QCOMPARE(decision.metadata, PL_HDR_METADATA_HDR10);
@@ -332,14 +332,14 @@ void LibplaceboColorPolicyTest::resolvesBaseMetadataInContentSpecificOrder() {
     std::shared_ptr<DecodedVideoFrame const> const mastering =
         makeFrame(11, 1, AVCOL_TRC_SMPTE2084, std::nullopt, [](AVFrame& frame) { addMastering(frame, 0.005, 4000.0); });
     QVERIFY(mastering);
-    QVERIFY(policy.shouldMapDolbyVision(*mastering, target(1.0f)));
+    QVERIFY(policy.shouldMapDolbyVision(*mastering, true));
     decision = policy.resolve(*mastering, mapped, target(1.0f));
     QCOMPARE(decision.provenance, LibplaceboSourceMetadataProvenance::MasteringDisplay);
     QCOMPARE(decision.effectiveSourceMaximumNits, std::optional<float>(4000.0f));
 
     std::shared_ptr<DecodedVideoFrame const> const missing = makeFrame(12, 1, AVCOL_TRC_SMPTE2084);
     QVERIFY(missing);
-    QVERIFY(policy.shouldMapDolbyVision(*missing, target(1.0f)));
+    QVERIFY(policy.shouldMapDolbyVision(*missing, true));
     decision = policy.resolve(*missing, pqMappedFrame(0.0f, 0.0f), target(1.0f));
     QCOMPARE(decision.provenance, LibplaceboSourceMetadataProvenance::PqCompatibilityFallback);
     QCOMPARE(decision.toneMapping, LibplaceboToneMappingFunction::Bt2446a);
@@ -353,7 +353,7 @@ void LibplaceboColorPolicyTest::resolvesBaseMetadataInContentSpecificOrder() {
             addContentLight(frame, 10'001);
         });
     QVERIFY(invalidStatic);
-    QVERIFY(policy.shouldMapDolbyVision(*invalidStatic, target(1.0f)));
+    QVERIFY(policy.shouldMapDolbyVision(*invalidStatic, true));
     decision = policy.resolve(*invalidStatic, mapped, target(1.0f));
     QCOMPARE(decision.provenance, LibplaceboSourceMetadataProvenance::PqCompatibilityFallback);
 
@@ -374,7 +374,7 @@ void LibplaceboColorPolicyTest::usesOnlyPinnedRepresentableHdr10PlusOotfs() {
         Q_ASSERT(frame);
         pl_frame mapped = pqMappedFrame();
         addMappedHdr10Plus(mapped, mappedAnchors);
-        policy.shouldMapDolbyVision(*frame, target(targetHeadroom));
+        policy.shouldMapDolbyVision(*frame, true);
         return policy.resolve(*frame, mapped, target(targetHeadroom));
     };
 
@@ -382,15 +382,14 @@ void LibplaceboColorPolicyTest::usesOnlyPinnedRepresentableHdr10PlusOotfs() {
     QCOMPARE(ootf.toneMapping, LibplaceboToneMappingFunction::St2094_40);
     QCOMPARE(ootf.metadata, PL_HDR_METADATA_HDR10PLUS);
     QCOMPARE(ootf.provenance, LibplaceboSourceMetadataProvenance::Hdr10PlusOotf);
-    QCOMPARE(ootf.selectedSourceAverageNits, std::optional<float>(80.0f));
-    QVERIFY(ootf.description().contains(QStringLiteral("selected average 80 nits")));
+    QVERIFY(!ootf.effectiveSourceMaximumNits);
+    QVERIFY(ootf.selectedSourceAverageNits);
 
     LibplaceboColorPolicyDecision const hdrOotf = evaluate(30, 1, 2, 2, 1, 4.0f);
-    QCOMPARE(hdrOotf.toneMapping, LibplaceboToneMappingFunction::Spline);
+    QCOMPARE(hdrOotf.toneMapping, LibplaceboToneMappingFunction::St2094_40);
     QCOMPARE(hdrOotf.metadata, PL_HDR_METADATA_HDR10PLUS);
-    QCOMPARE(hdrOotf.provenance, LibplaceboSourceMetadataProvenance::Hdr10PlusScene);
-    QVERIFY(hdrOotf.qualification.contains(
-        QStringLiteral("source OOTF not applied on reference-white-adaptive HDR target")));
+    QCOMPARE(hdrOotf.provenance, LibplaceboSourceMetadataProvenance::Hdr10PlusOotf);
+    QVERIFY(hdrOotf.qualification.isEmpty());
 
     LibplaceboColorPolicyDecision const zeroAnchor = evaluate(21, 1, 0, 0);
     QCOMPARE(zeroAnchor.toneMapping, LibplaceboToneMappingFunction::Bt2446a);
@@ -423,7 +422,7 @@ void LibplaceboColorPolicyTest::usesOnlyPinnedRepresentableHdr10PlusOotfs() {
     QVERIFY(localOnlyOotf);
     pl_frame localOnlyMapped = pqMappedFrame();
     addMappedHdr10Plus(localOnlyMapped);
-    policy.shouldMapDolbyVision(*localOnlyOotf, target(1.0f));
+    policy.shouldMapDolbyVision(*localOnlyOotf, true);
     LibplaceboColorPolicyDecision const localOnlyDecision =
         policy.resolve(*localOnlyOotf, localOnlyMapped, target(1.0f));
     QCOMPARE(localOnlyDecision.provenance, LibplaceboSourceMetadataProvenance::Hdr10PlusScene);
@@ -432,9 +431,10 @@ void LibplaceboColorPolicyTest::usesOnlyPinnedRepresentableHdr10PlusOotfs() {
     LibplaceboColorPolicyDecision const invalidVersionOneWindows = evaluate(25, 2, 2, 2);
     QCOMPARE(invalidVersionOneWindows.provenance, LibplaceboSourceMetadataProvenance::PqCompatibilityFallback);
 
-    LibplaceboColorPolicyDecision const tooManyVersionOneAnchors = evaluate(26, 1, 10, 10);
-    QCOMPARE(tooManyVersionOneAnchors.provenance, LibplaceboSourceMetadataProvenance::Hdr10PlusScene);
-    QVERIFY(tooManyVersionOneAnchors.qualification.contains(QStringLiteral("unsupported")));
+    LibplaceboColorPolicyDecision const maximumVersionOneAnchors = evaluate(26, 1, 9, 9);
+    QCOMPARE(maximumVersionOneAnchors.provenance, LibplaceboSourceMetadataProvenance::Hdr10PlusOotf);
+
+    QCOMPARE(evaluate(260, 1, 10, 10).provenance, LibplaceboSourceMetadataProvenance::Hdr10PlusScene);
 
     LibplaceboColorPolicyDecision const maximumVersionZeroAnchors = evaluate(28, 1, 15, 15, 0);
     QCOMPARE(maximumVersionZeroAnchors.provenance, LibplaceboSourceMetadataProvenance::Hdr10PlusOotf);
@@ -453,7 +453,7 @@ void LibplaceboColorPolicyTest::usesOnlyPinnedRepresentableHdr10PlusOotfs() {
     addMappedHdr10Plus(zeroKneeMapped, 2);
     zeroKneeMapped.color.hdr.ootf.knee_x = 0.0f;
     zeroKneeMapped.color.hdr.ootf.knee_y = 0.0f;
-    policy.shouldMapDolbyVision(*zeroKnee, target(1.0f));
+    policy.shouldMapDolbyVision(*zeroKnee, true);
     LibplaceboColorPolicyDecision const zeroKneeDecision = policy.resolve(*zeroKnee, zeroKneeMapped, target(1.0f));
     QCOMPARE(zeroKneeDecision.provenance, LibplaceboSourceMetadataProvenance::Hdr10PlusOotf);
 
@@ -463,7 +463,7 @@ void LibplaceboColorPolicyTest::usesOnlyPinnedRepresentableHdr10PlusOotfs() {
     pl_frame malformedMapped = pqMappedFrame();
     addMappedHdr10Plus(malformedMapped, 2);
     malformedMapped.color.hdr.ootf.anchors[0] = std::numeric_limits<float>::quiet_NaN();
-    policy.shouldMapDolbyVision(*malformedOotf, target(1.0f));
+    policy.shouldMapDolbyVision(*malformedOotf, true);
     LibplaceboColorPolicyDecision const malformedDecision =
         policy.resolve(*malformedOotf, malformedMapped, target(1.0f));
     QCOMPARE(malformedDecision.toneMapping, LibplaceboToneMappingFunction::Bt2446a);
@@ -477,11 +477,11 @@ void LibplaceboColorPolicyTest::usesOnlyPinnedRepresentableHdr10PlusOotfs() {
     addMappedHdr10Plus(descendingMapped, 2);
     descendingMapped.color.hdr.ootf.anchors[0] = 0.8f;
     descendingMapped.color.hdr.ootf.anchors[1] = 0.7f;
-    policy.shouldMapDolbyVision(*descendingOotf, target(1.0f));
+    policy.shouldMapDolbyVision(*descendingOotf, true);
     LibplaceboColorPolicyDecision const descendingDecision =
         policy.resolve(*descendingOotf, descendingMapped, target(1.0f));
-    QCOMPARE(descendingDecision.provenance, LibplaceboSourceMetadataProvenance::Hdr10PlusScene);
-    QVERIFY(descendingDecision.qualification.contains(QStringLiteral("unavailable")));
+    QCOMPARE(descendingDecision.provenance, LibplaceboSourceMetadataProvenance::Hdr10PlusOotf);
+    QVERIFY(descendingDecision.qualification.isEmpty());
 
     std::shared_ptr<DecodedVideoFrame const> const malformedScene =
         makeFrame(24, 1, AVCOL_TRC_SMPTE2084, std::nullopt, [](AVFrame& source) {
@@ -492,7 +492,7 @@ void LibplaceboColorPolicyTest::usesOnlyPinnedRepresentableHdr10PlusOotfs() {
     pl_frame malformedSceneMapped = pqMappedFrame();
     addMappedHdr10Plus(malformedSceneMapped);
     malformedSceneMapped.color.hdr.scene_avg = 700.0f;
-    policy.shouldMapDolbyVision(*malformedScene, target(1.0f));
+    policy.shouldMapDolbyVision(*malformedScene, true);
     LibplaceboColorPolicyDecision const malformedSceneDecision =
         policy.resolve(*malformedScene, malformedSceneMapped, target(1.0f));
     QCOMPARE(malformedSceneDecision.provenance, LibplaceboSourceMetadataProvenance::MaxCll);
@@ -508,7 +508,7 @@ void LibplaceboColorPolicyTest::keepsDolbyMetadataWithinTheMappedRepresentation(
             addContentLight(frame, 4000, 1000);
         });
     QVERIFY(source);
-    QVERIFY(policy.shouldMapDolbyVision(*source, target(1.0f)));
+    QVERIFY(policy.shouldMapDolbyVision(*source, true));
 
     struct pl_dovi_metadata dovi{};
     pl_frame mapped = pqMappedFrame(0.001f, 1200.0f);
@@ -575,21 +575,52 @@ void LibplaceboColorPolicyTest::keepsDualFormatRepresentationStable() {
     std::shared_ptr<DecodedVideoFrame const> const laterWithoutDynamicMetadata = dualFrame(40, 2, true, false);
     QVERIFY(first);
     QVERIFY(laterWithoutDynamicMetadata);
-    QCOMPARE(policy.shouldMapDolbyVision(*first, target(1.0f)), false);
-    QCOMPARE(policy.shouldMapDolbyVision(*laterWithoutDynamicMetadata, target(1.0f)), false);
-    QCOMPARE(policy.shouldMapDolbyVision(*laterWithoutDynamicMetadata, target(4.0f)), true);
-    QCOMPARE(policy.shouldMapDolbyVision(*laterWithoutDynamicMetadata, target(1.0f)), false);
+    QCOMPARE(policy.shouldMapDolbyVision(*first, true), false);
+    QCOMPARE(policy.shouldMapDolbyVision(*laterWithoutDynamicMetadata, true), false);
+    QCOMPARE(policy.shouldMapDolbyVision(*first, false), true);
+    QCOMPARE(policy.shouldMapDolbyVision(*first, true), false);
+
+    auto const zeroAverage = makeFrame(46, 1, AVCOL_TRC_SMPTE2084, true, [](AVFrame& frame) {
+        addDolbyVision(frame);
+        addHdr10Plus(frame, 1, true, 2);
+        auto* metadata =
+            reinterpret_cast<AVDynamicHDRPlus*>(av_frame_get_side_data(&frame, AV_FRAME_DATA_DYNAMIC_HDR_PLUS)->data);
+        metadata->params[0].average_maxrgb = {0, 100000};
+    });
+    QVERIFY(zeroAverage);
+    QVERIFY(zeroAverage->hasHdr10PlusMetadata());
+    QVERIFY(!policy.shouldMapDolbyVision(*zeroAverage, true));
+    QVERIFY(policy.shouldMapDolbyVision(*zeroAverage, false));
+    pl_frame zeroAverageMapped = pqMappedFrame();
+    addMappedHdr10Plus(zeroAverageMapped, 2);
+    zeroAverageMapped.color.hdr.scene_avg = 0.0f;
+    for (float headroom : {1.0f, 2.0f}) {
+        auto const decision = policy.resolve(*zeroAverage, zeroAverageMapped, target(headroom));
+        QCOMPARE(decision.toneMapping, LibplaceboToneMappingFunction::St2094_40);
+        QCOMPARE(decision.metadata, PL_HDR_METADATA_HDR10PLUS);
+        QVERIFY(!decision.effectiveSourceMaximumNits);
+        QVERIFY(!decision.selectedSourceAverageNits);
+    }
+    auto const invalidWindows = makeFrame(47, 1, AVCOL_TRC_SMPTE2084, true, [](AVFrame& frame) {
+        addDolbyVision(frame);
+        addHdr10Plus(frame, 2, true, 2);
+    });
+    QVERIFY(invalidWindows);
+    QVERIFY(!invalidWindows->hasHdr10PlusMetadata());
+    QVERIFY(policy.shouldMapDolbyVision(*invalidWindows, true));
 
     std::shared_ptr<DecodedVideoFrame const> const unknown = dualFrame(41, 1, std::nullopt, true);
     QVERIFY(unknown);
-    QCOMPARE(policy.shouldMapDolbyVision(*unknown, target(1.0f)), true);
+    auto const incompatible = dualFrame(41, 2, false, true);
+    QVERIFY(policy.shouldMapDolbyVision(*incompatible, true));
+    QCOMPARE(policy.shouldMapDolbyVision(*unknown, true), true);
 
     std::shared_ptr<DecodedVideoFrame const> const lateMetadata = dualFrame(42, 1, true, false);
     std::shared_ptr<DecodedVideoFrame const> const laterOotf = dualFrame(42, 2, true, true);
     QVERIFY(lateMetadata);
     QVERIFY(laterOotf);
-    QCOMPARE(policy.shouldMapDolbyVision(*lateMetadata, target(1.0f)), true);
-    QCOMPARE(policy.shouldMapDolbyVision(*laterOotf, target(1.0f)), true);
+    QCOMPARE(policy.shouldMapDolbyVision(*lateMetadata, true), true);
+    QCOMPARE(policy.shouldMapDolbyVision(*laterOotf, true), false);
 
     std::shared_ptr<DecodedVideoFrame const> const sceneOnly =
         makeFrame(43, 1, AVCOL_TRC_SMPTE2084, true, [](AVFrame& frame) {
@@ -597,7 +628,7 @@ void LibplaceboColorPolicyTest::keepsDualFormatRepresentationStable() {
             addHdr10Plus(frame, 1, false, 0);
         });
     QVERIFY(sceneOnly);
-    QCOMPARE(policy.shouldMapDolbyVision(*sceneOnly, target(1.0f)), true);
+    QCOMPARE(policy.shouldMapDolbyVision(*sceneOnly, true), false);
 
     std::shared_ptr<DecodedVideoFrame const> const descendingRawOotf =
         makeFrame(45, 1, AVCOL_TRC_SMPTE2084, true, [](AVFrame& frame) {
@@ -610,14 +641,14 @@ void LibplaceboColorPolicyTest::keepsDualFormatRepresentationStable() {
             metadata->params[0].bezier_curve_anchors[1] = {3, 5};
         });
     QVERIFY(descendingRawOotf);
-    QCOMPARE(policy.shouldMapDolbyVision(*descendingRawOotf, target(1.0f)), true);
+    QCOMPARE(policy.shouldMapDolbyVision(*descendingRawOotf, true), false);
 
     std::shared_ptr<DecodedVideoFrame const> const hdrFirst = dualFrame(44, 1, true, true);
     std::shared_ptr<DecodedVideoFrame const> const sdrLater = dualFrame(44, 2, true, false);
     QVERIFY(hdrFirst);
     QVERIFY(sdrLater);
-    QCOMPARE(policy.shouldMapDolbyVision(*hdrFirst, target(4.0f)), true);
-    QCOMPARE(policy.shouldMapDolbyVision(*sdrLater, target(1.0f)), false);
+    QCOMPARE(policy.shouldMapDolbyVision(*hdrFirst, true), false);
+    QCOMPARE(policy.shouldMapDolbyVision(*sdrLater, true), false);
 }
 
 void LibplaceboColorPolicyTest::bt2446aMatchesTheIndependentReferenceEetf() {

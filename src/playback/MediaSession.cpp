@@ -176,6 +176,9 @@ QString MediaSession::selectedVideoTrackSummary() const {
 
 QString MediaSession::videoDynamicRange() const {
     std::shared_ptr<DecodedVideoFrame const> const frame = m_videoSource.currentFrame();
+    if (frame && frame->dynamicRange() == VideoDynamicRange::DolbyVision && frame->hasHdr10PlusMetadata()) {
+        return tr("Dolby Vision + HDR10+");
+    }
     return dynamicRangeName(frame ? frame->dynamicRange() : VideoDynamicRange::Unknown);
 }
 
@@ -1677,7 +1680,8 @@ bool MediaSession::updateVideoSummary(QueuedVideoFrame const& frame) {
     QString const summary = summaryParts.join(QStringLiteral(" · "));
     std::shared_ptr<DecodedVideoFrame const> const current = m_videoSource.currentFrame();
     bool const changed = diagnosticsChanged || summary != m_videoSummary || !current || current->signal() != signal ||
-                         current->dynamicRange() != frame.frame->dynamicRange();
+                         current->dynamicRange() != frame.frame->dynamicRange() ||
+                         current->hasHdr10PlusMetadata() != frame.frame->hasHdr10PlusMetadata();
     m_containerFormat = frame.diagnostics.containerFormat;
     m_decoderName = frame.diagnostics.decoderName;
     m_decodePath = frame.diagnostics.decodePath;

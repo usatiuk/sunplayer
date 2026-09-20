@@ -1,3 +1,4 @@
+#include <QSignalSpy>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -188,11 +189,13 @@ DecodedFrameCapture captureDecodedFrame(GraphicsDeviceDomain& graphics, std::sha
                                         float targetMinimumLuminanceNits = 0.0f,
                                         std::optional<float> compositionSdrScale = std::nullopt,
                                         QSize targetPixelSize = {}, bool targetMinimumLuminanceKnown = true,
-                                        std::optional<VideoRenderingMode> renderingMode = std::nullopt) {
+                                        std::optional<VideoRenderingMode> renderingMode = std::nullopt,
+                                        bool preferHdr10Plus = false) {
     DecodedFrameCapture result;
     GraphicsDeviceExecutionScope execution = graphics.acquireExecutionScope();
     QRhi& rhi = graphics.rhi();
     DecodedVideoSource source(std::move(frame), VideoTargetReadback::Enabled);
+    source.setPreferHdr10Plus(preferHdr10Plus);
     LibplaceboDecodedVideoProducer producer(graphics, source, VideoTargetReadback::Enabled);
     if (!targetPixelSize.isValid()) {
         targetPixelSize = source.currentFrame()->geometry().visibleSize;
@@ -364,7 +367,8 @@ class FfmpegFirstFrameTest final : public QObject {
     void hdrInputAcceptance();
     void nominalSdrTargetPreservesWcg();
     void unknownSdrBlackPreservesPqNearBlack();
-    void dualFormatTargetChangeRemapsPausedFrame();
+    void dualFormatPreferenceRemapsPausedFrame_data();
+    void dualFormatPreferenceRemapsPausedFrame();
     void realDemuxDecodeImportAndComposition();
     void compressedYuvMetadataAndRendering();
     void continuousDecodeDrainsEveryFrame();
@@ -643,10 +647,8 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
     QCOMPARE(capture.readback.pixelSize, QSize(256, 144));
     QCOMPARE(capture.input.path, VideoFrameImportPath::SoftwareUpload);
     if (kind == HdrFixtureKind::Hdr10Plus) {
-        QVERIFY(capture.producer.colorPolicy.contains(QStringLiteral("Spline tone map")));
-        QVERIFY(capture.producer.colorPolicy.contains(QStringLiteral("HDR10+ scene maximum")));
-        QVERIFY(capture.producer.colorPolicy.contains(
-            QStringLiteral("source OOTF not applied on reference-white-adaptive HDR target")));
+        QVERIFY(capture.producer.colorPolicy.contains(QStringLiteral("ST 2094-40 EETF")));
+        QVERIFY(capture.producer.colorPolicy.contains(QStringLiteral("HDR10+ source OOTF")));
     } else if (kind == HdrFixtureKind::Hlg) {
         QCOMPARE(capture.producer.colorPolicy, QStringLiteral("Spline tone map · perceptual gamut map · "
                                                               "inverse mapping off · peak detection off · dither off"));
@@ -690,6 +692,44 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
                 }
             }
             previous = std::move(capture);
+        }
+    }
+
+    if (kind == HdrFixtureKind::StaticPq || kind == HdrFixtureKind::Hdr10Plus) {
+        constexpr float firstReferenceWhiteNits = 160.0f;
+        constexpr float secondReferenceWhiteNits = 240.0f;
+#ifdef Q_OS_WIN
+        constexpr float firstCompositionScale = firstReferenceWhiteNits / 80.0f;
+        constexpr float secondCompositionScale = secondReferenceWhiteNits / 80.0f;
+        constexpr float expectedCompositionRatio = secondReferenceWhiteNits / firstReferenceWhiteNits;
+#else
+        constexpr float firstCompositionScale = 1.0f;
+        constexpr float secondCompositionScale = 1.0f;
+        constexpr float expectedCompositionRatio = 1.0f;
+#endif
+        DecodedFrameCapture const firstWhiteCapture =
+            captureDecodedFrame(*graphics, frames.front(), firstReferenceWhiteNits, targetPeakHeadroom, std::nullopt,
+                                0.0f, firstCompositionScale);
+        DecodedFrameCapture const secondWhiteCapture =
+            captureDecodedFrame(*graphics, frames.front(), secondReferenceWhiteNits, targetPeakHeadroom, std::nullopt,
+                                0.0f, secondCompositionScale);
+        QVERIFY2(firstWhiteCapture.isSuccess(), qPrintable(firstWhiteCapture.error));
+        QVERIFY2(secondWhiteCapture.isSuccess(), qPrintable(secondWhiteCapture.error));
+        QVERIFY(!firstWhiteCapture.compositionReadback.data.isEmpty());
+        QVERIFY(!secondWhiteCapture.compositionReadback.data.isEmpty());
+        std::array<FloatPixel, 4> const firstWhiteSurface = neutralPatchPixels(firstWhiteCapture.readback);
+        std::array<FloatPixel, 4> const secondWhiteSurface = neutralPatchPixels(secondWhiteCapture.readback);
+        std::array<FloatPixel, 4> const firstWhiteComposition =
+            neutralPatchPixels(firstWhiteCapture.compositionReadback);
+        std::array<FloatPixel, 4> const secondWhiteComposition =
+            neutralPatchPixels(secondWhiteCapture.compositionReadback);
+        for (std::size_t index = 0; index < firstWhiteSurface.size(); ++index) {
+            compareNear(secondWhiteSurface[index].red, firstWhiteSurface[index].red, 0.01f);
+            compareNear(firstWhiteComposition[index].red, firstWhiteSurface[index].red * firstCompositionScale, 0.04f);
+            compareNear(secondWhiteComposition[index].red, secondWhiteSurface[index].red * secondCompositionScale,
+                        0.04f);
+            compareNear(secondWhiteComposition[index].red, firstWhiteComposition[index].red * expectedCompositionRatio,
+                        0.04f);
         }
     }
 
@@ -751,42 +791,6 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
             compareNear(metadataLessHdrPatches[index].red, patches[index].red, 0.01f);
         }
 
-        constexpr float firstReferenceWhiteNits = 160.0f;
-        constexpr float secondReferenceWhiteNits = 240.0f;
-#ifdef Q_OS_WIN
-        constexpr float firstCompositionScale = firstReferenceWhiteNits / 80.0f;
-        constexpr float secondCompositionScale = secondReferenceWhiteNits / 80.0f;
-        constexpr float expectedCompositionRatio = secondReferenceWhiteNits / firstReferenceWhiteNits;
-#else
-        constexpr float firstCompositionScale = 1.0f;
-        constexpr float secondCompositionScale = 1.0f;
-        constexpr float expectedCompositionRatio = 1.0f;
-#endif
-        DecodedFrameCapture const firstWhiteCapture =
-            captureDecodedFrame(*graphics, frames.front(), firstReferenceWhiteNits, targetPeakHeadroom, std::nullopt,
-                                0.0f, firstCompositionScale);
-        DecodedFrameCapture const secondWhiteCapture =
-            captureDecodedFrame(*graphics, frames.front(), secondReferenceWhiteNits, targetPeakHeadroom, std::nullopt,
-                                0.0f, secondCompositionScale);
-        QVERIFY2(firstWhiteCapture.isSuccess(), qPrintable(firstWhiteCapture.error));
-        QVERIFY2(secondWhiteCapture.isSuccess(), qPrintable(secondWhiteCapture.error));
-        QVERIFY(!firstWhiteCapture.compositionReadback.data.isEmpty());
-        QVERIFY(!secondWhiteCapture.compositionReadback.data.isEmpty());
-        std::array<FloatPixel, 4> const firstWhiteSurface = neutralPatchPixels(firstWhiteCapture.readback);
-        std::array<FloatPixel, 4> const secondWhiteSurface = neutralPatchPixels(secondWhiteCapture.readback);
-        std::array<FloatPixel, 4> const firstWhiteComposition =
-            neutralPatchPixels(firstWhiteCapture.compositionReadback);
-        std::array<FloatPixel, 4> const secondWhiteComposition =
-            neutralPatchPixels(secondWhiteCapture.compositionReadback);
-        for (std::size_t index = 0; index < firstWhiteSurface.size(); ++index) {
-            compareNear(secondWhiteSurface[index].red, firstWhiteSurface[index].red, 0.01f);
-            compareNear(firstWhiteComposition[index].red, firstWhiteSurface[index].red * firstCompositionScale, 0.04f);
-            compareNear(secondWhiteComposition[index].red, secondWhiteSurface[index].red * secondCompositionScale,
-                        0.04f);
-            compareNear(secondWhiteComposition[index].red, firstWhiteComposition[index].red * expectedCompositionRatio,
-                        0.04f);
-        }
-
     } else if (kind == HdrFixtureKind::Hlg) {
         QCOMPARE(sdrCapture.producer.colorPolicy,
                  QStringLiteral("Spline tone map · perceptual gamut map · "
@@ -845,8 +849,8 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
         DecodedFrameCapture const secondCapture =
             captureDecodedFrame(*graphics, frames.front(), secondReferenceWhiteNits, secondTargetHeadroom);
         QVERIFY2(secondCapture.isSuccess(), qPrintable(secondCapture.error));
-        QVERIFY(secondCapture.producer.colorPolicy.contains(QStringLiteral("Spline tone map")));
-        QVERIFY(secondCapture.producer.colorPolicy.contains(QStringLiteral("HDR10+ scene maximum")));
+        QVERIFY(secondCapture.producer.colorPolicy.contains(QStringLiteral("ST 2094-40 EETF")));
+        QVERIFY(secondCapture.producer.colorPolicy.contains(QStringLiteral("HDR10+ source OOTF")));
         std::array<FloatPixel, 4> const secondPatches = neutralPatchPixels(secondCapture.readback);
         verifyNeutralPatchProperties(secondPatches, secondTargetHeadroom);
         for (std::size_t index = 0; index < patches.size(); ++index) {
@@ -1041,10 +1045,17 @@ void FfmpegFirstFrameTest::unknownSdrBlackPreservesPqNearBlack() {
 #endif
 }
 
-void FfmpegFirstFrameTest::dualFormatTargetChangeRemapsPausedFrame() {
+void FfmpegFirstFrameTest::dualFormatPreferenceRemapsPausedFrame_data() {
+    QTest::addColumn<bool>("zeroAverage");
+    QTest::newRow("authored-curve") << false;
+    QTest::newRow("zero-average") << true;
+}
+
+void FfmpegFirstFrameTest::dualFormatPreferenceRemapsPausedFrame() {
 #if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
     QSKIP("This test requires a D3D11 or Metal graphics domain");
 #else
+    QFETCH(bool, zeroAverage);
     QString const fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/dovi-profile81-hevc.hevc");
     FfmpegFirstFrameResult const decoded = decodeFirstVideoFrame(fixture, {
                                                                               .playbackGeneration = 46,
@@ -1067,7 +1078,7 @@ void FfmpegFirstFrameTest::dualFormatTargetChangeRemapsPausedFrame() {
     hdr10Plus->params[0].maxscl[0] = {32, 100};
     hdr10Plus->params[0].maxscl[1] = {30, 100};
     hdr10Plus->params[0].maxscl[2] = {28, 100};
-    hdr10Plus->params[0].average_maxrgb = {1, 10};
+    hdr10Plus->params[0].average_maxrgb = {zeroAverage ? 0 : 1, 10};
     hdr10Plus->params[0].tone_mapping_flag = 1;
     hdr10Plus->params[0].knee_point_x = {1, 2};
     hdr10Plus->params[0].knee_point_y = {1, 2};
@@ -1084,8 +1095,19 @@ void FfmpegFirstFrameTest::dualFormatTargetChangeRemapsPausedFrame() {
 
     std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
     QVERIFY2(graphics, "Could not create the graphics domain");
+    if (zeroAverage) {
+        for (float headroom : {1.0f, 6.0f}) {
+            auto const captured = captureDecodedFrame(*graphics, dualFrame, 203.0f, headroom, std::nullopt, 0.0f,
+                                                      std::nullopt, {}, true, std::nullopt, true);
+            QVERIFY2(captured.isSuccess(), qPrintable(captured.error));
+            QVERIFY(captured.producer.colorPolicy.contains(QStringLiteral("ST 2094-40 EETF")));
+            verifyNeutralPatchProperties(neutralPatchPixels(captured.readback), headroom, 0.12f);
+        }
+    }
     GraphicsDeviceExecutionScope execution = graphics->acquireExecutionScope();
     DecodedVideoSource source(dualFrame, VideoTargetReadback::Disabled);
+    QVERIFY(!source.preferHdr10Plus());
+    source.setPreferHdr10Plus(true);
     LibplaceboDecodedVideoProducer producer(*graphics, source, VideoTargetReadback::Disabled);
     QRhi& rhi = graphics->rhi();
 
@@ -1123,18 +1145,39 @@ void FfmpegFirstFrameTest::dualFormatTargetChangeRemapsPausedFrame() {
     QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("ST 2094-40 EETF")));
 
     QVERIFY(render(6.0f, VideoRenderingMode::AdaptiveHdr));
-    QCOMPARE(producer.inputImportCount(), 2U);
-    QVERIFY(producer.frameImportDiagnostics().metadataPath.contains(QStringLiteral("Dolby Vision reshape mapped")));
+    QCOMPARE(producer.inputImportCount(), 1U);
     for (float headroom : {1.1f, 1.01f, 1.001f, 1.0001f, 1.0f}) {
         QVERIFY(render(headroom, VideoRenderingMode::AdaptiveHdr));
-        QCOMPARE(producer.inputImportCount(), 2U);
-        QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("Spline tone map")));
+        QCOMPARE(producer.inputImportCount(), 1U);
+        QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("ST 2094-40 EETF")));
     }
-    QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("Spline tone map")));
 
-    QVERIFY(render(1.0f, VideoRenderingMode::SdrCompatibility));
+    auto const revision = source.contentRevision();
+    QSignalSpy updates(&source, &RenderedVideoSource::updateRequested);
+    QVERIFY(source.preferHdr10Plus());
+    source.setPreferHdr10Plus(false);
+    QVERIFY(source.contentRevision() != revision);
+    QCOMPARE(updates.count(), 1);
+    auto state = surfaceState(*graphics, source.contentRevision(), 203.0f, dualFrame->geometry().visibleSize, 1.0f);
+    state.description.renderingMode = VideoRenderingMode::AdaptiveHdr;
+    QVERIFY(producer.needsRender(state));
+    QVERIFY(render(1.0f, VideoRenderingMode::AdaptiveHdr));
+    QVERIFY(!producer.needsRender(state));
+    QCOMPARE(producer.inputImportCount(), 2U);
+    QVERIFY(producer.frameImportDiagnostics().metadataPath.contains(QStringLiteral("Dolby Vision reshape mapped")));
+    QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("Spline tone map")));
+    source.setPreferHdr10Plus(false);
+    QCOMPARE(updates.count(), 1);
+    QVERIFY(!producer.needsRender(state));
+
+    source.setPreferHdr10Plus(true);
+    QVERIFY(render(1.0f, VideoRenderingMode::AdaptiveHdr));
     QCOMPARE(producer.inputImportCount(), 3U);
     QVERIFY(producer.frameImportDiagnostics().metadataPath.contains(QStringLiteral("base-layer representation")));
+    QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("ST 2094-40 EETF")));
+    QVERIFY(render(1.0f, VideoRenderingMode::SdrCompatibility));
+    QCOMPARE(producer.inputImportCount(), 3U);
+
 #endif
 }
 

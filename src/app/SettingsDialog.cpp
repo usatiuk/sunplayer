@@ -72,6 +72,12 @@ SettingsDialog::SettingsDialog(SubtitleSettings& subtitleSettings) : m_subtitleS
     volumeLayout->addWidget(m_volumeSlider, 1);
     volumeLayout->addWidget(m_volumeSpin);
     playbackLayout->addRow(tr("Volume:"), volumeRow);
+    m_preferHdr10Plus = new QCheckBox(tr("Prefer HDR10+ over Dolby Vision"), playbackPage);
+    m_preferHdr10Plus->setObjectName(QStringLiteral("settingsPreferHdr10Plus"));
+    m_preferHdr10Plus->setToolTip(tr("When a video contains both formats, use HDR10+ instead of Dolby Vision."));
+    playbackLayout->addRow(QString(), m_preferHdr10Plus);
+    connect(m_preferHdr10Plus, &QCheckBox::toggled, this, &SettingsDialog::preferHdr10PlusEdited);
+
     m_blankOtherDisplays = new QCheckBox(tr("Blank other displays in fullscreen"), playbackPage);
     m_blankOtherDisplays->setObjectName(QStringLiteral("settingsBlankOtherDisplays"));
     playbackLayout->addRow(QString(), m_blankOtherDisplays);
@@ -309,7 +315,6 @@ SettingsDialog::SettingsDialog(SubtitleSettings& subtitleSettings) : m_subtitleS
             [this](int value) { m_subtitleSettings.setOverallOpacity(value / 100.0); });
     connect(&m_subtitleSettings, &SubtitleSettings::settingsChanged, this, &SettingsDialog::refreshSubtitles);
 
-    setPlaybackState(1.0, false, false);
     refreshSubtitles();
 }
 
@@ -317,10 +322,13 @@ void SettingsDialog::showPage(int page) {
     m_tabs->setCurrentIndex(page == SubtitlesPage ? SubtitlesPage : PlaybackPage);
 }
 
-void SettingsDialog::setPlaybackState(qreal volume, bool blankingAvailable, bool blankingEnabled) {
+void SettingsDialog::setPlaybackState(qreal volume, bool blankingAvailable, bool blankingEnabled,
+                                      bool preferHdr10Plus) {
     QSignalBlocker const sliderBlocker(m_volumeSlider);
     QSignalBlocker const spinBlocker(m_volumeSpin);
     QSignalBlocker const blankingBlocker(m_blankOtherDisplays);
+    QSignalBlocker const hdr10PlusBlocker(m_preferHdr10Plus);
+    m_preferHdr10Plus->setChecked(preferHdr10Plus);
     int const volumePercent = qRound(qBound(0.0, volume, 1.0) * 100.0);
     m_volumeSlider->setValue(volumePercent);
     m_volumeSpin->setValue(volumePercent);

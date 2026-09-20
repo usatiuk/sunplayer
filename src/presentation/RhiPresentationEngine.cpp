@@ -277,8 +277,6 @@ void RhiPresentationEngine::renderFrame() {
         if (!handleVideoOperationResult("creating the rendered-video surface", ensureResult)) {
             return;
         }
-        // Target provisioning can select a direct, copy, or fallback path.
-        updateBackendState();
     }
 
     QRhiTexture* const compositionVideoTexture = requestedSurface ? &m_videoProducer->textureForComposition() : nullptr;
@@ -477,6 +475,8 @@ void RhiPresentationEngine::renderFrame() {
 
     m_retriedFrameError = false;
     m_hasPresentedFrame = true;
+    // Rendering may change the selected metadata path even while playback is paused.
+    updateBackendState();
     if (requestedSurface) {
         emit videoFramePresented(requestedSurface->contentRevision);
     }

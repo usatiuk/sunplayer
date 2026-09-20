@@ -157,6 +157,11 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
     if (storedSettings.blankOtherDisplaysInFullscreen && otherDisplayBlankingAvailable()) {
         setBlankOtherDisplaysInFullscreen(*storedSettings.blankOtherDisplaysInFullscreen);
     }
+    if (storedSettings.preferHdr10Plus) {
+        m_mediaSession->videoSource().setPreferHdr10Plus(*storedSettings.preferHdr10Plus);
+    }
+    connect(&m_mediaSession->videoSource(), &DecodedVideoSource::preferHdr10PlusChanged, this,
+            [this] { m_applicationSettings.setPreferHdr10Plus(m_mediaSession->videoSource().preferHdr10Plus()); });
     if (storedSettings.subtitleAppearance) {
         m_subtitleSettings->restore(*storedSettings.subtitleAppearance);
     }
@@ -291,8 +296,11 @@ void PresentationWindow::showSettings(int page) {
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     auto const refreshPlayback = [this, dialog] {
         dialog->setPlaybackState(m_mediaSession->volume(), otherDisplayBlankingAvailable(),
-                                 blankOtherDisplaysInFullscreen());
+                                 blankOtherDisplaysInFullscreen(), m_mediaSession->videoSource().preferHdr10Plus());
     };
+    connect(dialog, &SettingsDialog::preferHdr10PlusEdited, &m_mediaSession->videoSource(),
+            &DecodedVideoSource::setPreferHdr10Plus);
+    connect(&m_mediaSession->videoSource(), &DecodedVideoSource::preferHdr10PlusChanged, dialog, refreshPlayback);
     connect(dialog, &SettingsDialog::volumeEdited, m_mediaSession.get(), &MediaSession::setVolume);
     connect(dialog, &SettingsDialog::blankOtherDisplaysEdited, this,
             &PresentationWindow::setBlankOtherDisplaysInFullscreen);

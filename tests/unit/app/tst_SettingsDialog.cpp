@@ -41,7 +41,15 @@ void SettingsDialogTest::selectsRequestedPageAndMirrorsPlayback() {
 
     QSignalSpy volumeEdits(&dialog, &SettingsDialog::volumeEdited);
     QSignalSpy blankingEdits(&dialog, &SettingsDialog::blankOtherDisplaysEdited);
-    dialog.setPlaybackState(0.35, true, true);
+    auto* const hdr10Plus = dialog.findChild<QCheckBox*>(QStringLiteral("settingsPreferHdr10Plus"));
+    QVERIFY(hdr10Plus);
+    QSignalSpy preferenceEdits(&dialog, &SettingsDialog::preferHdr10PlusEdited);
+    dialog.setPlaybackState(0.35, true, true, false);
+    QVERIFY(!hdr10Plus->isChecked());
+    QCOMPARE(preferenceEdits.count(), 0);
+    hdr10Plus->setChecked(true);
+    QCOMPARE(preferenceEdits.count(), 1);
+    QCOMPARE(preferenceEdits.takeFirst().at(0).toBool(), true);
     QCOMPARE(volume->value(), 35);
     QVERIFY(!blanking->isHidden());
     QVERIFY(blanking->isChecked());

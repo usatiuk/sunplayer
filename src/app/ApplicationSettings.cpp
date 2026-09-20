@@ -15,6 +15,7 @@
 namespace {
 
 constexpr auto volumeKey = "playback/volume";
+constexpr auto preferHdr10PlusKey = "playback/preferHdr10Plus";
 constexpr auto blankOtherDisplaysKey = "fullscreen/blankOtherDisplays";
 constexpr auto subtitleAppearancePrefix = "subtitles/appearance";
 constexpr auto appearanceModeKey = "subtitles/appearance/mode";
@@ -153,6 +154,13 @@ ApplicationSettings::Values ApplicationSettings::load() {
         }
     }
 
+    if (m_settings.contains(QLatin1StringView(preferHdr10PlusKey))) {
+        values.preferHdr10Plus = parseBoolean(m_settings.value(QLatin1StringView(preferHdr10PlusKey)));
+        if (!values.preferHdr10Plus) {
+            reportInvalidValue(QString::fromLatin1(preferHdr10PlusKey));
+        }
+    }
+
     bool const hasSubtitleAppearance =
         std::any_of(subtitleAppearanceKeys.cbegin(), subtitleAppearanceKeys.cend(),
                     [this](char const* key) { return m_settings.contains(QLatin1StringView(key)); });
@@ -234,6 +242,11 @@ ApplicationSettings::Values ApplicationSettings::load() {
 void ApplicationSettings::setVolume(qreal volume) {
     Q_ASSERT(std::isfinite(volume) && volume >= 0.0 && volume <= 1.0);
     m_settings.setValue(QLatin1StringView(volumeKey), volume);
+    reportStatus();
+}
+
+void ApplicationSettings::setPreferHdr10Plus(bool enabled) {
+    m_settings.setValue(QLatin1StringView(preferHdr10PlusKey), enabled);
     reportStatus();
 }
 
