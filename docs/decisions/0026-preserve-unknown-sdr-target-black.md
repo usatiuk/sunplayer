@@ -8,6 +8,9 @@
   and
   [0025: Keep normal HDR reference-white adaptive](0025-keep-normal-hdr-reference-white-adaptive.md)
 
+Current policy amendments: [ADR 0027](0027-separate-rendering-intent-from-headroom.md) separates rendering intent
+from headroom and updates PQ fallback and Wayland composition declarations.
+
 ## Context
 
 SunPlayer preserves target minimum luminance as a known flag plus a value.

@@ -568,11 +568,13 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
             PkgConfig::VAAPI
             PkgConfig::DRM
             sunplayer_linux_platform
+            libplacebo::libplacebo
     )
     target_link_libraries(sunplayer_wayland_color_management_tests
             PRIVATE
             Qt6::Test
             sunplayer_linux_platform
+            libplacebo::libplacebo
     )
 endif ()
 
@@ -1130,7 +1132,7 @@ if (WIN32 OR APPLE)
             PROPERTIES
             LABELS
                 "ffmpeg;gpu;hardware-decode;integration;${sunplayer_test_platform_label}"
-            TIMEOUT 30
+            TIMEOUT 120
     )
     if (WIN32)
         set_tests_properties(

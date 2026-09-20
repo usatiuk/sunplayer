@@ -224,15 +224,15 @@ void RhiPresentationEngine::renderFrame() {
                                        displayAspectRatio);
     }
 
+    PresentationTarget const presentationTarget = m_outputState.presentationTarget();
+    bool const diagnosticsActive = m_videoSource.route() == ActiveVideoSource::Route::Diagnostics;
+    // Manual target controls belong to HDR Lab. Player always follows the
+    // live platform target, regardless of retained diagnostic state.
+    float const requestedTargetPeak = diagnosticsActive && !m_settings.automaticTargetPeak()
+                                          ? m_settings.manualTargetHeadroom()
+                                          : presentationTarget.effectiveTargetHeadroom;
+    float const targetPeak = m_surfaceContract.constrainTargetHeadroom(requestedTargetPeak);
     if (!videoRect.isEmpty()) {
-        PresentationTarget const presentationTarget = m_outputState.presentationTarget();
-        bool const diagnosticsActive = m_videoSource.route() == ActiveVideoSource::Route::Diagnostics;
-        // Manual target controls belong to HDR Lab. Player always follows the
-        // live platform target, regardless of retained diagnostic state.
-        float const requestedTargetPeak = diagnosticsActive && !m_settings.automaticTargetPeak()
-                                              ? m_settings.manualTargetHeadroom()
-                                              : presentationTarget.effectiveTargetHeadroom;
-        float const targetPeak = m_surfaceContract.constrainTargetHeadroom(requestedTargetPeak);
         Q_ASSERT(std::isfinite(targetPeak) && targetPeak >= 1.0f);
         float const referenceWhiteNits =
             presentationTarget.sdrWhiteKnown ? presentationTarget.sdrWhiteNits : scRgbReferenceWhiteNits;
@@ -253,6 +253,12 @@ void RhiPresentationEngine::renderFrame() {
         requestedSurface->description.targetMinimumLuminanceKnown = targetMinimumLuminanceKnown;
         requestedSurface->description.targetMinimumLuminanceNits = targetMinimumLuminanceNits;
         requestedSurface->description.targetPeakHeadroom = targetPeak;
+        requestedSurface->description.renderingMode =
+            m_surfaceContract.usesAdaptiveHdrMapping(presentationTarget.hdrPresentationActive,
+                                                     m_outputState.displayHdrEnabled(),
+                                                     presentationTarget.sceneReferred)
+                ? VideoRenderingMode::AdaptiveHdr
+                : VideoRenderingMode::SdrCompatibility;
         requestedSurface->description.targetPrimariesKnown = presentationTarget.targetPrimariesKnown;
         requestedSurface->description.targetPrimaries = presentationTarget.targetPrimaries;
         requestedSurface->graphicsDeviceGeneration = m_graphicsDevice->generation();
@@ -327,6 +333,22 @@ void RhiPresentationEngine::renderFrame() {
         }
         m_boundVideoTextureRevision = compositionTextureRevision;
         m_boundSubtitleTextureRevision = subtitleTextureRevision;
+    }
+
+    if (m_surfaceController && m_surfaceContract.mode != PresentationSurfaceMode::UnmanagedSrgb) {
+        // Finish texture rebinding before a possible asynchronous wait. HDR Lab
+        // can bypass mapping, so its declaration must allow the transport peak.
+        auto const prepared = m_surfaceController->prepareFrame(
+            m_window, m_surfaceContract.mode,
+            diagnosticsActive ? PresentationSurfaceContract::pqMaximumHeadroom : targetPeak,
+            presentationTarget.targetPrimariesKnown ? presentationTarget.targetPrimaries : ColorPrimaries{});
+        if (prepared == PresentationSurfaceController::Preparation::Rejected) {
+            rejectRequiredHdrSurface("compositor rejected the composed target volume");
+            return;
+        }
+        if (prepared == PresentationSurfaceController::Preparation::Pending) {
+            return;
+        }
     }
 
     QRhi::FrameOpResult result = m_rhi->beginFrame(m_swapChain.get());
@@ -430,7 +452,7 @@ void RhiPresentationEngine::renderFrame() {
     Q_ASSERT(m_compositor);
     m_compositor->render(commandBuffer, *m_swapChain->currentFrameRenderTarget(), pixelSize, parameters);
 
-    if (m_surfaceDeclarationPending) {
+    if (m_surfaceController && m_surfaceContract.mode != PresentationSurfaceMode::UnmanagedSrgb) {
         Q_ASSERT(m_surfaceController);
         // Queue the double-buffered declaration immediately before Vulkan WSI
         // presents the matching buffer. No Qt event processing can insert an
@@ -453,7 +475,6 @@ void RhiPresentationEngine::renderFrame() {
         return;
     }
 
-    m_surfaceDeclarationPending = false;
     m_retriedFrameError = false;
     m_hasPresentedFrame = true;
     if (requestedSurface) {
@@ -997,7 +1018,6 @@ void RhiPresentationEngine::queueSurfaceTransition() {
             PresentationSurfaceMode const latestMode = m_surfaceController->desiredMode(m_graphicsDevice->generation());
             if (latestMode != m_surfaceContract.mode) {
                 m_surfaceContract.mode = latestMode;
-                m_surfaceDeclarationPending = true;
             }
 
             m_surfaceTransitionPending = false;

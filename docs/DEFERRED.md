@@ -83,13 +83,13 @@ presentation. Exact macOS profile chromaticities, Wayland compositor/display
 behavior, and physical gamut verification remain deferred, so the project does
 not yet make a measured cross-platform wide-gamut-output claim.
 
-Managed Wayland's stable outgoing BT.2020/PQ description also still inherits a
-BT.2020/10,000-nit target volume after libplacebo maps into the preferred target
-primaries and relative headroom. Aligning that declaration requires tracking
-the optional mastering-display feature, replacing the image description after
-asynchronous preferred-description changes, handling compositor rejection, and
-validating the result on native compositors. Preferred target propagation into
-libplacebo is complete; end-to-end native Wayland target-volume behavior is not.
+Managed Wayland now declares the post-mapping composition volume using the
+mastering feature and one asynchronous description, with capability/rejection
+fallback. Native compositor acceptance, paused updates, resize during a pending
+description, multiple-output behavior, and physical double-mapping assessment
+remain unvalidated. Different-white-point targets intentionally retain the full transport volume;
+tighter unions are deferred until demonstrated necessary.
+See ADR 0027 and the September 2026 adaptation plan.
 
 Track under graphics milestone 5 and the active testing plan.
 

@@ -157,6 +157,8 @@ RenderedVideoSurfaceState surfaceState(GraphicsDeviceDomain& graphics, std::uint
                 .targetMinimumLuminanceKnown = targetMinimumLuminanceKnown,
                 .targetMinimumLuminanceNits = targetMinimumLuminanceNits,
                 .targetPeakHeadroom = targetPeakHeadroom,
+                .renderingMode =
+                    targetPeakHeadroom > 1.0f ? VideoRenderingMode::AdaptiveHdr : VideoRenderingMode::SdrCompatibility,
             },
         .graphicsDeviceGeneration = graphics.generation(),
         .contentRevision = contentRevision,
@@ -185,7 +187,8 @@ DecodedFrameCapture captureDecodedFrame(GraphicsDeviceDomain& graphics, std::sha
                                         std::optional<ColorPrimaries> targetPrimaries = std::nullopt,
                                         float targetMinimumLuminanceNits = 0.0f,
                                         std::optional<float> compositionSdrScale = std::nullopt,
-                                        QSize targetPixelSize = {}, bool targetMinimumLuminanceKnown = true) {
+                                        QSize targetPixelSize = {}, bool targetMinimumLuminanceKnown = true,
+                                        std::optional<VideoRenderingMode> renderingMode = std::nullopt) {
     DecodedFrameCapture result;
     GraphicsDeviceExecutionScope execution = graphics.acquireExecutionScope();
     QRhi& rhi = graphics.rhi();
@@ -194,9 +197,12 @@ DecodedFrameCapture captureDecodedFrame(GraphicsDeviceDomain& graphics, std::sha
     if (!targetPixelSize.isValid()) {
         targetPixelSize = source.currentFrame()->geometry().visibleSize;
     }
-    RenderedVideoSurfaceState const state =
+    RenderedVideoSurfaceState state =
         surfaceState(graphics, source.contentRevision(), referenceWhiteNits, targetPixelSize, targetPeakHeadroom,
                      targetPrimaries, targetMinimumLuminanceNits, targetMinimumLuminanceKnown);
+    if (renderingMode) {
+        state.description.renderingMode = *renderingMode;
+    }
     if (producer.ensureSurface(state) != VideoOperationResult::Ready) {
         result.error = producer.diagnostics().target.fallbackReason;
         return result;
@@ -659,6 +665,34 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
         return av_frame_get_side_data(&frame.ffmpegFrame(), type);
     };
 
+    for (bool knownBlack : {false, true}) {
+        std::optional<DecodedFrameCapture> previous;
+        for (float headroom : {1.0f, 1.0001f, 1.001f, 1.01f, 1.1f}) {
+            auto capture = captureDecodedFrame(*graphics, frames.front(), 203.0f, headroom, std::nullopt, 0.0f, 1.0f,
+                                               {}, knownBlack, VideoRenderingMode::AdaptiveHdr);
+            QVERIFY2(capture.isSuccess(), qPrintable(capture.error));
+            if (previous) {
+                QCOMPARE(capture.producer.colorPolicy, previous->producer.colorPolicy);
+                QCOMPARE(capture.input.metadataPath, previous->input.metadataPath);
+                float const tolerance = headroom <= 1.001f ? 0.006f : (headroom <= 1.01f ? 0.025f : 0.18f);
+                for (int y = 4; y < capture.readback.pixelSize.height() - 4; y += 8) {
+                    for (int x = 4; x < capture.readback.pixelSize.width() - 4; x += 8) {
+                        auto const before = pixel(previous->readback, x, y);
+                        auto const after = pixel(capture.readback, x, y);
+                        compareNear(after.red, before.red, tolerance);
+                        compareNear(after.green, before.green, tolerance);
+                        compareNear(after.blue, before.blue, tolerance);
+                        auto const composed = pixel(capture.compositionReadback, x, y);
+                        compareNear(composed.red, after.red, 0.003f);
+                        compareNear(composed.green, after.green, 0.003f);
+                        compareNear(composed.blue, after.blue, 0.003f);
+                    }
+                }
+            }
+            previous = std::move(capture);
+        }
+    }
+
     if (kind == HdrFixtureKind::StaticPq) {
         QVERIFY(sdrCapture.producer.colorPolicy.contains(QStringLiteral("BT.2446A EETF")));
         QVERIFY(sdrCapture.producer.colorPolicy.contains(QStringLiteral("MaxCLL 1000 nits")));
@@ -695,15 +729,16 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
 
         DecodedFrameCapture const metadataLessCapture = captureDecodedFrame(*graphics, metadataLessFrame, 203.0f, 1.0f);
         QVERIFY2(metadataLessCapture.isSuccess(), qPrintable(metadataLessCapture.error));
-        QVERIFY(metadataLessCapture.producer.colorPolicy.contains(QStringLiteral("Spline tone map")));
+        QVERIFY(metadataLessCapture.producer.colorPolicy.contains(QStringLiteral("BT.2446A")));
         QVERIFY(metadataLessCapture.producer.colorPolicy.contains(
             QStringLiteral("explicit PQ compatibility fallback 1000 nits")));
         std::array<FloatPixel, 4> const metadataLessPatches = neutralPatchPixels(metadataLessCapture.readback);
         verifyNeutralPatchProperties(metadataLessPatches, 1.0f);
-        // The fixture's second neutral patch is 203 nits. Pinned spline maps
-        // 1000 -> 100 nits to about 52.16 nits here; normalization therefore
-        // stores about 0.522 in the white-relative surface.
-        compareNear(metadataLessPatches[1].red, 0.522f, 0.02f);
+        // Equivalent 1000-nit source assumptions use the same SDR mapper.
+        auto const taggedSdrPatches = neutralPatchPixels(sdrCapture.readback);
+        for (std::size_t index = 0; index < metadataLessPatches.size(); ++index) {
+            compareNear(metadataLessPatches[index].red, taggedSdrPatches[index].red, 0.015f);
+        }
 
         DecodedFrameCapture const metadataLessHdrCapture =
             captureDecodedFrame(*graphics, metadataLessFrame, referenceWhiteNits, targetPeakHeadroom);
@@ -1054,9 +1089,10 @@ void FfmpegFirstFrameTest::dualFormatTargetChangeRemapsPausedFrame() {
     LibplaceboDecodedVideoProducer producer(*graphics, source, VideoTargetReadback::Disabled);
     QRhi& rhi = graphics->rhi();
 
-    auto const render = [&](float headroom) {
-        RenderedVideoSurfaceState const state =
+    auto const render = [&](float headroom, VideoRenderingMode mode) {
+        RenderedVideoSurfaceState state =
             surfaceState(*graphics, source.contentRevision(), 203.0f, dualFrame->geometry().visibleSize, headroom);
+        state.description.renderingMode = mode;
         if (producer.ensureSurface(state) != VideoOperationResult::Ready) {
             return false;
         }
@@ -1081,17 +1117,22 @@ void FfmpegFirstFrameTest::dualFormatTargetChangeRemapsPausedFrame() {
         return true;
     };
 
-    QVERIFY(render(1.0f));
+    QVERIFY(render(1.0f, VideoRenderingMode::SdrCompatibility));
     QCOMPARE(producer.inputImportCount(), 1U);
     QVERIFY(producer.frameImportDiagnostics().metadataPath.contains(QStringLiteral("base-layer representation")));
     QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("ST 2094-40 EETF")));
 
-    QVERIFY(render(6.0f));
+    QVERIFY(render(6.0f, VideoRenderingMode::AdaptiveHdr));
     QCOMPARE(producer.inputImportCount(), 2U);
     QVERIFY(producer.frameImportDiagnostics().metadataPath.contains(QStringLiteral("Dolby Vision reshape mapped")));
+    for (float headroom : {1.1f, 1.01f, 1.001f, 1.0001f, 1.0f}) {
+        QVERIFY(render(headroom, VideoRenderingMode::AdaptiveHdr));
+        QCOMPARE(producer.inputImportCount(), 2U);
+        QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("Spline tone map")));
+    }
     QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("Spline tone map")));
 
-    QVERIFY(render(1.0f));
+    QVERIFY(render(1.0f, VideoRenderingMode::SdrCompatibility));
     QCOMPARE(producer.inputImportCount(), 3U);
     QVERIFY(producer.frameImportDiagnostics().metadataPath.contains(QStringLiteral("base-layer representation")));
 #endif

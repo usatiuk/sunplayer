@@ -21,10 +21,20 @@ struct WaylandColorManagementCapabilities {
     bool namedBt2020Primaries = false;
     bool gamma22Transfer = false;
     bool pqTransfer = false;
+    bool masteringDisplayPrimaries = false;
 
     bool supportsManagedSdr() const;
     bool supportsManagedHdr10() const;
 };
+
+// Outgoing PQ coordinates, covering video, sRGB overlays, and black background.
+struct WaylandCompositionVolume {
+    bool operator==(WaylandCompositionVolume const&) const = default;
+    ColorPrimaries primaries;
+    std::uint32_t maximumNits = 203;
+};
+
+WaylandCompositionVolume waylandCompositionVolume(float headroom, ColorPrimaries const& videoPrimaries);
 
 using WaylandChromaticity = ColorChromaticity;
 using WaylandColorPrimaries = ColorPrimaries;

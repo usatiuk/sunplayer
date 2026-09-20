@@ -8,6 +8,9 @@
 * Amended by:
   [0025: Keep normal HDR reference-white adaptive](0025-keep-normal-hdr-reference-white-adaptive.md)
 
+Current policy amendments: [ADR 0027](0027-separate-rendering-intent-from-headroom.md) separates rendering intent
+from headroom and updates PQ fallback and Wayland composition declarations.
+
 ## Context
 
 The retained FFmpeg frame and libplacebo remain the source-color and rendering

@@ -42,6 +42,7 @@ RenderedVideoSurfaceDescription target(float headroom) {
         .targetMinimumLuminanceKnown = true,
         .targetMinimumLuminanceNits = 0.0f,
         .targetPeakHeadroom = headroom,
+        .renderingMode = headroom > 1.0f ? VideoRenderingMode::AdaptiveHdr : VideoRenderingMode::SdrCompatibility,
     };
 }
 
@@ -181,6 +182,8 @@ class LibplaceboColorPolicyTest final : public QObject {
   private slots:
     void calculatesTargetLuminanceFromSourceAndHeadroom();
     void translatesTargetMinimumLuminance();
+    void adaptiveEndpointKeepsItsPolicy();
+    void comparesOrdinarySdrCurves();
     void preservesRelativeSourcesAndBoundsMissingPq();
     void resolvesBaseMetadataInContentSpecificOrder();
     void usesOnlyPinnedRepresentableHdr10PlusOotfs();
@@ -194,28 +197,71 @@ void LibplaceboColorPolicyTest::calculatesTargetLuminanceFromSourceAndHeadroom()
     pl_frame source{};
     source.color.transfer = PL_COLOR_TRC_PQ;
 
-    LibplaceboTargetLuminance const nominalPq = calculateLibplaceboTargetLuminance(source, 1.0f);
+    LibplaceboTargetLuminance const nominalPq = calculateLibplaceboTargetLuminance(source, target(1.0f));
     QCOMPARE(nominalPq.coordinateWhiteNits, 100.0f);
     QCOMPARE(nominalPq.maximumNits, 100.0f);
     QCOMPARE(nominalPq.outputNormalizationScale, PL_COLOR_SDR_WHITE / 100.0f);
 
-    LibplaceboTargetLuminance const hdrPq = calculateLibplaceboTargetLuminance(source, 4.0f);
+    LibplaceboTargetLuminance const hdrPq = calculateLibplaceboTargetLuminance(source, target(4.0f));
     QCOMPARE(hdrPq.coordinateWhiteNits, PL_COLOR_SDR_WHITE);
     QCOMPARE(hdrPq.maximumNits, PL_COLOR_SDR_WHITE * 4.0f);
     QCOMPARE(hdrPq.outputNormalizationScale, 1.0f);
 
     source.color.transfer = PL_COLOR_TRC_LINEAR;
     source.repr.sys = PL_COLOR_SYSTEM_DOLBYVISION;
-    LibplaceboTargetLuminance const nominalDolby = calculateLibplaceboTargetLuminance(source, 1.0f);
+    LibplaceboTargetLuminance const nominalDolby = calculateLibplaceboTargetLuminance(source, target(1.0f));
     QCOMPARE(nominalDolby.coordinateWhiteNits, nominalPq.coordinateWhiteNits);
     QCOMPARE(nominalDolby.maximumNits, nominalPq.maximumNits);
     QCOMPARE(nominalDolby.outputNormalizationScale, nominalPq.outputNormalizationScale);
 
     source.repr = pl_color_repr_rgb;
-    LibplaceboTargetLuminance const relative = calculateLibplaceboTargetLuminance(source, 1.0f);
+    LibplaceboTargetLuminance const relative = calculateLibplaceboTargetLuminance(source, target(1.0f));
     QCOMPARE(relative.coordinateWhiteNits, PL_COLOR_SDR_WHITE);
     QCOMPARE(relative.maximumNits, PL_COLOR_SDR_WHITE);
     QCOMPARE(relative.outputNormalizationScale, 1.0f);
+}
+
+void LibplaceboColorPolicyTest::adaptiveEndpointKeepsItsPolicy() {
+    auto const frame = makeFrame(90, 1, AVCOL_TRC_SMPTE2084);
+    QVERIFY(frame);
+    LibplaceboColorPolicy policy;
+    for (float headroom : {1.0f, 1.0001f, 1.001f, 1.01f, 1.1f}) {
+        auto description = target(headroom);
+        description.renderingMode = VideoRenderingMode::AdaptiveHdr;
+        description.targetMinimumLuminanceKnown = false;
+        auto const mapped = pqMappedFrame();
+        auto const luminance = calculateLibplaceboTargetLuminance(mapped, description);
+        QCOMPARE(luminance.maximumNits, 203.0f * headroom);
+        QCOMPARE(luminance.outputNormalizationScale, 1.0f);
+        QCOMPARE(calculateLibplaceboTargetMinimumNits(description, luminance.maximumNits), PL_COLOR_HDR_BLACK);
+        QCOMPARE(policy.resolve(*frame, mapped, description).toneMapping, LibplaceboToneMappingFunction::Spline);
+    }
+}
+
+void LibplaceboColorPolicyTest::comparesOrdinarySdrCurves() {
+    // Hold every source/target assumption fixed. This characterizes the look
+    // difference; brightness alone is not an oracle for choosing a mapper.
+    for (auto const* function : {&pl_tone_map_bt2446a, &pl_tone_map_spline}) {
+        pl_tone_map_params params{};
+        params.function = function;
+        params.constants = pl_color_map_default_params.tone_constants;
+        params.input_scaling = PL_HDR_NITS;
+        params.output_scaling = PL_HDR_NITS;
+        params.input_min = PL_COLOR_HDR_BLACK;
+        params.input_max = 1000.0f;
+        params.output_min = 0.1f;
+        params.output_max = 100.0f;
+        pl_tone_map_params_infer(&params);
+        float previous = 0.0f;
+        for (float input : {0.01f, 0.1f, 1.0f, 50.0f, 100.0f, 203.0f, 1000.0f}) {
+            float const output = pl_tone_map_sample(input, &params);
+            QVERIFY(std::isfinite(output));
+            QVERIFY(output >= previous);
+            QVERIFY(output <= 100.001f);
+            qInfo("SDR comparison %s: %.4f -> %.4f nits", function->name, input, output);
+            previous = output;
+        }
+    }
 }
 
 void LibplaceboColorPolicyTest::translatesTargetMinimumLuminance() {
@@ -225,6 +271,7 @@ void LibplaceboColorPolicyTest::translatesTargetMinimumLuminance() {
     QCOMPARE(calculateLibplaceboTargetMinimumNits(description, 100.0f), 0.0f);
 
     description.targetPeakHeadroom = 4.0f;
+    description.renderingMode = VideoRenderingMode::AdaptiveHdr;
     QCOMPARE(calculateLibplaceboTargetMinimumNits(description, PL_COLOR_SDR_WHITE * 4.0f), PL_COLOR_HDR_BLACK);
 
     description.targetMinimumLuminanceKnown = true;
@@ -295,7 +342,7 @@ void LibplaceboColorPolicyTest::resolvesBaseMetadataInContentSpecificOrder() {
     QVERIFY(policy.shouldMapDolbyVision(*missing, target(1.0f)));
     decision = policy.resolve(*missing, pqMappedFrame(0.0f, 0.0f), target(1.0f));
     QCOMPARE(decision.provenance, LibplaceboSourceMetadataProvenance::PqCompatibilityFallback);
-    QCOMPARE(decision.toneMapping, LibplaceboToneMappingFunction::Spline);
+    QCOMPARE(decision.toneMapping, LibplaceboToneMappingFunction::Bt2446a);
     QCOMPARE(decision.effectiveSourceMaximumNits,
              std::optional<float>(LibplaceboColorPolicy::pqCompatibilityMaximumNits));
     QVERIFY(decision.description().contains(QStringLiteral("explicit PQ compatibility fallback")));

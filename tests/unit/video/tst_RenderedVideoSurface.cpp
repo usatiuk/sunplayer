@@ -257,6 +257,11 @@ void RenderedVideoSurfaceTest::semanticChangesInvalidate() {
     }
     {
         auto requested = canonicalState();
+        requested.description.renderingMode = VideoRenderingMode::AdaptiveHdr;
+        QVERIFY(!completed.isReusableFor(requested));
+    }
+    {
+        auto requested = canonicalState();
         requested.description.targetPrimariesKnown = true;
         requested.description.targetPrimaries = displayP3Primaries();
         QVERIFY(requested.isValid());

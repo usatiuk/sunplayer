@@ -40,6 +40,8 @@ class LinuxWaylandWindowContext final : public PresentationSurfaceController {
     QVulkanInstance& vulkanInstance();
 
     PresentationSurfaceMode desiredMode(std::uint64_t graphicsDeviceGeneration) override;
+    Preparation prepareFrame(QWindow& window, PresentationSurfaceMode mode, float headroom,
+                             ColorPrimaries const& videoPrimaries) override;
     void applyMode(QWindow& window, PresentationSurfaceMode mode) override;
     void rejectHdrTarget(std::uint64_t graphicsDeviceGeneration, char const* reason) override;
 

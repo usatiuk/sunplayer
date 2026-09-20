@@ -8,6 +8,9 @@
   [0013: Rely on system display calibration on managed presentation paths](0013-rely-on-system-display-calibration.md),
   [0018: Support unmanaged sRGB SDR on native Wayland](0018-support-unmanaged-srgb-wayland-sdr.md)
 
+Current policy amendments: [ADR 0027](0027-separate-rendering-intent-from-headroom.md) separates rendering intent
+from headroom and updates PQ fallback and Wayland composition declarations.
+
 ## Context
 
 SunPlayer composites video, subtitles, and UI in linear sRGB, where `1.0` is

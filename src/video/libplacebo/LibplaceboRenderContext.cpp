@@ -74,7 +74,7 @@ pl_hook_res normalizeNominalSdrOutputHook(void* privateData, pl_hook_params cons
 float calculateLibplaceboTargetMinimumNits(RenderedVideoSurfaceDescription const& description,
                                            float targetMaximumNits) {
     if (!description.targetMinimumLuminanceKnown) {
-        return description.targetPeakHeadroom <= 1.0f ? 0.0f : PL_COLOR_HDR_BLACK;
+        return description.renderingMode == VideoRenderingMode::SdrCompatibility ? 0.0f : PL_COLOR_HDR_BLACK;
     }
     if (description.targetMinimumLuminanceNits == 0.0f) {
         return PL_COLOR_HDR_BLACK;
@@ -85,11 +85,14 @@ float calculateLibplaceboTargetMinimumNits(RenderedVideoSurfaceDescription const
                     targetMaximumNits * description.targetMinimumLuminanceNits / physicalTargetMaximum);
 }
 
-LibplaceboTargetLuminance calculateLibplaceboTargetLuminance(pl_frame const& source, float targetPeakHeadroom) {
+LibplaceboTargetLuminance calculateLibplaceboTargetLuminance(pl_frame const& source,
+                                                             RenderedVideoSurfaceDescription const& target) {
+    float const targetPeakHeadroom = target.targetPeakHeadroom;
     Q_ASSERT(std::isfinite(targetPeakHeadroom) && targetPeakHeadroom >= 1.0f);
     bool const absoluteLuminanceSource =
         source.color.transfer == PL_COLOR_TRC_PQ || source.repr.sys == PL_COLOR_SYSTEM_DOLBYVISION;
-    bool const nominalSdrTarget = targetPeakHeadroom <= 1.0f && absoluteLuminanceSource;
+    bool const nominalSdrTarget =
+        target.renderingMode == VideoRenderingMode::SdrCompatibility && absoluteLuminanceSource;
     float const coordinateWhiteNits = nominalSdrTarget ? nominalSdrMaximumNits : PL_COLOR_SDR_WHITE;
     return {
         .coordinateWhiteNits = coordinateWhiteNits,
@@ -186,7 +189,14 @@ bool LibplaceboRenderContext::renderWithPolicy(pl_frame const& source, pl_tex ta
                                                                    : *pl_raw_primaries_get(PL_COLOR_PRIM_BT_709);
     Q_ASSERT(pl_primaries_valid(&target.color.hdr.prim));
     LibplaceboTargetLuminance const targetLuminance =
-        calculateLibplaceboTargetLuminance(effectiveSource, targetDescription.targetPeakHeadroom);
+        calculateLibplaceboTargetLuminance(effectiveSource, targetDescription);
+    if (effectiveSource.color.transfer == PL_COLOR_TRC_HLG &&
+        targetDescription.renderingMode == VideoRenderingMode::AdaptiveHdr) {
+        // infer_map replaces HLG's source peak with the destination peak only
+        // above 203 nits. Extend that same relative rendering model to H=1;
+        // otherwise inference silently changes HLG appearance at the endpoint.
+        effectiveSource.color.hdr.max_luma = targetLuminance.maximumNits;
+    }
     target.color.hdr.min_luma = calculateLibplaceboTargetMinimumNits(targetDescription, targetLuminance.maximumNits);
     target.color.hdr.max_luma = targetLuminance.maximumNits;
     target.crop = {

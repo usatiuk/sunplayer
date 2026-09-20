@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include <QStringList>
+#include <libplacebo/colorspace.h>
 
 bool WaylandColorManagementCapabilities::supportsManagedSdr() const {
     return protocolAdvertised && protocolVersion >= requiredProtocolVersion && inventoryComplete &&
@@ -11,7 +12,55 @@ bool WaylandColorManagementCapabilities::supportsManagedSdr() const {
 }
 
 bool WaylandColorManagementCapabilities::supportsManagedHdr10() const {
-    return supportsManagedSdr() && namedBt2020Primaries && pqTransfer;
+    return supportsManagedSdr() && namedBt2020Primaries && pqTransfer && masteringDisplayPrimaries;
+}
+
+WaylandCompositionVolume waylandCompositionVolume(float headroom, ColorPrimaries const& videoPrimaries) {
+    Q_ASSERT(std::isfinite(headroom) && headroom >= 1.0f && headroom <= PresentationSurfaceContract::pqMaximumHeadroom);
+    constexpr ColorPrimaries srgb{{0.64f, 0.33f}, {0.30f, 0.60f}, {0.15f, 0.06f}, {0.3127f, 0.3290f}};
+    constexpr ColorPrimaries bt2020{{0.708f, 0.292f}, {0.170f, 0.797f}, {0.131f, 0.046f}, {0.3127f, 0.3290f}};
+    auto const contains = [](ColorPrimaries gamut, ColorPrimaries const& inner) {
+        for (auto const point : {inner.red, inner.green, inner.blue}) {
+            gamut.white = point;
+            if (!gamut.isValid()) {
+                return false;
+            }
+        }
+        return true;
+    };
+    ColorPrimaries const video = videoPrimaries.isValid() ? videoPrimaries : srgb;
+    // A single triangle cannot describe every gamut union. Keep the transport
+    // volume for unusual targets rather than exclude UI colors or change pixels.
+    // A different white can also produce transport components above H.
+    bool const commonWhite =
+        std::abs(video.white.x - srgb.white.x) < 0.00001f && std::abs(video.white.y - srgb.white.y) < 0.00001f;
+    bool const tightVolume = commonWhite && contains(video, srgb) && contains(bt2020, video);
+    float maximumNits = 10000.0f;
+    if (commonWhite) {
+        float maximumComponent = headroom;
+        if (!tightVolume) {
+            pl_raw_primaries const source{
+                .red = {video.red.x, video.red.y},
+                .green = {video.green.x, video.green.y},
+                .blue = {video.blue.x, video.blue.y},
+                .white = {video.white.x, video.white.y},
+            };
+            auto const matrix = pl_get_color_mapping_matrix(&source, pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020),
+                                                            PL_INTENT_RELATIVE_COLORIMETRIC);
+            // P3 slightly exceeds the BT.2020 triangle. Bound its encoded RGB
+            // cube with the library's transform, rather than claim containment.
+            for (auto const& row : matrix.m) {
+                float const bound =
+                    headroom * (std::max(0.0f, row[0]) + std::max(0.0f, row[1]) + std::max(0.0f, row[2]));
+                maximumComponent = std::max(maximumComponent, bound);
+            }
+        }
+        maximumNits = std::min(10000.0f, std::ceil(203.0f * maximumComponent));
+    }
+    return {
+        .primaries = tightVolume ? video : bt2020,
+        .maximumNits = static_cast<std::uint32_t>(maximumNits),
+    };
 }
 
 bool WaylandPreferredDescription::isCompleteAndValid() const {

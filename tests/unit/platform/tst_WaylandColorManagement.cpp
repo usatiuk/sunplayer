@@ -1,4 +1,5 @@
 #include <QtTest>
+#include <libplacebo/colorspace.h>
 
 #include "platform/linux/WaylandColorManagement.h"
 
@@ -10,6 +11,7 @@ class WaylandColorManagementTest final : public QObject {
     void incompleteManagedContractUsesUnmanagedSrgb();
     void completeManagedContractUsesGamma22();
     void hdr10CapabilitiesChooseStableHdr();
+    void composedVolumeCoversOverlaysAndEncodedPeak();
     void completePreferredDescriptionPublishesDisplayState();
     void explicitTargetPrimariesArePublished();
     void referenceWhiteEqualsTargetMaximumIsSdr();
@@ -124,10 +126,52 @@ void WaylandColorManagementTest::hdr10CapabilitiesChooseStableHdr() {
     capabilities.pqTransfer = false;
     QVERIFY(!capabilities.supportsManagedHdr10());
     capabilities.pqTransfer = true;
+    capabilities.masteringDisplayPrimaries = true;
     QVERIFY(capabilities.supportsManagedHdr10());
     WaylandSurfaceSelection const selection = selectWaylandSurface(capabilities);
     QCOMPARE(selection.mode, WaylandSdrSurfaceMode::ManagedGamma22);
     QVERIFY(selection.presentationContract().hdr10Required());
+}
+
+void WaylandColorManagementTest::composedVolumeCoversOverlaysAndEncodedPeak() {
+    auto const srgb = srgbPrimaries();
+    auto const p3 = displayP3Primaries();
+    QCOMPARE(waylandCompositionVolume(1.0f, srgb).maximumNits, 203U);
+    QCOMPARE(waylandCompositionVolume(1.0001f, srgb).maximumNits, 204U);
+    QCOMPARE(waylandCompositionVolume(6.0f, srgb).maximumNits, 1218U);
+    QCOMPARE(waylandCompositionVolume(PresentationSurfaceContract::pqMaximumHeadroom, p3).maximumNits, 10000U);
+    QCOMPARE(waylandCompositionVolume(1.0f, {}).primaries, srgb);
+    auto const p3Volume = waylandCompositionVolume(4.0f, p3);
+    QCOMPARE(p3Volume.primaries.red.x, 0.708f);
+    QVERIFY(p3Volume.maximumNits > 812U);
+    QVERIFY(p3Volume.maximumNits < 1000U);
+    auto const matrix =
+        pl_get_color_mapping_matrix(pl_raw_primaries_get(PL_COLOR_PRIM_DISPLAY_P3),
+                                    pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020), PL_INTENT_RELATIVE_COLORIMETRIC);
+    // Check transformed cube corners, not a duplicate of the bound formula.
+    for (int corner = 0; corner < 8; ++corner) {
+        float rgb[]{(corner & 1) ? 4.0f : 0.0f, (corner & 2) ? 4.0f : 0.0f, (corner & 4) ? 4.0f : 0.0f};
+        pl_matrix3x3_apply(&matrix, rgb);
+        for (float component : rgb) {
+            QVERIFY(component * 203.0f <= p3Volume.maximumNits);
+        }
+    }
+    auto narrow = srgb;
+    narrow.red = {0.55f, 0.33f};
+    QVERIFY(narrow.isValid());
+    auto const conservative = waylandCompositionVolume(4.0f, narrow);
+    QCOMPARE(conservative.primaries.red.x, 0.708f);
+    QVERIFY(conservative.maximumNits >= 812U);
+    auto differentWhite = p3;
+    differentWhite.white = {0.3457f, 0.3585f};
+    QCOMPARE(waylandCompositionVolume(4.0f, differentWhite).primaries, conservative.primaries);
+    QCOMPARE(waylandCompositionVolume(4.0f, differentWhite).maximumNits, 10000U);
+    auto capabilities = completeManagedSdrCapabilities();
+    capabilities.namedBt2020Primaries = true;
+    capabilities.pqTransfer = true;
+    QVERIFY(!capabilities.supportsManagedHdr10());
+    QCOMPARE(selectWaylandSurface(capabilities).presentationContract().mode,
+             PresentationSurfaceMode::ManagedGamma22Sdr);
 }
 
 void WaylandColorManagementTest::completePreferredDescriptionPublishesDisplayState() {
@@ -199,6 +243,7 @@ void WaylandColorManagementTest::presentationModeTracksCapabilityAndBoundedRejec
 
     capabilities.namedBt2020Primaries = true;
     capabilities.pqTransfer = true;
+    capabilities.masteringDisplayPrimaries = true;
     QCOMPARE(selectWaylandPresentationMode(WaylandSdrSurfaceMode::ManagedGamma22, capabilities, 7, std::nullopt),
              PresentationSurfaceMode::ManagedHdr10Pq);
     PresentationSurfaceContract const hdr10Contract{

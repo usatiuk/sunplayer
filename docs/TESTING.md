@@ -724,3 +724,13 @@ Be suspicious of tests that:
 These are review heuristics, not automatic rejection rules. A narrow fake or
 smoke assertion can still be useful when its claim and limitations are stated
 accurately.
+
+## Continuous HDR target adaptation
+
+The decoded HDR fixture acceptance checks adaptive headrooms 1, 1.0001, 1.001,
+1.01, and 1.1 with known-zero/unknown black through the real producer and final
+compositor. Its timeout is 120 seconds to cover the extra GPU captures. Explicit
+SDR remains separate. Policy tests compare generic curves with identical inputs;
+Wayland tests cover capability gating and whole-composition encoded volume.
+These checks do not measure native display luminance or prove compositor
+pass-through; managed compositor transitions remain native acceptance work.

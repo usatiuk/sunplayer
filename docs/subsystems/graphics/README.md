@@ -38,6 +38,18 @@ The active work required to turn this foundation into a real player boundary is
 tracked in [PLAN.md](PLAN.md). Known limitations are also collected in
 [../../DEFERRED.md](../../DEFERRED.md).
 
+## Composed Wayland color volume
+
+Managed PQ requires `set_mastering_display_primaries` support and declares the
+already-mapped composition's gamut and zero-to-ceil(203H) luminance range.
+Include sRGB UI/subtitles and black letterboxing. P3 and other same-D65 gamut
+unions use BT.2020 with a conservative matrix-derived peak. Different white
+points retain the full transport volume; HDR Lab bypass permits the transport peak.
+One latest asynchronous description is prepared before visible frame submission
+and applied immediately before its matching buffer. No render-loop roundtrip or
+new swapchain is needed for volume changes. Rejection uses existing bounded SDR
+fallback. See [ADR 0027](../../decisions/0027-separate-rendering-intent-from-headroom.md).
+
 ## Responsibilities
 
 The subsystem currently owns:
@@ -407,13 +419,15 @@ set, SunPlayer emits exact piecewise sRGB into an unmanaged assumed-sRGB surface
 Missing managed color is a normal SDR capability result, not a graphics
 failure or an X11 fallback.
 
-Named BT.2020 and PQ additionally select a stable managed HDR content surface.
+Named BT.2020, PQ, and the mastering-display feature additionally select a
+stable managed HDR content surface.
 SunPlayer applies a ready BT.2020/PQ description to the existing `wl_surface`,
 requires QRhi's `HDR10` plus raw Vulkan RGB10A2/HDR10 and RGB10A2/pass-through
 pairs, and emits the matching final encoding. The surface stays HDR10 while
 moving across HDR and SDR outputs; preferred feedback updates target rendering
 and diagnostics but never changes the content encoding or recreates the
-window. The compositor maps the same source description to each output.
+window. The composition target volume changes with the rendered target; the
+compositor maps that description to each output.
 
 If HDR format validation, render-pass creation, swapchain creation, or later
 resize fails without device loss, the queued render-safe path changes pending
@@ -523,7 +537,7 @@ luminance capabilities, system SDR white, and a usable target gamut. Shared
 presentation policy turns those facts into one surface description. Every
 normal HDR target, plus relative SDR and HLG, expresses headroom in
 libplacebo's fixed 203-nit coordinate system. Decoded PQ and mapped Dolby use a
-nominal 100-nit target only at headroom one, followed by a fixed `203 / 100`
+nominal 100-nit target only in SDR compatibility mode, followed by a fixed `203 / 100`
 output-coordinate conversion. At HDR headroom there is no producer factor
 involving live reference white. The compositor does not know about
 libplacebo's coordinate system.
@@ -532,15 +546,16 @@ The analytic PQ diagnostic remains one fixed mastered signal. Analytic and
 decoded inputs now share the render context's target-coordinate rule; decoded
 playback additionally supplies its metadata-family and representation policy.
 The virtual destination is not assumed to be a universal HLG construction:
-libplacebo 7.360.1 uses the destination maximum as HLG's physical OOTF peak.
-The production renderer still accepts HLG through that path, but does not claim
-absolute-reference HLG monitoring.
+libplacebo 7.360.1 uses the virtual destination maximum in HLG inference.
+Adaptive HLG explicitly extends that model to headroom one without a second
+transform. This relative playback model does not claim physical-reference
+HLG accuracy.
 
 The surface preserves whether the target minimum is known. The backend converts
 a positive physical minimum by the same ratio as the selected target maximum.
 Libplacebo treats
 numeric zero as unknown and otherwise infers a linear-target contrast ratio, so
-the adapter passes numeric zero for an unknown no-headroom SDR minimum and uses
+the adapter passes numeric zero for an unknown SDR-compatibility minimum and uses
 `PL_COLOR_HDR_BLACK` for a known physical zero. Unknown extended-linear HDR/EDR
 retains the sentinel conservatively to avoid inferring `targetPeak / 1000`
 through the linear target transfer.

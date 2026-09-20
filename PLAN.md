@@ -66,6 +66,13 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 
 ## Current implementation status
 
+The September 2026 color-policy update separates SDR compatibility from adaptive
+HDR headroom, unifies generic PQ metadata/fallback mapper selection, and adds
+capability-aware composed Wayland target-volume declarations. The bounded work
+and validation are tracked in
+[the adaptation plan](docs/plans/video-rendering/2026-09-20-continuous-adaptation.md).
+
+
 As of 2026-08-16, the repository contains Windows D3D11, Apple-Silicon macOS
 Metal, and native-Wayland Vulkan presentation paths plus continuous local-file
 playback:
@@ -121,7 +128,7 @@ playback:
   1,000-nit fallback for ordinary base PQ only when usable metadata is absent. It
   dispatches pinned libplacebo operators, keeps perceptual gamut mapping, and
   disables inverse mapping, peak detection, and dithering; the exact decision
-  is visible in diagnostics. PQ/Dolby at headroom one receives nominal
+  is visible in diagnostics. PQ/Dolby in explicit SDR compatibility receives nominal
   100-nit SDR plus a fixed `203 / 100` output-coordinate conversion. Every HDR
   target uses `203 * targetPeakHeadroom` with no live-reference-white producer
   scale, so Windows applies `referenceWhite / 80` exactly once to the complete

@@ -88,6 +88,13 @@ These are purpose-specific boundaries, not another general graphics API.
 
 ## Surface contract
 
+[ADR 0027](../../decisions/0027-separate-rendering-intent-from-headroom.md)
+separates SDR compatibility from adaptive HDR in the existing surface description.
+Adaptive HDR at headroom one preserves coordinates, black policy, mapper, and
+source representation. Actual SDR presentation and Windows WCG retain intentional
+SDR conversion. Equivalent effective PQ metadata/fallback inputs use one mapper.
+
+
 The compositor consumes the display-targeted RGBA16F surface defined by
 [ADR 0003](../../decisions/0003-display-targeted-video-surface.md). It does not
 know whether the underlying texture is QRhi-owned, libplacebo-owned, directly
@@ -133,7 +140,7 @@ surface uses `1.0 = active reference white`. Every normal HDR target, plus
 relative SDR and HLG, uses `max_luma = 203 * targetPeakHeadroom` with no
 producer scale involving live reference white.
 
-PQ and mapped Dolby at headroom one use the nominal-SDR construction accepted
+PQ and mapped Dolby in explicit SDR compatibility mode use the nominal-SDR construction accepted
 in [ADR 0025](../../decisions/0025-keep-normal-hdr-reference-white-adaptive.md):
 libplacebo receives a 100-nit destination, then one fixed `203 / 100` linear
 coordinate conversion stores the result in the reference-white-relative
@@ -167,7 +174,7 @@ MaxCLL/mastering range, and mapped Dolby L1/source range use libplacebo's
 generalized BT.2446A EETF. HDR otherwise retains spline, while carrying the
 validated scene/static metadata choice and coherent mapped representation.
 Ordinary base PQ without usable luminance metadata uses an explicit, diagnosed
-1,000-nit maximum and spline on both target classes. A mapped Dolby image is
+1,000-nit maximum with the same BT.2446A SDR / spline adaptive-HDR choice. A mapped Dolby image is
 never combined with HDR10+ or static values from its base representation.
 
 A proven Profile 8.1 HDR10-compatible base carrying a supported HDR10+ OOTF
@@ -192,14 +199,12 @@ mixing, open, seek, track change, and generation replacement must flush that
 source-temporal state without destroying the persistent renderer. A
 target-only rerender is not a source discontinuity.
 
-Static PQ has an analytical target-response oracle. A real HLG fixture also
-confirms that libplacebo 7.360.1 changes the captured OOTF response when
-SunPlayer's virtual destination changes, because the library uses that HDR
-destination maximum while inferring HLG. V1 accepts this behavior for
-display-relative playback, but does not claim absolute-reference HLG
-monitoring. If physical evidence later rejects it, the next step is a focused
-upstream API separating physical HLG peak from destination coordinates, not a
-second SunPlayer HLG stage. HDR10+'s source-provided targeted-display luminance
+Static PQ has an analytical target-response oracle. Adaptive HLG explicitly
+sets its render-local source peak to `203 * H`, extending libplacebo's existing
+virtual-peak inference continuously to headroom one. Decoded neutral/color
+captures cover that endpoint. This is a documented relative playback model,
+not an independent physical-reference HLG appearance oracle.
+HDR10+'s source-provided targeted-display luminance
 stays unchanged. Its OOTF is used against nominal SDR; normal HDR keeps the
 scene values but uses spline against the reference-white-relative destination.
 The pinned Dolby Vision helper supports the tested Profile 8.1 reshape but not
@@ -227,7 +232,7 @@ surface description supplied to libplacebo. Normal playback does not carry a
 second physical-peak-authority flag. SunPlayer preserves a measured physical
 zero as distinct from unavailable metadata.
 Because libplacebo reserves numeric zero for unknown minimum luminance, an
-unknown no-headroom SDR target reaches that API as zero and receives the
+unknown SDR-compatibility target reaches that API as zero and receives the
 library's 1000:1 default contrast. A known physical zero uses
 `PL_COLOR_HDR_BLACK`. Unknown extended-linear HDR/EDR targets retain that same
 sentinel conservatively so the linear-transfer fallback does not invent
@@ -240,7 +245,7 @@ uploads. Hardware frames require backend-native import, synchronization, and
 lifetime retention and should be the normal playback path when supported.
 
 Every HDR target plus relative SDR/HLG retains libplacebo's 203-nit coordinate
-anchor. PQ/Dolby at headroom one uses a fixed nominal-100 coordinate conversion
+anchor. PQ/Dolby in SDR compatibility uses a fixed nominal-100 coordinate conversion
 into the same surface where `1.0` means platform reference white. PQ source
 values and mastering metadata remain source truth. The physical luminance of
 surface `1.0` follows the platform reference white at presentation.

@@ -13,6 +13,9 @@
 * Amended by:
   [0026: Preserve unknown SDR target black at the libplacebo boundary](0026-preserve-unknown-sdr-target-black.md)
 
+Current policy amendments: [ADR 0027](0027-separate-rendering-intent-from-headroom.md) separates rendering intent
+from headroom and updates PQ fallback and Wayland composition declarations.
+
 ## Context
 
 The rendered-video and composition contract uses one coordinate:

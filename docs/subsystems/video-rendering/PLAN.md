@@ -91,8 +91,8 @@ surface.
   target.
   Use libplacebo's generalized BT.2446A EETF for other coherent PQ-to-SDR
   dynamic/static ranges, and retain spline for ordinary HDR. Use an explicit,
-  diagnosed 1,000-nit maximum with spline only when ordinary base PQ has no
-  usable maximum.
+  diagnosed 1,000-nit maximum with the same SDR/adaptive mapper when ordinary
+  base PQ has no usable maximum.
 * [x] Keep perceptual gamut mapping, inverse tone mapping off, peak detection
   off, and dithering off for the RGBA16F target. Report the exact operator,
   metadata provenance, unsupported guidance, and fallback in diagnostics.
@@ -110,11 +110,11 @@ surface.
   pass the same production-boundary tests.
 * [x] Keep every normal HDR target plus relative SDR/HLG in the
   display-relative `203 * targetPeakHeadroom` coordinate. Give PQ/Dolby nominal
-  100-nit SDR only at headroom one and apply the fixed `203 / 100` coordinate
+  100-nit SDR only in explicit SDR compatibility mode and apply the fixed `203 / 100` coordinate
   conversion. Do not install a live-reference-white producer scale at HDR
   headroom.
 * [x] Preserve unknown SDR target-black semantics at the libplacebo boundary.
-  Pass numeric zero only for unknown no-headroom SDR so the pinned library
+  Pass numeric zero only for unknown SDR compatibility so the pinned library
   infers 1000:1 contrast; retain the effectively-zero sentinel for known zero
   and conservatively for unknown extended-linear HDR/EDR.
 * [x] Render a controlled HLG fixture through the current adapter at two

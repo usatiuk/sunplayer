@@ -124,7 +124,6 @@ class RhiPresentationEngine final : public QObject {
     // Native display callbacks are hints. Query and mutate at the render point.
     bool m_outputCharacteristicsDirty = false;
     bool m_surfaceTransitionPending = false;
-    bool m_surfaceDeclarationPending = false;
 #ifdef Q_OS_MACOS
     // Qt's Cocoa backing-property propagation can replace CAMetalLayer's
     // colorspace when the window changes screens. QRhi reapplies the selected

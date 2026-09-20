@@ -1,5 +1,6 @@
 #include <QtTest>
 
+#include "presentation/PresentationSurfaceContract.h"
 #include "presentation/PresentationTarget.h"
 
 #ifdef Q_OS_WIN
@@ -30,7 +31,19 @@ class PresentationTargetTest final : public QObject {
   private slots:
     void calculation_data();
     void calculation();
+    void renderingIntentIsIndependentOfHeadroom();
 };
+
+void PresentationTargetTest::renderingIntentIsIndependentOfHeadroom() {
+    PresentationSurfaceContract native;
+    QVERIFY(native.usesAdaptiveHdrMapping(true, true, false));   // macOS EDR, including current H=1
+    QVERIFY(native.usesAdaptiveHdrMapping(true, true, true));    // Windows HDR
+    QVERIFY(native.usesAdaptiveHdrMapping(true, false, true));   // HDR backend fallback
+    QVERIFY(!native.usesAdaptiveHdrMapping(true, false, false)); // Windows WCG
+    QVERIFY(!native.usesAdaptiveHdrMapping(false, true, true));  // actual SDR presentation fallback
+    PresentationSurfaceContract wayland{PresentationSurfaceMode::ManagedHdr10Pq};
+    QVERIFY(wayland.usesAdaptiveHdrMapping(true, false, false)); // stable PQ on an SDR output
+}
 
 void PresentationTargetTest::calculation_data() {
     QTest::addColumn<DisplayState>("display");

@@ -27,6 +27,11 @@ enum class RenderedVideoAlphaMode {
     Opaque,
 };
 
+enum class VideoRenderingMode {
+    SdrCompatibility,
+    AdaptiveHdr,
+};
+
 struct RenderedVideoSurfaceDescription {
     bool operator==(RenderedVideoSurfaceDescription const&) const = default;
 
@@ -44,6 +49,8 @@ struct RenderedVideoSurfaceDescription {
     bool targetMinimumLuminanceKnown = false;
     float targetMinimumLuminanceNits = 0.0f;
     float targetPeakHeadroom = 0.0f;
+    // Presentation intent is independent of temporarily available headroom.
+    VideoRenderingMode renderingMode = VideoRenderingMode::SdrCompatibility;
     bool targetPrimariesKnown = false;
     ColorPrimaries targetPrimaries;
 

@@ -35,7 +35,7 @@ std::optional<double> rationalValueInRange(AVRational value, double minimum, dou
 }
 
 bool sdrLikeTarget(RenderedVideoSurfaceDescription const& description) {
-    return description.targetPeakHeadroom <= 1.0f;
+    return description.renderingMode == VideoRenderingMode::SdrCompatibility;
 }
 
 bool validMappedOotf(pl_hdr_bezier const& ootf) {
@@ -362,6 +362,8 @@ LibplaceboColorPolicy::resolve(DecodedVideoFrame const& frame, pl_frame const& m
     }
 
     bool const sdrTarget = sdrLikeTarget(targetDescription);
+    LibplaceboToneMappingFunction const toneMapping =
+        sdrTarget ? LibplaceboToneMappingFunction::Bt2446a : LibplaceboToneMappingFunction::Spline;
     Hdr10PlusEvidence const dynamic = hdr10PlusEvidence(source, &mappedFrame);
     std::optional<float> const dynamicMaximum = hdr10PlusMaximumNits(mappedFrame.color.hdr);
 
@@ -371,8 +373,6 @@ LibplaceboColorPolicy::resolve(DecodedVideoFrame const& frame, pl_frame const& m
             appendQualification(ignoredBaseGuidance,
                                 QStringLiteral("concurrent HDR10+ guidance ignored for mapped Dolby representation"));
         }
-        LibplaceboToneMappingFunction const toneMapping =
-            sdrTarget ? LibplaceboToneMappingFunction::Bt2446a : LibplaceboToneMappingFunction::Spline;
 
         std::optional<float> const level1Maximum = [&mappedFrame]() -> std::optional<float> {
             if (!pl_hdr_metadata_contains(&mappedFrame.color.hdr, PL_HDR_METADATA_CIE_Y)) {
@@ -428,7 +428,7 @@ LibplaceboColorPolicy::resolve(DecodedVideoFrame const& frame, pl_frame const& m
             appendQualification(qualification, QStringLiteral("global scene values used"));
         }
         return {
-            .toneMapping = sdrTarget ? LibplaceboToneMappingFunction::Bt2446a : LibplaceboToneMappingFunction::Spline,
+            .toneMapping = toneMapping,
             .metadata = PL_HDR_METADATA_HDR10PLUS,
             .provenance = LibplaceboSourceMetadataProvenance::Hdr10PlusScene,
             .selectedSourceAverageNits = sourceAverageNits(mappedFrame.color.hdr, PL_HDR_METADATA_HDR10PLUS),
@@ -450,7 +450,7 @@ LibplaceboColorPolicy::resolve(DecodedVideoFrame const& frame, pl_frame const& m
                 QStringLiteral("mastering maximum %1 nits retained").arg(formattedNits(*masteringMaximum)));
         }
         return {
-            .toneMapping = sdrTarget ? LibplaceboToneMappingFunction::Bt2446a : LibplaceboToneMappingFunction::Spline,
+            .toneMapping = toneMapping,
             .metadata = PL_HDR_METADATA_HDR10,
             .provenance = LibplaceboSourceMetadataProvenance::MaxCll,
             .effectiveSourceMaximumNits = maxCll,
@@ -459,7 +459,7 @@ LibplaceboColorPolicy::resolve(DecodedVideoFrame const& frame, pl_frame const& m
     }
     if (masteringMaximum) {
         return {
-            .toneMapping = sdrTarget ? LibplaceboToneMappingFunction::Bt2446a : LibplaceboToneMappingFunction::Spline,
+            .toneMapping = toneMapping,
             .metadata = PL_HDR_METADATA_HDR10,
             .provenance = LibplaceboSourceMetadataProvenance::MasteringDisplay,
             .effectiveSourceMaximumNits = masteringMaximum,
@@ -474,5 +474,5 @@ LibplaceboColorPolicy::resolve(DecodedVideoFrame const& frame, pl_frame const& m
         }
         appendQualification(fallbackQualification, QStringLiteral("PQ fallback used"));
     }
-    return pqCompatibilityFallback(LibplaceboToneMappingFunction::Spline, fallbackQualification);
+    return pqCompatibilityFallback(toneMapping, fallbackQualification);
 }

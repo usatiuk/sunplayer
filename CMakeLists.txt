@@ -276,6 +276,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
             Qt6::WaylandClientPrivate
             Vulkan::Vulkan
             Wayland::Client
+            libplacebo::libplacebo
             sunplayer_diagnostics
     )
 endif ()

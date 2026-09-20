@@ -4,6 +4,8 @@
 
 #include <QtGlobal>
 
+#include "platform/ColorPrimaries.h"
+
 class QWindow;
 
 enum class PresentationOutputEncoding {
@@ -45,6 +47,13 @@ struct PresentationSurfaceContract {
 
     bool hdr10Required() const { return mode == PresentationSurfaceMode::ManagedHdr10Pq; }
 
+    bool usesAdaptiveHdrMapping(bool hdrPresentationActive, bool hdrDisplay, bool sceneReferred) const {
+        // An extended-linear WCG surface still wants SDR conversion. EDR at
+        // current headroom one and stable Wayland PQ retain adaptive mapping.
+        return hdrPresentationActive &&
+               (sceneReferred || hdrDisplay || mode == PresentationSurfaceMode::ManagedHdr10Pq);
+    }
+
     float constrainTargetHeadroom(float requestedHeadroom) const {
         switch (mode) {
         case PresentationSurfaceMode::AdaptiveExtendedLinear:
@@ -64,9 +73,14 @@ struct PresentationSurfaceContract {
 // controller owns only platform selection and declaration changes.
 class PresentationSurfaceController {
   public:
+    enum class Preparation { Ready, Pending, Rejected };
     virtual ~PresentationSurfaceController() = default;
 
     virtual PresentationSurfaceMode desiredMode(std::uint64_t graphicsDeviceGeneration) = 0;
+    // Pending completion requests a window update; never dispatch native events
+    // inside rendering. A ready declaration is applied with its matching buffer.
+    virtual Preparation prepareFrame(QWindow& window, PresentationSurfaceMode mode, float headroom,
+                                     ColorPrimaries const& videoPrimaries) = 0;
     virtual void applyMode(QWindow& window, PresentationSurfaceMode mode) = 0;
     virtual void rejectHdrTarget(std::uint64_t graphicsDeviceGeneration, char const* reason) = 0;
 };

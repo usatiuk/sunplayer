@@ -81,6 +81,7 @@ RenderedVideoSurfaceState surfaceState() {
     state.description.targetMinimumLuminanceKnown = true;
     state.description.targetMinimumLuminanceNits = 0.005f;
     state.description.targetPeakHeadroom = sourcePeak;
+    state.description.renderingMode = VideoRenderingMode::AdaptiveHdr;
     state.graphicsDeviceGeneration = 1;
     state.contentRevision = 1;
     return state;

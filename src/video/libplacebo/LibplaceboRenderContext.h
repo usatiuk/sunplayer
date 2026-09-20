@@ -15,9 +15,10 @@ struct LibplaceboTargetLuminance {
 };
 
 // The source color must already be inferred. Absolute-luminance PQ/Dolby uses
-// a fixed nominal 100-nit destination only when no HDR headroom is requested.
+// a fixed nominal 100-nit destination only in SDR compatibility mode.
 // Every other destination stays in libplacebo's 203-nit relative coordinate.
-LibplaceboTargetLuminance calculateLibplaceboTargetLuminance(pl_frame const& source, float targetPeakHeadroom);
+LibplaceboTargetLuminance calculateLibplaceboTargetLuminance(pl_frame const& source,
+                                                             RenderedVideoSurfaceDescription const& target);
 
 // Translates the surface's known/value pair into libplacebo target metadata.
 // Numeric zero means unknown to libplacebo; PL_COLOR_HDR_BLACK means known
