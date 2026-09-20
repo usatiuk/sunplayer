@@ -191,12 +191,14 @@ DecodedFrameCapture captureDecodedFrame(GraphicsDeviceDomain& graphics, std::sha
                                         QSize targetPixelSize = {}, bool targetMinimumLuminanceKnown = true,
                                         std::optional<VideoRenderingMode> renderingMode = std::nullopt,
                                         bool preferHdr10Plus = false,
-                                        std::optional<int> sourceHdrReferenceWhiteNits = std::nullopt) {
+                                        std::optional<int> sourceHdrReferenceWhiteNits = std::nullopt,
+                                        bool absolutePqEnabled = false, bool absolutePqAvailable = false) {
     DecodedFrameCapture result;
     GraphicsDeviceExecutionScope execution = graphics.acquireExecutionScope();
     QRhi& rhi = graphics.rhi();
     DecodedVideoSource source(std::move(frame), VideoTargetReadback::Enabled);
     source.setPreferHdr10Plus(preferHdr10Plus);
+    source.setAbsolutePqEnabled(absolutePqEnabled);
     LibplaceboDecodedVideoProducer producer(graphics, source, VideoTargetReadback::Enabled);
     if (!targetPixelSize.isValid()) {
         targetPixelSize = source.currentFrame()->geometry().visibleSize;
@@ -207,6 +209,7 @@ DecodedFrameCapture captureDecodedFrame(GraphicsDeviceDomain& graphics, std::sha
     if (renderingMode) {
         state.description.renderingMode = *renderingMode;
     }
+    state.description.absolutePqAvailable = absolutePqAvailable;
     // Keep the established endpoint oracles explicit. The adjustable-reference
     // test below exercises the new default and both presets on retained frames.
     source.setSourceHdrReferenceWhiteNits(sourceHdrReferenceWhiteNits.value_or(
@@ -373,6 +376,8 @@ class FfmpegFirstFrameTest final : public QObject {
     void hdrInputAcceptance();
     void hdrReferenceWhiteRerendersRetainedFrame_data();
     void hdrReferenceWhiteRerendersRetainedFrame();
+    void absolutePqPhysicalOutput_data();
+    void absolutePqPhysicalOutput();
     void nominalSdrTargetPreservesWcg();
     void unknownSdrBlackPreservesPqNearBlack();
     void dualFormatPreferenceRemapsPausedFrame_data();
@@ -692,6 +697,122 @@ void FfmpegFirstFrameTest::hdrReferenceWhiteRerendersRetainedFrame() {
                 QCOMPARE(updates.count(), updateCount + 1);
                 QVERIFY(!producer.needsRender(state));
             }
+        }
+    }
+
+    // Retain the decoded frame and producer while preference and presentation
+    // capability change. Both must invalidate pixels without another import.
+    source.setSourceHdrReferenceWhiteNits(100);
+    auto state = surfaceState(*graphics, source.contentRevision(), 160.0f, decoded.frame->geometry().visibleSize, 5.0f);
+    state.description.absolutePqAvailable = true;
+    QRhiReadbackResult adaptive;
+    QVERIFY(capture(producer, state, adaptive));
+    auto const adaptiveRevision = source.contentRevision();
+    auto const updateCount = updates.count();
+    source.setAbsolutePqEnabled(true);
+    QCOMPARE(updates.count(), updateCount + 1);
+    QVERIFY(source.contentRevision() != adaptiveRevision);
+    QCOMPARE(source.producerConfigurationRevision(), configurationRevision);
+    state.contentRevision = source.contentRevision();
+    QVERIFY(producer.needsRender(state));
+    QRhiReadbackResult absolute;
+    QVERIFY(capture(producer, state, absolute));
+    QVERIFY(!producer.needsRender(state));
+    QCOMPARE(producer.inputImportCount(), 1U);
+    if (affected) {
+        QVERIFY(absolute.data != adaptive.data);
+    } else {
+        QCOMPARE(absolute.data, adaptive.data);
+    }
+    source.setAbsolutePqEnabled(true);
+    QCOMPARE(updates.count(), updateCount + 1);
+    QVERIFY(!producer.needsRender(state));
+
+    for (bool available : {false, true}) {
+        state.description.absolutePqAvailable = available;
+        QVERIFY(producer.needsRender(state));
+        QRhiReadbackResult changedCapability;
+        QVERIFY(capture(producer, state, changedCapability));
+        QCOMPARE(changedCapability.data, available ? absolute.data : adaptive.data);
+        QVERIFY(!producer.needsRender(state));
+        QCOMPARE(producer.inputImportCount(), 1U);
+        QCOMPARE(source.currentFrame(), decoded.frame);
+        QCOMPARE(source.contentRevision(), state.contentRevision);
+        QCOMPARE(source.producerConfigurationRevision(), configurationRevision);
+    }
+    source.setAbsolutePqEnabled(false);
+    QCOMPARE(updates.count(), updateCount + 2);
+    state.contentRevision = source.contentRevision();
+    QVERIFY(producer.needsRender(state));
+    QRhiReadbackResult restored;
+    QVERIFY(capture(producer, state, restored));
+    QCOMPARE(restored.data, adaptive.data);
+    QCOMPARE(producer.inputImportCount(), 1U);
+    QCOMPARE(source.currentFrame(), decoded.frame);
+}
+
+void FfmpegFirstFrameTest::absolutePqPhysicalOutput_data() { hdrReferenceWhiteRerendersRetainedFrame_data(); }
+
+void FfmpegFirstFrameTest::absolutePqPhysicalOutput() {
+    QFETCH(QString, fixtureFile);
+    QFETCH(bool, affected);
+    auto const decoded = decodeFirstVideoFrame(QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/") + fixtureFile,
+                                               {.playbackGeneration = 96, .decoderRevision = 1, .frameId = 1});
+    QVERIFY2(decoded.isSuccess(), qPrintable(decoded.error));
+    auto graphics = GraphicsBackendFactory::createDeviceDomain();
+    QVERIFY(graphics);
+    constexpr float physicalPeakNits = 800.0f;
+    auto capture = [&](float white, int sourceReference, bool enabled, bool available) {
+        // Exercise the Windows absolute scRGB contract on any GPU backend:
+        // the real compositor converts SDR-white-relative pixels by W / 80.
+        return captureDecodedFrame(*graphics, decoded.frame, white, physicalPeakNits / white, std::nullopt, 0.0f,
+                                   white / 80.0f, {}, true, VideoRenderingMode::AdaptiveHdr, false, sourceReference,
+                                   enabled, available);
+    };
+    auto const adaptive = capture(160.0f, 100, false, true);
+    QVERIFY2(adaptive.isSuccess(), qPrintable(adaptive.error));
+    auto const absolute = capture(160.0f, 100, true, true);
+    QVERIFY2(absolute.isSuccess(), qPrintable(absolute.error));
+    auto const otherReference = capture(160.0f, 203, true, true);
+    QVERIFY2(otherReference.isSuccess(), qPrintable(otherReference.error));
+    QCOMPARE(absolute.readback.data, otherReference.readback.data);
+    QCOMPARE(absolute.compositionReadback.data, otherReference.compositionReadback.data);
+    auto const unavailable = capture(160.0f, 100, true, false);
+    QVERIFY2(unavailable.isSuccess(), qPrintable(unavailable.error));
+    QCOMPARE(unavailable.readback.data, adaptive.readback.data);
+    QCOMPARE(unavailable.compositionReadback.data, adaptive.compositionReadback.data);
+
+    if (!affected) {
+        QCOMPARE(absolute.readback.data, adaptive.readback.data);
+        QCOMPARE(absolute.compositionReadback.data, adaptive.compositionReadback.data);
+        return;
+    }
+    QVERIFY(absolute.readback.data != adaptive.readback.data);
+    if (fixtureFile == QStringLiteral("hdr10-pq-hevc.hevc")) {
+        // With the source fitting the destination, check absolute units
+        // independently of the reference-white invariance comparison.
+        auto const uncompressed = captureDecodedFrame(
+            *graphics, decoded.frame, 200.0f, 20.0f, std::nullopt, 0.0f, 200.0f / 80.0f, {}, true,
+            VideoRenderingMode::AdaptiveHdr, false, 100, true, true);
+        QVERIFY2(uncompressed.isSuccess(), qPrintable(uncompressed.error));
+        auto const patch = neutralPatchPixels(uncompressed.compositionReadback)[0];
+        compareNear(patch.red, 50.0f / 80.0f, 0.02f);
+        compareNear(patch.green, 50.0f / 80.0f, 0.02f);
+        compareNear(patch.blue, 50.0f / 80.0f, 0.02f);
+    }
+    auto const otherWhite = capture(240.0f, 100, true, true);
+    QVERIFY2(otherWhite.isSuccess(), qPrintable(otherWhite.error));
+    QVERIFY(!absolute.compositionReadback.data.isEmpty());
+    QVERIFY(!otherWhite.compositionReadback.data.isEmpty());
+    for (int y = 4; y < absolute.readback.pixelSize.height() - 4; y += 8) {
+        for (int x = 4; x < absolute.readback.pixelSize.width() - 4; x += 8) {
+            auto const first = pixel(absolute.compositionReadback, x, y);
+            auto const second = pixel(otherWhite.compositionReadback, x, y);
+            // Two FP16 render targets round independently; compare absolute
+            // scRGB values, whose peak here is 800 / 80 = 10.
+            compareNear(second.red, first.red, 0.03f);
+            compareNear(second.green, first.green, 0.03f);
+            compareNear(second.blue, first.blue, 0.03f);
         }
     }
 }

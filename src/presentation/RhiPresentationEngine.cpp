@@ -259,6 +259,7 @@ void RhiPresentationEngine::renderFrame() {
                                                      presentationTarget.sceneReferred)
                 ? VideoRenderingMode::AdaptiveHdr
                 : VideoRenderingMode::SdrCompatibility;
+        requestedSurface->description.absolutePqAvailable = presentationTarget.absolutePqAvailable;
         requestedSurface->description.targetPrimariesKnown = presentationTarget.targetPrimariesKnown;
         requestedSurface->description.targetPrimaries = presentationTarget.targetPrimaries;
         requestedSurface->graphicsDeviceGeneration = m_graphicsDevice->generation();
@@ -893,6 +894,13 @@ void RhiPresentationEngine::updateBackendState() {
     state.sceneReferred = false;
 #else
     state.sceneReferred = info.luminanceBehavior == QRhiSwapChainHdrInfo::SceneReferred;
+#endif
+#ifdef Q_OS_WIN
+    // Windows HDR scRGB encodes 1.0 as 80 nits. Other transports do not
+    // currently establish an absolute luminance contract for this renderer.
+    state.absoluteLuminanceSupported = state.hdrPresentationActive && state.sceneReferred &&
+                                       m_swapChain->format() == QRhiSwapChain::HDRExtendedSrgbLinear &&
+                                       m_surfaceContract.outputEncoding(true) == PresentationOutputEncoding::LinearSrgb;
 #endif
 #ifdef Q_OS_LINUX
     state.useSdrDisplayTargetForHdrPresentation = true;

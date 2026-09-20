@@ -141,9 +141,15 @@ use the source HDR reference-white setting R (100–203 nits, default 100):
 `max_luma = R * targetPeakHeadroom`, followed by `203 / R` linear coordinate
 normalization. Libplacebo fits highlights before this conversion, preserving
 the surface ceiling and extended-BT.709 WCG coordinates. Source pixels and
-metadata remain unchanged. There is no producer scale involving live platform
-reference white. R=100 retains the previous SDR endpoint; R=203 retains the
+metadata remain unchanged. Adaptive playback has no producer scale involving live
+platform reference white. R=100 retains the previous SDR endpoint; R=203 retains the
 previous adaptive-HDR convention. See [ADR 0029](../../decisions/0029-configure-hdr-source-reference-white.md).
+
+Optional Absolute PQ replaces R with known physical platform white W on Windows
+HDR scRGB: destination W*H, normalization 203/W, then composition W/80. This
+preserves physical-nit coordinates while retaining library tone/gamut mapping.
+It is disabled by default and unavailable on SDR, macOS, and Wayland. HLG and
+SDR input remain unchanged. See [ADR 0030](../../decisions/0030-optional-absolute-pq.md).
 
 Relative SDR, HLG, and diagnostic HDR Lab retain their existing conventions.
 The setting does not alter platform output encoding, UI, or subtitle brightness.

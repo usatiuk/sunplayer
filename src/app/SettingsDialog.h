@@ -3,6 +3,8 @@
 #include <QColor>
 #include <QDialog>
 
+#include "video/DecodedVideoSource.h"
+
 class QCheckBox;
 class QComboBox;
 class QLabel;
@@ -24,13 +26,23 @@ class SettingsDialog final : public QDialog {
 
     explicit SettingsDialog(SubtitleSettings& subtitleSettings);
 
+    struct PlaybackState {
+        qreal volume = 1.0;
+        bool blankingAvailable = false;
+        bool blankingEnabled = false;
+        bool preferHdr10Plus = false;
+        int sourceHdrReferenceWhiteNits = DecodedVideoSource::defaultSourceHdrReferenceWhiteNits;
+        bool absolutePqEnabled = false;
+        bool absolutePqAvailable = false;
+    };
+
     void showPage(int page);
-    void setPlaybackState(qreal volume, bool blankingAvailable, bool blankingEnabled, bool preferHdr10Plus,
-                          int sourceHdrReferenceWhiteNits);
+    void setPlaybackState(PlaybackState const& state);
 
   signals:
     void volumeEdited(qreal volume);
     void preferHdr10PlusEdited(bool enabled);
+    void absolutePqEnabledEdited(bool enabled);
     void sourceHdrReferenceWhiteNitsEdited(int nits);
     void blankOtherDisplaysEdited(bool enabled);
 
@@ -47,6 +59,9 @@ class SettingsDialog final : public QDialog {
     QSpinBox* m_volumeSpin = nullptr;
     QCheckBox* m_blankOtherDisplays = nullptr;
     QCheckBox* m_preferHdr10Plus = nullptr;
+    QCheckBox* m_absolutePq = nullptr;
+    QLabel* m_absolutePqStatus = nullptr;
+    QWidget* m_sourceHdrReferenceWhitePresets = nullptr;
     QSlider* m_sourceHdrReferenceWhiteSlider = nullptr;
     QSpinBox* m_sourceHdrReferenceWhiteSpin = nullptr;
     QComboBox* m_appearanceMode = nullptr;

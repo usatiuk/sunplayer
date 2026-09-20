@@ -87,14 +87,20 @@ float calculateLibplaceboTargetMinimumNits(RenderedVideoSurfaceDescription const
 
 LibplaceboTargetLuminance calculateLibplaceboTargetLuminance(pl_frame const& source,
                                                              RenderedVideoSurfaceDescription const& target,
-                                                             float sourceHdrReferenceWhiteNits) {
+                                                             float sourceHdrReferenceWhiteNits,
+                                                             bool absolutePqEnabled) {
     float const targetPeakHeadroom = target.targetPeakHeadroom;
     Q_ASSERT(std::isfinite(targetPeakHeadroom) && targetPeakHeadroom >= 1.0f);
     Q_ASSERT(std::isfinite(sourceHdrReferenceWhiteNits) && sourceHdrReferenceWhiteNits >= 100.0f &&
              sourceHdrReferenceWhiteNits <= PL_COLOR_SDR_WHITE);
     bool const absoluteLuminanceSource =
         source.color.transfer == PL_COLOR_TRC_PQ || source.repr.sys == PL_COLOR_SYSTEM_DOLBYVISION;
-    float const coordinateWhiteNits = absoluteLuminanceSource ? sourceHdrReferenceWhiteNits : PL_COLOR_SDR_WHITE;
+    bool const absolutePqActive = absolutePqEnabled && absoluteLuminanceSource && target.absolutePqAvailable &&
+                                  target.renderingMode == VideoRenderingMode::AdaptiveHdr;
+    float const coordinateWhiteNits = absolutePqActive          ? target.referenceWhiteNits
+                                      : absoluteLuminanceSource ? sourceHdrReferenceWhiteNits
+                                                                : PL_COLOR_SDR_WHITE;
+    Q_ASSERT(std::isfinite(coordinateWhiteNits) && coordinateWhiteNits > 0.0f);
     return {
         .coordinateWhiteNits = coordinateWhiteNits,
         .maximumNits = coordinateWhiteNits * targetPeakHeadroom,
@@ -132,15 +138,16 @@ bool LibplaceboRenderContext::render(pl_frame const& source, pl_tex targetTextur
     return renderWithPolicy(source, targetTexture, targetDescription,
                             toneMappingEnabled ? LibplaceboToneMappingFunction::Spline
                                                : LibplaceboToneMappingFunction::Clip,
-                            PL_HDR_METADATA_ANY, std::nullopt, diagnosticReferenceWhite, error);
+                            PL_HDR_METADATA_ANY, std::nullopt, diagnosticReferenceWhite, false, error);
 }
 
 bool LibplaceboRenderContext::renderDecoded(pl_frame const& source, pl_tex targetTexture,
                                             RenderedVideoSurfaceDescription const& targetDescription,
                                             LibplaceboColorPolicyDecision const& colorPolicy,
-                                            float sourceHdrReferenceWhiteNits, QString* error) {
+                                            float sourceHdrReferenceWhiteNits, bool absolutePqEnabled, QString* error) {
     return renderWithPolicy(source, targetTexture, targetDescription, colorPolicy.toneMapping, colorPolicy.metadata,
-                            colorPolicy.effectiveSourceMaximumNits, sourceHdrReferenceWhiteNits, error);
+                            colorPolicy.effectiveSourceMaximumNits, sourceHdrReferenceWhiteNits, absolutePqEnabled,
+                            error);
 }
 
 bool LibplaceboRenderContext::renderWithPolicy(pl_frame const& source, pl_tex targetTexture,
@@ -148,7 +155,8 @@ bool LibplaceboRenderContext::renderWithPolicy(pl_frame const& source, pl_tex ta
                                                LibplaceboToneMappingFunction toneMapping,
                                                enum pl_hdr_metadata_type metadata,
                                                std::optional<float> effectiveSourceMaximumNits,
-                                               float sourceHdrReferenceWhiteNits, QString* error) {
+                                               float sourceHdrReferenceWhiteNits, bool absolutePqEnabled,
+                                               QString* error) {
     Q_ASSERT(isValid());
     Q_ASSERT(targetTexture);
     Q_ASSERT(targetDescription.isValid());
@@ -196,8 +204,8 @@ bool LibplaceboRenderContext::renderWithPolicy(pl_frame const& source, pl_tex ta
     target.color.hdr.prim = targetDescription.targetPrimariesKnown ? rawPrimaries(targetDescription.targetPrimaries)
                                                                    : *pl_raw_primaries_get(PL_COLOR_PRIM_BT_709);
     Q_ASSERT(pl_primaries_valid(&target.color.hdr.prim));
-    LibplaceboTargetLuminance const targetLuminance =
-        calculateLibplaceboTargetLuminance(effectiveSource, targetDescription, sourceHdrReferenceWhiteNits);
+    LibplaceboTargetLuminance const targetLuminance = calculateLibplaceboTargetLuminance(
+        effectiveSource, targetDescription, sourceHdrReferenceWhiteNits, absolutePqEnabled);
     if (effectiveSource.color.transfer == PL_COLOR_TRC_HLG &&
         targetDescription.renderingMode == VideoRenderingMode::AdaptiveHdr) {
         // infer_map replaces HLG's source peak with the destination peak only
@@ -236,10 +244,11 @@ bool LibplaceboRenderContext::renderWithPolicy(pl_frame const& source, pl_tex ta
     parameters.color_map_params = &colorMap;
     parameters.dither_params = nullptr;
     parameters.peak_detect_params = nullptr;
-    // Libplacebo's linear output unit is always nits / 203. Mapping into R * H
-    // followed by this 203 / R coordinate conversion keeps the surface ceiling
-    // at H and surface 1.0 at the active platform reference white. Neither the
-    // source metadata nor the platform's final white scale changes.
+    // Libplacebo's linear output unit is always nits / 203. The coordinate
+    // white is source R for adaptive PQ, physical W for supported Absolute PQ,
+    // and 203 for relative sources. Its normalization keeps the surface ceiling
+    // at H and surface 1.0 at platform white. Absolute PQ changes coordinates,
+    // not the selected mapper or source metadata; curves can still alter nits.
     OutputNormalizationContext outputNormalization{
         .scale = targetLuminance.outputNormalizationScale,
     };

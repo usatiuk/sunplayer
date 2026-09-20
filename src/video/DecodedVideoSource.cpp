@@ -68,6 +68,19 @@ void DecodedVideoSource::setPreferHdr10Plus(bool enabled) {
     emit updateRequested();
 }
 
+bool DecodedVideoSource::absolutePqEnabled() const { return m_absolutePqEnabled; }
+
+void DecodedVideoSource::setAbsolutePqEnabled(bool enabled) {
+    Q_ASSERT(QThread::currentThread() == thread());
+    if (m_absolutePqEnabled == enabled) {
+        return;
+    }
+    m_absolutePqEnabled = enabled;
+    advanceContentRevision();
+    emit absolutePqEnabledChanged();
+    emit updateRequested();
+}
+
 int DecodedVideoSource::sourceHdrReferenceWhiteNits() const { return m_sourceHdrReferenceWhiteNits; }
 
 void DecodedVideoSource::setSourceHdrReferenceWhiteNits(int nits) {

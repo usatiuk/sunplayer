@@ -113,14 +113,25 @@ VideoOperationResult LibplaceboDecodedVideoProducer::render(QRhiCommandBuffer& c
         LibplaceboColorPolicyDecision const colorPolicy =
             m_colorPolicy.resolve(*frame, m_mapping->frame(), requestedState.description);
         float const sourceReferenceWhite = m_source.sourceHdrReferenceWhiteNits();
-        rendered =
-            m_renderContext->renderDecoded(m_mapping->frame(), m_target->libplaceboRenderTarget(),
-                                           requestedState.description, colorPolicy, sourceReferenceWhite, &renderError);
+        rendered = m_renderContext->renderDecoded(m_mapping->frame(), m_target->libplaceboRenderTarget(),
+                                                  requestedState.description, colorPolicy, sourceReferenceWhite,
+                                                  m_source.absolutePqEnabled(), &renderError);
         renderedColorPolicyDescription = colorPolicy.description();
         auto const& source = m_mapping->frame();
         if (source.color.transfer == PL_COLOR_TRC_PQ || source.repr.sys == PL_COLOR_SYSTEM_DOLBYVISION) {
-            renderedColorPolicyDescription +=
-                QStringLiteral(" · source HDR reference white %1 nits").arg(sourceReferenceWhite);
+            bool const absolutePqActive = m_source.absolutePqEnabled() &&
+                                          requestedState.description.absolutePqAvailable &&
+                                          requestedState.description.renderingMode == VideoRenderingMode::AdaptiveHdr;
+            if (absolutePqActive) {
+                renderedColorPolicyDescription += QStringLiteral(" · Absolute PQ · physical reference white %1 nits")
+                                                      .arg(requestedState.description.referenceWhiteNits);
+            } else {
+                renderedColorPolicyDescription +=
+                    QStringLiteral(" · source HDR reference white %1 nits").arg(sourceReferenceWhite);
+                if (m_source.absolutePqEnabled()) {
+                    renderedColorPolicyDescription += QStringLiteral(" · Absolute PQ unavailable: adaptive fallback");
+                }
+            }
         }
     }
 

@@ -13,8 +13,9 @@ actually been validated.
 
 ## Product invariants
 
-* Normal playback expresses every format in the active-reference-white surface;
-  an absolute/reference-monitoring intent would be a separate explicit mode.
+* Playback expresses every format in the active-reference-white surface.
+  Adaptive brightness is the default; optional Absolute PQ uses physical-nit
+  coordinates on supported Windows HDR output (ADR 0030).
 * SunPlayer's linear working surface uses `1.0 = active reference white` and
   permits negative and greater-than-one components.
 * Libplacebo owns content transfer interpretation, tone mapping, and gamut

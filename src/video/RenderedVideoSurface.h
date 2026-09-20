@@ -51,6 +51,8 @@ struct RenderedVideoSurfaceDescription {
     float targetPeakHeadroom = 0.0f;
     // Presentation intent is independent of temporarily available headroom.
     VideoRenderingMode renderingMode = VideoRenderingMode::SdrCompatibility;
+    // Resolved presentation capability; a reference-white fallback is insufficient.
+    bool absolutePqAvailable = false;
     bool targetPrimariesKnown = false;
     ColorPrimaries targetPrimaries;
 

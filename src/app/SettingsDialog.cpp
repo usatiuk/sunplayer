@@ -79,6 +79,20 @@ SettingsDialog::SettingsDialog(SubtitleSettings& subtitleSettings) : m_subtitleS
     playbackLayout->addRow(QString(), m_preferHdr10Plus);
     connect(m_preferHdr10Plus, &QCheckBox::toggled, this, &SettingsDialog::preferHdr10PlusEdited);
 
+    m_absolutePq = new QCheckBox(tr("Absolute PQ (Windows HDR)"), playbackPage);
+    m_absolutePq->setObjectName(QStringLiteral("settingsAbsolutePq"));
+    m_absolutePq->setEnabled(false);
+    m_absolutePq->setToolTip(tr("Map PQ, HDR10+ and Dolby Vision to physical display luminance. "
+                                "Tone mapping still applies; SDR and HLG are unchanged."));
+    playbackLayout->addRow(QString(), m_absolutePq);
+    connect(m_absolutePq, &QCheckBox::toggled, this, &SettingsDialog::absolutePqEnabledEdited);
+    m_absolutePqStatus =
+        new QLabel(tr("Absolute PQ is unavailable on this output; adaptive rendering is active."), playbackPage);
+    m_absolutePqStatus->setObjectName(QStringLiteral("settingsAbsolutePqStatus"));
+    m_absolutePqStatus->setWordWrap(true);
+    m_absolutePqStatus->hide();
+    playbackLayout->addRow(QString(), m_absolutePqStatus);
+
     auto* const referenceWhiteRow =
         sliderRow(m_sourceHdrReferenceWhiteSlider, m_sourceHdrReferenceWhiteSpin, playbackPage);
     m_sourceHdrReferenceWhiteSlider->setObjectName(QStringLiteral("settingsSourceHdrReferenceWhiteSlider"));
@@ -94,6 +108,7 @@ SettingsDialog::SettingsDialog(SubtitleSettings& subtitleSettings) : m_subtitleS
     m_sourceHdrReferenceWhiteSpin->setValue(DecodedVideoSource::defaultSourceHdrReferenceWhiteNits);
     playbackLayout->addRow(tr("HDR reference white:"), referenceWhiteRow);
     auto* const referenceWhitePresets = new QWidget(playbackPage);
+    m_sourceHdrReferenceWhitePresets = referenceWhitePresets;
     auto* const referenceWhitePresetsLayout = new QHBoxLayout(referenceWhitePresets);
     referenceWhitePresetsLayout->setContentsMargins(0, 0, 0, 0);
     for (int nits : {DecodedVideoSource::minimumSourceHdrReferenceWhiteNits,
@@ -378,22 +393,29 @@ void SettingsDialog::showPage(int page) {
     m_tabs->setCurrentIndex(page == SubtitlesPage ? SubtitlesPage : PlaybackPage);
 }
 
-void SettingsDialog::setPlaybackState(qreal volume, bool blankingAvailable, bool blankingEnabled, bool preferHdr10Plus,
-                                      int sourceHdrReferenceWhiteNits) {
+void SettingsDialog::setPlaybackState(PlaybackState const& state) {
     QSignalBlocker const sliderBlocker(m_volumeSlider);
     QSignalBlocker const spinBlocker(m_volumeSpin);
     QSignalBlocker const blankingBlocker(m_blankOtherDisplays);
     QSignalBlocker const hdr10PlusBlocker(m_preferHdr10Plus);
+    QSignalBlocker const absolutePqBlocker(m_absolutePq);
     QSignalBlocker const referenceWhiteSliderBlocker(m_sourceHdrReferenceWhiteSlider);
     QSignalBlocker const referenceWhiteSpinBlocker(m_sourceHdrReferenceWhiteSpin);
-    m_sourceHdrReferenceWhiteSlider->setValue(sourceHdrReferenceWhiteNits);
-    m_sourceHdrReferenceWhiteSpin->setValue(sourceHdrReferenceWhiteNits);
-    m_preferHdr10Plus->setChecked(preferHdr10Plus);
-    int const volumePercent = qRound(qBound(0.0, volume, 1.0) * 100.0);
+    m_sourceHdrReferenceWhiteSlider->setValue(state.sourceHdrReferenceWhiteNits);
+    m_sourceHdrReferenceWhiteSpin->setValue(state.sourceHdrReferenceWhiteNits);
+    m_preferHdr10Plus->setChecked(state.preferHdr10Plus);
+    m_absolutePq->setChecked(state.absolutePqEnabled);
+    m_absolutePq->setEnabled(state.absolutePqAvailable);
+    bool const adaptiveActive = !(state.absolutePqEnabled && state.absolutePqAvailable);
+    m_sourceHdrReferenceWhiteSlider->setEnabled(adaptiveActive);
+    m_sourceHdrReferenceWhiteSpin->setEnabled(adaptiveActive);
+    m_sourceHdrReferenceWhitePresets->setEnabled(adaptiveActive);
+    m_absolutePqStatus->setVisible(state.absolutePqEnabled && !state.absolutePqAvailable);
+    int const volumePercent = qRound(qBound(0.0, state.volume, 1.0) * 100.0);
     m_volumeSlider->setValue(volumePercent);
     m_volumeSpin->setValue(volumePercent);
-    m_blankOtherDisplays->setVisible(blankingAvailable);
-    m_blankOtherDisplays->setChecked(blankingEnabled);
+    m_blankOtherDisplays->setVisible(state.blankingAvailable);
+    m_blankOtherDisplays->setChecked(state.blankingEnabled);
 }
 
 void SettingsDialog::refreshSubtitles() {

@@ -9,6 +9,7 @@ bool RenderedVideoSurfaceDescription::isValid() const {
            alphaMode == RenderedVideoAlphaMode::Opaque && std::isfinite(referenceWhiteNits) &&
            referenceWhiteNits > 0.0f && std::isfinite(targetMinimumLuminanceNits) &&
            std::isfinite(targetPeakHeadroom) && targetPeakHeadroom >= 1.0f &&
+           (!absolutePqAvailable || renderingMode == VideoRenderingMode::AdaptiveHdr) &&
            (targetMinimumLuminanceKnown ? targetMinimumLuminanceNits >= 0.0f &&
                                               targetMinimumLuminanceNits <= referenceWhiteNits * targetPeakHeadroom
                                         : targetMinimumLuminanceNits == 0.0f) &&

@@ -32,7 +32,91 @@ class PresentationTargetTest final : public QObject {
     void calculation_data();
     void calculation();
     void renderingIntentIsIndependentOfHeadroom();
+    void absolutePqCapability_data();
+    void absolutePqCapability();
 };
+
+void PresentationTargetTest::absolutePqCapability_data() {
+    QTest::addColumn<DisplayState>("display");
+    QTest::addColumn<PresentationBackendState>("backend");
+    QTest::addColumn<bool>("available");
+
+    PresentationBackendState supported;
+    supported.hdrPresentationActive = true;
+    supported.absoluteLuminanceSupported = true;
+    supported.sceneReferred = true;
+    supported.sdrWhiteKnown = true;
+    supported.sdrWhiteNits = 200.0f;
+    supported.luminanceKnown = true;
+    supported.minLuminanceNits = 0.0f;
+    supported.maxLuminanceNits = 1000.0f;
+    QTest::newRow("known-windows-scrgb") << DisplayState{} << supported << true;
+    {
+        auto backend = supported;
+        backend.absoluteLuminanceSupported = false;
+        QTest::newRow("known-range-without-absolute-transport") << DisplayState{} << backend << false;
+    }
+    {
+        auto backend = supported;
+        backend.hdrPresentationActive = false;
+        QTest::newRow("sdr-output") << DisplayState{} << backend << false;
+    }
+    {
+        auto backend = supported;
+        backend.sdrWhiteKnown = false;
+        QTest::newRow("unknown-white") << DisplayState{} << backend << false;
+    }
+    {
+        auto backend = supported;
+        backend.luminanceKnown = false;
+        QTest::newRow("unknown-physical-range") << DisplayState{} << backend << false;
+    }
+    {
+        auto backend = supported;
+        backend.maxLuminanceNits = 199.0f;
+        QTest::newRow("peak-below-white") << DisplayState{} << backend << false;
+        backend.maxLuminanceNits = 200.0f;
+        QTest::newRow("peak-equals-white") << DisplayState{} << backend << true;
+    }
+    {
+        auto backend = supported;
+        backend.minLuminanceNits = 1001.0f;
+        QTest::newRow("invalid-physical-range") << DisplayState{} << backend << false;
+    }
+    {
+        DisplayState display;
+        display.valid = true;
+        display.colorMode = DisplayColorMode::WideColorGamut;
+        display.luminanceBehavior = DisplayLuminanceBehavior::DisplayReferred;
+        QTest::newRow("wcg-overrides-stale-hdr-backend") << display << supported << false;
+        display.colorMode = DisplayColorMode::StandardDynamicRange;
+        QTest::newRow("sdr-overrides-stale-hdr-backend") << display << supported << false;
+    }
+    {
+        DisplayState display;
+        display.valid = true;
+        display.colorMode = DisplayColorMode::HighDynamicRange;
+        display.luminanceBehavior = DisplayLuminanceBehavior::DisplayReferred;
+        display.currentHeadroom = 5.0f;
+        PresentationBackendState backend;
+        backend.hdrPresentationActive = true;
+        QTest::newRow("macos-relative-edr") << display << backend << false;
+        display.sdrWhiteKnown = true;
+        display.sdrWhiteNits = 200.0f;
+        display.luminanceKnown = true;
+        display.maxLuminanceNits = 1000.0f;
+        QTest::newRow("wayland-known-preferred-range") << display << backend << false;
+    }
+}
+
+void PresentationTargetTest::absolutePqCapability() {
+    QFETCH(DisplayState, display);
+    QFETCH(PresentationBackendState, backend);
+    QFETCH(bool, available);
+    QVERIFY(!PresentationBackendState{}.absoluteLuminanceSupported);
+    QVERIFY(!PresentationTarget{}.absolutePqAvailable);
+    QCOMPARE(calculatePresentationTarget(display, backend).absolutePqAvailable, available);
+}
 
 void PresentationTargetTest::renderingIntentIsIndependentOfHeadroom() {
     PresentationSurfaceContract native;
@@ -405,6 +489,7 @@ void PresentationTargetTest::calculation() {
     PresentationTarget const actual = calculatePresentationTarget(display, backend);
 
     QCOMPARE(actual.hdrPresentationActive, expected.hdrPresentationActive);
+    QCOMPARE(actual.absolutePqAvailable, expected.absolutePqAvailable);
     QCOMPARE(actual.sceneReferred, expected.sceneReferred);
     QCOMPARE(actual.targetPrimariesKnown, expected.targetPrimariesKnown);
     QVERIFY(actual.targetPrimaries == expected.targetPrimaries);

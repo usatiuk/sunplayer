@@ -18,6 +18,7 @@ namespace {
 constexpr auto volumeKey = "playback/volume";
 constexpr auto preferHdr10PlusKey = "playback/preferHdr10Plus";
 constexpr auto sourceHdrReferenceWhiteKey = "playback/sourceHdrReferenceWhiteNits";
+constexpr auto absolutePqEnabledKey = "playback/absolutePqEnabled";
 constexpr auto blankOtherDisplaysKey = "fullscreen/blankOtherDisplays";
 constexpr auto subtitleAppearancePrefix = "subtitles/appearance";
 constexpr auto appearanceModeKey = "subtitles/appearance/mode";
@@ -165,6 +166,13 @@ ApplicationSettings::Values ApplicationSettings::load() {
         }
     }
 
+    if (m_settings.contains(QLatin1StringView(absolutePqEnabledKey))) {
+        values.absolutePqEnabled = parseBoolean(m_settings.value(QLatin1StringView(absolutePqEnabledKey)));
+        if (!values.absolutePqEnabled) {
+            reportInvalidValue(QString::fromLatin1(absolutePqEnabledKey));
+        }
+    }
+
     if (m_settings.contains(QLatin1StringView(sourceHdrReferenceWhiteKey))) {
         auto const nits = parseNumber(m_settings.value(QLatin1StringView(sourceHdrReferenceWhiteKey)),
                                       DecodedVideoSource::minimumSourceHdrReferenceWhiteNits,
@@ -263,6 +271,11 @@ void ApplicationSettings::setVolume(qreal volume) {
 
 void ApplicationSettings::setPreferHdr10Plus(bool enabled) {
     m_settings.setValue(QLatin1StringView(preferHdr10PlusKey), enabled);
+    reportStatus();
+}
+
+void ApplicationSettings::setAbsolutePqEnabled(bool enabled) {
+    m_settings.setValue(QLatin1StringView(absolutePqEnabledKey), enabled);
     reportStatus();
 }
 

@@ -20,6 +20,7 @@ class SettingsDialogTest final : public QObject {
   private slots:
     void selectsRequestedPageAndMirrorsPlayback();
     void editsHdrReferenceWhite();
+    void absolutePqAvailabilityPreservesPreference();
     void editsSubtitleSettingsLive();
     void previewsAndRollsBackTextColor();
     void appliesPresetsAndRestoresDefaults();
@@ -46,7 +47,7 @@ void SettingsDialogTest::selectsRequestedPageAndMirrorsPlayback() {
     auto* const hdr10Plus = dialog.findChild<QCheckBox*>(QStringLiteral("settingsPreferHdr10Plus"));
     QVERIFY(hdr10Plus);
     QSignalSpy preferenceEdits(&dialog, &SettingsDialog::preferHdr10PlusEdited);
-    dialog.setPlaybackState(0.35, true, true, false, DecodedVideoSource::defaultSourceHdrReferenceWhiteNits);
+    dialog.setPlaybackState({.volume = 0.35, .blankingAvailable = true, .blankingEnabled = true});
     QVERIFY(!hdr10Plus->isChecked());
     QCOMPARE(preferenceEdits.count(), 0);
     hdr10Plus->setChecked(true);
@@ -103,11 +104,59 @@ void SettingsDialogTest::editsHdrReferenceWhite() {
     QCOMPARE(spin->value(), slider->value());
     QCOMPARE(edits.count(), 1);
     edits.clear();
-    dialog.setPlaybackState(0.5, false, false, false, 150);
+    dialog.setPlaybackState({.volume = 0.5, .sourceHdrReferenceWhiteNits = 150});
     QCOMPARE(slider->value(), 150);
     QCOMPARE(spin->value(), 150);
     QCOMPARE(edits.count(), 0);
     QCOMPARE(settings.brightness(), subtitleBrightness);
+}
+
+void SettingsDialogTest::absolutePqAvailabilityPreservesPreference() {
+    SubtitleSettings settings;
+    SettingsDialog dialog(settings);
+    auto* const absolute = dialog.findChild<QCheckBox*>(QStringLiteral("settingsAbsolutePq"));
+    auto* const status = dialog.findChild<QLabel*>(QStringLiteral("settingsAbsolutePqStatus"));
+    auto* const slider = dialog.findChild<QSlider*>(QStringLiteral("settingsSourceHdrReferenceWhiteSlider"));
+    auto* const spin = dialog.findChild<QSpinBox*>(QStringLiteral("settingsSourceHdrReferenceWhiteSpin"));
+    auto* const low = dialog.findChild<QPushButton*>(QStringLiteral("settingsSourceHdrReferenceWhitePreset100"));
+    auto* const high = dialog.findChild<QPushButton*>(QStringLiteral("settingsSourceHdrReferenceWhitePreset203"));
+    QVERIFY(absolute && status && slider && spin && low && high);
+    QVERIFY(!absolute->isChecked());
+    QVERIFY(!absolute->isEnabled());
+    QSignalSpy edits(&dialog, &SettingsDialog::absolutePqEnabledEdited);
+    QSignalSpy whiteEdits(&dialog, &SettingsDialog::sourceHdrReferenceWhiteNitsEdited);
+    SettingsDialog::PlaybackState state{.sourceHdrReferenceWhiteNits = 150};
+    for (bool selected : {false, true}) {
+        state.absolutePqEnabled = selected;
+        for (bool available : {true, false, true}) {
+            state.absolutePqAvailable = available;
+            dialog.setPlaybackState(state);
+            QCOMPARE(absolute->isChecked(), selected);
+            QCOMPARE(absolute->isEnabled(), available);
+            QCOMPARE(status->isHidden(), !(selected && !available));
+            bool const adaptive = !(selected && available);
+            QCOMPARE(slider->isEnabled(), adaptive);
+            QCOMPARE(spin->isEnabled(), adaptive);
+            QCOMPARE(low->isEnabled(), adaptive);
+            QCOMPARE(high->isEnabled(), adaptive);
+            QCOMPARE(slider->value(), 150);
+            QCOMPARE(spin->value(), 150);
+        }
+    }
+    QCOMPARE(edits.count(), 0);
+    QCOMPARE(whiteEdits.count(), 0);
+    state.absolutePqAvailable = false;
+    dialog.setPlaybackState(state);
+    absolute->click();
+    QCOMPARE(edits.count(), 0);
+    QVERIFY(absolute->isChecked());
+    state.absolutePqAvailable = true;
+    dialog.setPlaybackState(state);
+    QVERIFY(absolute->isChecked());
+    QVERIFY(!slider->isEnabled());
+    absolute->click();
+    QCOMPARE(edits.count(), 1);
+    QCOMPARE(edits.takeFirst().at(0).toBool(), false);
 }
 
 void SettingsDialogTest::editsSubtitleSettingsLive() {

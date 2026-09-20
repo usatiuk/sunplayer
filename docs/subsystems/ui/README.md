@@ -364,6 +364,12 @@ preset buttons, default 100. It adjusts PQ/HDR10+/Dolby Vision video on SDR and
 HDR outputs through shared mapping. SDR input, HLG, UI, and subtitle brightness
 are unchanged. Edits use the existing paused-frame update path.
 
+Absolute PQ is off by default and available only on supported Windows HDR
+output. Enabling it disables the source reference-white controls. On other
+outputs its checkbox is greyed out, its saved preference is retained, and
+adaptive rendering and reference-white controls remain active. Output changes
+refresh these controls while Settings is open. HLG remains unchanged.
+
 Video details identify both Dolby Vision and HDR10+ on dual-format frames. Output
 details refresh after successful presentation, including paused settings edits.
 

@@ -20,6 +20,8 @@ struct PresentationBackendState {
     QString videoCopySummary = QStringLiteral("Unavailable");
     QString videoFallbackReason;
     bool hdrPresentationActive = false;
+    // The active output encoding has a defined absolute luminance scale.
+    bool absoluteLuminanceSupported = false;
     bool sceneReferred = false;
     // A stable HDR content surface may remain active on an SDR output, whose
     // valid 1x preferred target still describes the compositor conversion.
@@ -37,6 +39,7 @@ struct PresentationTarget {
     bool operator==(PresentationTarget const&) const = default;
 
     bool hdrPresentationActive = false;
+    bool absolutePqAvailable = false;
     bool sceneReferred = false;
     bool targetPrimariesKnown = false;
     ColorPrimaries targetPrimaries;

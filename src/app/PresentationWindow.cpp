@@ -160,6 +160,11 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
     if (storedSettings.preferHdr10Plus) {
         m_mediaSession->videoSource().setPreferHdr10Plus(*storedSettings.preferHdr10Plus);
     }
+    if (storedSettings.absolutePqEnabled) {
+        m_mediaSession->videoSource().setAbsolutePqEnabled(*storedSettings.absolutePqEnabled);
+    }
+    connect(&m_mediaSession->videoSource(), &DecodedVideoSource::absolutePqEnabledChanged, this,
+            [this] { m_applicationSettings.setAbsolutePqEnabled(m_mediaSession->videoSource().absolutePqEnabled()); });
     if (storedSettings.sourceHdrReferenceWhiteNits) {
         m_mediaSession->videoSource().setSourceHdrReferenceWhiteNits(*storedSettings.sourceHdrReferenceWhiteNits);
     }
@@ -302,10 +307,20 @@ void PresentationWindow::showSettings(int page) {
     m_settingsDialog = dialog;
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     auto const refreshPlayback = [this, dialog] {
-        dialog->setPlaybackState(m_mediaSession->volume(), otherDisplayBlankingAvailable(),
-                                 blankOtherDisplaysInFullscreen(), m_mediaSession->videoSource().preferHdr10Plus(),
-                                 m_mediaSession->videoSource().sourceHdrReferenceWhiteNits());
+        dialog->setPlaybackState({
+            .volume = m_mediaSession->volume(),
+            .blankingAvailable = otherDisplayBlankingAvailable(),
+            .blankingEnabled = blankOtherDisplaysInFullscreen(),
+            .preferHdr10Plus = m_mediaSession->videoSource().preferHdr10Plus(),
+            .sourceHdrReferenceWhiteNits = m_mediaSession->videoSource().sourceHdrReferenceWhiteNits(),
+            .absolutePqEnabled = m_mediaSession->videoSource().absolutePqEnabled(),
+            .absolutePqAvailable = m_outputState->presentationTarget().absolutePqAvailable,
+        });
     };
+    connect(dialog, &SettingsDialog::absolutePqEnabledEdited, &m_mediaSession->videoSource(),
+            &DecodedVideoSource::setAbsolutePqEnabled);
+    connect(&m_mediaSession->videoSource(), &DecodedVideoSource::absolutePqEnabledChanged, dialog, refreshPlayback);
+    connect(m_outputState.get(), &PresentationOutputState::stateChanged, dialog, refreshPlayback);
     connect(dialog, &SettingsDialog::preferHdr10PlusEdited, &m_mediaSession->videoSource(),
             &DecodedVideoSource::setPreferHdr10Plus);
     connect(&m_mediaSession->videoSource(), &DecodedVideoSource::preferHdr10PlusChanged, dialog, refreshPlayback);

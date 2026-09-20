@@ -40,6 +40,8 @@ class DecodedVideoSource final : public RenderedVideoSource {
     void clearFrame();
     bool preferHdr10Plus() const;
     void setPreferHdr10Plus(bool enabled);
+    bool absolutePqEnabled() const;
+    void setAbsolutePqEnabled(bool enabled);
     int sourceHdrReferenceWhiteNits() const;
     void setSourceHdrReferenceWhiteNits(int nits);
 
@@ -54,6 +56,7 @@ class DecodedVideoSource final : public RenderedVideoSource {
   signals:
     void frameChanged();
     void preferHdr10PlusChanged();
+    void absolutePqEnabledChanged();
     void sourceHdrReferenceWhiteNitsChanged();
     void presentationFailed(VideoFailure const& failure);
 
@@ -65,6 +68,7 @@ class DecodedVideoSource final : public RenderedVideoSource {
     DecodedVideoFrameSelector* m_selector = nullptr;
     VideoTargetReadback m_readback;
     bool m_preferHdr10Plus = false;
+    bool m_absolutePqEnabled = false;
     int m_sourceHdrReferenceWhiteNits = defaultSourceHdrReferenceWhiteNits;
     std::uint64_t m_contentRevision = 1;
     std::uint64_t m_producerConfigurationRevision = 1;

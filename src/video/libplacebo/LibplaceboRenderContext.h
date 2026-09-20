@@ -15,11 +15,13 @@ struct LibplaceboTargetLuminance {
 };
 
 // The source color must already be inferred. PQ/Dolby uses the selected source
-// reference white as its virtual target coordinate on both SDR and HDR outputs.
+// reference white as its virtual target coordinate, or physical display white
+// when Absolute PQ is requested and supported by the HDR target.
 // Relative sources retain libplacebo's 203-nit coordinate.
 LibplaceboTargetLuminance calculateLibplaceboTargetLuminance(pl_frame const& source,
                                                              RenderedVideoSurfaceDescription const& target,
-                                                             float sourceHdrReferenceWhiteNits);
+                                                             float sourceHdrReferenceWhiteNits,
+                                                             bool absolutePqEnabled = false);
 
 // Translates the surface's known/value pair into libplacebo target metadata.
 // Numeric zero means unknown to libplacebo; PL_COLOR_HDR_BLACK means known
@@ -46,14 +48,14 @@ class LibplaceboRenderContext final {
     bool renderDecoded(pl_frame const& source, pl_tex targetTexture,
                        RenderedVideoSurfaceDescription const& targetDescription,
                        LibplaceboColorPolicyDecision const& colorPolicy, float sourceHdrReferenceWhiteNits,
-                       QString* error = nullptr);
+                       bool absolutePqEnabled, QString* error = nullptr);
 
   private:
     bool renderWithPolicy(pl_frame const& source, pl_tex targetTexture,
                           RenderedVideoSurfaceDescription const& targetDescription,
                           LibplaceboToneMappingFunction toneMapping, enum pl_hdr_metadata_type metadata,
                           std::optional<float> effectiveSourceMaximumNits, float sourceHdrReferenceWhiteNits,
-                          QString* error);
+                          bool absolutePqEnabled, QString* error);
 
     pl_renderer m_renderer = nullptr;
 };

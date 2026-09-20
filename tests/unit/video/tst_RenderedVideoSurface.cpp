@@ -57,6 +57,7 @@ class RenderedVideoSurfaceTest final : public QObject {
     void descriptionRequiresCompleteSemantics();
     void descriptionRequiresFiniteLuminance();
     void descriptionRequiresValidTargetPrimaries();
+    void absolutePqRequiresHdrAndInvalidatesReuse();
     void stateRequiresNonzeroIdentities();
     void equalSemanticStateIsReusableAcrossNativeChanges();
     void lifecycleAndContentChangesInvalidate();
@@ -69,6 +70,20 @@ class RenderedVideoSurfaceTest final : public QObject {
 void RenderedVideoSurfaceTest::canonicalDescriptionIsValid() {
     QVERIFY(canonicalDescription().isValid());
     QVERIFY(canonicalState().isValid());
+}
+
+void RenderedVideoSurfaceTest::absolutePqRequiresHdrAndInvalidatesReuse() {
+    auto completed = canonicalState();
+    QVERIFY(!completed.description.absolutePqAvailable);
+    completed.description.absolutePqAvailable = true;
+    QVERIFY(!completed.isValid());
+    completed.description.renderingMode = VideoRenderingMode::AdaptiveHdr;
+    QVERIFY(completed.isValid());
+    auto requested = completed;
+    requested.description.absolutePqAvailable = false;
+    QVERIFY(requested.isValid());
+    QVERIFY(!completed.isReusableFor(requested));
+    QVERIFY(!requested.isReusableFor(completed));
 }
 
 void RenderedVideoSurfaceTest::descriptionRequiresCompleteSemantics() {

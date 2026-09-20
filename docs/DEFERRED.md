@@ -7,6 +7,14 @@ accepted behavior merely because it is documented here.
 
 ## Graphics and display
 
+### Absolute PQ platform support
+
+Absolute PQ is available only on Windows HDR scRGB with known physical white
+and range. macOS relative EDR and the current Wayland perceptual surface remain
+adaptive. Extending support requires a native absolute-luminance contract;
+shared renderer arithmetic alone is insufficient. Physical display measurements
+and native HDR/SDR monitor-transition checks remain manual validation.
+
 ### Remaining macOS native-hardware and packaging validation
 
 The Apple-Silicon macOS path now runs QRhi Metal presentation, direct

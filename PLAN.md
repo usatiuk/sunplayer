@@ -71,6 +71,10 @@ Decoded PQ/HDR10+/Dolby Vision has a shared source reference-white control,
 paused-frame validation are tracked in
 [the reference-white plan](docs/plans/video-rendering/2026-09-20-hdr-reference-white.md).
 
+Optional Absolute PQ uses physical luminance on supported Windows HDR output,
+with adaptive playback remaining the default. SDR and HLG are unchanged; see
+[the Absolute PQ plan](docs/plans/video-rendering/2026-09-20-absolute-pq.md).
+
 The September 2026 color-policy update separates SDR compatibility from adaptive
 HDR headroom, unifies generic PQ metadata/fallback mapper selection, and adds
 capability-aware composed Wayland target-volume declarations. The bounded work

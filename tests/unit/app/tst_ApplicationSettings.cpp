@@ -66,6 +66,7 @@ class ApplicationSettingsTest final : public QObject {
     void defaultsAndRoundTrip();
     void rejectsInvalidValues();
     void hdrReferenceWhitePersistence();
+    void absolutePqPersistence();
     void acceptsPortableBooleanRepresentations();
     void subtitleAppearanceRoundTripAndReset();
     void subtitleAppearanceMaskedWritePreservesNeighbors();
@@ -85,6 +86,7 @@ void ApplicationSettingsTest::defaultsAndRoundTrip() {
         ApplicationSettings::Values const defaults = settings.load();
         QVERIFY(!defaults.volume);
         QVERIFY(!defaults.preferHdr10Plus);
+        QVERIFY(!defaults.absolutePqEnabled);
         QVERIFY(!defaults.sourceHdrReferenceWhiteNits);
         QVERIFY(!defaults.blankOtherDisplaysInFullscreen);
 
@@ -113,6 +115,30 @@ void ApplicationSettingsTest::defaultsAndRoundTrip() {
     QCOMPARE(stored.value(QStringLiteral("playback/volume")).toDouble(), 0.7);
     QCOMPARE(stored.value(QStringLiteral("fullscreen/blankOtherDisplays")).toBool(), true);
     QCOMPARE(stored.value(QStringLiteral("future/value")).toInt(), 17);
+}
+
+void ApplicationSettingsTest::absolutePqPersistence() {
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QString const path = settingsPath(directory);
+    for (bool enabled : {true, false}) {
+        ApplicationSettings settings(path);
+        settings.setAbsolutePqEnabled(enabled);
+        settings.sync();
+        QCOMPARE(ApplicationSettings(path).load().absolutePqEnabled, std::optional<bool>(enabled));
+    }
+    for (QString const& value : {QStringLiteral("true"), QStringLiteral("1")}) {
+        writeValue(path, QStringLiteral("playback/absolutePqEnabled"), value);
+        QCOMPARE(ApplicationSettings(path).load().absolutePqEnabled, std::optional<bool>(true));
+    }
+    writeValue(path, QStringLiteral("playback/absolutePqEnabled"), QStringLiteral("invalid"));
+    writeValue(path, QStringLiteral("playback/volume"), 0.35);
+    MessageCapture messages;
+    auto const loaded = ApplicationSettings(path).load();
+    QVERIFY(!loaded.absolutePqEnabled);
+    QCOMPARE(loaded.volume, std::optional<qreal>(0.35));
+    QCOMPARE(messages.settingsFaultCount(), 1);
+    QVERIFY(messages.hasSettingsFault(QStringLiteral("invalid_value")));
 }
 
 void ApplicationSettingsTest::hdrReferenceWhitePersistence() {

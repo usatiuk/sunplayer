@@ -63,5 +63,11 @@ PresentationTarget calculatePresentationTarget(DisplayState const& display, Pres
                                                                     ? display.potentialHeadroom
                                                                     : backendPotentialHeadroom);
     target.effectiveTargetHeadroom = std::max(1.0f, target.currentHeadroom / target.sdrScale);
+    target.absolutePqAvailable = backend.absoluteLuminanceSupported && target.hdrPresentationActive &&
+                                 (!display.valid || display.colorMode == DisplayColorMode::HighDynamicRange) &&
+                                 target.sceneReferred && target.sdrWhiteKnown && std::isfinite(target.sdrWhiteNits) &&
+                                 target.sdrWhiteNits > 0.0f && target.luminanceKnown &&
+                                 isValidDisplayLuminanceRange(target.minLuminanceNits, target.maxLuminanceNits) &&
+                                 target.maxLuminanceNits >= target.sdrWhiteNits;
     return target;
 }

@@ -523,6 +523,17 @@ Adaptive headroom-one sweeps and final composition exercise both 100 and 203.
 Persistence and Settings tests cover bounds, invalid values, presets, and
 slider/numeric-field synchronization without refresh-triggered edits.
 
+Absolute PQ GPU coverage keeps physical peak fixed while changing platform
+white and compares the real final compositor output for PQ, HDR10+, and Dolby
+Vision. An uncompressed 50-nit PQ patch independently checks the scRGB value
+50/80. Source-reference changes are ignored only in effective Absolute mode;
+unavailable output returns to adaptive pixels. Retained-frame tests toggle
+preference and capability without reimporting the frame. HLG and SDR input
+remain unchanged. Unit tests cover known SDR overriding a stale HDR backend,
+unknown physical data, saved preference, greyed-out Absolute controls, and
+reference-white controls following the effective mode. Native monitor movement
+and emitted luminance are still manual checks.
+
 Target-black regressions must distinguish unknown minimum from known physical
 zero. Coverage includes pinned libplacebo nominal-luminance inference, numeric
 BT.2446A samples below 1 nit, and an in-memory high-bit-depth PQ ramp through
