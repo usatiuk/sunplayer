@@ -7,6 +7,8 @@
 
 #include <QSize>
 
+#include "subtitles/SubtitleAppearance.h"
+
 class QRhi;
 class QRhiBuffer;
 class QRhiCommandBuffer;
@@ -27,7 +29,8 @@ struct alignas(16) HdrCompositorParameters {
     // Matches PresentationOutputEncoding's stable shader values.
     float outputEncoding = 2.0f;
     float subtitleOpacity = 1.0f;
-    std::array<float, 2> padding{};
+    float subtitleBrightness = static_cast<float>(SubtitleAppearanceValues{}.brightness);
+    float padding = 0.0f;
 };
 
 static_assert(std::is_standard_layout_v<HdrCompositorParameters>);
@@ -36,6 +39,7 @@ static_assert(offsetof(HdrCompositorParameters, sdrScale) == 24);
 static_assert(offsetof(HdrCompositorParameters, ndcYUp) == 28);
 static_assert(offsetof(HdrCompositorParameters, outputEncoding) == 32);
 static_assert(offsetof(HdrCompositorParameters, subtitleOpacity) == 36);
+static_assert(offsetof(HdrCompositorParameters, subtitleBrightness) == 40);
 
 // Final presentation pass; source color processing belongs to video producers.
 class HdrCompositor final {

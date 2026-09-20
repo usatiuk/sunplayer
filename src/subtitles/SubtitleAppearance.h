@@ -25,6 +25,7 @@ struct SubtitleAppearanceValues {
     PositionMode positionMode = PositionMode::Authored;
     qreal verticalPosition = 0.0;
     qreal overallOpacity = 1.0;
+    qreal brightness = 0.8;
 
     bool operator==(SubtitleAppearanceValues const&) const = default;
 };
@@ -50,5 +51,6 @@ constexpr SubtitleAppearanceFields Scale = 1U << 10U;
 constexpr SubtitleAppearanceFields PositionMode = 1U << 11U;
 constexpr SubtitleAppearanceFields VerticalPosition = 1U << 12U;
 constexpr SubtitleAppearanceFields OverallOpacity = 1U << 13U;
-constexpr SubtitleAppearanceFields All = (1U << 14U) - 1U;
+constexpr SubtitleAppearanceFields Brightness = 1U << 14U;
+constexpr SubtitleAppearanceFields All = (1U << 15U) - 1U;
 } // namespace SubtitleAppearanceField

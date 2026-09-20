@@ -426,3 +426,11 @@ chromaticities, native Wayland target-gamut behavior, P012/P016 capture, general
 rotation, physical macOS EDR output above SDR white and unlike-display
 transitions, native-GPU Linux Vulkan coverage, and the broader Vulkan
 resize/surface-recreation synchronization matrix remain unproven.
+
+Subtitle composition brightness comes from the existing appearance snapshot.
+After sRGB decoding, the compositor scales subtitle RGB by brightness (default
+0.8) before blending. Alpha and the video/UI layers are unaffected. This applies
+to text and bitmap subtitles and precedes the shared platform-white scale and
+output encoding. Like overall opacity, brightness does not advance the subtitle
+raster revision or invalidate decoded video. Zero brightness yields black
+subtitle pixels at their existing coverage, not transparent subtitles.

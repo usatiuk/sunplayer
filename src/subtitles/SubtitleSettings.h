@@ -22,6 +22,7 @@ class SubtitleSettings : public QObject {
     Q_PROPERTY(PositionMode positionMode READ positionMode WRITE setPositionMode NOTIFY settingsChanged)
     Q_PROPERTY(qreal verticalPosition READ verticalPosition WRITE setVerticalPosition NOTIFY settingsChanged)
     Q_PROPERTY(qreal overallOpacity READ overallOpacity WRITE setOverallOpacity NOTIFY settingsChanged)
+    Q_PROPERTY(qreal brightness READ brightness WRITE setBrightness NOTIFY settingsChanged)
     Q_PROPERTY(qulonglong rasterRevision READ rasterRevision NOTIFY settingsChanged)
 
   public:
@@ -50,6 +51,7 @@ class SubtitleSettings : public QObject {
     PositionMode positionMode() const;
     qreal verticalPosition() const;
     qreal overallOpacity() const;
+    qreal brightness() const;
     qulonglong rasterRevision() const;
 
     void setAppearanceMode(AppearanceMode value);
@@ -66,6 +68,7 @@ class SubtitleSettings : public QObject {
     void setPositionMode(PositionMode value);
     void setVerticalPosition(qreal value);
     void setOverallOpacity(qreal value);
+    void setBrightness(qreal value);
 
     SubtitleAppearanceValues values() const;
     SubtitleAppearanceSnapshot snapshot() const;

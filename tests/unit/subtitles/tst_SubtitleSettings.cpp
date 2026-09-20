@@ -9,6 +9,7 @@ class SubtitleSettingsTest final : public QObject {
   private slots:
     void settersReportPreciseDirtyFields();
     void overallOpacityDoesNotInvalidateRaster();
+    void brightnessChangesOnlyComposition();
     void presetsAreAtomic();
     void restoreDefaultsRemovesPersistenceEvenWhenUnchanged();
 };
@@ -46,6 +47,34 @@ void SubtitleSettingsTest::overallOpacityDoesNotInvalidateRaster() {
 
     settings.setTextOpacity(0.5);
     QVERIFY(settings.rasterRevision() > initialRevision);
+}
+
+void SubtitleSettingsTest::brightnessChangesOnlyComposition() {
+    SubtitleSettings settings;
+    QCOMPARE(settings.brightness(), 0.8);
+    auto const revision = settings.rasterRevision();
+    auto const original = settings.values();
+    QSignalSpy updates(&settings, &SubtitleSettings::settingsChanged);
+    SubtitleAppearanceFields dirty = 0;
+    connect(&settings, &SubtitleSettings::persistenceChanged, this,
+            [&dirty](SubtitleAppearanceFields fields) { dirty = fields; });
+    settings.setBrightness(0.25);
+    QCOMPARE(updates.count(), 1);
+    QCOMPARE(dirty, SubtitleAppearanceField::Brightness);
+    QCOMPARE(settings.rasterRevision(), revision);
+    QCOMPARE(settings.textColor(), original.textColor);
+    QCOMPARE(settings.overallOpacity(), original.overallOpacity);
+    settings.setBrightness(0.25);
+    settings.setBrightness(1.1);
+    QCOMPARE(updates.count(), 1);
+    settings.applyHighContrast();
+    QCOMPARE(settings.brightness(), 0.25);
+    settings.applyAsAuthored();
+    QCOMPARE(settings.brightness(), 0.25);
+    auto const beforeReset = settings.rasterRevision();
+    settings.restoreDefaults();
+    QCOMPARE(settings.brightness(), 0.8);
+    QCOMPARE(settings.rasterRevision(), beforeReset);
 }
 
 void SubtitleSettingsTest::presetsAreAtomic() {

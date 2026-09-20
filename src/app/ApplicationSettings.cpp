@@ -33,11 +33,13 @@ constexpr auto positionModeKey = "subtitles/appearance/positionMode";
 constexpr auto verticalPositionKey = "subtitles/appearance/verticalPosition";
 constexpr auto overallOpacityKey = "subtitles/appearance/overallOpacity";
 
-constexpr std::array<char const*, 14> subtitleAppearanceKeys{
+constexpr auto brightnessKey = "subtitles/appearance/brightness";
+
+constexpr std::array<char const*, 15> subtitleAppearanceKeys{
     appearanceModeKey,   textColorKey,         textOpacityKey, backgroundEnabledKey,
     backgroundColorKey,  backgroundOpacityKey, edgeStyleKey,   edgeColorKey,
     edgeOpacityKey,      sizeModeKey,          scaleKey,       positionModeKey,
-    verticalPositionKey, overallOpacityKey,
+    verticalPositionKey, overallOpacityKey,    brightnessKey,
 };
 
 std::optional<qreal> parseVolume(QVariant const& value) {
@@ -229,6 +231,7 @@ ApplicationSettings::Values ApplicationSettings::load() {
         load(
             overallOpacityKey, [](QVariant const& value) { return parseNumber(value, 0.0, 1.0); },
             appearance.overallOpacity);
+        load(brightnessKey, [](QVariant const& value) { return parseNumber(value, 0.0, 1.0); }, appearance.brightness);
         values.subtitleAppearance = appearance;
     }
 
@@ -286,6 +289,7 @@ void ApplicationSettings::setSubtitleAppearance(SubtitleAppearanceValues const& 
                                                                                 : QStringLiteral("authored"));
     write(SubtitleAppearanceField::VerticalPosition, verticalPositionKey, values.verticalPosition);
     write(SubtitleAppearanceField::OverallOpacity, overallOpacityKey, values.overallOpacity);
+    write(SubtitleAppearanceField::Brightness, brightnessKey, values.brightness);
     reportStatus();
 }
 

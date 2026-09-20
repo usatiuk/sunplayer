@@ -440,6 +440,7 @@ void RhiPresentationEngine::renderFrame() {
     };
     parameters.sdrScale = sdrScale;
     parameters.subtitleOpacity = static_cast<float>(subtitleAppearance.overallOpacity);
+    parameters.subtitleBrightness = static_cast<float>(subtitleAppearance.brightness);
     parameters.ndcYUp = m_rhi->isYUpInNDC() ? 1.0f : 0.0f;
     // Final encoding follows the successfully created presentation path, not
     // asynchronous OS HDR metadata that may already describe another output.

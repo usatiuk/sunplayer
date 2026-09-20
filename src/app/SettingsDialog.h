@@ -61,6 +61,8 @@ class SettingsDialog final : public QDialog {
     QComboBox* m_positionMode = nullptr;
     QSlider* m_verticalPosition = nullptr;
     QSpinBox* m_verticalPositionSpin = nullptr;
+    QSlider* m_brightness = nullptr;
+    QSpinBox* m_brightnessSpin = nullptr;
     QSlider* m_overallOpacity = nullptr;
     QSpinBox* m_overallOpacitySpin = nullptr;
     QLabel* m_warning = nullptr;

@@ -185,6 +185,7 @@ void ApplicationSettingsTest::subtitleAppearanceRoundTripAndReset() {
     expected.positionMode = SubtitleAppearanceValues::PositionMode::Custom;
     expected.verticalPosition = 1.0;
     expected.overallOpacity = 0.25;
+    expected.brightness = 0.35;
 
     {
         ApplicationSettings settings(path);

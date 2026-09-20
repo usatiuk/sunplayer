@@ -753,3 +753,9 @@ HDR10+ and verify paused remapping in both directions. Authored-curve tests
 retain ST2094-40 when average metadata is zero, with library-owned luminance
 inference and finite output. They do not assert equal brightness across changing
 metadata. Native appearance and physical display output remain manual checks.
+
+Subtitle brightness regressions cover saved values, live slider/spin editing,
+preset preservation, default reset, and unchanged raster revision. GPU readback
+covers 0%, 25%, 80%, and 100% through sRGB, gamma-2.2, extended-linear, and PQ
+output. Opaque subtitles remain opaque even at zero brightness; translucent
+colored subtitles retain independent opacity and layer ordering.

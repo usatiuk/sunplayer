@@ -15,6 +15,7 @@ layout(std140, binding = 3) uniform CompositorParams {
     float ndcYUp;
     float outputEncoding;
     float subtitleOpacity;
+    float subtitleBrightness;
 };
 
 vec3 srgbToLinear(vec3 value)
@@ -91,7 +92,7 @@ void main()
     }
 
     color = compositeSrgbPremultiplied(
-        color, texture(subtitleTexture, displayUv), 0.8, subtitleOpacity);
+        color, texture(subtitleTexture, displayUv), subtitleBrightness, subtitleOpacity);
     color = compositeSrgbPremultiplied(
         color, texture(uiTexture, displayUv), 1.0, 1.0);
     color *= sdrScale;

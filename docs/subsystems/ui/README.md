@@ -35,7 +35,7 @@ Settings dialog, matching the existing About/support surface. Its Playback tab
 shares canonical volume and display-blanking owners. Its Subtitles tab exposes
 authored/high-contrast/large-text presets plus unrestricted RGB colors,
 component opacity, background and edge choices, 50–200% scale, bottom-to-top
-position, overall opacity, and reset. The subtitle submenu opens that tab
+position, brightness, overall opacity, and reset. The subtitle submenu opens that tab
 directly. Every edit writes through immediately and updates the real active cue
 without pausing playback; there is no Apply/Cancel draft state.
 
@@ -361,3 +361,9 @@ including while paused, and persists through the existing application settings.
 
 Video details identify both Dolby Vision and HDR10+ on dual-format frames. Output
 details refresh after successful presentation, including paused settings edits.
+
+Subtitle brightness is a 0–100% slider with a percentage field, default 80%.
+It changes the entire subtitle layer in linear light without editing its colors
+or opacity. 100% matches display reference white on SDR and HDR. It remains
+available with authored styling; style presets preserve it and Restore defaults
+returns it to 80%. Changes apply while paused through the existing settings signal.

@@ -45,6 +45,7 @@ SubtitleSettings::PositionMode SubtitleSettings::positionMode() const {
 }
 qreal SubtitleSettings::verticalPosition() const { return m_values.verticalPosition; }
 qreal SubtitleSettings::overallOpacity() const { return m_values.overallOpacity; }
+qreal SubtitleSettings::brightness() const { return m_values.brightness; }
 qulonglong SubtitleSettings::rasterRevision() const { return m_rasterRevision; }
 
 void SubtitleSettings::setAppearanceMode(AppearanceMode value) {
@@ -144,6 +145,13 @@ void SubtitleSettings::setOverallOpacity(qreal value) {
     }
 }
 
+void SubtitleSettings::setBrightness(qreal value) {
+    if (validUnit(value) && !qFuzzyCompare(value, m_values.brightness)) {
+        m_values.brightness = value;
+        changed(SubtitleAppearanceField::Brightness, false);
+    }
+}
+
 SubtitleAppearanceValues SubtitleSettings::values() const { return m_values; }
 SubtitleAppearanceSnapshot SubtitleSettings::snapshot() const {
     SubtitleAppearanceSnapshot result;
@@ -217,7 +225,9 @@ void SubtitleSettings::apply(SubtitleAppearanceValues values, bool persist, bool
     mark(values.positionMode != m_values.positionMode, SubtitleAppearanceField::PositionMode);
     mark(!qFuzzyCompare(values.verticalPosition, m_values.verticalPosition), SubtitleAppearanceField::VerticalPosition);
     mark(!qFuzzyCompare(values.overallOpacity, m_values.overallOpacity), SubtitleAppearanceField::OverallOpacity);
-    bool const rasterChanged = (dirtyFields & ~SubtitleAppearanceField::OverallOpacity) != 0;
+    mark(!qFuzzyCompare(values.brightness, m_values.brightness), SubtitleAppearanceField::Brightness);
+    bool const rasterChanged =
+        (dirtyFields & ~(SubtitleAppearanceField::OverallOpacity | SubtitleAppearanceField::Brightness)) != 0;
     m_values = std::move(values);
     if (rasterChanged && ++m_rasterRevision == 0) {
         ++m_rasterRevision;

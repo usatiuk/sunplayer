@@ -230,6 +230,14 @@ SettingsDialog::SettingsDialog(SubtitleSettings& subtitleSettings) : m_subtitleS
 
     auto* const opacity = new QGroupBox(tr("Overall"), subtitlesPage);
     auto* const opacityLayout = new QFormLayout(opacity);
+    opacityLayout->addRow(tr("Subtitle brightness:"), sliderRow(m_brightness, m_brightnessSpin, opacity));
+    m_brightness->setObjectName(QStringLiteral("subtitleBrightness"));
+    m_brightness->setAccessibleName(tr("Subtitle brightness slider"));
+    m_brightnessSpin->setObjectName(QStringLiteral("subtitleBrightnessSpin"));
+    m_brightnessSpin->setAccessibleName(tr("Subtitle brightness percentage"));
+    auto* const brightnessHint = new QLabel(tr("100% matches display reference white."), opacity);
+    brightnessHint->setWordWrap(true);
+    opacityLayout->addRow(QString(), brightnessHint);
     opacityLayout->addRow(tr("Subtitle opacity:"), sliderRow(m_overallOpacity, m_overallOpacitySpin, opacity));
     m_overallOpacity->setObjectName(QStringLiteral("subtitleOverallOpacity"));
     m_overallOpacity->setAccessibleName(tr("Overall subtitle opacity slider"));
@@ -309,6 +317,10 @@ SettingsDialog::SettingsDialog(SubtitleSettings& subtitleSettings) : m_subtitleS
             [this](int value) { m_subtitleSettings.setVerticalPosition(value / 100.0); });
     connect(m_verticalPositionSpin, &QSpinBox::valueChanged, this,
             [this](int value) { m_subtitleSettings.setVerticalPosition(value / 100.0); });
+    connect(m_brightness, &QSlider::valueChanged, this,
+            [this](int value) { m_subtitleSettings.setBrightness(value / 100.0); });
+    connect(m_brightnessSpin, &QSpinBox::valueChanged, this,
+            [this](int value) { m_subtitleSettings.setBrightness(value / 100.0); });
     connect(m_overallOpacity, &QSlider::valueChanged, this,
             [this](int value) { m_subtitleSettings.setOverallOpacity(value / 100.0); });
     connect(m_overallOpacitySpin, &QSpinBox::valueChanged, this,
@@ -342,7 +354,8 @@ void SettingsDialog::refreshSubtitles() {
         m_backgroundOpacity, m_backgroundPreset,   m_edgeStyle,
         m_edgeOpacity,       m_sizeMode,           m_scale,
         m_positionMode,      m_verticalPosition,   m_verticalPositionSpin,
-        m_overallOpacity,    m_overallOpacitySpin,
+        m_overallOpacity,    m_overallOpacitySpin, m_brightness,
+        m_brightnessSpin,
     };
     std::vector<QSignalBlocker> blockers;
     blockers.reserve(controls.size());
@@ -386,6 +399,9 @@ void SettingsDialog::refreshSubtitles() {
     int const position = qRound(m_subtitleSettings.verticalPosition() * 100.0);
     m_verticalPosition->setValue(position);
     m_verticalPositionSpin->setValue(position);
+    int const brightness = qRound(m_subtitleSettings.brightness() * 100.0);
+    m_brightness->setValue(brightness);
+    m_brightnessSpin->setValue(brightness);
     int const opacity = qRound(m_subtitleSettings.overallOpacity() * 100.0);
     m_overallOpacity->setValue(opacity);
     m_overallOpacitySpin->setValue(opacity);

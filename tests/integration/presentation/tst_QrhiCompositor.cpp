@@ -558,6 +558,7 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     constexpr float subtitleLayerOpacity = 0.5f;
     linearParameters.sdrScale = linearSdrScale;
     linearParameters.subtitleOpacity = subtitleLayerOpacity;
+    linearParameters.subtitleBrightness = 0.25f;
     linearParameters.outputEncoding = 2.0f;
     linearOutputCompositor.render(*commandBuffer, *linearOutputTarget, outputSize, linearParameters);
 
@@ -576,15 +577,14 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
 
     float const alpha = 128.0f / 255.0f;
     float const encodedStraightRed = (64.0f / 255.0f) / alpha;
-    constexpr float subtitleBrightness = 0.8f;
-    auto const expectedLinearBlend =
-        [alpha, subtitleBrightness, subtitleLayerOpacity](float baseLinear, float encodedSubtitle, float encodedUi,
-                                                         float scale) {
-            float const subtitleAlpha = alpha * subtitleLayerOpacity;
-            float const withSubtitle = srgbToLinear(encodedSubtitle) * (subtitleBrightness * subtitleAlpha) +
-                                       baseLinear * (1.0f - subtitleAlpha);
-            return (srgbToLinear(encodedUi) * alpha + withSubtitle * (1.0f - alpha)) * scale;
-        };
+    constexpr float subtitleBrightness = 0.25f;
+    auto const expectedLinearBlend = [alpha, subtitleBrightness, subtitleLayerOpacity](
+                                         float baseLinear, float encodedSubtitle, float encodedUi, float scale) {
+        float const subtitleAlpha = alpha * subtitleLayerOpacity;
+        float const withSubtitle =
+            srgbToLinear(encodedSubtitle) * (subtitleBrightness * subtitleAlpha) + baseLinear * (1.0f - subtitleAlpha);
+        return (srgbToLinear(encodedUi) * alpha + withSubtitle * (1.0f - alpha)) * scale;
+    };
 
     FloatPixel const blendedBackground = readFloatPixel(linearReadback, *rhi, 1, 1);
     compareNear(blendedBackground.r, expectedLinearBlend(0.0f, 0.0f, encodedStraightRed, linearSdrScale), 0.002f);
@@ -603,6 +603,47 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     compareNear(reusedExtendedVideo.g, expectedExtendedGreen, 0.01f);
     compareNear(reusedExtendedVideo.b, expectedExtendedBlue, 0.01f);
     compareNear(reusedExtendedVideo.a, 1.0f, 0.001f);
+
+    // Brightness scales subtitle light, not coverage, on every output encoding.
+    // An opaque white subtitle stays opaque even at zero brightness.
+    for (float encoding : {0.0f, 1.0f, 2.0f, 3.0f}) {
+        for (float brightness : {0.0f, 0.25f, 0.8f, 1.0f}) {
+            QCOMPARE(rhi->beginOffscreenFrame(&commandBuffer), QRhi::FrameOpSuccess);
+            updates = rhi->nextResourceUpdateBatch();
+            QByteArray const whiteSubtitle(4, static_cast<char>(255));
+            updates->uploadTexture(subtitleTexture.get(),
+                                   QRhiTextureUploadDescription(QRhiTextureUploadEntry(
+                                       0, 0, QRhiTextureSubresourceUploadDescription(whiteSubtitle))));
+            updates->uploadTexture(uiTexture.get(), QRhiTextureUploadDescription(QRhiTextureUploadEntry(
+                                                        0, 0, QRhiTextureSubresourceUploadDescription(transparentUi))));
+            commandBuffer->resourceUpdate(updates);
+            QVERIFY(!producer->needsRender(requestedState));
+            QCOMPARE(producer->prepareForComposition(*commandBuffer), VideoOperationResult::Ready);
+            auto parameters = compositorParameters;
+            parameters.subtitleBrightness = brightness;
+            parameters.outputEncoding = encoding;
+            parameters.sdrScale = encoding == 2.0f ? 1.5f : 1.0f;
+            linearOutputCompositor.render(*commandBuffer, *linearOutputTarget, outputSize, parameters);
+            QRhiReadbackResult captured;
+            bool completed = false;
+            captured.completed = [&completed] { completed = true; };
+            updates = rhi->nextResourceUpdateBatch();
+            updates->readBackTexture(QRhiReadbackDescription(linearOutputTexture.get()), &captured);
+            commandBuffer->resourceUpdate(updates);
+            QCOMPARE(rhi->endOffscreenFrame(), QRhi::FrameOpSuccess);
+            producer->submissionAccepted();
+            QVERIFY(completed);
+            float const expected = encoding == 0.0f   ? linearToSrgb(brightness)
+                                   : encoding == 1.0f ? std::pow(brightness, 1.0f / 2.2f)
+                                   : encoding == 2.0f ? brightness * 1.5f
+                                                      : linearToPq(brightness);
+            auto const actual = readFloatPixel(captured, *rhi, videoOriginX + extendedSampleX, videoOriginY + 1);
+            compareNear(actual.r, expected, 0.002f);
+            compareNear(actual.g, expected, 0.002f);
+            compareNear(actual.b, expected, 0.002f);
+            compareNear(actual.a, 1.0f, 0.001f);
+        }
+    }
 
     // The compositor owns a valid fallback binding when no page publishes a
     // visible video viewport. No video surface is prepared or sampled.
