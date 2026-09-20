@@ -359,6 +359,11 @@ The Playback settings page includes a default-disabled “Prefer HDR10+ over Dol
 Vision” checkbox. It changes the compatible dual-format representation live,
 including while paused, and persists through the existing application settings.
 
+HDR reference white uses a 100–203-nit slider and numeric field with 100/203-nit
+preset buttons, default 100. It adjusts PQ/HDR10+/Dolby Vision video on SDR and
+HDR outputs through shared mapping. SDR input, HLG, UI, and subtitle brightness
+are unchanged. Edits use the existing paused-frame update path.
+
 Video details identify both Dolby Vision and HDR10+ on dual-format frames. Output
 details refresh after successful presentation, including paused settings edits.
 

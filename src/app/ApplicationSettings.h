@@ -12,6 +12,7 @@ class ApplicationSettings final {
     struct Values {
         std::optional<qreal> volume;
         std::optional<bool> preferHdr10Plus;
+        std::optional<int> sourceHdrReferenceWhiteNits;
         std::optional<bool> blankOtherDisplaysInFullscreen;
         std::optional<SubtitleAppearanceValues> subtitleAppearance;
     };
@@ -22,6 +23,7 @@ class ApplicationSettings final {
     Values load();
     void setVolume(qreal volume);
     void setPreferHdr10Plus(bool enabled);
+    void setSourceHdrReferenceWhiteNits(int nits);
     void setBlankOtherDisplaysInFullscreen(bool enabled);
     void setSubtitleAppearance(SubtitleAppearanceValues const& values, SubtitleAppearanceFields dirtyFields);
     void removeSubtitleAppearance();

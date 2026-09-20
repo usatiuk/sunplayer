@@ -3,6 +3,8 @@
 * Status: Accepted
 * Date: 2026-09-20
 * Amends the HDR10+ and representation-selection parts of ADRs 0023, 0025 and 0027.
+* Amended by [ADR 0029](0029-configure-hdr-source-reference-white.md) for the
+  destination reference white; format selection and source metadata stay unchanged.
 
 ## Decision
 

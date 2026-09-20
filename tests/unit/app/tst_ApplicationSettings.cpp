@@ -7,6 +7,7 @@
 #include <QTest>
 
 #include "app/ApplicationSettings.h"
+#include "video/DecodedVideoSource.h"
 
 namespace {
 
@@ -64,6 +65,7 @@ class ApplicationSettingsTest final : public QObject {
   private slots:
     void defaultsAndRoundTrip();
     void rejectsInvalidValues();
+    void hdrReferenceWhitePersistence();
     void acceptsPortableBooleanRepresentations();
     void subtitleAppearanceRoundTripAndReset();
     void subtitleAppearanceMaskedWritePreservesNeighbors();
@@ -83,6 +85,7 @@ void ApplicationSettingsTest::defaultsAndRoundTrip() {
         ApplicationSettings::Values const defaults = settings.load();
         QVERIFY(!defaults.volume);
         QVERIFY(!defaults.preferHdr10Plus);
+        QVERIFY(!defaults.sourceHdrReferenceWhiteNits);
         QVERIFY(!defaults.blankOtherDisplaysInFullscreen);
 
         settings.setPreferHdr10Plus(false);
@@ -110,6 +113,40 @@ void ApplicationSettingsTest::defaultsAndRoundTrip() {
     QCOMPARE(stored.value(QStringLiteral("playback/volume")).toDouble(), 0.7);
     QCOMPARE(stored.value(QStringLiteral("fullscreen/blankOtherDisplays")).toBool(), true);
     QCOMPARE(stored.value(QStringLiteral("future/value")).toInt(), 17);
+}
+
+void ApplicationSettingsTest::hdrReferenceWhitePersistence() {
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QString const path = settingsPath(directory);
+    for (int nits : {DecodedVideoSource::minimumSourceHdrReferenceWhiteNits, 150,
+                     DecodedVideoSource::maximumSourceHdrReferenceWhiteNits}) {
+        ApplicationSettings settings(path);
+        settings.setSourceHdrReferenceWhiteNits(nits);
+        settings.sync();
+        QCOMPARE(ApplicationSettings(path).load().sourceHdrReferenceWhiteNits, std::optional<int>(nits));
+    }
+    QList<QVariant> const invalid{
+        true,
+        QStringLiteral("not-a-number"),
+        99,
+        204,
+        150.5,
+        QStringLiteral("150.5"),
+        std::numeric_limits<double>::infinity(),
+        std::numeric_limits<double>::quiet_NaN(),
+    };
+    for (qsizetype index = 0; index < invalid.size(); ++index) {
+        QString const invalidPath = settingsPath(directory, QStringLiteral("invalid-white-%1.ini").arg(index));
+        writeValue(invalidPath, QStringLiteral("playback/sourceHdrReferenceWhiteNits"), invalid.at(index));
+        writeValue(invalidPath, QStringLiteral("playback/volume"), 0.35);
+        MessageCapture messages;
+        auto const loaded = ApplicationSettings(invalidPath).load();
+        QVERIFY(!loaded.sourceHdrReferenceWhiteNits);
+        QCOMPARE(loaded.volume, std::optional<qreal>(0.35));
+        QCOMPARE(messages.settingsFaultCount(), 1);
+        QVERIFY(messages.hasSettingsFault(QStringLiteral("invalid_value")));
+    }
 }
 
 void ApplicationSettingsTest::rejectsInvalidValues() {

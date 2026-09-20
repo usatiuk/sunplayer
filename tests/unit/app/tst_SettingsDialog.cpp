@@ -12,12 +12,14 @@
 
 #include "app/SettingsDialog.h"
 #include "subtitles/SubtitleSettings.h"
+#include "video/DecodedVideoSource.h"
 
 class SettingsDialogTest final : public QObject {
     Q_OBJECT
 
   private slots:
     void selectsRequestedPageAndMirrorsPlayback();
+    void editsHdrReferenceWhite();
     void editsSubtitleSettingsLive();
     void previewsAndRollsBackTextColor();
     void appliesPresetsAndRestoresDefaults();
@@ -44,7 +46,7 @@ void SettingsDialogTest::selectsRequestedPageAndMirrorsPlayback() {
     auto* const hdr10Plus = dialog.findChild<QCheckBox*>(QStringLiteral("settingsPreferHdr10Plus"));
     QVERIFY(hdr10Plus);
     QSignalSpy preferenceEdits(&dialog, &SettingsDialog::preferHdr10PlusEdited);
-    dialog.setPlaybackState(0.35, true, true, false);
+    dialog.setPlaybackState(0.35, true, true, false, DecodedVideoSource::defaultSourceHdrReferenceWhiteNits);
     QVERIFY(!hdr10Plus->isChecked());
     QCOMPARE(preferenceEdits.count(), 0);
     hdr10Plus->setChecked(true);
@@ -62,6 +64,50 @@ void SettingsDialogTest::selectsRequestedPageAndMirrorsPlayback() {
     blanking->setChecked(false);
     QCOMPARE(blankingEdits.count(), 1);
     QCOMPARE(blankingEdits.takeFirst().at(0).toBool(), false);
+}
+
+void SettingsDialogTest::editsHdrReferenceWhite() {
+    SubtitleSettings settings;
+    SettingsDialog dialog(settings);
+    auto* const slider = dialog.findChild<QSlider*>(QStringLiteral("settingsSourceHdrReferenceWhiteSlider"));
+    auto* const spin = dialog.findChild<QSpinBox*>(QStringLiteral("settingsSourceHdrReferenceWhiteSpin"));
+    auto* const low = dialog.findChild<QPushButton*>(QStringLiteral("settingsSourceHdrReferenceWhitePreset100"));
+    auto* const high = dialog.findChild<QPushButton*>(QStringLiteral("settingsSourceHdrReferenceWhitePreset203"));
+    QVERIFY(slider);
+    QVERIFY(spin);
+    QVERIFY(low);
+    QVERIFY(high);
+    QCOMPARE(slider->minimum(), DecodedVideoSource::minimumSourceHdrReferenceWhiteNits);
+    QCOMPARE(slider->maximum(), DecodedVideoSource::maximumSourceHdrReferenceWhiteNits);
+    QCOMPARE(spin->minimum(), slider->minimum());
+    QCOMPARE(spin->maximum(), slider->maximum());
+    QCOMPARE(slider->value(), DecodedVideoSource::defaultSourceHdrReferenceWhiteNits);
+    QCOMPARE(spin->value(), slider->value());
+    QSignalSpy edits(&dialog, &SettingsDialog::sourceHdrReferenceWhiteNitsEdited);
+    auto const subtitleBrightness = settings.brightness();
+    slider->setValue(145);
+    QCOMPARE(spin->value(), 145);
+    QCOMPARE(edits.count(), 1);
+    QCOMPARE(edits.takeFirst().at(0).toInt(), 145);
+    spin->setValue(170);
+    QCOMPARE(slider->value(), 170);
+    QCOMPARE(edits.count(), 1);
+    QCOMPARE(edits.takeFirst().at(0).toInt(), 170);
+    low->click();
+    QCOMPARE(slider->value(), DecodedVideoSource::minimumSourceHdrReferenceWhiteNits);
+    QCOMPARE(spin->value(), slider->value());
+    QCOMPARE(edits.count(), 1);
+    edits.clear();
+    high->click();
+    QCOMPARE(slider->value(), DecodedVideoSource::maximumSourceHdrReferenceWhiteNits);
+    QCOMPARE(spin->value(), slider->value());
+    QCOMPARE(edits.count(), 1);
+    edits.clear();
+    dialog.setPlaybackState(0.5, false, false, false, 150);
+    QCOMPARE(slider->value(), 150);
+    QCOMPARE(spin->value(), 150);
+    QCOMPARE(edits.count(), 0);
+    QCOMPARE(settings.brightness(), subtitleBrightness);
 }
 
 void SettingsDialogTest::editsSubtitleSettingsLive() {

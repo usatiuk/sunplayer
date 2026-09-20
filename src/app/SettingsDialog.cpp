@@ -22,6 +22,7 @@
 #include <QVBoxLayout>
 
 #include "subtitles/SubtitleSettings.h"
+#include "video/DecodedVideoSource.h"
 
 namespace {
 QSpinBox* percentageSpin(QWidget* parent) {
@@ -77,6 +78,49 @@ SettingsDialog::SettingsDialog(SubtitleSettings& subtitleSettings) : m_subtitleS
     m_preferHdr10Plus->setToolTip(tr("When a video contains both formats, use HDR10+ instead of Dolby Vision."));
     playbackLayout->addRow(QString(), m_preferHdr10Plus);
     connect(m_preferHdr10Plus, &QCheckBox::toggled, this, &SettingsDialog::preferHdr10PlusEdited);
+
+    auto* const referenceWhiteRow =
+        sliderRow(m_sourceHdrReferenceWhiteSlider, m_sourceHdrReferenceWhiteSpin, playbackPage);
+    m_sourceHdrReferenceWhiteSlider->setObjectName(QStringLiteral("settingsSourceHdrReferenceWhiteSlider"));
+    m_sourceHdrReferenceWhiteSlider->setAccessibleName(tr("HDR reference white"));
+    m_sourceHdrReferenceWhiteSpin->setObjectName(QStringLiteral("settingsSourceHdrReferenceWhiteSpin"));
+    m_sourceHdrReferenceWhiteSpin->setAccessibleName(tr("HDR reference white in nits"));
+    m_sourceHdrReferenceWhiteSlider->setRange(DecodedVideoSource::minimumSourceHdrReferenceWhiteNits,
+                                              DecodedVideoSource::maximumSourceHdrReferenceWhiteNits);
+    m_sourceHdrReferenceWhiteSpin->setRange(DecodedVideoSource::minimumSourceHdrReferenceWhiteNits,
+                                            DecodedVideoSource::maximumSourceHdrReferenceWhiteNits);
+    m_sourceHdrReferenceWhiteSpin->setSuffix(tr(" nits"));
+    m_sourceHdrReferenceWhiteSlider->setValue(DecodedVideoSource::defaultSourceHdrReferenceWhiteNits);
+    m_sourceHdrReferenceWhiteSpin->setValue(DecodedVideoSource::defaultSourceHdrReferenceWhiteNits);
+    playbackLayout->addRow(tr("HDR reference white:"), referenceWhiteRow);
+    auto* const referenceWhitePresets = new QWidget(playbackPage);
+    auto* const referenceWhitePresetsLayout = new QHBoxLayout(referenceWhitePresets);
+    referenceWhitePresetsLayout->setContentsMargins(0, 0, 0, 0);
+    for (int nits : {DecodedVideoSource::minimumSourceHdrReferenceWhiteNits,
+                     DecodedVideoSource::maximumSourceHdrReferenceWhiteNits}) {
+        auto* const preset = new QPushButton(tr("%1 nits").arg(nits), referenceWhitePresets);
+        preset->setObjectName(QStringLiteral("settingsSourceHdrReferenceWhitePreset%1").arg(nits));
+        referenceWhitePresetsLayout->addWidget(preset);
+        connect(preset, &QPushButton::clicked, this, [this, nits] { m_sourceHdrReferenceWhiteSlider->setValue(nits); });
+    }
+    referenceWhitePresetsLayout->addStretch();
+    playbackLayout->addRow(QString(), referenceWhitePresets);
+    auto* const referenceWhiteHint = new QLabel(tr("Source reference white for PQ, HDR10+ and Dolby Vision. Appearance "
+                                                   "depends on tone mapping and HDR metadata. "
+                                                   "System brightness still applies; SDR and HLG are unchanged."),
+                                                playbackPage);
+    referenceWhiteHint->setWordWrap(true);
+    playbackLayout->addRow(QString(), referenceWhiteHint);
+    connect(m_sourceHdrReferenceWhiteSlider, &QSlider::valueChanged, this, [this](int nits) {
+        QSignalBlocker const blocker(m_sourceHdrReferenceWhiteSpin);
+        m_sourceHdrReferenceWhiteSpin->setValue(nits);
+        emit sourceHdrReferenceWhiteNitsEdited(nits);
+    });
+    connect(m_sourceHdrReferenceWhiteSpin, &QSpinBox::valueChanged, this, [this](int nits) {
+        QSignalBlocker const blocker(m_sourceHdrReferenceWhiteSlider);
+        m_sourceHdrReferenceWhiteSlider->setValue(nits);
+        emit sourceHdrReferenceWhiteNitsEdited(nits);
+    });
 
     m_blankOtherDisplays = new QCheckBox(tr("Blank other displays in fullscreen"), playbackPage);
     m_blankOtherDisplays->setObjectName(QStringLiteral("settingsBlankOtherDisplays"));
@@ -334,12 +378,16 @@ void SettingsDialog::showPage(int page) {
     m_tabs->setCurrentIndex(page == SubtitlesPage ? SubtitlesPage : PlaybackPage);
 }
 
-void SettingsDialog::setPlaybackState(qreal volume, bool blankingAvailable, bool blankingEnabled,
-                                      bool preferHdr10Plus) {
+void SettingsDialog::setPlaybackState(qreal volume, bool blankingAvailable, bool blankingEnabled, bool preferHdr10Plus,
+                                      int sourceHdrReferenceWhiteNits) {
     QSignalBlocker const sliderBlocker(m_volumeSlider);
     QSignalBlocker const spinBlocker(m_volumeSpin);
     QSignalBlocker const blankingBlocker(m_blankOtherDisplays);
     QSignalBlocker const hdr10PlusBlocker(m_preferHdr10Plus);
+    QSignalBlocker const referenceWhiteSliderBlocker(m_sourceHdrReferenceWhiteSlider);
+    QSignalBlocker const referenceWhiteSpinBlocker(m_sourceHdrReferenceWhiteSpin);
+    m_sourceHdrReferenceWhiteSlider->setValue(sourceHdrReferenceWhiteNits);
+    m_sourceHdrReferenceWhiteSpin->setValue(sourceHdrReferenceWhiteNits);
     m_preferHdr10Plus->setChecked(preferHdr10Plus);
     int const volumePercent = qRound(qBound(0.0, volume, 1.0) * 100.0);
     m_volumeSlider->setValue(volumePercent);

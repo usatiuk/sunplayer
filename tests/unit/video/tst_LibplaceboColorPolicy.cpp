@@ -196,29 +196,43 @@ class LibplaceboColorPolicyTest final : public QObject {
 void LibplaceboColorPolicyTest::calculatesTargetLuminanceFromSourceAndHeadroom() {
     pl_frame source{};
     source.color.transfer = PL_COLOR_TRC_PQ;
+    for (float referenceWhite : {100.0f, 150.0f, 203.0f}) {
+        for (float headroom : {1.0f, 1.0001f, 4.0f}) {
+            auto description = target(headroom);
+            auto const pq = calculateLibplaceboTargetLuminance(source, description, referenceWhite);
+            QCOMPARE(pq.coordinateWhiteNits, referenceWhite);
+            QCOMPARE(pq.maximumNits, referenceWhite * headroom);
+            QCOMPARE(pq.outputNormalizationScale, PL_COLOR_SDR_WHITE / referenceWhite);
+            // The coordinate conversion preserves the declared working peak.
+            QVERIFY(std::abs(pq.maximumNits / PL_COLOR_SDR_WHITE * pq.outputNormalizationScale - headroom) < 0.00001f);
 
-    LibplaceboTargetLuminance const nominalPq = calculateLibplaceboTargetLuminance(source, target(1.0f));
-    QCOMPARE(nominalPq.coordinateWhiteNits, 100.0f);
-    QCOMPARE(nominalPq.maximumNits, 100.0f);
-    QCOMPARE(nominalPq.outputNormalizationScale, PL_COLOR_SDR_WHITE / 100.0f);
+            pl_frame dolby{};
+            dolby.color.transfer = PL_COLOR_TRC_LINEAR;
+            dolby.repr.sys = PL_COLOR_SYSTEM_DOLBYVISION;
+            auto const mappedDolby = calculateLibplaceboTargetLuminance(dolby, description, referenceWhite);
+            QCOMPARE(mappedDolby.coordinateWhiteNits, pq.coordinateWhiteNits);
+            QCOMPARE(mappedDolby.maximumNits, pq.maximumNits);
+            QCOMPARE(mappedDolby.outputNormalizationScale, pq.outputNormalizationScale);
 
-    LibplaceboTargetLuminance const hdrPq = calculateLibplaceboTargetLuminance(source, target(4.0f));
-    QCOMPARE(hdrPq.coordinateWhiteNits, PL_COLOR_SDR_WHITE);
-    QCOMPARE(hdrPq.maximumNits, PL_COLOR_SDR_WHITE * 4.0f);
-    QCOMPARE(hdrPq.outputNormalizationScale, 1.0f);
+            // Changing the virtual coordinate retains the same physical black
+            // relative to platform white after producer normalization.
+            description.targetMinimumLuminanceKnown = true;
+            description.targetMinimumLuminanceNits = 2.0f;
+            float const minimum = calculateLibplaceboTargetMinimumNits(description, pq.maximumNits);
+            QVERIFY(std::abs(minimum / PL_COLOR_SDR_WHITE * pq.outputNormalizationScale -
+                             2.0f / description.referenceWhiteNits) < 0.00001f);
 
-    source.color.transfer = PL_COLOR_TRC_LINEAR;
-    source.repr.sys = PL_COLOR_SYSTEM_DOLBYVISION;
-    LibplaceboTargetLuminance const nominalDolby = calculateLibplaceboTargetLuminance(source, target(1.0f));
-    QCOMPARE(nominalDolby.coordinateWhiteNits, nominalPq.coordinateWhiteNits);
-    QCOMPARE(nominalDolby.maximumNits, nominalPq.maximumNits);
-    QCOMPARE(nominalDolby.outputNormalizationScale, nominalPq.outputNormalizationScale);
-
-    source.repr = pl_color_repr_rgb;
-    LibplaceboTargetLuminance const relative = calculateLibplaceboTargetLuminance(source, target(1.0f));
-    QCOMPARE(relative.coordinateWhiteNits, PL_COLOR_SDR_WHITE);
-    QCOMPARE(relative.maximumNits, PL_COLOR_SDR_WHITE);
-    QCOMPARE(relative.outputNormalizationScale, 1.0f);
+            for (auto transfer : {PL_COLOR_TRC_LINEAR, PL_COLOR_TRC_BT_1886, PL_COLOR_TRC_HLG}) {
+                pl_frame relative{};
+                relative.repr = pl_color_repr_rgb;
+                relative.color.transfer = transfer;
+                auto const unchanged = calculateLibplaceboTargetLuminance(relative, description, referenceWhite);
+                QCOMPARE(unchanged.coordinateWhiteNits, PL_COLOR_SDR_WHITE);
+                QCOMPARE(unchanged.maximumNits, PL_COLOR_SDR_WHITE * headroom);
+                QCOMPARE(unchanged.outputNormalizationScale, 1.0f);
+            }
+        }
+    }
 }
 
 void LibplaceboColorPolicyTest::adaptiveEndpointKeepsItsPolicy() {
@@ -230,10 +244,12 @@ void LibplaceboColorPolicyTest::adaptiveEndpointKeepsItsPolicy() {
         description.renderingMode = VideoRenderingMode::AdaptiveHdr;
         description.targetMinimumLuminanceKnown = false;
         auto const mapped = pqMappedFrame();
-        auto const luminance = calculateLibplaceboTargetLuminance(mapped, description);
-        QCOMPARE(luminance.maximumNits, 203.0f * headroom);
-        QCOMPARE(luminance.outputNormalizationScale, 1.0f);
-        QCOMPARE(calculateLibplaceboTargetMinimumNits(description, luminance.maximumNits), PL_COLOR_HDR_BLACK);
+        for (float referenceWhite : {100.0f, 150.0f, 203.0f}) {
+            auto const luminance = calculateLibplaceboTargetLuminance(mapped, description, referenceWhite);
+            QCOMPARE(luminance.maximumNits, referenceWhite * headroom);
+            QCOMPARE(luminance.outputNormalizationScale, PL_COLOR_SDR_WHITE / referenceWhite);
+            QCOMPARE(calculateLibplaceboTargetMinimumNits(description, luminance.maximumNits), PL_COLOR_HDR_BLACK);
+        }
         QCOMPARE(policy.resolve(*frame, mapped, description).toneMapping, LibplaceboToneMappingFunction::Spline);
     }
 }

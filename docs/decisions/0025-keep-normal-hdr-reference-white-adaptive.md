@@ -15,6 +15,8 @@
 
 Current policy amendments: [ADR 0027](0027-separate-rendering-intent-from-headroom.md) separates rendering intent
 from headroom and updates PQ fallback and Wayland composition declarations.
+[ADR 0029](0029-configure-hdr-source-reference-white.md) replaces the fixed
+decoded PQ/Dolby coordinate whites below with a user-selected 100–203-nit value.
 
 ## Context
 

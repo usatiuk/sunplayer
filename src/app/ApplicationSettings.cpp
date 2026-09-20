@@ -11,11 +11,13 @@
 #include <QVariant>
 
 #include "diagnostics/LogCategories.h"
+#include "video/DecodedVideoSource.h"
 
 namespace {
 
 constexpr auto volumeKey = "playback/volume";
 constexpr auto preferHdr10PlusKey = "playback/preferHdr10Plus";
+constexpr auto sourceHdrReferenceWhiteKey = "playback/sourceHdrReferenceWhiteNits";
 constexpr auto blankOtherDisplaysKey = "fullscreen/blankOtherDisplays";
 constexpr auto subtitleAppearancePrefix = "subtitles/appearance";
 constexpr auto appearanceModeKey = "subtitles/appearance/mode";
@@ -163,6 +165,17 @@ ApplicationSettings::Values ApplicationSettings::load() {
         }
     }
 
+    if (m_settings.contains(QLatin1StringView(sourceHdrReferenceWhiteKey))) {
+        auto const nits = parseNumber(m_settings.value(QLatin1StringView(sourceHdrReferenceWhiteKey)),
+                                      DecodedVideoSource::minimumSourceHdrReferenceWhiteNits,
+                                      DecodedVideoSource::maximumSourceHdrReferenceWhiteNits);
+        if (nits && std::trunc(*nits) == *nits) {
+            values.sourceHdrReferenceWhiteNits = static_cast<int>(*nits);
+        } else {
+            reportInvalidValue(QString::fromLatin1(sourceHdrReferenceWhiteKey));
+        }
+    }
+
     bool const hasSubtitleAppearance =
         std::any_of(subtitleAppearanceKeys.cbegin(), subtitleAppearanceKeys.cend(),
                     [this](char const* key) { return m_settings.contains(QLatin1StringView(key)); });
@@ -250,6 +263,13 @@ void ApplicationSettings::setVolume(qreal volume) {
 
 void ApplicationSettings::setPreferHdr10Plus(bool enabled) {
     m_settings.setValue(QLatin1StringView(preferHdr10PlusKey), enabled);
+    reportStatus();
+}
+
+void ApplicationSettings::setSourceHdrReferenceWhiteNits(int nits) {
+    Q_ASSERT(nits >= DecodedVideoSource::minimumSourceHdrReferenceWhiteNits &&
+             nits <= DecodedVideoSource::maximumSourceHdrReferenceWhiteNits);
+    m_settings.setValue(QLatin1StringView(sourceHdrReferenceWhiteKey), nits);
     reportStatus();
 }
 

@@ -108,12 +108,20 @@ VideoOperationResult LibplaceboDecodedVideoProducer::render(QRhiCommandBuffer& c
     }
 
     bool rendered = false;
+    QString renderedColorPolicyDescription;
     if (m_mapping) {
         LibplaceboColorPolicyDecision const colorPolicy =
             m_colorPolicy.resolve(*frame, m_mapping->frame(), requestedState.description);
-        m_colorPolicyDescription = colorPolicy.description();
-        rendered = m_renderContext->renderDecoded(m_mapping->frame(), m_target->libplaceboRenderTarget(),
-                                                  requestedState.description, colorPolicy, &renderError);
+        float const sourceReferenceWhite = m_source.sourceHdrReferenceWhiteNits();
+        rendered =
+            m_renderContext->renderDecoded(m_mapping->frame(), m_target->libplaceboRenderTarget(),
+                                           requestedState.description, colorPolicy, sourceReferenceWhite, &renderError);
+        renderedColorPolicyDescription = colorPolicy.description();
+        auto const& source = m_mapping->frame();
+        if (source.color.transfer == PL_COLOR_TRC_PQ || source.repr.sys == PL_COLOR_SYSTEM_DOLBYVISION) {
+            renderedColorPolicyDescription +=
+                QStringLiteral(" · source HDR reference white %1 nits").arg(sourceReferenceWhite);
+        }
     }
 
     VideoOperationResult const endResult = m_target->endProducerAccess(commandBuffer);
@@ -134,6 +142,7 @@ VideoOperationResult LibplaceboDecodedVideoProducer::render(QRhiCommandBuffer& c
 
     m_failureReason.clear();
     m_failureKind = VideoFailureKind::None;
+    m_colorPolicyDescription = std::move(renderedColorPolicyDescription);
     m_pendingState = requestedState;
     return VideoOperationResult::Ready;
 }

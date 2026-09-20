@@ -3,6 +3,8 @@
 * Status: Accepted
 * Date: 2026-09-20
 * Amends ADRs 0021, 0023, 0025, and 0026.
+* Amended by [ADR 0029](0029-configure-hdr-source-reference-white.md) for decoded
+  PQ/Dolby reference-white coordinates; mode and HLG behavior remain unchanged.
 
 ## Decision
 

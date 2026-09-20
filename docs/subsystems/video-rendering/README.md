@@ -136,17 +136,17 @@ wins by construction.
 
 libplacebo owns source interpretation, tone mapping, and gamut mapping.
 libplacebo's linear convention uses `1.0 = 203 nits`; SunPlayer's rendered-video
-surface uses `1.0 = active reference white`. Every normal HDR target, plus
-relative SDR and HLG, uses `max_luma = 203 * targetPeakHeadroom` with no
-producer scale involving live reference white.
+surface uses `1.0 = active reference white`. Decoded PQ, HDR10+, and mapped Dolby
+use the source HDR reference-white setting R (100–203 nits, default 100):
+`max_luma = R * targetPeakHeadroom`, followed by `203 / R` linear coordinate
+normalization. Libplacebo fits highlights before this conversion, preserving
+the surface ceiling and extended-BT.709 WCG coordinates. Source pixels and
+metadata remain unchanged. There is no producer scale involving live platform
+reference white. R=100 retains the previous SDR endpoint; R=203 retains the
+previous adaptive-HDR convention. See [ADR 0029](../../decisions/0029-configure-hdr-source-reference-white.md).
 
-PQ and mapped Dolby in explicit SDR compatibility mode use the nominal-SDR construction accepted
-in [ADR 0025](../../decisions/0025-keep-normal-hdr-reference-white-adaptive.md):
-libplacebo receives a 100-nit destination, then one fixed `203 / 100` linear
-coordinate conversion stores the result in the reference-white-relative
-surface. This is not another tone curve. It preserves chromaticity and valid
-negative or greater-than-one extended-BT.709 WCG coordinates. Source pixels
-and metadata remain unchanged.
+Relative SDR, HLG, and diagnostic HDR Lab retain their existing conventions.
+The setting does not alter platform output encoding, UI, or subtitle brightness.
 
 The surface remains linear BT.709/sRGB coordinates even for a wide-gamut
 target. Its separate optional raw target primaries describe the usable display
@@ -212,8 +212,8 @@ virtual-peak inference continuously to headroom one. Decoded neutral/color
 captures cover that endpoint. This is a documented relative playback model,
 not an independent physical-reference HLG appearance oracle.
 HDR10+'s source-provided targeted-display luminance
-stays unchanged. Libplacebo adapts its supported OOTF to nominal SDR or the
-203H virtual adaptive target. This preserves the white-relative convention; it
+stays unchanged. Libplacebo adapts its supported OOTF to the selected R*H
+virtual target on SDR and HDR. This preserves the white-relative convention; it
 does not establish physical reference-display equivalence.
 The pinned Dolby Vision helper supports the tested Profile 8.1 reshape but not
 all target trims or enhancement-layer residual processing.
@@ -252,11 +252,10 @@ contracts, but not storage behavior. Software planes require observable
 uploads. Hardware frames require backend-native import, synchronization, and
 lifetime retention and should be the normal playback path when supported.
 
-Every HDR target plus relative SDR/HLG retains libplacebo's 203-nit coordinate
-anchor. PQ/Dolby in SDR compatibility uses a fixed nominal-100 coordinate conversion
-into the same surface where `1.0` means platform reference white. PQ source
-values and mastering metadata remain source truth. The physical luminance of
-surface `1.0` follows the platform reference white at presentation.
+All source paths produce the same surface where `1.0` means platform reference
+white, using the coordinate conversions described above. PQ source values and
+mastering metadata remain source truth. The physical luminance of surface `1.0`
+follows the platform reference white at presentation.
 
 Embedded source ICC bytes are retained with the `AVFrame` and reported in
 diagnostics. The render-local libplacebo frame explicitly clears both ICC

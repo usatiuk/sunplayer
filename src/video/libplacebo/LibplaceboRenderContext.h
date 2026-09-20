@@ -14,11 +14,12 @@ struct LibplaceboTargetLuminance {
     float outputNormalizationScale = 1.0f;
 };
 
-// The source color must already be inferred. Absolute-luminance PQ/Dolby uses
-// a fixed nominal 100-nit destination only in SDR compatibility mode.
-// Every other destination stays in libplacebo's 203-nit relative coordinate.
+// The source color must already be inferred. PQ/Dolby uses the selected source
+// reference white as its virtual target coordinate on both SDR and HDR outputs.
+// Relative sources retain libplacebo's 203-nit coordinate.
 LibplaceboTargetLuminance calculateLibplaceboTargetLuminance(pl_frame const& source,
-                                                             RenderedVideoSurfaceDescription const& target);
+                                                             RenderedVideoSurfaceDescription const& target,
+                                                             float sourceHdrReferenceWhiteNits);
 
 // Translates the surface's known/value pair into libplacebo target metadata.
 // Numeric zero means unknown to libplacebo; PL_COLOR_HDR_BLACK means known
@@ -44,13 +45,15 @@ class LibplaceboRenderContext final {
                 bool toneMappingEnabled, QString* error = nullptr);
     bool renderDecoded(pl_frame const& source, pl_tex targetTexture,
                        RenderedVideoSurfaceDescription const& targetDescription,
-                       LibplaceboColorPolicyDecision const& colorPolicy, QString* error = nullptr);
+                       LibplaceboColorPolicyDecision const& colorPolicy, float sourceHdrReferenceWhiteNits,
+                       QString* error = nullptr);
 
   private:
     bool renderWithPolicy(pl_frame const& source, pl_tex targetTexture,
                           RenderedVideoSurfaceDescription const& targetDescription,
                           LibplaceboToneMappingFunction toneMapping, enum pl_hdr_metadata_type metadata,
-                          std::optional<float> effectiveSourceMaximumNits, QString* error);
+                          std::optional<float> effectiveSourceMaximumNits, float sourceHdrReferenceWhiteNits,
+                          QString* error);
 
     pl_renderer m_renderer = nullptr;
 };

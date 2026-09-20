@@ -25,11 +25,13 @@ class SettingsDialog final : public QDialog {
     explicit SettingsDialog(SubtitleSettings& subtitleSettings);
 
     void showPage(int page);
-    void setPlaybackState(qreal volume, bool blankingAvailable, bool blankingEnabled, bool preferHdr10Plus);
+    void setPlaybackState(qreal volume, bool blankingAvailable, bool blankingEnabled, bool preferHdr10Plus,
+                          int sourceHdrReferenceWhiteNits);
 
   signals:
     void volumeEdited(qreal volume);
     void preferHdr10PlusEdited(bool enabled);
+    void sourceHdrReferenceWhiteNitsEdited(int nits);
     void blankOtherDisplaysEdited(bool enabled);
 
   private:
@@ -45,6 +47,8 @@ class SettingsDialog final : public QDialog {
     QSpinBox* m_volumeSpin = nullptr;
     QCheckBox* m_blankOtherDisplays = nullptr;
     QCheckBox* m_preferHdr10Plus = nullptr;
+    QSlider* m_sourceHdrReferenceWhiteSlider = nullptr;
+    QSpinBox* m_sourceHdrReferenceWhiteSpin = nullptr;
     QComboBox* m_appearanceMode = nullptr;
     QWidget* m_customAppearanceControls = nullptr;
     QPushButton* m_textColor = nullptr;

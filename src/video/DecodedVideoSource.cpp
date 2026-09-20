@@ -68,6 +68,20 @@ void DecodedVideoSource::setPreferHdr10Plus(bool enabled) {
     emit updateRequested();
 }
 
+int DecodedVideoSource::sourceHdrReferenceWhiteNits() const { return m_sourceHdrReferenceWhiteNits; }
+
+void DecodedVideoSource::setSourceHdrReferenceWhiteNits(int nits) {
+    Q_ASSERT(QThread::currentThread() == thread());
+    Q_ASSERT(nits >= minimumSourceHdrReferenceWhiteNits && nits <= maximumSourceHdrReferenceWhiteNits);
+    if (m_sourceHdrReferenceWhiteNits == nits) {
+        return;
+    }
+    m_sourceHdrReferenceWhiteNits = nits;
+    advanceContentRevision();
+    emit sourceHdrReferenceWhiteNitsChanged();
+    emit updateRequested();
+}
+
 void DecodedVideoSource::advanceContentRevision() {
     ++m_contentRevision;
     if (m_contentRevision == 0) {

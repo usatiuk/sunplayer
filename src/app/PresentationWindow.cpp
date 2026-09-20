@@ -160,6 +160,13 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
     if (storedSettings.preferHdr10Plus) {
         m_mediaSession->videoSource().setPreferHdr10Plus(*storedSettings.preferHdr10Plus);
     }
+    if (storedSettings.sourceHdrReferenceWhiteNits) {
+        m_mediaSession->videoSource().setSourceHdrReferenceWhiteNits(*storedSettings.sourceHdrReferenceWhiteNits);
+    }
+    connect(&m_mediaSession->videoSource(), &DecodedVideoSource::sourceHdrReferenceWhiteNitsChanged, this, [this] {
+        m_applicationSettings.setSourceHdrReferenceWhiteNits(
+            m_mediaSession->videoSource().sourceHdrReferenceWhiteNits());
+    });
     connect(&m_mediaSession->videoSource(), &DecodedVideoSource::preferHdr10PlusChanged, this,
             [this] { m_applicationSettings.setPreferHdr10Plus(m_mediaSession->videoSource().preferHdr10Plus()); });
     if (storedSettings.subtitleAppearance) {
@@ -296,11 +303,16 @@ void PresentationWindow::showSettings(int page) {
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     auto const refreshPlayback = [this, dialog] {
         dialog->setPlaybackState(m_mediaSession->volume(), otherDisplayBlankingAvailable(),
-                                 blankOtherDisplaysInFullscreen(), m_mediaSession->videoSource().preferHdr10Plus());
+                                 blankOtherDisplaysInFullscreen(), m_mediaSession->videoSource().preferHdr10Plus(),
+                                 m_mediaSession->videoSource().sourceHdrReferenceWhiteNits());
     };
     connect(dialog, &SettingsDialog::preferHdr10PlusEdited, &m_mediaSession->videoSource(),
             &DecodedVideoSource::setPreferHdr10Plus);
     connect(&m_mediaSession->videoSource(), &DecodedVideoSource::preferHdr10PlusChanged, dialog, refreshPlayback);
+    connect(dialog, &SettingsDialog::sourceHdrReferenceWhiteNitsEdited, &m_mediaSession->videoSource(),
+            &DecodedVideoSource::setSourceHdrReferenceWhiteNits);
+    connect(&m_mediaSession->videoSource(), &DecodedVideoSource::sourceHdrReferenceWhiteNitsChanged, dialog,
+            refreshPlayback);
     connect(dialog, &SettingsDialog::volumeEdited, m_mediaSession.get(), &MediaSession::setVolume);
     connect(dialog, &SettingsDialog::blankOtherDisplaysEdited, this,
             &PresentationWindow::setBlankOtherDisplaysInFullscreen);

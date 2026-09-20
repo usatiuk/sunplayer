@@ -26,6 +26,10 @@ class DecodedVideoSource final : public RenderedVideoSource {
     Q_OBJECT
 
   public:
+    static constexpr int minimumSourceHdrReferenceWhiteNits = 100;
+    static constexpr int maximumSourceHdrReferenceWhiteNits = 203;
+    static constexpr int defaultSourceHdrReferenceWhiteNits = minimumSourceHdrReferenceWhiteNits;
+
     explicit DecodedVideoSource(std::shared_ptr<DecodedVideoFrame const> frame, VideoTargetReadback readback,
                                 QObject* parent = nullptr);
 
@@ -36,6 +40,8 @@ class DecodedVideoSource final : public RenderedVideoSource {
     void clearFrame();
     bool preferHdr10Plus() const;
     void setPreferHdr10Plus(bool enabled);
+    int sourceHdrReferenceWhiteNits() const;
+    void setSourceHdrReferenceWhiteNits(int nits);
 
     void prepareForPresentation(std::chrono::steady_clock::time_point now) override;
     std::uint64_t contentRevision() const override;
@@ -48,6 +54,7 @@ class DecodedVideoSource final : public RenderedVideoSource {
   signals:
     void frameChanged();
     void preferHdr10PlusChanged();
+    void sourceHdrReferenceWhiteNitsChanged();
     void presentationFailed(VideoFailure const& failure);
 
   private:
@@ -58,6 +65,7 @@ class DecodedVideoSource final : public RenderedVideoSource {
     DecodedVideoFrameSelector* m_selector = nullptr;
     VideoTargetReadback m_readback;
     bool m_preferHdr10Plus = false;
+    int m_sourceHdrReferenceWhiteNits = defaultSourceHdrReferenceWhiteNits;
     std::uint64_t m_contentRevision = 1;
     std::uint64_t m_producerConfigurationRevision = 1;
 };

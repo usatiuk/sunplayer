@@ -515,6 +515,14 @@ production surfaces must cross the final compositor: Windows expects the
 headroom at the same time is a compression test, not a valid white-scaling
 oracle.
 
+Source HDR reference white is a separate preference from platform white.
+Retained-frame GPU tests vary 203/150/100 nits with fixed platform white and
+headroom, check a round trip to 203, preserved import count, bounded highlights,
+and the uncompressed PQ ratio. SDR and HLG captures remain byte-identical.
+Adaptive headroom-one sweeps and final composition exercise both 100 and 203.
+Persistence and Settings tests cover bounds, invalid values, presets, and
+slider/numeric-field synchronization without refresh-triggered edits.
+
 Target-black regressions must distinguish unknown minimum from known physical
 zero. Coverage includes pinned libplacebo nominal-luminance inference, numeric
 BT.2446A samples below 1 nit, and an in-memory high-bit-depth PQ ramp through

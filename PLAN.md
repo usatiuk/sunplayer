@@ -66,6 +66,11 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 
 ## Current implementation status
 
+Decoded PQ/HDR10+/Dolby Vision has a shared source reference-white control,
+100–203 nits with default 100 and preset buttons. Its bounded mapping and
+paused-frame validation are tracked in
+[the reference-white plan](docs/plans/video-rendering/2026-09-20-hdr-reference-white.md).
+
 The September 2026 color-policy update separates SDR compatibility from adaptive
 HDR headroom, unifies generic PQ metadata/fallback mapper selection, and adds
 capability-aware composed Wayland target-volume declarations. The bounded work
@@ -123,15 +128,15 @@ playback:
   Vision Profile 8.1 without a second media operation. The importer reports
   retained source facts, usable HDR10+ scene metadata, and whether Dolby Vision
   reshaping was mapped. Source HDR values remain unchanged. Shared
-  metadata-first policy selects supported HDR10+ OOTFs on nominal SDR,
-  coherent HDR10+ scene/static or Dolby range evidence for HDR, and an explicit
+  metadata-first policy selects supported HDR10+ OOTFs on SDR and HDR,
+  coherent HDR10+ scene/static or Dolby range evidence otherwise, and an explicit
   1,000-nit fallback for ordinary base PQ only when usable metadata is absent. It
   dispatches pinned libplacebo operators, keeps perceptual gamut mapping, and
   disables inverse mapping, peak detection, and dithering; the exact decision
-  is visible in diagnostics. PQ/Dolby in explicit SDR compatibility receives nominal
-  100-nit SDR plus a fixed `203 / 100` output-coordinate conversion. Every HDR
-  target uses `203 * targetPeakHeadroom` with no live-reference-white producer
-  scale, so Windows applies `referenceWhite / 80` exactly once to the complete
+  is visible in diagnostics. Decoded PQ/Dolby uses a source reference-white
+  setting R (100–203 nits, default 100), destination `R * targetPeakHeadroom`,
+  and `203 / R` coordinate conversion. No producer scale cancels live platform
+  white, so Windows applies `referenceWhite / 80` exactly once to the complete
   composition; macOS and managed Wayland retain final scale one. SDR and HLG
   remain relative; HLG does not claim absolute-reference monitoring. Broader
   dynamic-HDR profiles and physical output accuracy remain validation work.

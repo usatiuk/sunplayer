@@ -41,13 +41,13 @@ struct OutputNormalizationContext {
     float scale;
 };
 
-pl_hook_res normalizeNominalSdrOutputHook(void* privateData, pl_hook_params const* parameters) {
+pl_hook_res normalizeVirtualTargetOutputHook(void* privateData, pl_hook_params const* parameters) {
     auto const& context = *static_cast<OutputNormalizationContext const*>(privateData);
     pl_shader_var const variables[]{
         {.var = pl_var_float("outputNormalizationScale"), .data = &context.scale},
     };
     pl_custom_shader const shader{
-        .description = "Normalize nominal SDR luminance into the surface coordinate system",
+        .description = "Normalize virtual target luminance into the surface coordinate system",
         .body = "color.rgb *= outputNormalizationScale;",
         .input = PL_SHADER_SIG_COLOR,
         .output = PL_SHADER_SIG_COLOR,
@@ -86,18 +86,19 @@ float calculateLibplaceboTargetMinimumNits(RenderedVideoSurfaceDescription const
 }
 
 LibplaceboTargetLuminance calculateLibplaceboTargetLuminance(pl_frame const& source,
-                                                             RenderedVideoSurfaceDescription const& target) {
+                                                             RenderedVideoSurfaceDescription const& target,
+                                                             float sourceHdrReferenceWhiteNits) {
     float const targetPeakHeadroom = target.targetPeakHeadroom;
     Q_ASSERT(std::isfinite(targetPeakHeadroom) && targetPeakHeadroom >= 1.0f);
+    Q_ASSERT(std::isfinite(sourceHdrReferenceWhiteNits) && sourceHdrReferenceWhiteNits >= 100.0f &&
+             sourceHdrReferenceWhiteNits <= PL_COLOR_SDR_WHITE);
     bool const absoluteLuminanceSource =
         source.color.transfer == PL_COLOR_TRC_PQ || source.repr.sys == PL_COLOR_SYSTEM_DOLBYVISION;
-    bool const nominalSdrTarget =
-        target.renderingMode == VideoRenderingMode::SdrCompatibility && absoluteLuminanceSource;
-    float const coordinateWhiteNits = nominalSdrTarget ? nominalSdrMaximumNits : PL_COLOR_SDR_WHITE;
+    float const coordinateWhiteNits = absoluteLuminanceSource ? sourceHdrReferenceWhiteNits : PL_COLOR_SDR_WHITE;
     return {
         .coordinateWhiteNits = coordinateWhiteNits,
         .maximumNits = coordinateWhiteNits * targetPeakHeadroom,
-        .outputNormalizationScale = nominalSdrTarget ? PL_COLOR_SDR_WHITE / nominalSdrMaximumNits : 1.0f,
+        .outputNormalizationScale = PL_COLOR_SDR_WHITE / coordinateWhiteNits,
     };
 }
 
@@ -123,24 +124,31 @@ QString LibplaceboRenderContext::policyDescription(bool toneMappingEnabled) {
 bool LibplaceboRenderContext::render(pl_frame const& source, pl_tex targetTexture,
                                      RenderedVideoSurfaceDescription const& targetDescription, bool toneMappingEnabled,
                                      QString* error) {
+    // HDR Lab retains its fixed diagnostic convention independently of the
+    // decoded-video preference: nominal 100 for SDR, 203 for adaptive HDR.
+    float const diagnosticReferenceWhite = targetDescription.renderingMode == VideoRenderingMode::SdrCompatibility
+                                               ? nominalSdrMaximumNits
+                                               : PL_COLOR_SDR_WHITE;
     return renderWithPolicy(source, targetTexture, targetDescription,
                             toneMappingEnabled ? LibplaceboToneMappingFunction::Spline
                                                : LibplaceboToneMappingFunction::Clip,
-                            PL_HDR_METADATA_ANY, std::nullopt, error);
+                            PL_HDR_METADATA_ANY, std::nullopt, diagnosticReferenceWhite, error);
 }
 
 bool LibplaceboRenderContext::renderDecoded(pl_frame const& source, pl_tex targetTexture,
                                             RenderedVideoSurfaceDescription const& targetDescription,
-                                            LibplaceboColorPolicyDecision const& colorPolicy, QString* error) {
+                                            LibplaceboColorPolicyDecision const& colorPolicy,
+                                            float sourceHdrReferenceWhiteNits, QString* error) {
     return renderWithPolicy(source, targetTexture, targetDescription, colorPolicy.toneMapping, colorPolicy.metadata,
-                            colorPolicy.effectiveSourceMaximumNits, error);
+                            colorPolicy.effectiveSourceMaximumNits, sourceHdrReferenceWhiteNits, error);
 }
 
 bool LibplaceboRenderContext::renderWithPolicy(pl_frame const& source, pl_tex targetTexture,
                                                RenderedVideoSurfaceDescription const& targetDescription,
                                                LibplaceboToneMappingFunction toneMapping,
                                                enum pl_hdr_metadata_type metadata,
-                                               std::optional<float> effectiveSourceMaximumNits, QString* error) {
+                                               std::optional<float> effectiveSourceMaximumNits,
+                                               float sourceHdrReferenceWhiteNits, QString* error) {
     Q_ASSERT(isValid());
     Q_ASSERT(targetTexture);
     Q_ASSERT(targetDescription.isValid());
@@ -189,7 +197,7 @@ bool LibplaceboRenderContext::renderWithPolicy(pl_frame const& source, pl_tex ta
                                                                    : *pl_raw_primaries_get(PL_COLOR_PRIM_BT_709);
     Q_ASSERT(pl_primaries_valid(&target.color.hdr.prim));
     LibplaceboTargetLuminance const targetLuminance =
-        calculateLibplaceboTargetLuminance(effectiveSource, targetDescription);
+        calculateLibplaceboTargetLuminance(effectiveSource, targetDescription, sourceHdrReferenceWhiteNits);
     if (effectiveSource.color.transfer == PL_COLOR_TRC_HLG &&
         targetDescription.renderingMode == VideoRenderingMode::AdaptiveHdr) {
         // infer_map replaces HLG's source peak with the destination peak only
@@ -228,10 +236,10 @@ bool LibplaceboRenderContext::renderWithPolicy(pl_frame const& source, pl_tex ta
     parameters.color_map_params = &colorMap;
     parameters.dither_params = nullptr;
     parameters.peak_detect_params = nullptr;
-    // Libplacebo's linear output unit is always nits / 203. A PQ/Dolby source
-    // mapped to nominal 100-nit SDR needs one fixed coordinate conversion so
-    // surface 1.0 remains the active platform reference white. HDR targets and
-    // relative SDR/HLG sources need no producer normalization.
+    // Libplacebo's linear output unit is always nits / 203. Mapping into R * H
+    // followed by this 203 / R coordinate conversion keeps the surface ceiling
+    // at H and surface 1.0 at the active platform reference white. Neither the
+    // source metadata nor the platform's final white scale changes.
     OutputNormalizationContext outputNormalization{
         .scale = targetLuminance.outputNormalizationScale,
     };
@@ -239,7 +247,7 @@ bool LibplaceboRenderContext::renderWithPolicy(pl_frame const& source, pl_tex ta
         .stages = PL_HOOK_PRE_OUTPUT,
         .input = PL_HOOK_SIG_COLOR,
         .priv = &outputNormalization,
-        .hook = normalizeNominalSdrOutputHook,
+        .hook = normalizeVirtualTargetOutputHook,
         .signature = 0x53554e5344524e4dULL,
     };
     pl_hook const* hooks[]{&outputNormalizationHook};

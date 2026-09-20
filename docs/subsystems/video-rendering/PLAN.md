@@ -85,8 +85,8 @@ disabled. The resulting decision is visible in HDR Lab and protected at the
 production capture boundary without adding another mapper or quality-preset
 surface.
 
-* [x] Use pinned-representable HDR10+ OOTFs through ST 2094-40 on nominal SDR
-  and the existing 203H reference-white-adaptive HDR destination.
+* [x] Use pinned-representable HDR10+ OOTFs through ST 2094-40 on SDR
+  and HDR with the selected source reference-white destination R*H.
   Use libplacebo's generalized BT.2446A EETF for other coherent PQ-to-SDR
   dynamic/static ranges, and retain spline for ordinary HDR. Use an explicit,
   diagnosed 1,000-nit maximum with the same SDR/adaptive mapper when ordinary
@@ -106,11 +106,10 @@ surface.
   Consider enabling it only if representative missing or unreliable source
   metadata demonstrates a visible benefit and its cost and seek/scene behavior
   pass the same production-boundary tests.
-* [x] Keep every normal HDR target plus relative SDR/HLG in the
-  display-relative `203 * targetPeakHeadroom` coordinate. Give PQ/Dolby nominal
-  100-nit SDR only in explicit SDR compatibility mode and apply the fixed `203 / 100` coordinate
-  conversion. Do not install a live-reference-white producer scale at HDR
-  headroom.
+* [x] Map decoded PQ/Dolby to `R * targetPeakHeadroom` and normalize by `203 / R`,
+  with source reference white R=100–203 nits, default 100. Relative SDR/HLG and
+  HDR Lab retain their prior conventions. Do not cancel the platform's live
+  reference-white scale. See [the implementation plan](../../plans/video-rendering/2026-09-20-hdr-reference-white.md).
 * [x] Preserve unknown SDR target-black semantics at the libplacebo boundary.
   Pass numeric zero only for unknown SDR compatibility so the pinned library
   infers 1000:1 contrast; retain the effectively-zero sentinel for known zero
