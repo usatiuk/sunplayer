@@ -41,6 +41,11 @@ real decoded paused preference changes, and existing HDR neutral/color sweeps
 exercise this path. Physical appearance and native macOS/Wayland output remain
 separate validation requirements.
 
+A subsequent [user-reported mpv comparison](../research/2026-09-20-hdr10plus-external-playback-comparison.md)
+reproduced a problematic source's HDR10+ brightness jumps outside SunPlayer.
+The source-versus-libplacebo cause remains unresolved; no application workaround
+is warranted by that comparison.
+
 ## Authored-curve coordinates and validation
 
 Format detection is independent of scene statistics. Validate imported curve

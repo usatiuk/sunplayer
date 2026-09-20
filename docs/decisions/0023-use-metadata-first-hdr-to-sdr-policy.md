@@ -10,6 +10,9 @@
 
 Current policy amendments: [ADR 0027](0027-separate-rendering-intent-from-headroom.md) separates rendering intent
 from headroom and updates PQ fallback and Wayland composition declarations.
+[ADR 0028](0028-prefer-hdr10plus-on-compatible-dual-format-video.md) supersedes
+the HDR10+ validation and representation-selection rules below, including
+authored-curve selection independent of scene-average availability.
 
 ## Context
 
