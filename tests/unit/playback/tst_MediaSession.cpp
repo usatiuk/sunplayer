@@ -313,7 +313,12 @@ void MediaSessionTest::synchronizedPlaybackUsesPresentedAudioClock() {
     };
 
     session.openMedia(QUrl::fromLocalFile(synchronizedFixturePath()));
-    QVERIFY(waitUntil([&] { return session.state() == MediaSession::State::Ready && session.hasFrame(); }, 10'000));
+    // A ready video frame can precede the first audio presentation clock observation.
+    QVERIFY(waitUntil(
+        [&] {
+            return session.state() == MediaSession::State::Ready && session.hasFrame() && audioSink->snapshot().valid;
+        },
+        10'000));
     QCOMPARE(decodeOperations.load(), 1);
     QVERIFY(session.hasFrame());
     QVERIFY(session.playing());
