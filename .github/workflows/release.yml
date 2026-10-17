@@ -159,6 +159,9 @@ jobs:
   builds:
     needs: prepare
     uses: ./.github/workflows/build.yml
+    secrets:
+      APPIMAGE_SIGNING_PRIVATE_KEY: ${{ secrets.APPIMAGE_SIGNING_PRIVATE_KEY }}
+      APPIMAGE_SIGNING_PASSPHRASE: ${{ secrets.APPIMAGE_SIGNING_PASSPHRASE }}
     with:
       release: true
       version: ${{ needs.prepare.outputs.application-version }}

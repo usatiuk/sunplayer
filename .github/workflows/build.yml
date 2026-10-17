@@ -2,6 +2,11 @@ name: Package builds
 
 on:
   workflow_call:
+    secrets:
+      APPIMAGE_SIGNING_PRIVATE_KEY:
+        required: false
+      APPIMAGE_SIGNING_PASSPHRASE:
+        required: false
     inputs:
       release:
         description: Build Store packages instead of development packages

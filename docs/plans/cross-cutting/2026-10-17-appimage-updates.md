@@ -202,3 +202,11 @@ clean-source Docker probe reproduced a missing-directory mount error. Local
 builds had the ignored key directory; CI does not. Mask that directory only
 when it exists, retaining read-only source mounts and release-only signing-file
 mounts. The replacement dispatch uses this small packaging correction.
+
+The second dispatch (39040705253) stopped at the missing-secret check: current
+GitHub reusable-workflow semantics require the caller to pass environment-secret
+names explicitly, even when the called job selects the environment. Declare and
+forward only the two named signing secrets from Release; actual values remain
+in the main-only environment and are not inherited by ordinary CI. The public
+fingerprint variable already resolved correctly. No image was published.
+Source: [GitHub reusable-workflow environment secrets](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows).
