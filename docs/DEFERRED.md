@@ -63,9 +63,12 @@ multithread-protected D3D11 device. H.264/NV12 and Main10 HEVC/P010 scenarios
 prove exact-size same-device import with one GPU copy, zero CPU transfers,
 four-edge agreement with software decode, and observable software fallback.
 Windows P012/P016 capture, affected production-file validation, demonstrated
-CPU fallback needs, real device-loss injection, and the Linux native importer
-remain required. macOS
-H.264/NV12 and Main10 HEVC/P010 direct import are capture-validated across
+CPU fallback needs and real device-loss injection remain required. The Linux
+VAAPI/DRM PRIME importer is implemented and native Intel Arrow Lake NV12/P010
+captures plus continuous turnover/seek pass. AMD captures, unsupported
+modifier/export fault injection, and asynchronous busy-surface retirement
+stress remain unverified. NVIDIA-specific decode and cross-GPU copies are
+not part of this initial VAAPI path. macOS H.264/NV12 and Main10 HEVC/P010 direct import are capture-validated across
 multiple frames.
 General display-matrix rotation still lacks a dedicated render capture.
 

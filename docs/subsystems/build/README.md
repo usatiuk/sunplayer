@@ -9,8 +9,11 @@ Linux uses only system Qt, FFmpeg, libplacebo, cubeb, libass, Vulkan, Wayland,
 VAAPI, and DRM packages. Embedded subtitle discovery, FFmpeg decoding,
 libass/bitmap rendering, shared subtitle state, Wayland capability inventory,
 the Linux Vulkan graphics domain, and system-cubeb output are integrated.
-Native Linux route-change/recovery evidence, VAAPI/DRM PRIME, managed HDR, and
-complete distributable packaging remain open. The macOS development build,
+VAAPI/DRM PRIME device negotiation and input import are implemented using the
+existing system dependencies. Native Linux route-change/recovery, AMD VAAPI,
+managed-HDR execution evidence, and complete distributable packaging remain
+open. Intel VAAPI NV12/P010 captures and turnover/seek now pass after the
+missing iHD runtime driver was installed. The macOS development build,
 Metal/MoltenVK presentation, VideoToolbox, AudioUnit, and shared tests are
 validated on the available Apple M2/macOS 26 host; the macOS 13 dependency
 archive floor and self-contained bundle remain packaging gates.
@@ -128,6 +131,27 @@ These are the direct build/test requirements plus the native Wayland QPA
 runtime for the accepted Linux port slices. GPU drivers, VA drivers,
 validation layers, and compositor/runtime packages are environment-specific
 validation dependencies rather than configure-time requirements.
+
+VAAPI decoding additionally needs a working media driver for the selected GPU;
+`libva-dev` and the Mesa Vulkan driver alone are insufficient. On modern Intel
+hardware, Ubuntu provides the iHD driver through `intel-media-va-driver` or its
+full-feature variant `intel-media-va-driver-non-free`. AMD normally uses the
+Mesa VA driver. Keep distro/libva driver selection rather than forcing a
+vendor in SunPlayer. Do not install packages automatically at configure or
+runtime.
+
+If diagnostics report `Could not initialize VAAPI on /dev/dri/renderD…:
+Input/output error`, inspect the driver installation and native libva log
+before debugging codec or plane import. This exact failure on the native Intel
+Arrow Lake host was resolved by installing its missing iHD driver. Restart the
+player after driver installation so it constructs a fresh hardware capability.
+Run hardware checks outside any sandbox that hides DRM nodes:
+
+```sh
+SUNPLAYER_REQUIRE_VAAPI=1 ctest --test-dir build/linux-debug -R '^ffmpeg-first-frame$' --output-on-failure
+```
+
+See the [native investigation and sources](../../research/2026-10-17-linux-vaapi-drm-prime.md#native-failure-investigation-and-best-practice-reassessment).
 
 The Windows libplacebo feature set enables D3D11, Shaderc, the shared
 SPIRV-Cross C API, and libplacebo's built-in DOVI handling. The optional
@@ -479,8 +503,12 @@ without user interaction.
 
 On Ubuntu 26.04 under WSL, clean Debug and Release builds pass with system
 dependencies. The last validated tree passed all 26 then-registered Linux tests
-and QML lint; the current tree has additional platform-neutral support and
-packaging coverage and awaits a new Linux run. Existing evidence includes the
+and QML lint. The October 2026 tree additionally passes 33 CTests not requiring
+an audio device on Weston/lavapipe and both QML lint targets, with Debug tests
+on and Release tests off builds. See the
+[VAAPI delivery evidence](../../plans/cross-cutting/linux-port-evidence/2026-10-17-vaapi-drm-prime.md). The subsequent host run
+outside the sandbox passes all 35 CTests with required Intel VAAPI and no
+audio-device exclusions; three native VAAPI cases execute successfully. Existing evidence includes the
 system-cubeb sink, real application audio-first playback, shared embedded-
 subtitle behavior, system libass rendering, exact Wayland SDR surface
 selection, application-chrome layout behavior, and packaged-QML verification.
@@ -499,7 +527,7 @@ llvmpipe and exposes neither `/dev/dri` nor color-management-v1, so this proves
 the unmanaged assumed-sRGB software path and lifecycle only. The same installed
 player opens WSLg's Pulse-compatible default route through system cubeb and
 advances its cubeb-backed A/V clock. Native PulseAudio/PipeWire-Pulse route
-changes, native GPU behavior, VAAPI/DRM PRIME, managed gamma-2.2 compositor
+changes, broader native GPU behavior, AMD VAAPI/DRM PRIME, managed gamma-2.2 compositor
 declaration, HDR, and physical displays remain open.
 The current RelWithDebInfo build passes all 36 registered tests and both QML
 lint targets. A fresh install generated notices for 21 components while

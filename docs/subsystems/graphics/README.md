@@ -18,8 +18,11 @@ completes.
 HDR Lab still uses the analytic libplacebo producer by default, with the
 retained procedural QRhi producer available only for diagnostic A/B
 comparison. Continuous decoding, subtitles, and playback scheduling are
-integrated on both platforms. Linux currently uses software-decoded frames;
-VAAPI/DRM PRIME import remains a separate acceleration slice.
+integrated across platforms. Linux can decode through VAAPI on the DRM render
+node identified by the selected Vulkan adapter, then import DRM PRIME planes
+through libplacebo without a known input pixel transfer or GPU copy. Native
+Intel Arrow Lake NV12/P010 imports and decode-vs-software captures pass on the
+native host; AMD execution and asynchronous lifetime stress remain unverified.
 
 The currently accepted implementation is deliberately narrower than the
 cross-platform target:
@@ -97,7 +100,8 @@ RhiPresentationEngine
     │       └── Vulkan backend
     │               ├── QRhi-owned Vulkan 1.3 device and graphics queue
     │               ├── borrowed libplacebo Vulkan GPU
-    │               └── shared queue execution guard
+    │               ├── shared queue execution guard
+    │               └── exact-render-node VAAPI context + DRM PRIME importer
     ├── QRhi swapchain
     ├── QuickUiLayer
     │       └── QQuickRenderControl → full-window RGBA16F color + depth/stencil target
@@ -174,9 +178,22 @@ On Linux, `LinuxWaylandWindowContext` first owns the `QVulkanInstance` and
 Qt-created native surface. QRhi selects and owns the Vulkan 1.3 physical-
 device/logical-device/graphics-queue domain. SunPlayer verifies the selected
 device's required feature set and imports the same native handles into
-libplacebo as borrowed objects. Software FFmpeg frames use the shared importer;
-hardware decode capability reports unavailable until VAAPI/DRM PRIME is
-implemented.
+libplacebo as borrowed objects. It requests external-memory fd, dma-buf and
+DRM modifier extensions and reports only the supported requested subset to
+libplacebo. VAAPI is advertised only when libplacebo exposes dma-buf texture
+import and `VK_EXT_physical_device_drm` identifies a matching character-device
+render node. FFmpeg opens that explicit node; unavailable capability remains
+software decode with a reason, without guessing a GPU.
+
+The Linux importer uses libplacebo's FFmpeg mapper to export VAAPI as direct,
+read-only DRM PRIME and import its separate planes. FFmpeg waits for decode
+completion; libplacebo owns descriptor handling, modifiers and color metadata.
+One retired mapping alongside the active mapping retains decoder surfaces
+until every imported plane finishes GPU access. Replacement applies bounded
+backpressure only if the prior retired mapping remains busy. Destruction drains
+it before the libplacebo device disappears. Export/import incompatibility uses
+the existing typed, one-shot software restart at the current logical position.
+See [ADR 0031](../../decisions/0031-import-vaapi-through-libplacebo-drm-prime.md).
 
 On macOS, QRhi owns the Metal device and command queue. Libplacebo creates a
 Vulkan device over MoltenVK with `VK_EXT_metal_objects`; construction exports

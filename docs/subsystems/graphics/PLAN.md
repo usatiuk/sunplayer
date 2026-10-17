@@ -276,6 +276,10 @@ responsibilities.
   target observation, stable BT.2020/PQ HDR10 across output movement, and
   complete gamma-2.2 SDR rollback after presentation failure. X11 and XWayland
   are unsupported.
+* [x] Add exact-render-node VAAPI negotiation and libplacebo DRM PRIME import,
+  with bounded native-frame retirement and shared software fallback. Native
+  Intel NV12/P010 and turnover/seek pass; AMD execution and device-loss
+  injection remain validation gaps.
 * [ ] Complete the physical managed-HDR matrix on additional capable
   compositor/GPU/display combinations.
 * [ ] Validate backend-neutral orientation, texture, synchronization, and

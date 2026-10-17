@@ -16,6 +16,12 @@
 #include <QtCore/qfloat16.h>
 #include <QtTest>
 
+#ifdef Q_OS_LINUX
+#include "platform/linux/LinuxWaylandWindowContext.h"
+#include <QGuiApplication>
+#include <QWindow>
+#endif
+
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavcodec/codec_par.h>
@@ -367,10 +373,39 @@ class FfmpegFirstFrameTest final : public QObject {
     static void initMain() {
 #ifdef Q_OS_WIN
         SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+#elif defined(Q_OS_LINUX)
+        prepareLinuxWaylandPlatform();
 #endif
     }
 
+  private:
+    std::unique_ptr<GraphicsDeviceDomain> createDeviceDomain() {
+#ifdef Q_OS_LINUX
+        return GraphicsBackendFactory::createDeviceDomain(m_window);
+#else
+        return GraphicsBackendFactory::createDeviceDomain();
+#endif
+    }
+#ifdef Q_OS_LINUX
+    std::unique_ptr<LinuxWaylandWindowContext> m_windowContext;
+    QWindow m_window;
+#endif
+
   private slots:
+    void initTestCase() {
+#ifdef Q_OS_LINUX
+        m_windowContext = std::make_unique<LinuxWaylandWindowContext>(*qGuiApp);
+        m_window.setSurfaceType(QSurface::VulkanSurface);
+        m_windowContext->configureWindow(m_window);
+#endif
+    }
+    void cleanupTestCase() {
+#ifdef Q_OS_LINUX
+        m_windowContext->releaseWindow(m_window);
+        m_windowContext.reset();
+#endif
+    }
+    void continuousVaapiDecodeAndImport();
     void retainsStreamHdr10PlusAtTheDecodeBoundary();
     void hdrInputAcceptance_data();
     void hdrInputAcceptance();
@@ -388,8 +423,8 @@ class FfmpegFirstFrameTest final : public QObject {
     void seekDecodesInterFramePreroll();
     void longTimelineSeekUses64BitTarget();
     void hardwareDecodeFailureRetriesSoftware();
-    void videoToolboxHardwareDecodeDirectImport_data();
-    void videoToolboxHardwareDecodeDirectImport();
+    void nativeHardwareDecodeDirectImport_data();
+    void nativeHardwareDecodeDirectImport();
     void continuousVideoToolboxDecodeAndImport();
     void metalTargetResizesBeforeFirstSubmission();
     void continuousD3d11DecodeRetainsBoundedFrames();
@@ -593,7 +628,7 @@ void FfmpegFirstFrameTest::hdrReferenceWhiteRerendersRetainedFrame() {
     auto const decoded = decodeFirstVideoFrame(QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/") + fixtureFile,
                                                {.playbackGeneration = 95, .decoderRevision = 1, .frameId = 1});
     QVERIFY2(decoded.isSuccess(), qPrintable(decoded.error));
-    auto graphics = GraphicsBackendFactory::createDeviceDomain();
+    auto graphics = createDeviceDomain();
     QVERIFY(graphics);
     auto execution = graphics->acquireExecutionScope();
     QRhi& rhi = graphics->rhi();
@@ -759,7 +794,7 @@ void FfmpegFirstFrameTest::absolutePqPhysicalOutput() {
     auto const decoded = decodeFirstVideoFrame(QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/") + fixtureFile,
                                                {.playbackGeneration = 96, .decoderRevision = 1, .frameId = 1});
     QVERIFY2(decoded.isSuccess(), qPrintable(decoded.error));
-    auto graphics = GraphicsBackendFactory::createDeviceDomain();
+    auto graphics = createDeviceDomain();
     QVERIFY(graphics);
     constexpr float physicalPeakNits = 800.0f;
     auto capture = [&](float white, int sourceReference, bool enabled, bool available) {
@@ -791,9 +826,9 @@ void FfmpegFirstFrameTest::absolutePqPhysicalOutput() {
     if (fixtureFile == QStringLiteral("hdr10-pq-hevc.hevc")) {
         // With the source fitting the destination, check absolute units
         // independently of the reference-white invariance comparison.
-        auto const uncompressed = captureDecodedFrame(
-            *graphics, decoded.frame, 200.0f, 20.0f, std::nullopt, 0.0f, 200.0f / 80.0f, {}, true,
-            VideoRenderingMode::AdaptiveHdr, false, 100, true, true);
+        auto const uncompressed =
+            captureDecodedFrame(*graphics, decoded.frame, 200.0f, 20.0f, std::nullopt, 0.0f, 200.0f / 80.0f, {}, true,
+                                VideoRenderingMode::AdaptiveHdr, false, 100, true, true);
         QVERIFY2(uncompressed.isSuccess(), qPrintable(uncompressed.error));
         auto const patch = neutralPatchPixels(uncompressed.compositionReadback)[0];
         compareNear(patch.red, 50.0f / 80.0f, 0.02f);
@@ -833,8 +868,8 @@ void FfmpegFirstFrameTest::hdrInputAcceptance_data() {
 }
 
 void FfmpegFirstFrameTest::hdrInputAcceptance() {
-#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
-    QSKIP("This test requires a D3D11 or Metal graphics domain");
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS) && !defined(Q_OS_LINUX)
+    QSKIP("This test requires a supported graphics domain");
 #else
     QFETCH(QString, fixtureStem);
     QFETCH(QString, expectedTransfer);
@@ -890,7 +925,7 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
         QCOMPARE(frame.timing().durationMicroseconds(), std::optional<std::int64_t>(250'000));
     }
 
-    std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
+    std::unique_ptr<GraphicsDeviceDomain> graphics = createDeviceDomain();
     QVERIFY2(graphics, "Could not create the graphics domain");
     constexpr float referenceWhiteNits = 100.0f;
     constexpr float targetPeakHeadroom = 6.0f;
@@ -1132,8 +1167,8 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
 }
 
 void FfmpegFirstFrameTest::nominalSdrTargetPreservesWcg() {
-#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
-    QSKIP("This test requires a D3D11 or Metal graphics domain");
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS) && !defined(Q_OS_LINUX)
+    QSKIP("This test requires a supported graphics domain");
 #else
     auto const freeFrame = [](AVFrame* frame) { av_frame_free(&frame); };
     std::unique_ptr<AVFrame, decltype(freeFrame)> source(av_frame_alloc(), freeFrame);
@@ -1185,7 +1220,7 @@ void FfmpegFirstFrameTest::nominalSdrTargetPreservesWcg() {
         .blue = {0.150f, 0.060f},
         .white = {0.3127f, 0.3290f},
     };
-    std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
+    std::unique_ptr<GraphicsDeviceDomain> graphics = createDeviceDomain();
     QVERIFY2(graphics, "Could not create the graphics domain");
     DecodedFrameCapture const capture = captureDecodedFrame(*graphics, frame, PL_COLOR_SDR_WHITE, 1.0f, displayP3);
     QVERIFY2(capture.isSuccess(), qPrintable(capture.error));
@@ -1221,8 +1256,8 @@ void FfmpegFirstFrameTest::nominalSdrTargetPreservesWcg() {
 }
 
 void FfmpegFirstFrameTest::unknownSdrBlackPreservesPqNearBlack() {
-#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
-    QSKIP("This test requires a D3D11 or Metal graphics domain");
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS) && !defined(Q_OS_LINUX)
+    QSKIP("This test requires a supported graphics domain");
 #else
     constexpr std::array inputNits{0.01f, 0.05f, 0.1f, 0.5f, 1.0f, 5.0f};
     auto const freeFrame = [](AVFrame* frame) { av_frame_free(&frame); };
@@ -1269,7 +1304,7 @@ void FfmpegFirstFrameTest::unknownSdrBlackPreservesPqNearBlack() {
                                  {1, 24}, std::nullopt, std::nullopt, &cloneError);
     QVERIFY2(frame, qPrintable(cloneError));
 
-    std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
+    std::unique_ptr<GraphicsDeviceDomain> graphics = createDeviceDomain();
     QVERIFY2(graphics, "Could not create the graphics domain");
     DecodedFrameCapture const knownZero = captureDecodedFrame(*graphics, frame);
     DecodedFrameCapture const unknown =
@@ -1308,8 +1343,8 @@ void FfmpegFirstFrameTest::dualFormatPreferenceRemapsPausedFrame_data() {
 }
 
 void FfmpegFirstFrameTest::dualFormatPreferenceRemapsPausedFrame() {
-#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
-    QSKIP("This test requires a D3D11 or Metal graphics domain");
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS) && !defined(Q_OS_LINUX)
+    QSKIP("This test requires a supported graphics domain");
 #else
     QFETCH(bool, zeroAverage);
     QString const fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/dovi-profile81-hevc.hevc");
@@ -1349,7 +1384,7 @@ void FfmpegFirstFrameTest::dualFormatPreferenceRemapsPausedFrame() {
     QVERIFY2(dualFrame, qPrintable(frameError));
     QCOMPARE(dualFrame->dynamicRange(), VideoDynamicRange::DolbyVision);
 
-    std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
+    std::unique_ptr<GraphicsDeviceDomain> graphics = createDeviceDomain();
     QVERIFY2(graphics, "Could not create the graphics domain");
     if (zeroAverage) {
         for (float headroom : {1.0f, 6.0f}) {
@@ -1438,8 +1473,8 @@ void FfmpegFirstFrameTest::dualFormatPreferenceRemapsPausedFrame() {
 }
 
 void FfmpegFirstFrameTest::realDemuxDecodeImportAndComposition() {
-#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
-    QSKIP("This test requires a D3D11 or Metal graphics domain");
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS) && !defined(Q_OS_LINUX)
+    QSKIP("This test requires a supported graphics domain");
 #else
     QString const fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-rgb-first-frame.ppm");
     QString const manifest = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-rgb-first-frame.toml");
@@ -1473,7 +1508,7 @@ void FfmpegFirstFrameTest::realDemuxDecodeImportAndComposition() {
     QCOMPARE(decoded.frame->storage().kind, VideoFrameStorageKind::SoftwarePlanes);
     QCOMPARE(decoded.frame->storage().softwareFormat, QStringLiteral("rgb24"));
 
-    std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
+    std::unique_ptr<GraphicsDeviceDomain> graphics = createDeviceDomain();
     QVERIFY2(graphics, "Could not create the graphics domain");
     QRhi& rhi = graphics->rhi();
     DecodedVideoSource source(decoded.frame, VideoTargetReadback::Enabled);
@@ -1608,8 +1643,8 @@ void FfmpegFirstFrameTest::realDemuxDecodeImportAndComposition() {
 }
 
 void FfmpegFirstFrameTest::compressedYuvMetadataAndRendering() {
-#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
-    QSKIP("This test requires a D3D11 or Metal graphics domain");
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS) && !defined(Q_OS_LINUX)
+    QSKIP("This test requires a supported graphics domain");
 #else
     QString const fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1.mkv");
     QString const manifest = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1.toml");
@@ -1617,7 +1652,7 @@ void FfmpegFirstFrameTest::compressedYuvMetadataAndRendering() {
     QVERIFY2(!declaredHash.isEmpty(), "Fixture manifest has no valid SHA-256");
     QCOMPARE(fixtureHash(fixture), declaredHash);
 
-    std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
+    std::unique_ptr<GraphicsDeviceDomain> graphics = createDeviceDomain();
     QVERIFY2(graphics, "Could not create the graphics domain");
     FfmpegFirstFrameResult const decoded = decodeFirstVideoFrame(fixture,
                                                                  {
@@ -1912,7 +1947,7 @@ void FfmpegFirstFrameTest::hardwareDecodeFailureRetriesSoftware() {
         result.diagnostics.hardwareFallbackReason.contains(QStringLiteral("Injected post-selection hardware failure")));
 }
 
-void FfmpegFirstFrameTest::videoToolboxHardwareDecodeDirectImport_data() {
+void FfmpegFirstFrameTest::nativeHardwareDecodeDirectImport_data() {
     QTest::addColumn<QString>("fixtureName");
     QTest::addColumn<QString>("softwareFormat");
     QTest::addColumn<int>("componentDepth");
@@ -1922,9 +1957,9 @@ void FfmpegFirstFrameTest::videoToolboxHardwareDecodeDirectImport_data() {
     QTest::newRow("p010-hevc") << QStringLiteral("hdr10-pq-hevc.hevc") << QStringLiteral("p010le") << 10 << 0.04f;
 }
 
-void FfmpegFirstFrameTest::videoToolboxHardwareDecodeDirectImport() {
-#ifndef Q_OS_MACOS
-    QSKIP("VideoToolbox direct import is macOS-specific");
+void FfmpegFirstFrameTest::nativeHardwareDecodeDirectImport() {
+#if !defined(Q_OS_MACOS) && !defined(Q_OS_LINUX)
+    QSKIP("This direct importer test requires VideoToolbox or VAAPI");
 #else
     QFETCH(QString, fixtureName);
     QFETCH(QString, softwareFormat);
@@ -1932,14 +1967,24 @@ void FfmpegFirstFrameTest::videoToolboxHardwareDecodeDirectImport() {
     QFETCH(float, comparisonTolerance);
 
     QString const fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/%1").arg(fixtureName);
-    std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
-    QVERIFY2(graphics, "Could not create the Metal graphics domain");
+    std::unique_ptr<GraphicsDeviceDomain> graphics = createDeviceDomain();
+    QVERIFY2(graphics, "Could not create the graphics domain");
+#ifdef Q_OS_LINUX
+    QCOMPARE(graphics->backend(), GraphicsBackend::Vulkan);
+    constexpr auto requireVariable = "SUNPLAYER_REQUIRE_VAAPI";
+    auto const apiName = QStringLiteral("VAAPI");
+    auto const storageKind = VideoFrameStorageKind::VaapiSurface;
+#else
     QCOMPARE(graphics->backend(), GraphicsBackend::Metal);
+    constexpr auto requireVariable = "SUNPLAYER_REQUIRE_VIDEOTOOLBOX";
+    auto const apiName = QStringLiteral("VideoToolbox");
+    auto const storageKind = VideoFrameStorageKind::VideoToolboxSurface;
+#endif
 
     VideoHardwareDecodeCapability const& hardwareDecode = graphics->videoDecodeCapability();
     if (!hardwareDecode.isAvailable()) {
-        QString const reason = QStringLiteral("VideoToolbox unavailable: %1").arg(hardwareDecode.unavailableReason);
-        if (qEnvironmentVariableIntValue("SUNPLAYER_REQUIRE_VIDEOTOOLBOX") != 0) {
+        QString const reason = QStringLiteral("%1 unavailable: %2").arg(apiName, hardwareDecode.unavailableReason);
+        if (qEnvironmentVariableIntValue(requireVariable) != 0) {
             QFAIL(qPrintable(reason));
         }
         QSKIP(qPrintable(reason));
@@ -1953,11 +1998,14 @@ void FfmpegFirstFrameTest::videoToolboxHardwareDecodeDirectImport() {
                                                                   },
                                                                   hardwareDecode);
     QVERIFY2(hardware.isSuccess(), qPrintable(hardware.error));
-    QVERIFY(hardware.diagnostics.hardwareAccelerated);
-    QCOMPARE(hardware.diagnostics.decodePath, QStringLiteral("VideoToolbox"));
+    if (!hardware.diagnostics.hardwareAccelerated && !qEnvironmentVariableIntValue(requireVariable)) {
+        QVERIFY(!hardware.diagnostics.hardwareFallbackReason.isEmpty());
+        QSKIP(qPrintable(hardware.diagnostics.hardwareFallbackReason));
+    }
+    QVERIFY2(hardware.diagnostics.hardwareAccelerated, qPrintable(hardware.diagnostics.hardwareFallbackReason));
+    QCOMPARE(hardware.diagnostics.decodePath, apiName);
     QVERIFY(hardware.diagnostics.hardwareFallbackReason.isEmpty());
-    QCOMPARE(hardware.frame->storage().kind, VideoFrameStorageKind::VideoToolboxSurface);
-    QCOMPARE(hardware.frame->storage().hardwareFormat, QStringLiteral("videotoolbox_vld"));
+    QCOMPARE(hardware.frame->storage().kind, storageKind);
     QCOMPARE(hardware.frame->storage().softwareFormat, softwareFormat);
     QCOMPARE(hardware.frame->storage().graphicsDeviceGeneration, std::optional<std::uint64_t>(graphics->generation()));
     QCOMPARE(hardware.frame->signal().componentDepth, componentDepth);
@@ -1980,7 +2028,25 @@ void FfmpegFirstFrameTest::videoToolboxHardwareDecodeDirectImport() {
     QCOMPARE(hardwareCapture.input.knownCpuUploadsPerFrame, 0U);
     QCOMPARE(hardwareCapture.input.knownGpuCopiesPerFrame, 0U);
     QVERIFY(hardwareCapture.input.nativeResource.contains(softwareFormat.toUpper()));
+#ifdef Q_OS_LINUX
+    QVERIFY(hardwareCapture.input.nativeResource.contains(QStringLiteral("modifier=")));
+    QVERIFY(hardwareCapture.input.synchronizationMode.contains(QStringLiteral("GPU-completion")));
+    auto replacement = createDeviceDomain();
+    QVERIFY(replacement);
+    auto const stale = captureDecodedFrame(*replacement, hardware.frame);
+    QVERIFY(!stale.isSuccess());
+    QCOMPARE(stale.producer.failureKind, VideoFailureKind::HardwareFrameImportUnavailable);
+    QVERIFY(stale.error.contains(QStringLiteral("stale graphics-device generation")));
+
+    // Force an unavailable native importer through the real shared boundary.
+    LibplaceboFrameImporter unavailable(graphics->libplaceboContext().gpu, graphics->generation(), {});
+    QString importError;
+    QVERIFY(!unavailable.map(*hardware.frame, false, &importError));
+    QCOMPARE(unavailable.lastDiagnostics().failure, VideoFrameImportFailure::NativeHardwareImportUnavailable);
+    QVERIFY(!importError.isEmpty());
+#else
     QVERIFY(hardwareCapture.input.synchronizationMode.contains(QStringLiteral("CVPixelBuffer")));
+#endif
     QCOMPARE(hardwareCapture.producer.target.outputPath, VideoOutputPath::DirectRenderTarget);
     QCOMPARE(hardwareCapture.producer.target.knownOutputGpuCopiesPerRender, 0U);
     QCOMPARE(hardwareCapture.producer.target.knownOutputCpuTransfersPerRender, 0U);
@@ -2007,7 +2073,7 @@ void FfmpegFirstFrameTest::metalTargetResizesBeforeFirstSubmission() {
 #ifndef Q_OS_MACOS
     QSKIP("The deferred Metal handoff is macOS-specific");
 #else
-    std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
+    std::unique_ptr<GraphicsDeviceDomain> graphics = createDeviceDomain();
     QVERIFY2(graphics, "Could not create the Metal graphics domain");
     GraphicsDeviceExecutionScope execution = graphics->acquireExecutionScope();
     std::unique_ptr<VideoTargetInterop> target = graphics->createVideoTarget({
@@ -2036,12 +2102,126 @@ void FfmpegFirstFrameTest::metalTargetResizesBeforeFirstSubmission() {
 #endif
 }
 
+void FfmpegFirstFrameTest::continuousVaapiDecodeAndImport() {
+#ifndef Q_OS_LINUX
+    QSKIP("VAAPI decoding is Linux-specific");
+#else
+    auto graphics = createDeviceDomain();
+    QVERIFY(graphics);
+    auto const& capability = graphics->videoDecodeCapability();
+    if (!capability.isAvailable()) {
+        QVERIFY(!capability.unavailableReason.isEmpty());
+        // Exercise actual decode/render with the unavailable capability first.
+        auto software =
+            decodeFirstVideoFrame(QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-h264.mkv"),
+                                  {.playbackGeneration = 70, .decoderRevision = 1, .frameId = 1}, capability);
+        QVERIFY2(software.isSuccess(), qPrintable(software.error));
+        QVERIFY(!software.diagnostics.hardwareAccelerated);
+        QCOMPARE(software.diagnostics.hardwareFallbackReason, capability.unavailableReason);
+        auto capture = captureDecodedFrame(*graphics, software.frame);
+        QVERIFY2(capture.isSuccess(), qPrintable(capture.error));
+        QCOMPARE(capture.input.path, VideoFrameImportPath::SoftwareUpload);
+        if (qEnvironmentVariableIntValue("SUNPLAYER_REQUIRE_VAAPI")) {
+            QFAIL(qPrintable(capability.unavailableReason));
+        }
+        QSKIP(qPrintable(capability.unavailableReason));
+    }
+
+    auto execution = graphics->acquireExecutionScope();
+    DecodedVideoSource source({}, VideoTargetReadback::Disabled);
+    LibplaceboDecodedVideoProducer producer(*graphics, source, VideoTargetReadback::Disabled);
+    QRhi& rhi = graphics->rhi();
+    std::uint64_t rendered = 0;
+    QString renderError;
+    std::optional<std::int64_t> firstRenderedPts;
+    auto const consume = [&](std::shared_ptr<DecodedVideoFrame const> frame,
+                             FfmpegVideoStreamDiagnostics const& diagnostics) {
+        if (!diagnostics.hardwareAccelerated || frame->storage().kind != VideoFrameStorageKind::VaapiSurface) {
+            renderError = QStringLiteral("VAAPI decoding unexpectedly fell back to software");
+            return false;
+        }
+        if (!firstRenderedPts) {
+            firstRenderedPts = frame->timing().ptsMicroseconds();
+        }
+        source.setFrame(std::move(frame));
+        auto const state =
+            surfaceState(*graphics, source.contentRevision(), 203.0f, source.currentFrame()->geometry().visibleSize);
+        if (producer.ensureSurface(state) != VideoOperationResult::Ready) {
+            renderError = QStringLiteral("Could not provision the VAAPI render target");
+            return false;
+        }
+        QRhiCommandBuffer* commands = nullptr;
+        if (rhi.beginOffscreenFrame(&commands) != QRhi::FrameOpSuccess) {
+            renderError = QStringLiteral("Could not begin VAAPI render");
+            return false;
+        }
+        if (producer.render(*commands, state) != VideoOperationResult::Ready ||
+            producer.prepareForComposition(*commands) != VideoOperationResult::Ready) {
+            rhi.endOffscreenFrame(QRhi::SkipPresent);
+            producer.submissionAborted();
+            producer.discardPendingRender();
+            renderError = producer.frameImportDiagnostics().fallbackReason;
+            if (renderError.isEmpty()) {
+                renderError = QStringLiteral("VAAPI render failed");
+            }
+            return false;
+        }
+        if (rhi.endOffscreenFrame() != QRhi::FrameOpSuccess) {
+            producer.submissionAborted();
+            producer.discardPendingRender();
+            renderError = QStringLiteral("Could not submit VAAPI render");
+            return false;
+        }
+        producer.submissionAccepted();
+        producer.commitPendingRender();
+        ++rendered;
+        return true;
+    };
+    auto const request = FfmpegVideoDecodeRequest{
+        .path = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-h264-seek.mkv"),
+        .firstFrameIdentity = {.playbackGeneration = 71, .decoderRevision = 1, .frameId = 1},
+        .hardwareDecode = capability,
+        .extraHardwareFrames = static_cast<int>(VideoFrameQueue::capacity + 2),
+    };
+    auto const decoded = decodeVideoFrames(request, consume);
+    QVERIFY2(decoded.isSuccess(), qPrintable(decoded.error));
+    if (!decoded.diagnostics.hardwareAccelerated && rendered == 0 &&
+        !qEnvironmentVariableIntValue("SUNPLAYER_REQUIRE_VAAPI")) {
+        QVERIFY(!decoded.diagnostics.hardwareFallbackReason.isEmpty());
+        QSKIP(qPrintable(decoded.diagnostics.hardwareFallbackReason));
+    }
+    QVERIFY2(renderError.isEmpty(), qPrintable(renderError));
+    QVERIFY(decoded.endOfStream);
+    QCOMPARE(rendered, 24U); // More than the decoder's extra-surface reserve.
+    QCOMPARE(producer.inputImportCount(), rendered);
+
+    auto seekRequest = request;
+    seekRequest.firstFrameIdentity.playbackGeneration = 72;
+    seekRequest.start = {.targetPositionMicroseconds = 3'125'000,
+                         .timelineOrigin = decoded.diagnostics.timelineOrigin,
+                         .performDemuxSeek = true};
+    firstRenderedPts.reset();
+    auto const sought = decodeVideoFrames(seekRequest, consume);
+    QVERIFY2(sought.isSuccess(), qPrintable(sought.error));
+    QVERIFY2(renderError.isEmpty(), qPrintable(renderError));
+    QVERIFY(sought.endOfStream);
+    QCOMPARE(firstRenderedPts, std::optional<std::int64_t>(2'000'000)); // Keyframe preroll is intentional.
+    QCOMPARE(sought.framesDecoded, 16U);
+    QVERIFY(rendered > 24U);
+    QCOMPARE(producer.inputImportCount(), rendered);
+    QCOMPARE(producer.frameImportDiagnostics().path, VideoFrameImportPath::DirectHardwareSurface);
+    QCOMPARE(producer.frameImportDiagnostics().knownCpuDownloadsPerFrame, 0U);
+    QCOMPARE(producer.frameImportDiagnostics().knownCpuUploadsPerFrame, 0U);
+    QCOMPARE(producer.frameImportDiagnostics().knownGpuCopiesPerFrame, 0U);
+#endif
+}
+
 void FfmpegFirstFrameTest::continuousVideoToolboxDecodeAndImport() {
 #ifndef Q_OS_MACOS
     QSKIP("VideoToolbox decoding is macOS-specific");
 #else
     QString const fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-h264.mkv");
-    std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
+    std::unique_ptr<GraphicsDeviceDomain> graphics = createDeviceDomain();
     QVERIFY2(graphics, "Could not create the Metal graphics domain");
     VideoHardwareDecodeCapability const& hardwareDecode = graphics->videoDecodeCapability();
     QVERIFY2(hardwareDecode.isAvailable(), qPrintable(hardwareDecode.unavailableReason));
@@ -2103,7 +2283,7 @@ void FfmpegFirstFrameTest::continuousD3d11DecodeRetainsBoundedFrames() {
     QSKIP("D3D11VA decoding is Windows-specific");
 #else
     QString const fixture = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-h264.mkv");
-    std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
+    std::unique_ptr<GraphicsDeviceDomain> graphics = createDeviceDomain();
     QVERIFY2(graphics, "Could not create D3D11 graphics domain");
     VideoHardwareDecodeCapability const capability = graphics->videoDecodeCapability();
     if (!capability.isAvailable()) {
@@ -2157,7 +2337,7 @@ void FfmpegFirstFrameTest::d3d11HardwareDecodeSafeImport() {
     QVERIFY2(!declaredHash.isEmpty(), "Fixture manifest has no valid SHA-256");
     QCOMPARE(fixtureHash(fixture), declaredHash);
 
-    std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
+    std::unique_ptr<GraphicsDeviceDomain> graphics = createDeviceDomain();
     QVERIFY2(graphics, "Could not create D3D11 graphics domain");
     VideoHardwareDecodeCapability const& hardwareDecode = graphics->videoDecodeCapability();
     if (!hardwareDecode.isAvailable()) {
@@ -2262,7 +2442,7 @@ void FfmpegFirstFrameTest::d3d11HardwareDecodeSafeImport() {
     QCOMPARE(hardwareCapture.producer.target.knownOutputCpuTransfersPerRender, 0U);
     QVERIFY(!hardwareCapture.producer.target.synchronizationMode.isEmpty());
 
-    std::unique_ptr<GraphicsDeviceDomain> incompatibleGraphics = GraphicsBackendFactory::createDeviceDomain();
+    std::unique_ptr<GraphicsDeviceDomain> incompatibleGraphics = createDeviceDomain();
     QVERIFY2(incompatibleGraphics, "Could not create second D3D11 graphics domain");
     DecodedFrameCapture const incompatibleCapture = captureDecodedFrame(*incompatibleGraphics, hardware.frame);
     QVERIFY(!incompatibleCapture.isSuccess());
@@ -2363,7 +2543,7 @@ void FfmpegFirstFrameTest::d3d11P010HardwareDecodeSafeImport() {
     QString const manifest = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/hdr10-pq-hevc.toml");
     QCOMPARE(fixtureHash(fixture), expectedFixtureHash(manifest));
 
-    std::unique_ptr<GraphicsDeviceDomain> graphics = GraphicsBackendFactory::createDeviceDomain();
+    std::unique_ptr<GraphicsDeviceDomain> graphics = createDeviceDomain();
     QVERIFY2(graphics, "Could not create D3D11 graphics domain");
     VideoHardwareDecodeCapability const& hardwareDecode = graphics->videoDecodeCapability();
     if (!hardwareDecode.isAvailable()) {
@@ -2414,9 +2594,9 @@ void FfmpegFirstFrameTest::d3d11P010HardwareDecodeSafeImport() {
 #endif
 }
 
-// Metal device creation needs the macOS GUI application lifecycle. The
-// Windows offscreen D3D11 path remains independent of a window system.
-#ifdef Q_OS_MACOS
+// Metal and native Wayland require the GUI application lifecycle.
+// Windows offscreen D3D11 remains independent of a window system.
+#if defined(Q_OS_MACOS) || defined(Q_OS_LINUX)
 QTEST_MAIN(FfmpegFirstFrameTest)
 #else
 QTEST_GUILESS_MAIN(FfmpegFirstFrameTest)

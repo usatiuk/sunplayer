@@ -1,6 +1,9 @@
 #include "graphics/backends/VulkanGraphicsDeviceDomain.h"
 
+#include <algorithm>
+#include <array>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <mutex>
 #include <utility>
@@ -12,16 +15,88 @@
 #include <libplacebo/vulkan.h>
 #include <rhi/qrhi.h>
 #include <rhi/qrhi_platform.h>
+#include <sys/stat.h>
+#include <sys/sysmacros.h>
 #include <vulkan/vulkan.h>
+#include <xf86drm.h>
+
+extern "C" {
+#include <libavutil/error.h>
+#include <libavutil/hwcontext.h>
+}
 
 #include "diagnostics/LogCategories.h"
 #include "graphics/GraphicsDeviceDomain.h"
+#include "graphics/backends/VulkanLibplaceboFrameImporter.h"
 #include "graphics/backends/VulkanLibplaceboVideoTarget.h"
 #include "media/FfmpegHardwareDevice.h"
 #include "video/QrhiVideoTarget.h"
 #include "video/libplacebo/LibplaceboFrameImporter.h"
 
 namespace {
+constexpr std::array dmaBufExtensions{
+    VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
+    VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME,
+    VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME,
+};
+
+VideoHardwareDecodeCapability createVideoDecodeCapability(QVulkanFunctions& functions, VkPhysicalDevice physicalDevice,
+                                                          pl_gpu gpu, bool hasDrmProperties, std::uint64_t generation) {
+    auto const unavailable = [](QString reason) {
+        return VideoHardwareDecodeCapability{.device = {}, .unavailableReason = std::move(reason)};
+    };
+    if (!(gpu->import_caps.tex & PL_HANDLE_DMA_BUF)) {
+        return unavailable(QStringLiteral("The Vulkan device cannot import DRM PRIME dma-buf textures"));
+    }
+    if (!hasDrmProperties) {
+        return unavailable(QStringLiteral("Vulkan does not expose a DRM render-device identity"));
+    }
+    VkPhysicalDeviceDrmPropertiesEXT drmProperties{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRM_PROPERTIES_EXT,
+    };
+    VkPhysicalDeviceProperties2 properties{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+        .pNext = &drmProperties,
+    };
+    functions.vkGetPhysicalDeviceProperties2(physicalDevice, &properties);
+    if (!drmProperties.hasRender) {
+        return unavailable(QStringLiteral("The Vulkan device has no DRM render node"));
+    }
+    dev_t const deviceId = makedev(drmProperties.renderMajor, drmProperties.renderMinor);
+    drmDevicePtr drmDevice = nullptr;
+    int const drmStatus = drmGetDeviceFromDevId(deviceId, 0, &drmDevice);
+    if (drmStatus < 0) {
+        return unavailable(QStringLiteral("Could not resolve Vulkan DRM render node %1:%2: %3")
+                               .arg(drmProperties.renderMajor)
+                               .arg(drmProperties.renderMinor)
+                               .arg(QString::fromLocal8Bit(std::strerror(-drmStatus))));
+    }
+    QString const renderNode = (drmDevice->available_nodes & (1 << DRM_NODE_RENDER))
+                                   ? QString::fromLocal8Bit(drmDevice->nodes[DRM_NODE_RENDER])
+                                   : QString();
+    drmFreeDevice(&drmDevice);
+    struct stat nodeState{};
+    QByteArray const nativeNode = renderNode.toLocal8Bit();
+    if (renderNode.isEmpty() || stat(nativeNode.constData(), &nodeState) != 0 || !S_ISCHR(nodeState.st_mode) ||
+        major(nodeState.st_rdev) != drmProperties.renderMajor ||
+        minor(nodeState.st_rdev) != drmProperties.renderMinor) {
+        return unavailable(QStringLiteral("No matching DRM render node for the Vulkan device"));
+    }
+    AVBufferRef* device = nullptr;
+    int const status = av_hwdevice_ctx_create(&device, AV_HWDEVICE_TYPE_VAAPI, nativeNode.constData(), nullptr, 0);
+    if (status < 0) {
+        char error[AV_ERROR_MAX_STRING_SIZE]{};
+        av_strerror(status, error, sizeof(error));
+        return unavailable(
+            QStringLiteral("Could not initialize VAAPI on %1: %2").arg(renderNode, QString::fromUtf8(error)));
+    }
+    auto retainedDevice = FfmpegHardwareDevice::adopt(device, generation, QStringLiteral("VAAPI"));
+    Q_ASSERT(retainedDevice);
+    qCInfo(sunplayerLogGraphics).noquote()
+        << "event=vaapi.device" << "renderNode=" + renderNode << "generation=" + QString::number(generation);
+    return {.device = std::move(retainedDevice), .unavailableReason = {}};
+}
+
 struct VulkanExecutionState {
     std::recursive_mutex mutex;
 };
@@ -70,8 +145,9 @@ class VulkanGraphicsDeviceDomain final : public GraphicsDeviceDomain {
         parameters.window = &window;
         // Vulkan 1.3 makes synchronization2 available to libplacebo's
         // external-image handoff without a custom device-feature chain.
-        // Request external-memory/modifier extensions with the future
-        // VAAPI/DRM-PRIME importer that actually consumes them.
+        for (char const* extension : dmaBufExtensions) {
+            parameters.deviceExtensions.append(extension);
+        }
         m_rhi.reset(QRhi::create(QRhi::Vulkan, &parameters));
         if (!m_rhi) {
             return;
@@ -95,6 +171,29 @@ class VulkanGraphicsDeviceDomain final : public GraphicsDeviceDomain {
             return;
         }
         m_deviceFunctions = deviceFunctions;
+        // Qt 6.10 enables supported requested extensions. Mirror that exact
+        // subset when importing its device; unsupported names remain optional.
+        std::uint32_t extensionCount = 0;
+        if (vulkanFunctions->vkEnumerateDeviceExtensionProperties(native->physDev, nullptr, &extensionCount, nullptr) !=
+            VK_SUCCESS) {
+            return;
+        }
+        std::vector<VkExtensionProperties> extensions(extensionCount);
+        if (vulkanFunctions->vkEnumerateDeviceExtensionProperties(native->physDev, nullptr, &extensionCount,
+                                                                  extensions.data()) != VK_SUCCESS) {
+            return;
+        }
+        auto const supportsExtension = [&extensions](char const* name) {
+            return std::any_of(extensions.begin(), extensions.end(), [name](auto const& extension) {
+                return std::strcmp(extension.extensionName, name) == 0;
+            });
+        };
+        std::vector<char const*> enabledExtensions;
+        for (char const* extension : dmaBufExtensions) {
+            if (supportsExtension(extension)) {
+                enabledExtensions.push_back(extension);
+            }
+        }
         VkPhysicalDeviceProperties physicalDeviceProperties{};
         vulkanFunctions->vkGetPhysicalDeviceProperties(native->physDev, &physicalDeviceProperties);
         if (physicalDeviceProperties.apiVersion < VK_API_VERSION_1_3) {
@@ -168,6 +267,8 @@ class VulkanGraphicsDeviceDomain final : public GraphicsDeviceDomain {
         import.unlock_queue = unlockQueue;
         import.queue_ctx = m_executionState.get();
         import.max_api_version = VK_API_VERSION_1_3;
+        import.extensions = enabledExtensions.data();
+        import.num_extensions = static_cast<int>(enabledExtensions.size());
         m_vulkan = pl_vulkan_import(m_log, &import);
         if (!m_vulkan) {
             return;
@@ -177,10 +278,12 @@ class VulkanGraphicsDeviceDomain final : public GraphicsDeviceDomain {
             .log = m_log,
             .gpu = m_vulkan->gpu,
         };
-        m_videoDecode = {
-            .device = {},
-            .unavailableReason = QStringLiteral("VAAPI/DRM PRIME import is not implemented yet"),
-        };
+        m_videoDecode =
+            createVideoDecodeCapability(*vulkanFunctions, native->physDev, m_libplacebo.gpu,
+                                        supportsExtension(VK_EXT_PHYSICAL_DEVICE_DRM_EXTENSION_NAME), generation());
+        if (!m_videoDecode.isAvailable()) {
+            qCInfo(sunplayerLogGraphics).noquote() << "event=vaapi.unavailable" << m_videoDecode.unavailableReason;
+        }
         m_diagnostics.backend = GraphicsBackend::Vulkan;
         m_diagnostics.backendName = QString::fromLatin1(m_rhi->backendName());
         m_diagnostics.nativeApi = QStringLiteral("Vulkan 1.3");
@@ -229,7 +332,9 @@ class VulkanGraphicsDeviceDomain final : public GraphicsDeviceDomain {
         return {};
     }
 
-    std::unique_ptr<LibplaceboHardwareFrameImporter> createHardwareFrameImporter() override { return {}; }
+    std::unique_ptr<LibplaceboHardwareFrameImporter> createHardwareFrameImporter() override {
+        return createVulkanLibplaceboFrameImporter(m_libplacebo.gpu);
+    }
 
     bool supportsPresentation(QWindow& window) const override {
         Q_ASSERT(m_instance);

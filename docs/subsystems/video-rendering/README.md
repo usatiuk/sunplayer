@@ -22,8 +22,13 @@ Vision Profile 8.1 fixture
 proves that FFmpeg retains raw and parsed RPU metadata and libplacebo maps the
 reshape on the production software-frame path. This is not a claim of support
 for every Dolby Vision profile, enhancement layer, trim, or physical target.
-CPU input fallbacks and Linux native importers are not implemented. The direct
-RGBA16F output target remains zero-copy.
+Linux VAAPI frames map through libplacebo's direct DRM PRIME helper, with no
+known input CPU transfer or GPU copy. FFmpeg owns export and decode-completion
+waiting; one retired mapping bounds retained surfaces until GPU sampling ends.
+Native Intel NV12/P010 pixel comparisons and continuous decode/seek pass; AMD
+and asynchronous busy-surface stress remain open. Per-frame CPU input fallbacks are
+not implemented; incompatible hardware uses the shared software re-decode.
+The direct RGBA16F output target remains zero-copy.
 
 The broad investigation in
 [../../ARCHITECTURE_NOTES.md](../../ARCHITECTURE_NOTES.md) is non-binding
@@ -81,8 +86,8 @@ The known seams are established with their first implementations:
 * The macOS importer maps VideoToolbox NV12/P010 planes into the same
   libplacebo boundary and retains the `CVPixelBuffer`, CoreVideo texture views,
   and libplacebo textures until nonblocking GPU-completion polling releases
-  them. A future Linux importer applies the same lifetime contract to
-  Vulkan/DRM/VAAPI resources.
+  them. The Linux importer follows the same lifetime requirement using
+  libplacebo-owned DRM PRIME mappings and one bounded retired frame.
 
 These are purpose-specific boundaries, not another general graphics API.
 
@@ -364,7 +369,8 @@ shared.
 11. [x] Make the Windows graphics domain own a video-capable,
     multithread-protected D3D11 device and import D3D11VA planes through one
     cached exact-size GPU copy.
-12. [ ] Add the Vulkan/DRM/VAAPI platform importer. The macOS VideoToolbox
+12. [x] Add the Vulkan/DRM/VAAPI platform importer; native Intel/AMD validation
+    has passed on Intel and remains pending on AMD. The macOS VideoToolbox
     NV12/P010 importer is complete for its initial scope.
 
 ## Verification

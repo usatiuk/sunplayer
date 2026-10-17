@@ -12,9 +12,10 @@ Windows video streams and keeps software decoding as an explicit fallback.
 The macOS package exposes VideoToolbox; SunPlayer exercises H.264/NV12 and
 Main10 HEVC/P010 hardware decode and direct Metal-plane import on Apple
 Silicon.
-Linux currently uses the same production operation with software video decode;
-the system FFmpeg exposes VAAPI/DRM capability, but native-frame import is not
-implemented yet.
+Linux uses the same production operation with VAAPI or software decoding. Its
+VAAPI capability uses the Vulkan adapter's exact DRM render node and the
+libplacebo DRM PRIME importer. Native Intel NV12/P010, continuous decode and
+seek pass; AMD execution remains a validation gap.
 
 The production `decodeMediaFrames()` operation accepts one restartable request,
 opens a local file, discovers every selectable embedded video and audio stream and every embedded subtitle stream,
@@ -54,10 +55,14 @@ mapping during a frame switch. A configured hardware failure retries in
 software only before any frame has been published; a later decoder failure is
 visible rather than silently replaying from the beginning.
 
-On Linux the graphics capability currently reports software decode. The
-software `AVFrame` path is shared with Windows and renders through the Vulkan
-libplacebo target. VAAPI/DRM PRIME negotiation and native image import remain
-one future acceleration slice rather than a second media pipeline.
+On Linux the graphics domain creates a generation-scoped VAAPI device on the
+render node identified by Vulkan's DRM major/minor. The same packet decoder
+negotiates the codec's VAAPI format; unsupported codecs use its existing
+software fallback. Libplacebo's direct DRM PRIME mapper retains each exported
+surface until GPU-completion polling permits release. There is no per-frame
+CPU download fallback. A device without provable identity, a usable VAAPI
+driver, or dma-buf import capability keeps the shared software path with a
+specific unavailable reason.
 
 On macOS the graphics domain creates an FFmpeg VideoToolbox device capability
 tagged with the Metal-domain generation. Hardware frames retain their
@@ -164,8 +169,7 @@ explicit codec-patent review where applicable.
 Linux discovers the corresponding system libraries with pkg-config and checks
 their accepted ABI-major ranges at configure and dependency-test time. It does
 not require the Windows package's disabled-Vulkan feature shape; system FFmpeg
-may expose VAAPI and DRM even though SunPlayer does not yet consume that hardware
-path.
+provides the VAAPI/DRM APIs used by the Linux graphics capability and importer.
 
 ## Decoded-frame contract
 
@@ -239,9 +243,9 @@ rotated-content output still needs a dedicated fixture and capture.
 3. Dispatch subtitle packets without letting one selected stream prevent
    progress for another.
 4. Add packet byte/duration and decode-time diagnostics.
-5. Add VAAPI/DRM PRIME hardware-device negotiation and native import behind
-   the existing graphics-domain contract. VideoToolbox NV12/P010 negotiation
-   and import are complete for the initial macOS scope.
+5. Validate the implemented VAAPI/DRM PRIME path on native Intel and AMD
+   devices. VideoToolbox NV12/P010 negotiation and import are complete for the
+   initial macOS scope.
 
 ## Verification
 

@@ -30,7 +30,33 @@ libplacebo render, and swapchain for an audio-first source. As buffering and
 device recovery arrive, deterministic whole-pipeline scenarios should become
 the bulk of behavioral coverage.
 
-The Ubuntu system build now compiles that shared media, subtitle, playback,
+The October 2026 VAAPI slice enables `ffmpeg-first-frame` on native Wayland
+and reuses its real FFmpeg/libplacebo render captures. Software SDR, PQ, HLG,
+HDR10+, Dolby Vision and reference-white cases run on lavapipe. VAAPI rows
+compare NV12/P010 output against software, reject stale generations, classify
+an unavailable importer, and decode/render 24 inter-frame H.264 frames followed
+by a seek with keyframe preroll. The existing MediaSession scenarios protect
+the one-shot software restart and captured logical position.
+
+Optional runs skip unavailable VAAPI devices or unsupported codec rows.
+`SUNPLAYER_REQUIRE_VAAPI=1` turns those gaps into failures on hardware runners:
+
+```sh
+SUNPLAYER_REQUIRE_VAAPI=1 ctest --test-dir build/linux-debug -R '^ffmpeg-first-frame$' --output-on-failure
+```
+
+The execution environment must provide native Wayland, Vulkan, the matching
+DRM render-node permissions, and a working VAAPI driver. Run hardware tests
+outside sandboxes that hide DRM nodes. On the native Intel Arrow Lake host,
+installing the missing iHD media driver resolves initialization and all 35
+CTests pass with required VAAPI. The rendering executable reports 30 passed,
+0 failed, five other-platform skips, and no VAAPI skips. AMD modifier imports,
+asynchronous busy-surface retirement stress, and device-loss injection remain
+uncovered. This slice does not add a driver simulator.
+The October delivery evidence is recorded in the
+[Linux GPU decoding plan](plans/cross-cutting/2026-10-17-linux-gpu-decoding.md).
+
+The earlier Ubuntu system build compiles that shared media, subtitle, playback,
 and UI graph plus the native-Wayland Vulkan path. It passes 26 Linux CTests and
 QML lint, including a device-backed system-cubeb lifecycle, real audio-first
 application playback, FFmpeg/subtitle fixtures, system dependencies, exact
@@ -50,8 +76,9 @@ lifecycle acceptance.
 WSLg's Pulse-compatible cubeb output and advancing application audio clock are
 proven, and a user-confirmed real-file run is audible through WSLg. Native
 PulseAudio/PipeWire-Pulse acoustic output and live default-route switching,
-native GPU behavior, VAAPI import, live managed gamma-2.2 declaration, and HDR
-display behavior remain unproven. The production Linux build compiles the
+broader native GPU behavior, AMD VAAPI import, live managed gamma-2.2
+presentation, and HDR display behavior remain unproven. Intel VAAPI import and
+offscreen Vulkan captures now pass on the native host as recorded above. The production Linux build compiles the
 shared final BT.709-to-BT.2020/PQ shader. Its analytic GPU pixel oracle remains
 inside the Windows-only real-compositor test and covers neutral reference white,
 signed pre-matrix input/post-matrix clamping, and ordinary color. This is not

@@ -319,8 +319,9 @@ Windows V1 color release gate:
   output copy. Device-loss injection remains broader graphics validation.
 * [x] Add the VideoToolbox NV12/P010 Metal-plane importer with the macOS
   graphics domain, retained through libplacebo GPU completion.
-* [ ] Add Vulkan/DRM PRIME/VAAPI importers with the Wayland Linux graphics
-  domain.
+* [x] Add the VAAPI → DRM PRIME importer with the Wayland Linux graphics
+  domain. Native Intel NV12/P010 and turnover/seek pass; AMD execution and
+  asynchronous busy-surface stress remain open.
 * [x] Inventory Linux color-management-v1 capabilities. Own one latest-version
   surface declaration with ready managed gamma-2.2 and BT.2020/PQ descriptions,
   observe version-2 preferred targets independently, and otherwise select

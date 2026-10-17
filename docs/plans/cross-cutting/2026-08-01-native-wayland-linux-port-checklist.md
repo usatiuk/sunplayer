@@ -113,12 +113,12 @@ roadmap state actually changes.
 
 | ID | Gate | Status | Evidence | Blocker or notes |
 | --- | --- | --- | --- | --- |
-| HW-01 | Match the selected Vulkan physical device to its DRM render node using stable device identity | Pending | — | Unprovable identity disables hardware decode |
-| HW-02 | Create the FFmpeg VAAPI device on that exact render node | Pending | — | Do not let FFmpeg select an unrelated default adapter |
-| HW-03 | Map retained VAAPI frames to DRM PRIME and import through libplacebo's FFmpeg helper | Pending | — | Retained `AVFrame` owns descriptors until GPU completion |
-| HW-04 | Diagnose modifiers, planes, formats, waits, transfers, copies, and bounded software fallback | Pending | — | No duplicate dma-buf model yet |
-| HW-05 | Pass NV12 and P010 import, seek/flush, device loss, teardown, mismatch, and forced-failure scenarios | Pending | — | Hardware path requires zero CPU pixel transfers |
-| HW-06 | Validate Intel ANV/iHD on native Ubuntu hardware | Needs native hardware | — | Record kernel, Mesa, Vulkan, VA driver, GPU, and fixtures |
+| HW-01 | Match the selected Vulkan physical device to its DRM render node using stable device identity | Done | [VAAPI implementation](linux-port-evidence/2026-10-17-vaapi-drm-prime.md) | Native Intel renderD128 identity matches Vulkan DRM major/minor; no guessed/default adapter |
+| HW-02 | Create the FFmpeg VAAPI device on that exact render node | Done | [VAAPI implementation](linux-port-evidence/2026-10-17-vaapi-drm-prime.md) | Native Intel iHD initializes on the exact node after the missing driver is installed |
+| HW-03 | Map retained VAAPI frames to DRM PRIME and import through libplacebo's FFmpeg helper | Done | [VAAPI implementation](linux-port-evidence/2026-10-17-vaapi-drm-prime.md) | Native Intel NV12/P010 capture-vs-software passes with direct libplacebo DRM import |
+| HW-04 | Diagnose modifiers, planes, formats, waits, transfers, copies, and bounded software fallback | Done | [VAAPI implementation](linux-port-evidence/2026-10-17-vaapi-drm-prime.md) | Native API/node/modifier/transfer diagnostics and typed generation/unavailable-importer behavior pass; deliberate driver faults remain HW-05 |
+| HW-05 | Pass NV12 and P010 import, seek/flush, device loss, teardown, mismatch, and forced-failure scenarios | In progress | [VAAPI implementation](linux-port-evidence/2026-10-17-vaapi-drm-prime.md) | Native Intel captures, 24-frame turnover, keyframe-preroll seek and stale-generation/unavailable-importer cases pass; asynchronous stress and actual driver/device-loss injection remain |
+| HW-06 | Validate Intel ANV/iHD on native Ubuntu hardware | Done | [VAAPI implementation](linux-port-evidence/2026-10-17-vaapi-drm-prime.md) | Intel Arrow Lake-P [8086:7d51], i915, Mesa 26.0.8, iHD 26.1.2, GNOME Wayland 50.1; strict VAAPI suite and all 35 CTests pass |
 | HW-07 | Validate AMD RADV/radeonsi on native Ubuntu hardware | Needs native hardware | — | Record kernel, Mesa, Vulkan, VA driver, GPU, and fixtures |
 
 ## 6. Reliability and Ubuntu delivery
@@ -157,6 +157,6 @@ roadmap state actually changes.
 | Linux fullscreen | In progress | Video-only production scenario has passed WSLg; audio-bearing assertions are implemented, but the latest run ended in an unresolved buffer/configure protocol failure after a valid zero-size hint and cross-output scenarios remain |
 | Complete Linux Wayland SDR | Pending | Unmanaged assumed-sRGB and available managed gamma-2.2 video, audio, fullscreen, clean install, native Wayland only |
 | Managed Linux HDR | Needs native hardware | Stable version-2 BT.2020/PQ declaration, RGB10A2 HDR10 plus pass-through, physical procedure, output movement, and gamma-2.2 SDR rollback |
-| Intel VAAPI acceleration | Needs native hardware | Exact-device DRM PRIME import, NV12/P010, zero CPU transfer and no extra full-frame input copy, software fallback |
+| Intel VAAPI acceleration | Done for recorded native host | [Arrow Lake evidence](linux-port-evidence/2026-10-17-vaapi-drm-prime.md); required NV12/P010 capture, turnover and seek pass; broader stress/fault matrix remains |
 | AMD VAAPI acceleration | Needs native hardware | Exact-device DRM PRIME import, NV12/P010, zero CPU transfer and no extra full-frame input copy, software fallback |
 | Ubuntu 26.04 distributable | Decision needed | Chosen format, clean install, ABI dependencies, license closure, runtime scenarios |

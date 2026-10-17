@@ -50,3 +50,5 @@ the newer note or decision rather than silently rewriting the investigation.
 * [2026-08-02: Qt Metal EDR declaration across macOS screen transitions](2026-08-02-qt-metal-edr-screen-transition.md)
 * [2026-08-09: Windows background before the first QRhi presentation](2026-08-09-windows-first-presentation-background.md)
 * [2026-08-21: Metadata-first HDR-to-SDR presentation mapping](2026-08-21-metadata-first-hdr-to-sdr-mapping.md)
+
+* [2026-10-17: Linux VAAPI and DRM PRIME integration](2026-10-17-linux-vaapi-drm-prime.md)

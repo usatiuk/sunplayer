@@ -210,8 +210,14 @@ playback:
   User-confirmed real-file playback is also audible through WSLg.
   Native PulseAudio/PipeWire-Pulse route-change and recovery evidence,
   preferred-target rerendering, stable HDR-output movement, managed-SDR
-  rollback, VAAPI/DRM PRIME, native GPU/display
-  validation, and packaging remain pending.
+  rollback, AMD VAAPI/DRM PRIME execution, broader native GPU/display validation,
+  and packaging remain pending. The Linux VAAPI implementation now matches
+  Vulkan's DRM render identity, opens FFmpeg on that exact node, and uses
+  libplacebo's direct DRM PRIME mapper with bounded GPU-completion retention
+  and the shared one-shot software restart. Native Intel Arrow Lake NV12/P010
+  captures and continuous decode/seek pass after installing the missing iHD
+  runtime driver. See the
+  [GPU decoding delivery plan](docs/plans/cross-cutting/2026-10-17-linux-gpu-decoding.md).
 * Qt remains the sole Wayland toplevel and surface owner. If xdg-decoration is
   absent, one modular QML chrome layer uses public Qt system move/resize/state
   operations and system-theme glyphs with bundled Lucide fallbacks. It
@@ -442,7 +448,7 @@ Documentation: `docs/subsystems/graphics/`
 * [x] Shared hardware-frame import result/diagnostic contract
 * [x] D3D11VA NV12/P010/P012/P016 direct importer
 * [x] Vulkan direct libplacebo output target
-* [ ] VAAPI and DRM PRIME hardware-frame importer
+* [x] VAAPI-to-DRM PRIME hardware-frame importer; native Intel validated, AMD pending
 * [x] VideoToolbox NV12/P010 direct Metal-plane importer and macOS
   Metal/MoltenVK output interop
 * [x] Offscreen HDR render-target contract and temporary QRhi producer

@@ -417,11 +417,14 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_sources(sunplayer_video_pipeline PRIVATE
             src/graphics/backends/VulkanGraphicsDeviceDomain.cpp
             src/graphics/backends/VulkanGraphicsDeviceDomain.h
+            src/graphics/backends/VulkanLibplaceboFrameImporter.cpp
+            src/graphics/backends/VulkanLibplaceboFrameImporter.h
             src/graphics/backends/VulkanLibplaceboVideoTarget.cpp
             src/graphics/backends/VulkanLibplaceboVideoTarget.h
     )
     target_link_libraries(sunplayer_video_pipeline PRIVATE
             Vulkan::Vulkan
+            PkgConfig::DRM
     )
 elseif (APPLE)
     target_sources(sunplayer_video_pipeline PRIVATE

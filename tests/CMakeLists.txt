@@ -1083,7 +1083,7 @@ if (WIN32 OR APPLE)
     )
 endif ()
 
-if (WIN32 OR APPLE)
+if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
     qt_add_executable(sunplayer_ffmpeg_first_frame_tests
             integration/video/tst_FfmpegFirstFrame.cpp
@@ -1118,6 +1118,10 @@ if (WIN32 OR APPLE)
             ../src/presentation/shaders/fullscreen.vert
             ../src/presentation/shaders/compositor.frag
     )
+    if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_sources(sunplayer_ffmpeg_first_frame_tests PRIVATE ../src/platform/DisplayStateProvider.h)
+        target_link_libraries(sunplayer_ffmpeg_first_frame_tests PRIVATE sunplayer_linux_platform)
+    endif ()
     if (WIN32)
         sunplayer_stage_windows_runtime(
                 sunplayer_ffmpeg_first_frame_tests
@@ -1139,7 +1143,7 @@ if (WIN32 OR APPLE)
                 ffmpeg-first-frame
                 PROPERTIES ENVIRONMENT "SUNPLAYER_REQUIRE_D3D11VA=1"
         )
-    else ()
+    elseif (APPLE)
         set_tests_properties(
                 ffmpeg-first-frame
                 PROPERTIES ENVIRONMENT "SUNPLAYER_REQUIRE_VIDEOTOOLBOX=1"
