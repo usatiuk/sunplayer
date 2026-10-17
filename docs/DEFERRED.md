@@ -473,3 +473,14 @@ long-buffering shell-slider behavior. MPRIS currently corrects position on
 hold/resume and logical jumps; periodic held-position correction is deferred
 unless native observation demonstrates a product need. See the
 [native-controls delivery plan](plans/cross-cutting/2026-10-17-native-media-controls.md).
+
+## Hosted Windows FFmpeg decoder test exits without diagnostics
+
+During v1.4.0 and v1.4.1 delivery, `ffmpeg-media-decoder` sometimes exited in
+about two seconds without Qt Test output on hosted Windows. The v1.4.1 release
+Windows job passed all 31 deterministic tests unchanged while regular CI's
+first attempt failed only that decoder test; an unchanged failed-job rerun
+passed tests and packaging. The cause is unclassified;
+investigate its process exit/diagnostics in a media-test-focused change. This
+UI/updater change adds no automatic retries, timeout changes or decoder fixes.
+See [the follow-up delivery evidence](plans/cross-cutting/2026-10-17-update-preferences-and-idle-controls.md).

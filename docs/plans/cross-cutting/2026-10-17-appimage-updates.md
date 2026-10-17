@@ -2,6 +2,8 @@
 
 Status: Shipped in v1.4.0. Local and hosted package validation pass; release
 assets are published. Physical-desktop update/relaunch remains a manual check.
+Startup consent/settings and notice dismissal shipped in the
+[v1.4.1 follow-up](2026-10-17-update-preferences-and-idle-controls.md).
 
 ## Accepted behavior
 

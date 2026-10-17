@@ -1,5 +1,7 @@
 # AppImage startup preferences and CSD idle controls
 
+Status: Shipped in [v1.4.1](https://github.com/usatiuk/sunplayer/releases/tag/v1.4.1).
+
 ## Accepted scope
 
 - Fix stationary hover notifications keeping CSD playback controls/cursor visible
@@ -39,5 +41,18 @@ commit, push and a patch release after completion.
   fixed by passing the actual application's backing filename into the Linux
   UI; preference keys and policy remain Linux-owned. The user confirmed cursor
   hiding works on their desktop.
-- Commit/push and patch release pending hosted build validation. Physical-
-  desktop update/relaunch remains the existing manual coverage gap.
+- Implementation commits `70ed52d` and `5bde4a6` are pushed. The latter ensures
+  the notice heading remains readable with light system palettes; the actual
+  QML notice and native consent dialog were visually checked with controlled
+  update availability. Release version commit: `c08aec1`.
+- [Release workflow 39044140879](https://github.com/usatiuk/sunplayer/actions/runs/39044140879)
+  passed: Windows's 31 deterministic tests and Store package, plus signed Linux
+  AppImage validation/playback smoke. Regular Linux CI passed all 40 tests and
+  unsigned AppImage smoke passed. Regular Windows CI's first attempt had the
+  known silent `ffmpeg-media-decoder` failure; its failed job was rerun unchanged
+  and passed tests and packaging. [Regular CI 39044136431](https://github.com/usatiuk/sunplayer/actions/runs/39044136431)
+  is successful on attempt 2; no test or retry policy changed.
+- Published all four assets: AppImage, checksum, zsync and MSIXUPLOAD. The
+  checksum matches the uploaded AppImage SHA-256
+  `d69eabf8c514173627159b2886f26a98d0ae13be148b2dec692e2ffedbc46dcb`.
+  Physical-desktop update/relaunch remains the existing manual coverage gap.
