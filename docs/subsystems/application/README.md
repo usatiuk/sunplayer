@@ -399,3 +399,22 @@ When features arrive, use:
 * Native platform tests where injected Qt events cannot prove the behavior.
 
 See [../../TESTING.md](../../TESTING.md).
+
+## Native desktop media controls
+
+PresentationWindow owns one build-selected NativeMediaControls adapter over
+MediaSession. Linux publishes MPRIS root/Player through existing QtDBus; Windows
+manually drives HWND-associated SMTC through SDK C++/WinRT; macOS uses public
+MediaPlayer Now Playing/Remote Command centers. The adapter publishes title,
+known duration/position, transport and supported seeking; Linux also exposes
+effective volume. No paths, artwork probing, playlists or second player engine.
+
+Release native controls before graphics/native-window/session teardown. Windows
+also detaches on surface destruction and reattaches on creation. Callbacks
+marshal to the Qt owner with in-flight lifetime protection. Desktop arbitration
+is OS policy. Linux retries an unavailable bus on session changes; Windows
+service failures retry on surface recreation. MPRIS preserves Playing during
+play-intent holds and corrects position at hold/resume and actual jumps; shell
+extrapolation during long holds is best-effort. Windows/macOS native builds and
+interaction require host validation; see the
+[delivery plan](../../plans/cross-cutting/2026-10-17-native-media-controls.md).

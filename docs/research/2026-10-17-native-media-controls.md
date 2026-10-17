@@ -6,6 +6,14 @@ platform, with shared playback/application inspection by the coordinating
 agent. Findings are based on documentation and source inspection, not native
 runtime experiments.
 
+The current implementation follows the [reduced design and delivery evidence](../plans/cross-cutting/2026-10-17-native-media-controls.md).
+Its intent-based, pause-like Stop replaces the earlier candidate's lifecycle
+State::Stopped, teardown and black viewport; no separate item-counter framework,
+capability wrappers or mandatory buffering refresh cadence is proposed. The
+candidate sections below are retained as investigation history, not current
+accepted architecture. Three further independent simplicity critiques and two
+reassessments informed that reduction. The delivery plan records implementation and host-validation limits.
+
 ## Question and project baseline
 
 How should SunPlayer expose playback to desktop media controls and hardware
@@ -280,6 +288,59 @@ capabilities for optional features, not implementing every feature an OS offers.
 Correctness is grounded in one playback owner, explicit native-resource
 lifetimes, boundary validation, and observable conformance tests. Native desktop
 acceptance remains necessary even with those invariants.
+
+## Library evaluation and design refinement
+
+The user subsequently requested all three implementations, with design signoff
+before code changes, and asked whether libraries could reduce integration work.
+The [pending design proposal](../plans/cross-cutting/2026-10-17-native-media-controls.md)
+records concrete APIs and lifetime rules. It also refines two earlier ideas:
+native Play/Pause/Seek are simply callers of existing shared actions, and UI
+seek-preview accumulation can remain UI interaction state rather than becoming
+a new pending-command subsystem in the playback owner. Stop is a missing shared
+action, not a special native lifecycle. Native protocols do not mandate tearing
+down decoders or blanking video when stopped; those are proposed product/internal
+choices to approve separately from the required restart-on-Play behavior.
+
+Actual provider libraries exist; direct native integration is not recommended
+on the assumption that none do:
+
+| Candidate | Evidence and fit |
+| --- | --- |
+| Sailfish Amber MPRIS | Qt/QtDBus publisher, Qt 6 build path, LGPL-2.1-or-later source headers. Its inspected SetPosition implementation divides raw microseconds before application validation; registration return values are ignored. Those details prevent enforcing strict boundary and observable-registration contracts without patching it. |
+| Desktop App Toolkit lib_base | Real cross-platform C++/Qt SystemMediaControls implementation. Its build pulls toolkit reactive/concurrency support, OpenSSL, crash-report support and other utilities. macOS currently fixes media type to audio and skip intervals to 15 seconds. Useful maintained production reference, but not a small standalone dependency. |
+| Souvlaki | MIT Rust provider for all three platforms, caller-supplied HWND/metadata and callback/drop lifetime. Requires owned Rust/C++ build and FFI glue. The inspected macOS backend enables commands unconditionally and uses a private position ivar; adopting it would not remove our capability/public-API work. |
+| Playwire | Rust three-platform provider under MIT OR Apache-2.0. Very limited maturity evidence in the inspected repository; not selected over existing SDKs for this change. |
+| libwinmedia | Archived C/C++ project, documented Windows/Linux coverage; not the required maintained three-platform dependency. |
+
+Primary sources inspected:
+
+* [Amber MPRIS](https://github.com/sailfishos/amber-mpris),
+  [player source](https://github.com/sailfishos/amber-mpris/blob/master/src/mprisplayer.cpp),
+  [Qt 6 build selection](https://github.com/sailfishos/amber-mpris/blob/master/common.pri).
+* [Desktop App Toolkit API](https://github.com/desktop-app/lib_base/blob/master/base/platform/base_platform_system_media_controls.h),
+  [build dependencies](https://github.com/desktop-app/lib_base/blob/master/CMakeLists.txt),
+  [macOS implementation](https://github.com/desktop-app/lib_base/blob/master/base/platform/mac/base_system_media_controls_mac.mm),
+  [GPL-3.0-or-later legal terms and OpenSSL exception](https://github.com/desktop-app/legal/blob/master/LEGAL).
+* [Souvlaki](https://github.com/Sinono3/souvlaki),
+  [manifest](https://github.com/Sinono3/souvlaki/blob/master/Cargo.toml),
+  [macOS implementation](https://github.com/Sinono3/souvlaki/blob/master/src/platform/macos/mod.rs).
+* [Playwire](https://github.com/SFG5453/playwire),
+  [libwinmedia](https://github.com/harmonoid/libwinmedia),
+  [C++/WinRT SDK projection](https://learn.microsoft.com/en-us/windows/apps/develop/cpp-winrt/intro-to-using-cpp-with-winrt).
+
+Proposed dependency choice: reuse QtDBus, C++/WinRT from the Windows SDK, and
+Apple MediaPlayer. This adds no new third-party runtime, language toolchain,
+or playback engine. The user has not yet signed off that choice.
+
+Independent plan review also resolved the MPRIS Seek/Next interaction: with
+CanGoNext false, an over-end Seek follows unavailable Next and has no effect;
+it should not be described as unambiguously requiring Stop. CanControl remains
+constant true, while per-item capabilities vary. Buffering projection must
+preserve the protocol's PlayPause semantics; the pending plan proposes keeping
+MPRIS Playing with active intent and bounded held-position corrections rather
+than exporting Paused while treating a toggle as Pause. These refine the
+earlier candidate table and remain subject to native validation.
 
 ## Verification before claiming support
 

@@ -232,24 +232,34 @@ QString MediaSession::selectedSubtitleTrackSummary() const {
 bool MediaSession::hasFrame() const { return static_cast<bool>(m_videoSource.currentFrame()); }
 
 bool MediaSession::playing() const {
-    return m_state == State::Ready && m_userWantsPlaying && m_playbackInterruption == PlaybackInterruption::None &&
-           !m_ended;
+    return m_state == State::Ready && (m_playbackIntent == PlaybackIntent::Playing) &&
+           m_playbackInterruption == PlaybackInterruption::None && !m_ended;
 }
 
-bool MediaSession::playRequested() const { return m_userWantsPlaying && !m_ended; }
+bool MediaSession::playRequested() const { return (m_playbackIntent == PlaybackIntent::Playing) && !m_ended; }
 
 bool MediaSession::ended() const { return m_ended; }
 
-bool MediaSession::seekable() const { return m_seekable; }
+bool MediaSession::stopped() const { return m_playbackIntent == PlaybackIntent::Stopped; }
+
+std::uint64_t MediaSession::mediaItemId() const { return m_mediaItemId; }
+
+MediaClockSnapshot MediaSession::mediaClockSnapshot() const {
+    Q_ASSERT(QThread::currentThread() == thread());
+    auto snapshot = mediaClockSnapshotAt(std::chrono::steady_clock::now());
+    snapshot.positionMicroseconds =
+        m_durationMicroseconds ? std::clamp<std::int64_t>(snapshot.positionMicroseconds, 0, *m_durationMicroseconds)
+                               : std::max<std::int64_t>(0, snapshot.positionMicroseconds);
+    return snapshot;
+}
+
+bool MediaSession::seekable() const {
+    return (m_seekable || m_seeking) && m_durationMicroseconds && (m_state == State::Ready || m_seeking);
+}
 
 bool MediaSession::seeking() const { return m_seeking; }
 
-qlonglong MediaSession::positionMilliseconds() const {
-    std::int64_t const position = mediaClockSnapshotAt(std::chrono::steady_clock::now()).positionMicroseconds;
-    std::int64_t const clamped = m_durationMicroseconds ? std::clamp<std::int64_t>(position, 0, *m_durationMicroseconds)
-                                                        : std::max<std::int64_t>(0, position);
-    return clamped / 1'000;
-}
+qlonglong MediaSession::positionMilliseconds() const { return mediaClockSnapshot().positionMicroseconds / 1'000; }
 
 qlonglong MediaSession::durationMilliseconds() const {
     return m_durationMicroseconds ? *m_durationMicroseconds / 1'000 : -1;
@@ -407,7 +417,7 @@ void MediaSession::openMedia(QUrl const& url) {
         failWithoutWorker(url, tr("The selected media path is empty."));
         return;
     }
-    m_userWantsPlaying = true;
+    m_playbackIntent = PlaybackIntent::Playing;
     m_audioPlayIntent.store(true, std::memory_order_release);
     m_reopenAfterGraphicsRecovery = false;
     m_graphicsRecoveryPositionMicroseconds = 0;
@@ -430,9 +440,10 @@ void MediaSession::cancel() {
     m_graphicsRecoveryPositionMicroseconds = 0;
     m_graphicsRecoverySeeking = false;
     m_hardwareImportFallbackConsumed = false;
-    m_userWantsPlaying = true;
+    m_playbackIntent = PlaybackIntent::Playing;
     m_audioPlayIntent.store(true, std::memory_order_release);
     m_state = State::Empty;
+    m_mediaItemId = 0;
     m_mediaUrl = QUrl{};
     m_displayName.clear();
     m_errorMessage.clear();
@@ -459,19 +470,32 @@ void MediaSession::play() {
     if (m_state != State::Ready && !seekOpening) {
         return;
     }
-    if (m_ended) {
+    if (m_ended || stopped()) {
         QString const path = m_mediaUrl.toLocalFile();
         if (!path.isEmpty()) {
-            m_userWantsPlaying = true;
+            m_playbackIntent = PlaybackIntent::Playing;
             m_hardwareImportFallbackConsumed = false;
+            if (m_reopenAfterGraphicsRecovery) {
+                auto const previousPosition = this->positionMilliseconds();
+                m_audioPlayIntent.store(true, std::memory_order_release);
+                m_graphicsRecoveryPositionMicroseconds = 0;
+                m_graphicsRecoverySeeking = false;
+                resetPlayback(0);
+                emit sessionChanged();
+                emit timelineChanged();
+                if (previousPosition != 0) {
+                    emit positionJumped(0);
+                }
+            } else {
             restartAt(0, m_videoDecodeCapability, false);
+            }
         }
         return;
     }
-    if (m_userWantsPlaying) {
+    if (m_playbackIntent == PlaybackIntent::Playing) {
         return;
     }
-    m_userWantsPlaying = true;
+    m_playbackIntent = PlaybackIntent::Playing;
     m_audioPlayIntent.store(true, std::memory_order_release);
     if (seekOpening) {
         {
@@ -507,32 +531,44 @@ void MediaSession::play() {
 void MediaSession::pause() {
     Q_ASSERT(QThread::currentThread() == thread());
     bool const seekOpening = m_state == State::Opening && m_seeking;
-    if ((m_state != State::Ready && !seekOpening) || !m_userWantsPlaying || m_ended) {
+    if ((m_state != State::Ready && !seekOpening) || m_playbackIntent != PlaybackIntent::Playing || m_ended) {
         return;
     }
-    auto const now = std::chrono::steady_clock::now();
-    // Record intent before observing a fallible device boundary. A recovery
-    // transition triggered by the observation must not lose a concurrent
-    // user pause or resume automatically afterward.
-    m_userWantsPlaying = false;
-    m_audioPlayIntent.store(false, std::memory_order_release);
-    if (seekOpening) {
-        {
-            std::lock_guard lock(m_audioSinkLifecycleMutex);
-            if (m_audioSink && m_audioSinkGeneration.load(std::memory_order_acquire) == m_playbackGeneration) {
-                m_audioSink->pause();
+    haltPlayback(PlaybackIntent::Paused);
+}
+
+void MediaSession::stop() {
+    Q_ASSERT(QThread::currentThread() == thread());
+    if ((m_state != State::Opening && m_state != State::Ready) || stopped()) {
+        return;
+    }
+    haltPlayback(PlaybackIntent::Stopped);
+}
+
+void MediaSession::togglePlayback() {
+    Q_ASSERT(QThread::currentThread() == thread());
+    if (playRequested()) {
+        pause();
+    } else {
+        play();
             }
         }
-        m_playbackMonitorTimer.stop();
-        emit sessionChanged();
-        emit timelineChanged();
-        return;
-    }
+
+void MediaSession::haltPlayback(PlaybackIntent intent) {
+    Q_ASSERT(intent != PlaybackIntent::Playing);
+    auto const now = std::chrono::steady_clock::now();
+    // Freeze before changing intent: the monotonic snapshot advances only
+    // while playing. Record intent before observing a fallible output edge.
+    auto const position = mediaClockSnapshotAt(now).positionMicroseconds;
+    m_playbackIntent = intent;
+    m_audioPlayIntent.store(false, std::memory_order_release);
+    if (m_state == State::Ready) {
     std::optional<AudioPresentationSnapshot> audio;
     if (!observeAudioOutput(now, audio)) {
         return;
     }
-    m_clockAnchorMediaMicroseconds = mediaClockSnapshotAt(now, audio ? &*audio : nullptr).positionMicroseconds;
+    }
+    m_clockAnchorMediaMicroseconds = position;
     m_clockAnchorTime = now;
     m_audioHoldSince.reset();
     m_audioClockUnavailableSince.reset();
@@ -574,10 +610,11 @@ void MediaSession::setMuted(bool muted) {
 
 void MediaSession::seekToMilliseconds(qlonglong positionMilliseconds) {
     Q_ASSERT(QThread::currentThread() == thread());
-    if ((!m_seekable && !m_seeking) || !m_durationMicroseconds || (m_state != State::Ready && !m_seeking)) {
+    if (!seekable()) {
         return;
     }
 
+    auto const previousPosition = this->positionMilliseconds();
     std::int64_t const duration = *m_durationMicroseconds;
     std::int64_t const requested = positionMilliseconds <= 0 ? 0
                                    : positionMilliseconds >= duration / 1'000
@@ -599,6 +636,9 @@ void MediaSession::seekToMilliseconds(qlonglong positionMilliseconds) {
         m_graphicsRecoveryPositionMicroseconds = requested;
         m_graphicsRecoverySeeking = true;
         publishSessionAndPlaybackMetrics(generation);
+        if (generation == m_playbackGeneration && previousPosition != requested / 1'000) {
+            emit positionJumped(requested / 1'000);
+        }
         return;
     }
     restartAt(requested, m_activeVideoDecodeCapability, true);
@@ -613,9 +653,9 @@ void MediaSession::selectSubtitleStream(int streamIndex) {
     std::int64_t const position = m_state == State::Opening
                                       ? m_requestedPositionMicroseconds
                                       : mediaClockSnapshotAt(std::chrono::steady_clock::now()).positionMicroseconds;
-    qCInfo(sunplayerLogPlayback).noquote() << "event=playback.subtitle_selected"
-                                         << "from=" + QString::number(m_selectedSubtitleStreamIndex)
-                                         << "to=" + QString::number(streamIndex)
+    qCInfo(sunplayerLogPlayback).noquote()
+        << "event=playback.subtitle_selected"
+        << "from=" + QString::number(m_selectedSubtitleStreamIndex) << "to=" + QString::number(streamIndex)
                                          << "positionUs=" + QString::number(position);
     m_selectedSubtitleStreamIndex = streamIndex;
     m_subtitleTracks.setSelectedStreamIndex(streamIndex);
@@ -636,9 +676,9 @@ void MediaSession::selectVideoStream(int streamIndex) {
     if (std::optional<std::int64_t> const end = m_videoTracks.endMicroseconds(streamIndex); end && position >= *end) {
         position = std::max<std::int64_t>(0, *end - 1);
     }
-    qCInfo(sunplayerLogPlayback).noquote() << "event=playback.video_track_selected"
-                                         << "from=" + QString::number(m_selectedVideoStreamIndex)
-                                         << "to=" + QString::number(streamIndex)
+    qCInfo(sunplayerLogPlayback).noquote()
+        << "event=playback.video_track_selected"
+        << "from=" + QString::number(m_selectedVideoStreamIndex) << "to=" + QString::number(streamIndex)
                                          << "positionUs=" + QString::number(position);
     m_selectedVideoStreamIndex = streamIndex;
     emit mediaTracksChanged();
@@ -654,9 +694,9 @@ void MediaSession::selectAudioStream(int streamIndex) {
     std::int64_t const position = m_state == State::Opening
                                       ? m_requestedPositionMicroseconds
                                       : mediaClockSnapshotAt(std::chrono::steady_clock::now()).positionMicroseconds;
-    qCInfo(sunplayerLogPlayback).noquote() << "event=playback.audio_track_selected"
-                                         << "from=" + QString::number(m_selectedAudioStreamIndex)
-                                         << "to=" + QString::number(streamIndex)
+    qCInfo(sunplayerLogPlayback).noquote()
+        << "event=playback.audio_track_selected"
+        << "from=" + QString::number(m_selectedAudioStreamIndex) << "to=" + QString::number(streamIndex)
                                          << "positionUs=" + QString::number(position);
     m_selectedAudioStreamIndex = streamIndex;
     emit mediaTracksChanged();
@@ -679,6 +719,7 @@ void MediaSession::restartAt(std::int64_t positionMicroseconds, VideoHardwareDec
 void MediaSession::startDecode(QUrl const& url, QString const& path, VideoHardwareDecodeCapability hardwareDecode,
                                std::int64_t requestedPositionMicroseconds, bool newMedia, bool seeking) {
     Q_ASSERT(requestedPositionMicroseconds >= 0);
+    auto const previousPosition = this->positionMilliseconds();
     advanceGeneration();
     std::uint64_t const generation = m_playbackGeneration;
     cancelPipeline();
@@ -690,6 +731,8 @@ void MediaSession::startDecode(QUrl const& url, QString const& path, VideoHardwa
     m_state = State::Opening;
     m_errorMessage.clear();
     if (newMedia) {
+        // An open occurrence retains its identity across decoder restarts.
+        m_mediaItemId = generation;
         m_mediaUrl = url;
         m_displayName = QFileInfo(path).fileName();
         resetMediaTracks();
@@ -700,7 +743,7 @@ void MediaSession::startDecode(QUrl const& url, QString const& path, VideoHardwa
     }
     m_activeVideoDecodeCapability = hardwareDecode;
     resetPlayback(requestedPositionMicroseconds);
-    m_audioPlayIntent.store(m_userWantsPlaying, std::memory_order_release);
+    m_audioPlayIntent.store(m_playbackIntent == PlaybackIntent::Playing, std::memory_order_release);
     m_seeking = seeking;
 
     qCInfo(sunplayerLogPlayback).noquote() << (newMedia  ? "event=playback.open_start"
@@ -746,10 +789,13 @@ void MediaSession::startDecode(QUrl const& url, QString const& path, VideoHardwa
                 .selectedSubtitleStreamIndex = m_selectedSubtitleStreamIndex,
             },
     });
-    if (m_userWantsPlaying) {
+    if (m_playbackIntent == PlaybackIntent::Playing) {
         m_playbackMonitorTimer.start();
     }
     publishSessionAndPlaybackMetrics(generation);
+    if (generation == m_playbackGeneration && !newMedia && previousPosition != requestedPositionMicroseconds / 1'000) {
+        emit positionJumped(requestedPositionMicroseconds / 1'000);
+    }
 }
 
 void MediaSession::submitOpen(OpenRequest request) {
@@ -1491,7 +1537,7 @@ bool MediaSession::updateAudioOutputState(std::chrono::steady_clock::time_point 
         m_clockAnchorTime = now;
     }
 
-    bool const activePlayback = m_state == State::Ready && m_userWantsPlaying && !m_ended;
+    bool const activePlayback = m_state == State::Ready && (m_playbackIntent == PlaybackIntent::Playing) && !m_ended;
     bool const holdingMedia = activePlayback && m_audioClockEstablished && snapshot.holding && !snapshot.drained;
     if (holdingMedia) {
         if (!m_audioHoldSince) {
@@ -1556,7 +1602,9 @@ bool MediaSession::failCurrentAudioOutput(AudioPresentationSnapshot const& snaps
     }
     m_state = State::Error;
     m_errorMessage = reason;
-    m_userWantsPlaying = false;
+    if (!stopped()) {
+        m_playbackIntent = PlaybackIntent::Paused;
+    }
     m_audioPlayIntent.store(false, std::memory_order_release);
     resetPlayback();
     publishSessionAndPlaybackMetrics(generation);
@@ -1609,7 +1657,8 @@ bool MediaSession::currentGenerationUsesAudioClock() const {
 }
 
 bool MediaSession::needsPlaybackMonitoring() const {
-    return (m_state == State::Opening || m_state == State::Ready) && m_userWantsPlaying && !m_ended;
+    return (m_state == State::Opening || m_state == State::Ready) && (m_playbackIntent == PlaybackIntent::Playing) &&
+           !m_ended;
 }
 
 bool MediaSession::currentGenerationStreamsDiscovered() const {
@@ -1649,7 +1698,9 @@ bool MediaSession::enterReady(std::chrono::steady_clock::time_point now) {
     if (m_durationMicroseconds && m_requestedPositionMicroseconds >= *m_durationMicroseconds) {
         m_clockAnchorMediaMicroseconds = *m_durationMicroseconds;
         m_ended = true;
-        m_userWantsPlaying = false;
+        if (!stopped()) {
+            m_playbackIntent = PlaybackIntent::Paused;
+        }
         m_audioPlayIntent.store(false, std::memory_order_release);
     }
     if (needsPlaybackMonitoring()) {
@@ -1745,7 +1796,9 @@ MediaSession::selectFrameForPresentation(std::chrono::steady_clock::time_point n
         m_clockAnchorMediaMicroseconds = *selection.mediaEndMicroseconds;
         m_clockAnchorTime = now;
         m_ended = true;
-        m_userWantsPlaying = false;
+        if (!stopped()) {
+            m_playbackIntent = PlaybackIntent::Paused;
+        }
         m_audioPlayIntent.store(false, std::memory_order_release);
     }
 

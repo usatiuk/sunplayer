@@ -400,6 +400,7 @@ class ShellTestMediaSession final : public QObject {
     Q_PROPERTY(bool hasFrame READ hasFrame NOTIFY sessionChanged)
     Q_PROPERTY(bool playing READ playing NOTIFY sessionChanged)
     Q_PROPERTY(bool playRequested READ playRequested NOTIFY sessionChanged)
+    Q_PROPERTY(bool stopped READ stopped NOTIFY sessionChanged)
     Q_PROPERTY(bool ended READ ended NOTIFY sessionChanged)
     Q_PROPERTY(bool seekable READ seekable NOTIFY timelineChanged)
     Q_PROPERTY(bool seeking READ seeking NOTIFY timelineChanged)
@@ -465,6 +466,7 @@ class ShellTestMediaSession final : public QObject {
                !m_ended;
     }
     bool playRequested() const { return m_playRequested && !m_ended; }
+    bool stopped() const { return m_stopped; }
     bool ended() const { return m_ended; }
     bool seekable() const { return m_seekable; }
     bool seeking() const { return m_seeking; }
@@ -576,8 +578,21 @@ class ShellTestMediaSession final : public QObject {
     }
     Q_INVOKABLE void retry() { ++m_retryCount; }
     Q_INVOKABLE void play() {
+        m_stopped = false;
         m_playRequested = true;
         m_ended = false;
+        emit sessionChanged();
+    }
+    Q_INVOKABLE void togglePlayback() {
+        if (playRequested()) {
+            pause();
+        } else {
+            play();
+        }
+    }
+    Q_INVOKABLE void stop() {
+        m_stopped = true;
+        m_playRequested = false;
         emit sessionChanged();
     }
     Q_INVOKABLE void pause() {
@@ -617,6 +632,7 @@ class ShellTestMediaSession final : public QObject {
     void sessionChanged();
     void playbackMetricsChanged();
     void timelineChanged();
+    void positionJumped(qlonglong positionMilliseconds);
     void volumeChanged();
     void mutedChanged();
     void audioDiagnosticsChanged();
@@ -627,6 +643,7 @@ class ShellTestMediaSession final : public QObject {
     State m_state = State::Empty;
     bool m_hasFrame = false;
     bool m_playRequested = false;
+    bool m_stopped = false;
     bool m_ended = false;
     bool m_seekable = false;
     bool m_seeking = false;

@@ -461,3 +461,15 @@ retains policy/volume tests but requires a different compositor for native
 request/readiness validation. The short native HDR fixture run has no automated
 smoke completion marker; physical luminance and monitor-movement validation
 also remain pending. Do not confuse these evidence gaps with absent HDR support.
+
+
+## Native desktop media controls: remaining host evidence
+
+All three adapters are implemented; Windows/macOS SDK builds and real native
+media-key, shell, minimized, competing-player and callback/window lifecycle
+checks remain unverified on the Linux development host. Linux isolated-bus
+coverage does not establish GNOME/KDE arbitration, daemon restart recovery or
+long-buffering shell-slider behavior. MPRIS currently corrects position on
+hold/resume and logical jumps; periodic held-position correction is deferred
+unless native observation demonstrates a product need. See the
+[native-controls delivery plan](plans/cross-cutting/2026-10-17-native-media-controls.md).

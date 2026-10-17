@@ -37,6 +37,7 @@
 #include "diagnostics/LogCategories.h"
 #include "graphics/GraphicsBackendFactory.h"
 #include "platform/DisplayStateProvider.h"
+#include "platform/NativeMediaControls.h"
 #include "platform/PlaybackPowerInhibitor.h"
 #include "playback/MediaSession.h"
 #include "presentation/PresentationOutputState.h"
@@ -218,6 +219,7 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
     // Attaching may create the native window and synchronously deliver events;
     // the lifecycle remains Initializing until startPresentation() owns an engine.
     m_outputState->attach(*this);
+    m_nativeMediaControls = createNativeMediaControls(*m_mediaSession, *this);
 #ifdef Q_OS_WIN
     applyWindowsOverlappedWindowStyle(*this);
 #endif
@@ -229,6 +231,7 @@ PresentationWindow::~PresentationWindow() {
     Q_ASSERT(m_presentationLifecycle != PresentationLifecycle::Releasing);
     m_presentationLifecycle = PresentationLifecycle::Releasing;
     delete m_settingsDialog;
+    m_nativeMediaControls.reset();
     m_engine.reset();
 #ifdef Q_OS_LINUX
     m_outputState.reset();
@@ -455,13 +458,7 @@ bool PresentationWindow::playbackShortcutEnabled() const {
            (m_mediaSession->state() == MediaSession::State::Ready || m_mediaSession->seeking());
 }
 
-void PresentationWindow::togglePlayback() {
-    if (m_mediaSession->playRequested()) {
-        m_mediaSession->pause();
-    } else {
-        m_mediaSession->play();
-    }
-}
+void PresentationWindow::togglePlayback() { m_mediaSession->togglePlayback(); }
 
 void PresentationWindow::wheelEvent(QWheelEvent* event) {
     if (m_engine) {

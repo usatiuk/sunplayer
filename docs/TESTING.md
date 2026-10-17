@@ -866,3 +866,25 @@ mastering requests and precedes XR30 buffer commits. The user confirms HDR
 appearance. The run has no automated playback-smoke completion marker; this
 is transport/decode acceptance, not complete smoke or physical calibration.
 See [the delivery plan](plans/graphics/2026-10-17-wayland-hdr-optional-mastering.md).
+
+
+## Native desktop media controls
+
+The media-session target covers retained-frame Stop/replay, Stop before initial
+open completion, EOF and graphics recovery, replay superseding a saved recovery
+position, and stable item identity through decoder restarts. Controlled A/V rows
+exercise actual sink pause and Stop before audio creation, then replay from zero.
+Basic/Fusion shell coverage checks native jumps/Stop superseding pending UI seeks.
+
+Linux's `linux-native-media-controls` target uses dbus-run-session, real QtDBus
+calls, production MediaSession/FFmpeg and ControlledAudioSink. It verifies wire
+signatures/types, introspection, raw signed seek bounds, stale/cross-item IDs,
+Seeked, volume/rate, fixed capabilities, buffering toggle behavior, clearing and
+unregistration. D-Bus is isolated from the developer's desktop bus. Its Qt test
+uses offscreen solely for the non-presenting QWindow; it is not X11 support.
+
+Windows/macOS source and callback lifetimes receive independent review, but
+native builds, SMTC/Control Center/media-key interaction, competing-player
+arbitration, app attribution and live teardown require those platform hosts.
+Linux GNOME/KDE shell behavior, long-hold slider extrapolation and daemon-loss
+reconnection also remain native acceptance checks, not claims of wire tests.

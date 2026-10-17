@@ -52,6 +52,7 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     Q_PROPERTY(bool playing READ playing NOTIFY sessionChanged)
     Q_PROPERTY(bool playRequested READ playRequested NOTIFY sessionChanged)
     Q_PROPERTY(bool ended READ ended NOTIFY sessionChanged)
+    Q_PROPERTY(bool stopped READ stopped NOTIFY sessionChanged)
     Q_PROPERTY(bool seekable READ seekable NOTIFY timelineChanged)
     Q_PROPERTY(bool seeking READ seeking NOTIFY timelineChanged)
     Q_PROPERTY(qlonglong positionMilliseconds READ positionMilliseconds NOTIFY timelineChanged)
@@ -133,6 +134,9 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     bool playing() const;
     bool playRequested() const;
     bool ended() const;
+    bool stopped() const;
+    std::uint64_t mediaItemId() const;
+    MediaClockSnapshot mediaClockSnapshot() const;
     bool seekable() const;
     bool seeking() const;
     qlonglong positionMilliseconds() const;
@@ -175,6 +179,8 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     Q_INVOKABLE void retry();
     Q_INVOKABLE void play();
     Q_INVOKABLE void pause();
+    Q_INVOKABLE void stop();
+    Q_INVOKABLE void togglePlayback();
     void setVolume(qreal volume);
     void setMuted(bool muted);
     Q_INVOKABLE void seekToMilliseconds(qlonglong positionMilliseconds);
@@ -186,6 +192,7 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     void sessionChanged();
     void playbackMetricsChanged();
     void timelineChanged();
+    void positionJumped(qlonglong positionMilliseconds);
     void volumeChanged();
     void mutedChanged();
     void audioDiagnosticsChanged();
@@ -193,6 +200,9 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     void subtitleChanged();
 
   private:
+    enum class PlaybackIntent { Playing, Paused, Stopped };
+    void haltPlayback(PlaybackIntent intent);
+
     struct OpenRequest {
         std::uint64_t generation = 0;
         FfmpegMediaDecodeRequest decode;
@@ -272,7 +282,8 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     int m_selectedAudioStreamIndex = -1;
     int m_selectedSubtitleStreamIndex = -1;
     QString m_subtitleError;
-    bool m_userWantsPlaying = true;
+    PlaybackIntent m_playbackIntent = PlaybackIntent::Playing;
+    std::uint64_t m_mediaItemId = 0;
     qreal m_volume = 1.0;
     bool m_muted = false;
     bool m_decoderDrained = false;

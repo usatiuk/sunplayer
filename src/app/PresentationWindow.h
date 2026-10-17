@@ -111,6 +111,7 @@ class PresentationWindow : public QWindow {
     std::unique_ptr<class PresentationSettings> m_settings;
     std::unique_ptr<class DiagnosticVideoSource> m_diagnosticVideoSource;
     std::unique_ptr<class MediaSession> m_mediaSession;
+    std::unique_ptr<class NativeMediaControls> m_nativeMediaControls;
     std::unique_ptr<class PlaybackPowerInhibitor> m_playbackPowerInhibitor;
     std::unique_ptr<class ActiveVideoSource> m_activeVideoSource;
     std::unique_ptr<class VideoViewportState> m_videoViewport;

@@ -74,6 +74,17 @@ VideoPage {
     Connections {
         target: root.session
 
+        function onPositionJumped(positionMilliseconds) {
+            root.clearPendingRelativeSeek()
+        }
+
+        function onSessionChanged() {
+            if (root.session.stopped || root.session.ended
+                    || root.session.state !== MediaSession.Ready) {
+                root.clearPendingRelativeSeek()
+            }
+        }
+
         function onTimelineChanged() {
             if (!root.session.seekable
                     || root.session.durationMilliseconds <= 0) {
@@ -165,10 +176,7 @@ VideoPage {
     function togglePlayback() {
         if (!sessionReady && !session.seeking)
             return
-        if (session.playRequested && !session.ended)
-            session.pause()
-        else
-            session.play()
+        session.togglePlayback()
         revealControls()
     }
 

@@ -399,3 +399,12 @@ It changes the entire subtitle layer in linear light without editing its colors
 or opacity. 100% matches display reference white on SDR and HDR. It remains
 available with authored styling; style presets preserve it and Restore defaults
 returns it to 80%. Changes apply while paused through the existing settings signal.
+
+## Desktop media command interaction
+
+The UI play/pause action calls the same MediaSession toggle as native toggle
+requests. Relative-seek preview and its existing 180-ms accumulation stay in
+QML. An external position jump or Stop, Close, replacement open or error clears
+pending UI preview so it cannot overwrite a later native command. Stop adds no
+new button, black viewport or teardown-driven UI state; its retained frame is
+presented like a paused frame, and Play restarts the item at zero.

@@ -33,7 +33,9 @@ extern "C" {
 namespace {
 QString fixturePath() { return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1.mkv"); }
 
-QString playbackFixturePath() { return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-playback.mkv"); }
+QString playbackFixturePath() {
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-playback.mkv");
+}
 
 QString synchronizedFixturePath() {
     return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-flac-sync.mkv");
@@ -55,7 +57,9 @@ QString longVideoTailFixturePath() {
     return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-short-audio-long-video-flac.mkv");
 }
 
-QString subtitleFixturePath() { return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-subtitles.mkv"); }
+QString subtitleFixturePath() {
+    return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-subtitles.mkv");
+}
 
 QString multitrackFixturePath() {
     return QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-ffv1-multitrack-flac.mkv");
@@ -174,6 +178,11 @@ class MediaSessionTest final : public QObject {
     void openingNotificationKeepsNewestRequest();
     void continuousPlaybackIsBoundedAndPauseable();
     void seekPreservesTimelineAndPlayIntent();
+    void stopRetainsItemAndReplayRestarts();
+    void stopDuringOpeningPreservesIntent();
+    void stopPausesAudioAndReplaysFromZero_data();
+    void stopPausesAudioAndReplaysFromZero();
+    void stoppedRecoveryPreservesIntentAndReplayTarget();
     void interFrameSeekPublishesRequestedFrame();
     void futureSeekFrameAdvancesClockAnchor();
     void zeroFrameSeekClearsFrameAtRestart();
@@ -1426,6 +1435,180 @@ void MediaSessionTest::seekPreservesTimelineAndPlayIntent() {
     QVERIFY(!session.playing());
     QCOMPARE(session.positionMilliseconds(), 3'000);
     QCOMPARE(session.videoSource().currentFrame()->timing().ptsMicroseconds(), std::optional<std::int64_t>(2'750'000));
+}
+
+void MediaSessionTest::stopRetainsItemAndReplayRestarts() {
+    MediaSession session(VideoTargetReadback::Disabled, decodeVideoFrames);
+    QSignalSpy jumps(&session, &MediaSession::positionJumped);
+    session.openMedia(QUrl::fromLocalFile(playbackFixturePath()));
+    auto const item = session.mediaItemId();
+    QVERIFY(item != 0);
+    QTRY_COMPARE_WITH_TIMEOUT(session.state(), MediaSession::State::Ready, 5000);
+    session.pause();
+    session.seekToMilliseconds(1'250);
+    QTRY_VERIFY_WITH_TIMEOUT(!session.seeking(), 5000);
+    auto const frame = session.videoSource().currentFrame();
+    auto const generation = session.playbackGeneration();
+    QCOMPARE(session.mediaItemId(), item);
+    session.stop();
+    QVERIFY(session.stopped());
+    QVERIFY(!session.playRequested());
+    QVERIFY(!session.mediaClockSnapshot().advancing);
+    QCOMPARE(session.positionMilliseconds(), 1'250);
+    QCOMPARE(session.videoSource().currentFrame(), frame);
+    QCOMPARE(session.playbackGeneration(), generation);
+    session.pause();
+    session.stop();
+    QVERIFY(session.stopped());
+    session.togglePlayback();
+    QVERIFY(!session.stopped());
+    QVERIFY(session.playRequested());
+    QVERIFY(session.playbackGeneration() != generation);
+    QCOMPARE(session.mediaItemId(), item);
+    QCOMPARE(jumps.last().at(0).toLongLong(), 0);
+    QTRY_COMPARE_WITH_TIMEOUT(session.state(), MediaSession::State::Ready, 5000);
+    QVERIFY(session.positionMilliseconds() < 1'000);
+    session.pause();
+    auto const pausedPosition = session.positionMilliseconds();
+    session.togglePlayback();
+    QVERIFY(session.playRequested());
+    QVERIFY(session.positionMilliseconds() >= pausedPosition);
+    QCOMPARE(session.playbackGeneration(), generation + 1);
+    session.pause();
+    session.seekToMilliseconds(session.durationMilliseconds());
+    QTRY_VERIFY_WITH_TIMEOUT(session.ended(), 5000);
+    session.stop();
+    QVERIFY(session.stopped());
+    session.play();
+    QTRY_COMPARE_WITH_TIMEOUT(session.state(), MediaSession::State::Ready, 5000);
+    QVERIFY(!session.stopped());
+    QVERIFY(!session.ended());
+    QCOMPARE(session.mediaItemId(), item);
+    session.openMedia(QUrl::fromLocalFile(replacementFixturePath()));
+    QVERIFY(session.mediaItemId() != item);
+    session.cancel();
+    QCOMPARE(session.mediaItemId(), std::uint64_t(0));
+}
+
+void MediaSessionTest::stopDuringOpeningPreservesIntent() {
+    OperationGate gate;
+    std::atomic_bool started = false;
+    MediaSession session(VideoTargetReadback::Disabled,
+                         [&gate, &started](auto const& request, auto const& sink, std::stop_token stop) {
+                             started = true;
+                             if (!gate.wait(stop)) {
+                                 return cancelledResult();
+                             }
+                             return decodeVideoFrames(request, sink, stop);
+                         });
+    session.openMedia(QUrl::fromLocalFile(playbackFixturePath()));
+    QTRY_VERIFY_WITH_TIMEOUT(started.load(), 5000);
+    auto const item = session.mediaItemId();
+    session.stop();
+    QVERIFY(session.stopped());
+    gate.release();
+    QTRY_COMPARE_WITH_TIMEOUT(session.state(), MediaSession::State::Ready, 5000);
+    QVERIFY(session.stopped());
+    QVERIFY(!session.playing());
+    QCOMPARE(session.positionMilliseconds(), 0);
+    QCOMPARE(session.mediaItemId(), item);
+    session.play();
+    QTRY_COMPARE_WITH_TIMEOUT(session.state(), MediaSession::State::Ready, 5000);
+    QVERIFY(session.playing());
+}
+
+void MediaSessionTest::stopPausesAudioAndReplaysFromZero_data() {
+    QTest::addColumn<bool>("duringOpening");
+    QTest::newRow("playing") << false;
+    QTest::newRow("opening-before-audio-creation") << true;
+}
+
+void MediaSessionTest::stopPausesAudioAndReplaysFromZero() {
+    QFETCH(bool, duringOpening);
+    OperationGate gate;
+    std::atomic_bool started = false;
+    auto sink = std::make_shared<ControlledAudioSink>(4'096);
+    MediaSession session(
+        VideoTargetReadback::Disabled,
+        [&gate, &started](FfmpegMediaDecodeRequest const& request, FfmpegVideoFrameSink const& video,
+                          FfmpegAudioOutputSink const& audio, FfmpegMediaStreamSink const& streams,
+                          FfmpegSubtitleOutputSink const&, std::stop_token stop) {
+            started = true;
+            if (!gate.wait(stop)) {
+                FfmpegMediaDecodeResult result;
+                result.cancelled = true;
+                return result;
+            }
+            return decodeMediaFrames(request, video, audio, streams, stop);
+        },
+        sink);
+    if (!duringOpening) {
+        gate.release();
+    }
+    session.openMedia(QUrl::fromLocalFile(synchronizedFixturePath()));
+    auto const item = session.mediaItemId();
+    if (duringOpening) {
+        QTRY_VERIFY_WITH_TIMEOUT(started.load(), 5000);
+        session.stop();
+        gate.release();
+    }
+    QTRY_VERIFY_WITH_TIMEOUT(session.state() == MediaSession::State::Ready && sink->bufferedFrames() > 0, 5000);
+    auto const service = [&] {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+        auto const rendered = sink->render(480);
+        if (rendered.frames) {
+            sink->advancePresentedFrames(rendered.frames);
+        }
+        session.videoSource().prepareForPresentation(std::chrono::steady_clock::now());
+        return session.positionMilliseconds();
+    };
+    if (!duringOpening) {
+        QTRY_VERIFY_WITH_TIMEOUT(service() >= 100, 5000);
+        session.stop();
+    }
+    QVERIFY(session.stopped());
+    auto const position = session.positionMilliseconds();
+    QCOMPARE(sink->render(480).frames, std::size_t(0));
+    QVERIFY(!session.mediaClockSnapshot().advancing);
+    QCOMPARE(service(), position);
+    QVERIFY(session.stopped());
+    session.play();
+    auto const generation = session.playbackGeneration();
+    QTRY_VERIFY_WITH_TIMEOUT(session.state() == MediaSession::State::Ready && sink->bufferedFrames() > 0 &&
+                                 sink->snapshot().playbackGeneration == generation,
+                             5000);
+    QCOMPARE(sink->snapshot().mediaPositionMicroseconds, std::int64_t(0));
+    QCOMPARE(session.mediaItemId(), item);
+    QTRY_VERIFY_WITH_TIMEOUT(service() > 0, 5000);
+}
+
+void MediaSessionTest::stoppedRecoveryPreservesIntentAndReplayTarget() {
+    MediaSession session(VideoTargetReadback::Disabled, decodeVideoFrames);
+    session.openMedia(QUrl::fromLocalFile(playbackFixturePath()));
+    QTRY_COMPARE_WITH_TIMEOUT(session.state(), MediaSession::State::Ready, 5000);
+    auto const item = session.mediaItemId();
+    session.pause();
+    session.seekToMilliseconds(1'250);
+    QTRY_VERIFY_WITH_TIMEOUT(!session.seeking(), 5000);
+    session.invalidateGraphicsDevice();
+    session.stop();
+    session.setVideoDecodeCapability({});
+    QTRY_COMPARE_WITH_TIMEOUT(session.state(), MediaSession::State::Ready, 5000);
+    QVERIFY(session.stopped());
+    QVERIFY(!session.playing());
+    QCOMPARE(session.positionMilliseconds(), 1'250);
+    QCOMPARE(session.mediaItemId(), item);
+
+    session.seekToMilliseconds(1'500);
+    session.invalidateGraphicsDevice();
+    QVERIFY(session.seeking());
+    session.play();
+    QVERIFY(session.playRequested());
+    QCOMPARE(session.positionMilliseconds(), 0);
+    session.setVideoDecodeCapability({});
+    QTRY_COMPARE_WITH_TIMEOUT(session.state(), MediaSession::State::Ready, 5000);
+    QVERIFY(session.positionMilliseconds() < 1'000);
+    QCOMPARE(session.mediaItemId(), item);
 }
 
 void MediaSessionTest::interFrameSeekPublishesRequestedFrame() {

@@ -769,6 +769,20 @@ void AppShellTest::publishesActiveViewport() {
     QCOMPARE(mediaSession.lastSeekMilliseconds(), 60'000);
     QVERIFY(!playerPage->property("relativeSeekPending").toBool());
 
+    // A native seek or Stop supersedes a pending UI preview.
+    mediaSession.setTimeline(30'000, 65'000, true);
+    emit windowCommands.relativeSeekRequested(10'000);
+    QVERIFY(playerPage->property("relativeSeekPending").toBool());
+    emit mediaSession.positionJumped(15'000);
+    QVERIFY(!playerPage->property("relativeSeekPending").toBool());
+    int const seeksBeforeNativeStop = mediaSession.seekCount();
+    emit windowCommands.relativeSeekRequested(10'000);
+    mediaSession.stop();
+    QVERIFY(!playerPage->property("relativeSeekPending").toBool());
+    QVERIFY(QMetaObject::invokeMethod(playerPage, "dispatchPendingRelativeSeek", Qt::DirectConnection));
+    QCOMPARE(mediaSession.seekCount(), seeksBeforeNativeStop);
+    mediaSession.play();
+
     // Equal opposite commands cancel the burst instead of drifting because
     // clamping is applied only to the displayed/dispatched target.
     mediaSession.setTimeline(30'000, 65'000, true);

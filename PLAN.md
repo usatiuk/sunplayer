@@ -229,6 +229,12 @@ playback:
   shadow helper. No libdecor, GTK, private negotiation listener, extra swapchain
   or shared rendering/layout changes are introduced; see
   [the shadow delivery plan](docs/plans/ui/2026-10-17-wayland-csd-frame-effects.md).
+* Native desktop media controls now have Linux MPRIS, Windows SMTC and macOS
+  Now Playing/Remote Command adapters over shared transport commands. Stop holds
+  like Pause and subsequent Play restarts the same item at zero. Linux wire and
+  shared behavior validation are tracked in the
+  [delivery plan](docs/plans/cross-cutting/2026-10-17-native-media-controls.md);
+  Windows/macOS builds and native desktop acceptance remain unverified here.
 * `MediaSession` opens a local file and supports play, pause, seek, and replay.
   One shared media operation gives one `AVFormatContext` to the demux owner;
   selected audio and video packets use one count/byte budget and independent

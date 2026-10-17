@@ -269,3 +269,21 @@ large-discontinuity recovery remain missing.
 Later physical verification uses synchronized audio impulses and visual flashes
 to measure actual speaker-to-display output timing. Software timestamps alone
 cannot prove Bluetooth, operating-system, display, and acoustic latency.
+
+## Shared desktop transport commands
+
+UI and native media controls use the same Play/Pause/Toggle/Stop actions.
+Stop uses pause-like clock/audio halt mechanics, retaining the current frame,
+position, queues and selected tracks. Pause resumes in place; Play after Stop
+restarts the same item at zero. Private Playing/Paused/Stopped intent replaces
+one boolean without adding a decoder lifecycle state. EOF and asynchronous
+recovery preserve Stopped. Recovery may rebuild paused resources but cannot
+overwrite a later replay-from-zero request.
+
+An accepted new open captures its decoder generation as a retained media-item
+ID. The ID survives seeks, replay, track switches and recovery and is cleared
+on Close; live decoder generation retains its cancellation meaning.
+`mediaClockSnapshot()` exposes the existing bounded position/advancement sample;
+`positionJumped` reports logical seeks/replay jumps from any caller. Ordinary
+progress and same-position restarts are not jumps. Existing `seekable` now
+reflects actual public seek acceptance, with source capability kept internally.

@@ -486,6 +486,7 @@ qt_add_executable(sunplayer
         src/platform/DisplayStateProvider.h
         src/platform/PlaybackPowerInhibitor.cpp
         src/platform/PlaybackPowerInhibitor.h
+        src/platform/NativeMediaControls.h
         src/presentation/PresentationOutputState.cpp
         src/presentation/PresentationOutputState.h
         src/presentation/PresentationTarget.cpp
@@ -499,10 +500,12 @@ qt_add_executable(sunplayer
 )
 
 if (APPLE)
+    target_link_libraries(sunplayer PRIVATE "-framework MediaPlayer")
     target_sources(sunplayer PRIVATE
             src/platform/macos/MacDisplayStateProvider.h
             src/platform/macos/MacDisplayStateProvider.mm
             src/platform/macos/MacPlaybackPowerInhibitor.mm
+            src/platform/macos/MacNativeMediaControls.mm
     )
     target_compile_options(sunplayer PRIVATE
             $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>
@@ -520,10 +523,12 @@ if (WIN32)
             src/platform/windows/WindowsDisplayStateProvider.cpp
             src/platform/windows/WindowsDisplayStateProvider.h
             src/platform/windows/WindowsPlaybackPowerInhibitor.cpp
+            src/platform/windows/WindowsNativeMediaControls.cpp
     )
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_sources(sunplayer PRIVATE
             src/platform/linux/LinuxPlaybackPowerInhibitor.cpp
+            src/platform/linux/LinuxNativeMediaControls.cpp
     )
 endif ()
 

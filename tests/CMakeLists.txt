@@ -1167,3 +1167,24 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
         )
     endif ()
 endif ()
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # Exercise the production session through real calls on an isolated D-Bus.
+    get_target_property(sunplayer_mpris_session_sources sunplayer_media_session_tests SOURCES)
+    list(FILTER sunplayer_mpris_session_sources EXCLUDE REGEX "tst_MediaSession[.]cpp$")
+    qt_add_executable(sunplayer_linux_native_media_controls_tests
+            integration/platform/tst_LinuxNativeMediaControls.cpp
+            ../src/platform/linux/LinuxNativeMediaControls.cpp
+            ${sunplayer_mpris_session_sources})
+    target_include_directories(sunplayer_linux_native_media_controls_tests PRIVATE ../src)
+    target_compile_definitions(sunplayer_linux_native_media_controls_tests PRIVATE
+            SUNPLAYER_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+    target_link_libraries(sunplayer_linux_native_media_controls_tests PRIVATE
+            Qt6::Test Qt6::Quick Qt6::DBus sunplayer_video_pipeline)
+    find_program(SUNPLAYER_DBUS_RUN_SESSION dbus-run-session REQUIRED)
+    add_test(NAME linux-native-media-controls
+            COMMAND "${SUNPLAYER_DBUS_RUN_SESSION}" -- $<TARGET_FILE:sunplayer_linux_native_media_controls_tests>)
+    set_tests_properties(linux-native-media-controls PROPERTIES
+            LABELS "platform;media;integration;linux" TIMEOUT 30
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endif ()
