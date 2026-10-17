@@ -96,6 +96,18 @@ application-chrome layout/state behavior. A WSLg production scenario exercises
 the real Qt Wayland window, llvmpipe Vulkan device, libplacebo direct target,
 redirected QML, swapchain, fullscreen/restoration, and teardown under Vulkan
 validation.
+The Linux-only `wayland-window-shadow` scenario runs a real Qt Wayland client
+against Qt's compositor, captures SHM pixels and verifies shadow falloff and
+corner symmetry, empty input region, below-parent stacking, unchanged xdg body
+geometry, maximized/fullscreen suppression, each same-size tiled-edge change,
+resize, integer scale, exhausted-buffer recovery and surface recreation/teardown.
+Its server withholds both buffers during resize/fullscreen, then releases them
+to verify convergence to the latest geometry. This tests native protocol and
+buffer ownership, not physical HDR blending or mixed-DPI desktop appearance.
+The same scenario temporarily removes the client's runtime storage, then
+restores it and revisits the failed size after another successful size to
+verify geometry-bounded recovery without terminating the parent window.
+
 The QML shell scenario also protects the full-root application outline's
 media-independent visibility and DPR-derived thickness. The original missing-
 outline regression is additionally covered by an interactive production WSLg

@@ -49,3 +49,4 @@ with a new decision when the accepted choice changes materially.
 * [0032: Support display-primary SDR independently of Wayland HDR](0032-support-display-primary-wayland-sdr.md)
 
 * [0033: Keep Wayland HDR mastering metadata optional](0033-keep-wayland-hdr-mastering-optional.md)
+* [0034: Isolate CSD shadows in the Linux Wayland integration](0034-isolate-wayland-csd-shadows.md)

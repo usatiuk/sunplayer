@@ -256,6 +256,8 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
             src/platform/linux/LinuxWaylandWindowContext.h
             src/platform/linux/WaylandColorManagement.cpp
             src/platform/linux/WaylandColorManagement.h
+            src/platform/linux/WaylandWindowShadow.cpp
+            src/platform/linux/WaylandWindowShadow.h
             src/presentation/PresentationSurfaceContract.h
     )
     qt_generate_wayland_protocol_client_sources(

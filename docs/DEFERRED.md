@@ -267,6 +267,41 @@ hosted-versus-native-hardware test split are defined.
 
 ## Application and player
 
+### Client-side window corner rounding
+
+Explicitly deferred by the user on 2026-10-17. Keep SunPlayer's application-
+drawn window body square and opaque while investigating exterior shadows and
+fullscreen/maximized/tiled behavior. Do not add radius state, rounded final-
+composition coverage or desktop-specific corner negotiation to that work.
+Compositor-owned SSD appearance is unaffected. Preserve the findings in the
+[CSD research](research/2026-10-17-wayland-csd-shadows-and-rounding.md); active
+scope is in the [delivery plan](plans/ui/2026-10-17-wayland-csd-frame-effects.md).
+
+### Native Wayland shadow visual acceptance
+
+The Linux-only shadow has protocol/pixel regression coverage, including tiled
+state-only transitions and bounded buffer recovery. Physical HDR desktop
+blending, fractional/mixed-monitor visual quality, live pointer resize and
+desktop snap interaction still need native acceptance. Do not expand this into
+theme discovery, rounded corners or another presentation backend; see the
+[delivery plan](plans/ui/2026-10-17-wayland-csd-frame-effects.md).
+
+### Debug Wayland fullscreen smoke and media-seek timing
+
+The 2026-10-17 shadow delivery run found the isolated Weston/pixman Debug
+fullscreen smoke timing out at stage 7 while restoring maximized state
+(`windowState=0`). A binary using the same Debug objects with shadow creation
+disabled reproduces it; the pre-change Release binary passes. Investigate the
+existing Qt/native fullscreen restoration versus smoke ordering separately
+from cosmetic shadow ownership. The decoration protocol regression itself
+passes fullscreen/maximized/tiled transitions.
+
+The full 37-test run also had one
+`MediaSessionTest::interFrameSeekPublishesRequestedFrame` timeout waiting for
+`seeking()` to clear; `media-session` passes alone on retry. No media code was
+changed. Preserve this as a timing/reproducibility finding rather than silently
+claiming a completely clean first suite run.
+
 ### Wayland decoration negotiation is not observable through public Qt API
 
 SunPlayer selects system decoration when xdg-decoration is advertised and

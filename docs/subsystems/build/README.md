@@ -44,6 +44,10 @@ libraries, libplacebo 7.360.0, libass 0.17.4, the Ubuntu cubeb snapshot,
 Vulkan 1.4.341, Wayland 1.24 with wayland-protocols 1.47, VA-API 1.23, and DRM
 2.4.131.
 
+With tests enabled, the Linux shadow integration scenario additionally links
+Qt Wayland Compositor and `wayland-server` from the existing system development
+packages. These are test dependencies, not player runtime dependencies.
+
 The validated macOS development configuration uses Apple Clang 16, ordinary
 CMake/Ninja, Qt 6.11.1 from the Online Installer, the stock vcpkg `arm64-osx`
 triplet, FFmpeg 8.1.2 with VideoToolbox, libplacebo 7.360.1 with Vulkan,

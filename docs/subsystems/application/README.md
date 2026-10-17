@@ -138,6 +138,15 @@ or playback policy. Advertisement is treated as the ordinary server-
 decoration happy path; the rare final-mode mismatch is documented rather than
 mirrored through Qt-private state.
 
+The Linux context also owns one private `WaylandWindowShadow`, only when CSD
+is selected. It observes Qt's applied native state and manages a synchronized,
+input-transparent SHM child below the opaque parent. It never changes body
+geometry or commits the parent. Fullscreen, maximized and any tiled state hide
+it; resize/scale changes update a two-buffer cache, and native-surface teardown
+destroys the child first. Qt-private details remain inside `src/platform/linux`;
+QML, shared presentation code and other platforms have no shadow API. See
+[ADR 0034](../../decisions/0034-isolate-wayland-csd-shadows.md).
+
 This direct ownership is intentionally simple for one window. Application-wide
 services should only be introduced when a concrete subsystem needs shared
 lifetime or coordination.

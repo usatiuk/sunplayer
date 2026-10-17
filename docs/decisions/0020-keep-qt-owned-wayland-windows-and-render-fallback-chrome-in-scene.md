@@ -2,6 +2,9 @@
 
 * Status: Accepted
 * Date: 2026-08-02
+* Amendment: [ADR 0034](0034-isolate-wayland-csd-shadows.md) adds a passive
+  Linux-only shadow subsurface; the original exterior-shadow deferral below
+  records the V1 decision, not current shadow behavior.
 * Related:
   [0001: Application-owned QRhi with redirected Qt Quick](0001-application-owned-qrhi-composition.md),
   [0015: Target Wayland and leave X11 unsupported](0015-wayland-only-linux-desktop.md),

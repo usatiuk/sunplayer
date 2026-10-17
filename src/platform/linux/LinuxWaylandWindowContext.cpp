@@ -28,6 +28,7 @@
 
 #include "diagnostics/LogCategories.h"
 #include "platform/DisplayStateProvider.h"
+#include "platform/linux/WaylandWindowShadow.h"
 #include "qwayland-color-management-v1.h"
 #include "wayland-color-management-v1-client-protocol.h"
 
@@ -716,6 +717,7 @@ struct LinuxWaylandWindowContext::NativeState final {
     std::unique_ptr<ManagedSurface> managedSurface;
     PresentationSurfaceMode declaredMode = PresentationSurfaceMode::ManagedGamma22Sdr;
     bool displayProviderTaken = false;
+    std::unique_ptr<WaylandWindowShadow> shadow;
 };
 
 void prepareLinuxWaylandPlatform() { qputenv("QT_QPA_PLATFORM", QByteArrayLiteral("wayland")); }
@@ -781,6 +783,9 @@ void LinuxWaylandWindowContext::configureWindow(QWindow& window) {
         throw LinuxWaylandStartupError("Qt could not create the native Wayland window surface");
     }
     m_window = &window;
+    if (m_requiresClientSideDecorations) {
+        m_nativeState->shadow = std::make_unique<WaylandWindowShadow>(window);
+    }
 }
 
 void LinuxWaylandWindowContext::releaseWindow(QWindow& window) {
@@ -788,6 +793,7 @@ void LinuxWaylandWindowContext::releaseWindow(QWindow& window) {
     // The one full-window-lifetime provider owns the color-surface follower
     // and must be released after the engine but before the native window.
     Q_ASSERT(!m_nativeState->managedSurface);
+    m_nativeState->shadow.reset();
     window.destroy();
     window.setVulkanInstance(nullptr);
     m_window = nullptr;

@@ -970,6 +970,16 @@ set_tests_properties(
 )
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_package(Qt6 REQUIRED COMPONENTS WaylandCompositor)
+    pkg_check_modules(SUNPLAYER_WAYLAND_SERVER REQUIRED IMPORTED_TARGET wayland-server)
+    qt_add_executable(sunplayer_wayland_shadow_tests
+            integration/platform/tst_WaylandWindowShadow.cpp
+    )
+    target_link_libraries(sunplayer_wayland_shadow_tests PRIVATE
+            Qt6::Test Qt6::WaylandCompositor PkgConfig::SUNPLAYER_WAYLAND_SERVER sunplayer_linux_platform)
+    add_test(NAME wayland-window-shadow COMMAND sunplayer_wayland_shadow_tests)
+    set_tests_properties(wayland-window-shadow PROPERTIES
+            LABELS "platform;integration;linux" TIMEOUT 45)
     add_test(
             NAME wayland-color-management
             COMMAND sunplayer_wayland_color_management_tests

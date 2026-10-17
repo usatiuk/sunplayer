@@ -87,11 +87,17 @@ Window buttons ask the system icon theme for symbolic minimize, maximize,
 restore, and close shapes, use the vendored Lucide glyphs as deterministic
 fallbacks, and always apply SunPlayer's light foreground tint. The desktop theme
 does not choose color for the intentionally black application titlebar. Exact
-desktop decoration styling, button ordering, and external client-side shadows
-are not reconstructed. One muted, one-physical-pixel inner outline covers the
+desktop decoration styling and button ordering are not reconstructed. Exterior
+shadows belong entirely to the Linux Wayland integration: one passive SHM
+subsurface below the opaque CSD body, hidden while fullscreen, maximized or
+tiled. The QML scene, video viewport and input coordinates have no shadow
+margins. Rounded corners remain deferred. One muted, one-physical-pixel inner
+outline covers the
 complete client area whenever application chrome is available. It remains
 visible when the titlebar fades and when no media is active, and disappears in
 fullscreen with the rest of the application chrome.
+The inner outline remains while tiled or maximized; it separates adjacent dark
+windows without adding an exterior gap. SSD appearance remains compositor-owned.
 
 ## Page structure
 

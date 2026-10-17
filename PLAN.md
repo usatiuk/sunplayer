@@ -224,8 +224,11 @@ playback:
   overlays active video, fades its titlebar with playback chrome, and retains
   one media-independent physical-pixel inner outline around the complete
   client area;
-  no libdecor, GTK, private negotiation listener, second surface, or external
-  shadow path is introduced.
+  one Linux-private passive SHM shadow child sits below the unchanged opaque
+  CSD body and hides in fullscreen, maximized and tiled states. SSD creates no
+  shadow helper. No libdecor, GTK, private negotiation listener, extra swapchain
+  or shared rendering/layout changes are introduced; see
+  [the shadow delivery plan](docs/plans/ui/2026-10-17-wayland-csd-frame-effects.md).
 * `MediaSession` opens a local file and supports play, pause, seek, and replay.
   One shared media operation gives one `AVFormatContext` to the demux owner;
   selected audio and video packets use one count/byte budget and independent
