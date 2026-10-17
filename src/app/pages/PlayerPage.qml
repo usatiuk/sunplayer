@@ -473,6 +473,7 @@ VideoPage {
             Label {
                 Layout.alignment: Qt.AlignHCenter
                 text: qsTr("Update available")
+                color: "#e8eaf0"
             }
 
             RowLayout {
