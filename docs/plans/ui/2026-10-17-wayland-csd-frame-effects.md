@@ -6,15 +6,16 @@ Status: Implemented; final validation recorded below.
 ## Accepted scope
 
 One Linux-only passive shadow subsurface below the unchanged opaque Qt-owned
-CSD window. Square corners; no changes to QML, video, subtitles, shared HDR
-composition, shared graphics contracts, Windows or macOS. SSD does not create
+CSD window. Square corners; outline visibility is the only QML change. No
+changes to video, subtitles, shared HDR composition, shared graphics contracts,
+Windows or macOS. SSD does not create
 the helper. See [ADR 0034](../../decisions/0034-isolate-wayland-csd-shadows.md).
 
 | State | Shadow | Existing inner outline |
 |---|---|---|
 | Floating CSD | Visible | Visible |
-| Maximized CSD | Hidden | Visible |
-| Any tiled CSD | Hidden | Visible: separates adjacent dark windows without a gap |
+| Maximized CSD | Hidden | Hidden; titlebar and controls remain |
+| Any tiled CSD | Hidden | Hidden; titlebar and controls remain |
 | Fullscreen | Hidden | Hidden, along with the titlebar and resize zones |
 | SSD | Compositor owns | Compositor owns |
 
@@ -60,7 +61,10 @@ It also makes the client's runtime storage unavailable, then restores it and
 revisits the failed size after a successful different size, verifying recovery.
 
 Existing Basic/Fusion shell tests pass and already assert that the complete
-1px inner outline disappears in fullscreen. No shared UI change was needed.
+1px inner outline disappears in fullscreen. A follow-up also hides it while
+maximized or tiled, without changing titlebar/control visibility. The native
+helper forwards its existing applied tiled-state observation to the chrome
+controller. Tests cover restoration to floating and all four tiled edges.
 
 The full Debug build and both QML lint targets pass. The focused native shadow
 test passes in 1.4 seconds; both existing Basic/Fusion shell tests pass. The
@@ -82,6 +86,21 @@ not calibrated HDR evidence.
 Physical HDR desktop blending, fractional/mixed-monitor visual quality and live
 pointer/snap interaction remain manual checks; the wire/pixel test is not a
 claim of physical display validation.
+
+## Maximized outline correction
+
+The reported persistent outline was in maximized mode, which the original
+policy deliberately kept outlined; fullscreen was the wrong reproduction state.
+The corrected policy keeps the outline only on floating windows. Verification
+uses the initial screen with no media, preserving its controls.
+
+Follow-up validation: the full Debug build, both QML lint targets, Basic/Fusion
+shell tests, native shadow test and shortcut test pass. A temporary diagnostic
+binary captured the final player swapchain on isolated GNOME 50.1 with lavapipe:
+the floating frame has 3,716 outline-color perimeter pixels; maximized and
+fullscreen frames have zero. The maximized initial screen retains its titlebar,
+window buttons, Open video button and overflow action. These are player-buffer
+captures on software rendering, not physical-display/compositor-output captures.
 
 ## Review and reasoning
 

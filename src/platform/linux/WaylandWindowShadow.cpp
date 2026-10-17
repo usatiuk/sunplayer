@@ -126,7 +126,8 @@ struct WaylandWindowShadow::Buffer final : QtWayland::wl_buffer {
     bool busy = false;
 };
 
-WaylandWindowShadow::WaylandWindowShadow(QWindow& window) : m_window(window) {
+WaylandWindowShadow::WaylandWindowShadow(QWindow& window, std::function<void(bool)> tilingChanged)
+    : m_window(window), m_tilingChanged(std::move(tilingChanged)) {
     m_window.installEventFilter(this);
     attach();
 }
@@ -215,13 +216,18 @@ void WaylandWindowShadow::hide() {
 }
 
 void WaylandWindowShadow::reconcile() {
-    if (!m_nativeWindow || !m_subcompositor || !m_nativeWindow->wlSurface()) {
+    if (!m_nativeWindow) {
+        return;
+    }
+    bool const tiled = m_nativeWindow->toplevelWindowTilingStates() != QtWaylandClient::QWaylandWindow::WindowNoState;
+    if (m_tilingChanged) {
+        m_tilingChanged(tiled);
+    }
+    if (!m_subcompositor || !m_nativeWindow->wlSurface()) {
         return;
     }
     auto const states = m_nativeWindow->windowStates();
-    if (states.testAnyFlags(Qt::WindowFullScreen | Qt::WindowMaximized) ||
-        m_nativeWindow->toplevelWindowTilingStates() != QtWaylandClient::QWaylandWindow::WindowNoState ||
-        m_window.size().isEmpty()) {
+    if (states.testAnyFlags(Qt::WindowFullScreen | Qt::WindowMaximized) || tiled || m_window.size().isEmpty()) {
         hide();
         return;
     }

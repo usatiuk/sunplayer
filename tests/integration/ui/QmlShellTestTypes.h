@@ -126,6 +126,7 @@ class ShellTestWindowChromeController final : public QObject {
     Q_PROPERTY(bool enabled READ enabled NOTIFY stateChanged)
     Q_PROPERTY(bool fullscreen READ fullscreen NOTIFY stateChanged)
     Q_PROPERTY(bool maximized READ maximized NOTIFY stateChanged)
+    Q_PROPERTY(bool tiled READ tiled NOTIFY stateChanged)
 
   public:
     explicit ShellTestWindowChromeController(QObject* parent) : QObject(parent) {}
@@ -133,14 +134,16 @@ class ShellTestWindowChromeController final : public QObject {
     bool enabled() const { return m_enabled; }
     bool fullscreen() const { return m_fullscreen; }
     bool maximized() const { return m_maximized; }
+    bool tiled() const { return m_tiled; }
 
-    void setState(bool enabled, bool fullscreen, bool maximized) {
-        if (enabled == m_enabled && fullscreen == m_fullscreen && maximized == m_maximized) {
+    void setState(bool enabled, bool fullscreen, bool maximized, bool tiled = false) {
+        if (enabled == m_enabled && fullscreen == m_fullscreen && maximized == m_maximized && tiled == m_tiled) {
             return;
         }
         m_enabled = enabled;
         m_fullscreen = fullscreen;
         m_maximized = maximized;
+        m_tiled = tiled;
         emit stateChanged();
     }
 
@@ -157,6 +160,7 @@ class ShellTestWindowChromeController final : public QObject {
     bool m_enabled = false;
     bool m_fullscreen = false;
     bool m_maximized = false;
+    bool m_tiled = false;
 };
 
 class ShellTestWindowCommands final : public QWindow {

@@ -390,6 +390,16 @@ void AppShellTest::publishesActiveViewport() {
     windowCommands.windowChromeController().setState(true, false, true);
     QTRY_COMPARE(clientSideWindowChrome->property("contentTop").toReal(), clientSideTitleBar->height());
 
+    QTRY_VERIFY(clientSideTitleBar->isVisible());
+    QTRY_VERIFY(!clientSideWindowOutline->isVisible());
+
+    windowCommands.windowChromeController().setState(true, false, false, true);
+    QTRY_VERIFY(clientSideTitleBar->isVisible());
+    QTRY_VERIFY(!clientSideWindowOutline->isVisible());
+
+    windowCommands.windowChromeController().setState(true, false, false);
+    QTRY_VERIFY(clientSideWindowOutline->isVisible());
+
     windowCommands.windowChromeController().setState(true, true, false);
     QTRY_VERIFY(!clientSideTitleBar->isVisible());
     QTRY_VERIFY(!clientSideWindowOutline->isVisible());

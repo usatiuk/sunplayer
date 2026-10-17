@@ -145,7 +145,7 @@ Item {
 
         anchors.fill: parent
         z: 2
-        visible: root.available
+        visible: root.available && !root.controller.maximized && !root.controller.tiled
         color: "transparent"
         antialiasing: false
         border.color: "#4a4f5a"

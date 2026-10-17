@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -31,7 +32,7 @@ class LinuxWaylandWindowContext final : public PresentationSurfaceController {
     LinuxWaylandWindowContext(LinuxWaylandWindowContext const&) = delete;
     LinuxWaylandWindowContext& operator=(LinuxWaylandWindowContext const&) = delete;
 
-    void configureWindow(QWindow& window);
+    void configureWindow(QWindow& window, std::function<void(bool)> tilingChanged = {});
     void releaseWindow(QWindow& window);
     std::unique_ptr<DisplayStateProvider> takeDisplayStateProvider(QObject* parent);
 

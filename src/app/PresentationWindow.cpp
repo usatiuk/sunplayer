@@ -137,7 +137,7 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
                                     PresentationSurfaceController* surfaceController) {
     setSurfaceType(GraphicsBackendFactory::windowSurfaceType());
 #ifdef Q_OS_LINUX
-    m_windowContext.configureWindow(*this);
+    m_windowContext.configureWindow(*this, [this](bool tiled) { m_windowChrome.setTiled(tiled); });
 #endif
     setTitle(QGuiApplication::applicationDisplayName());
 

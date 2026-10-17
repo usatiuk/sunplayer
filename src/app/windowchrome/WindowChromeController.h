@@ -13,6 +13,7 @@ class WindowChromeController final : public QObject {
     Q_PROPERTY(bool enabled READ enabled CONSTANT)
     Q_PROPERTY(bool fullscreen READ fullscreen NOTIFY stateChanged)
     Q_PROPERTY(bool maximized READ maximized NOTIFY stateChanged)
+    Q_PROPERTY(bool tiled READ tiled NOTIFY stateChanged)
 
   public:
     WindowChromeController(QWindow& window, bool enabled, QObject* parent = nullptr);
@@ -20,6 +21,8 @@ class WindowChromeController final : public QObject {
     bool enabled() const;
     bool fullscreen() const;
     bool maximized() const;
+    bool tiled() const;
+    void setTiled(bool tiled);
 
     Q_INVOKABLE void minimize();
     Q_INVOKABLE void toggleMaximized();
@@ -33,4 +36,5 @@ class WindowChromeController final : public QObject {
   private:
     QWindow& m_window;
     bool m_enabled = false;
+    bool m_tiled = false;
 };

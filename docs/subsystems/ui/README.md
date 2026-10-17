@@ -92,12 +92,12 @@ shadows belong entirely to the Linux Wayland integration: one passive SHM
 subsurface below the opaque CSD body, hidden while fullscreen, maximized or
 tiled. The QML scene, video viewport and input coordinates have no shadow
 margins. Rounded corners remain deferred. One muted, one-physical-pixel inner
-outline covers the
-complete client area whenever application chrome is available. It remains
-visible when the titlebar fades and when no media is active, and disappears in
-fullscreen with the rest of the application chrome.
-The inner outline remains while tiled or maximized; it separates adjacent dark
-windows without adding an exterior gap. SSD appearance remains compositor-owned.
+outline covers the complete client area only for floating CSD windows. It
+remains visible when the titlebar fades and when no media is active, but is
+hidden while maximized, tiled or fullscreen. Maximized and tiled windows retain
+their titlebar and controls. Linux forwards the tiled state already sampled by
+the shadow helper to the chrome controller; no second native observer is needed.
+SSD appearance remains compositor-owned.
 
 ## Page structure
 
@@ -322,7 +322,7 @@ window-command fake additionally proves the Windows-only menu action's
 visibility and two-way checked-state binding; it does not claim physical monitor
 coverage.
 The shell test also
-checks disabled, normal, maximized, and fullscreen application-chrome state;
+checks disabled, floating, maximized, tiled, and fullscreen application-chrome state;
 stable empty-page inset; full-root, media-independent outline visibility and
 DPR-derived thickness; and the invariant that title fade never moves an active
 video viewport. The real D3D11 and Metal captures

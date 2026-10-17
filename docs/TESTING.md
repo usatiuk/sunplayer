@@ -109,7 +109,10 @@ restores it and revisits the failed size after another successful size to
 verify geometry-bounded recovery without terminating the parent window.
 
 The QML shell scenario also protects the full-root application outline's
-media-independent visibility and DPR-derived thickness. The original missing-
+media-independent visibility and DPR-derived thickness, suppression while
+maximized/tiled/fullscreen, and restoration when floating. The native shadow
+test also verifies forwarding and clearing of all four applied tiled edges.
+The original missing-
 outline regression is additionally covered by an interactive production WSLg
 check because the component test cannot observe the redirected GPU texture.
 The shell runs under both Basic and Fusion styles. It checks all four HDR Lab

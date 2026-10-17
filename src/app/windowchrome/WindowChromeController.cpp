@@ -16,6 +16,16 @@ bool WindowChromeController::fullscreen() const { return m_window.windowState() 
 
 bool WindowChromeController::maximized() const { return m_window.windowState() == Qt::WindowMaximized; }
 
+bool WindowChromeController::tiled() const { return m_tiled; }
+
+void WindowChromeController::setTiled(bool tiled) {
+    if (m_tiled == tiled) {
+        return;
+    }
+    m_tiled = tiled;
+    emit stateChanged();
+}
+
 void WindowChromeController::minimize() { m_window.showMinimized(); }
 
 void WindowChromeController::toggleMaximized() {

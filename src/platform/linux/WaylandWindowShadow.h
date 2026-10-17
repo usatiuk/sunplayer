@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <functional>
 #include <memory>
 
 #include <QObject>
@@ -21,7 +22,7 @@ class QWaylandWindow;
 // or commits the parent; Qt's next presentation latches the synchronized child.
 class WaylandWindowShadow final : public QObject {
   public:
-    explicit WaylandWindowShadow(QWindow& window);
+    explicit WaylandWindowShadow(QWindow& window, std::function<void(bool)> tilingChanged = {});
     ~WaylandWindowShadow() override;
 
   protected:
@@ -36,6 +37,7 @@ class WaylandWindowShadow final : public QObject {
     void hide();
 
     QWindow& m_window;
+    std::function<void(bool)> m_tilingChanged;
     QPointer<QtWaylandClient::QWaylandWindow> m_nativeWindow;
     wl_subcompositor* m_subcompositor = nullptr;
     std::unique_ptr<QtWayland::wl_surface> m_surface;

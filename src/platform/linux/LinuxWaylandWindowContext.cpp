@@ -762,7 +762,7 @@ LinuxWaylandWindowContext::LinuxWaylandWindowContext(QGuiApplication& applicatio
 
 LinuxWaylandWindowContext::~LinuxWaylandWindowContext() { Q_ASSERT(!m_window); }
 
-void LinuxWaylandWindowContext::configureWindow(QWindow& window) {
+void LinuxWaylandWindowContext::configureWindow(QWindow& window, std::function<void(bool)> tilingChanged) {
     Q_ASSERT(!m_window);
     Q_ASSERT(!window.handle());
     Q_ASSERT(window.surfaceType() == QSurface::VulkanSurface);
@@ -784,7 +784,7 @@ void LinuxWaylandWindowContext::configureWindow(QWindow& window) {
     }
     m_window = &window;
     if (m_requiresClientSideDecorations) {
-        m_nativeState->shadow = std::make_unique<WaylandWindowShadow>(window);
+        m_nativeState->shadow = std::make_unique<WaylandWindowShadow>(window, std::move(tilingChanged));
     }
 }
 

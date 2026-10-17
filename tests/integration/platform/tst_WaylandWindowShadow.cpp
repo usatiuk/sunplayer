@@ -26,7 +26,8 @@ class ShadowHost final : public QWindow {
         setFlags(Qt::Window | Qt::FramelessWindowHint);
         resize(320, 200);
         create();
-        shadow = std::make_unique<WaylandWindowShadow>(*this);
+        shadow = std::make_unique<WaylandWindowShadow>(
+            *this, [this](bool tiled) { setTitle(tiled ? QStringLiteral("tiled") : QStringLiteral("floating")); });
     }
 
     ~ShadowHost() override { shadow.reset(); }
@@ -178,9 +179,11 @@ void WaylandWindowShadowTest::nativeShadowLifecycle() {
         toplevel->sendConfigure(QSize(320, 200), QList<int>{edge});
         compositor.processWaylandEvents();
         QTRY_VERIFY(!child->hasContent());
+        QTRY_COMPARE(toplevel->title(), QStringLiteral("tiled"));
         toplevel->sendConfigure(QSize(320, 200), QList<int>{});
         compositor.processWaylandEvents();
         QTRY_VERIFY(child->hasContent());
+        QTRY_COMPARE(toplevel->title(), QStringLiteral("floating"));
     }
     toplevel->sendConfigure(QSize(480, 300), QList<int>{});
     compositor.processWaylandEvents();
