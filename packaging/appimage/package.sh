@@ -68,7 +68,7 @@ dpkg-query -W -f='${binary:Package}\t${Version}\n' \
     > "$appdir/usr/share/sunplayer/build-packages.tsv"
 
 export ARCH=x86_64
-artifact="SunPlayer-$version-x86_64.AppImage"
+artifact="SunPlayer-$version-ubuntu26.04-x86_64.AppImage"
 appimagetool --runtime-file /opt/tools/runtime-x86_64 "$appdir" "/output/$artifact"
 cd /output
 sha256sum "$artifact" > "$artifact.sha256"

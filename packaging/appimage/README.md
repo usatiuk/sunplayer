@@ -16,7 +16,8 @@ run concurrent builds sharing that volume. Remove the volume to start clean:
 docker volume rm sunplayer-appimage-build
 ```
 
-The output is `SunPlayer-<VERSION.txt>-x86_64.AppImage` plus its `.sha256` file.
+The output is `SunPlayer-<VERSION.txt>-ubuntu26.04-x86_64.AppImage` plus its `.sha256` file.
+The filename identifies the build/runtime baseline, not universal Linux compatibility.
 The existing application icon and CMake install rules are reused. Rootful
 Docker runs the build as your UID/GID; rootless Docker uses container root,
 which maps to your host user. No host build packages, FUSE mounts, privileged
@@ -75,8 +76,8 @@ On a native Wayland desktop, verify the output separately:
 cd out/appimage
 sha256sum --check SunPlayer-*.AppImage.sha256
 chmod +x SunPlayer-*.AppImage
-./SunPlayer-<version>-x86_64.AppImage --verify-qml
-./SunPlayer-<version>-x86_64.AppImage --debug-log /path/to/video.mkv
+./SunPlayer-<version>-ubuntu26.04-x86_64.AppImage --verify-qml
+./SunPlayer-<version>-ubuntu26.04-x86_64.AppImage --debug-log /path/to/video.mkv
 ```
 
 If FUSE is unavailable, use the runtime's `--appimage-extract-and-run` option.
@@ -87,6 +88,8 @@ backend. HDR needs a capable compositor/display. The Docker smoke proves
 software-hosted packaging and playback, not those hardware/display behaviors.
 
 CI invokes the same build command and uploads the AppImage and checksum. The
+generated release notes state the Ubuntu 26.04 baseline and host-library/driver
+requirements alongside the automatically generated change list. The
 AppImage job follows Windows because Windows currently owns creation of the
 unpublished release commit and Git bundle. In release mode it checks out that
 exact bundle revision before building. Publication waits for both jobs and

@@ -28,4 +28,4 @@ docker run --rm --platform linux/amd64 \
     --mount "type=bind,source=$source_dir/tests/fixtures/media,target=/fixtures,readonly" \
     --mount type=volume,source=sunplayer-appimage-build,target=/build,readonly \
     sunplayer-appimage-smoke \
-    "/artifacts/SunPlayer-$(cat "$source_dir/VERSION.txt")-x86_64.AppImage"
+    "/artifacts/SunPlayer-$(cat "$source_dir/VERSION.txt")-ubuntu26.04-x86_64.AppImage"
