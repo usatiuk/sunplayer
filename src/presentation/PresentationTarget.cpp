@@ -9,15 +9,16 @@ constexpr float scRgbReferenceWhiteNits = 80.0f;
 
 PresentationTarget calculatePresentationTarget(DisplayState const& display, PresentationBackendState const& backend) {
     PresentationTarget target;
-    if (!backend.hdrPresentationActive) {
+    if (!backend.hdrPresentationActive && !backend.managedSdrPresentationActive) {
         return target;
     }
 
-    target.hdrPresentationActive = true;
+    target.hdrPresentationActive = backend.hdrPresentationActive;
 
     bool const colorTargetActive = display.colorMode != DisplayColorMode::StandardDynamicRange;
     bool const displayTargetUsable =
-        display.valid && (colorTargetActive || backend.useSdrDisplayTargetForHdrPresentation);
+        display.valid &&
+        (colorTargetActive || backend.useSdrDisplayTargetForHdrPresentation || backend.managedSdrPresentationActive);
     bool const displayLuminanceAuthority =
         displayTargetUsable && display.luminanceBehavior != DisplayLuminanceBehavior::Unknown;
     target.sceneReferred = displayLuminanceAuthority
@@ -63,6 +64,16 @@ PresentationTarget calculatePresentationTarget(DisplayState const& display, Pres
                                                                     ? display.potentialHeadroom
                                                                     : backendPotentialHeadroom);
     target.effectiveTargetHeadroom = std::max(1.0f, target.currentHeadroom / target.sdrScale);
+    if (backend.managedSdrPresentationActive) {
+        // This surface is relative, zero-black SDR. The compositor owns the
+        // physical display floor/white conversion; do not bake its black twice.
+        target.sceneReferred = false;
+        target.sdrScale = 1.0f;
+        target.luminanceKnown = true;
+        target.minLuminanceNits = 0.0f;
+        target.maxLuminanceNits = target.sdrWhiteKnown ? target.sdrWhiteNits : scRgbReferenceWhiteNits;
+        target.currentHeadroom = target.potentialHeadroom = target.effectiveTargetHeadroom = 1.0f;
+    }
     target.absolutePqAvailable = backend.absoluteLuminanceSupported && target.hdrPresentationActive &&
                                  (!display.valid || display.colorMode == DisplayColorMode::HighDynamicRange) &&
                                  target.sceneReferred && target.sdrWhiteKnown && std::isfinite(target.sdrWhiteNits) &&

@@ -436,6 +436,19 @@ set, SunPlayer emits exact piecewise sRGB into an unmanaged assumed-sRGB surface
 Missing managed color is a normal SDR capability result, not a graphics
 failure or an X11 fallback.
 
+Explicit primaries and luminances additionally enable display-primary gamma-2.2
+SDR independently of HDR support. Preferred target gamut drives the existing
+libplacebo mapper with headroom one and zero content black. The final compositor
+converts signed linear BT.709/D65 into the declared display basis using
+libplacebo relative colorimetry (CAT16), then clamps and gamma encodes. UI and
+subtitles share this final conversion. The declaration uses luminances
+`(0, 80, 80)`; physical black, white and calibration remain compositor-owned.
+Pending descriptions reuse the asynchronous HDR ownership path and become
+active only before matching buffer presentation. Rejection falls back to the
+canonical managed-sRGB description for that graphics generation. Qt selects
+the SDR format; native baseline output is XRGB8888, not a claimed 10-bit mode.
+See [ADR 0032](../../decisions/0032-support-display-primary-wayland-sdr.md).
+
 Named BT.2020, PQ, and the mastering-display feature additionally select a
 stable managed HDR content surface.
 SunPlayer applies a ready BT.2020/PQ description to the existing `wl_surface`,
@@ -448,7 +461,8 @@ compositor maps that description to each output.
 
 If HDR format validation, render-pass creation, swapchain creation, or later
 resize fails without device loss, the queued render-safe path changes pending
-surface state and the swapchain to the complete managed gamma-2.2 SDR tuple.
+surface state and the swapchain to managed display-primary gamma-2.2 SDR
+when supported, otherwise the canonical managed-sRGB SDR tuple.
 It prepares the SDR frame first and sends the description immediately before
 present, so the first SDR buffer commit applies matching pixels and description
 together without an intervening Qt event-loop turn.

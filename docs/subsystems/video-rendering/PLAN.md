@@ -367,3 +367,12 @@ fallback path, packaging claim, or validation matrix.
 * Handmade PQ, HLG, gamut, or highlight-compression shaders.
 * General renderer/backend plugin systems.
 * Exact cross-GPU pixel equality and large self-generated golden suites.
+
+## October 2026: managed Wayland WCG SDR
+
+* [x] Separate explicit display-primary SDR from HDR capability gating.
+* [x] Convert signed linear composition once into declared output primaries.
+* [x] Reuse async description preparation and bounded managed-sRGB fallback.
+* [x] Cover D65/D50 CAT16, FP16/UNORM8, UI/subtitles and retained input changes.
+
+See the [delivery plan](../../plans/graphics/2026-10-17-wayland-wcg-sdr.md).

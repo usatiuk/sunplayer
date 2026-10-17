@@ -7,6 +7,8 @@ class WaylandColorManagementTest final : public QObject {
     Q_OBJECT
 
   private slots:
+    void displaySdrUsesExplicitPrimariesWithoutHdr();
+    void displaySdrRejectionIsBounded();
     void incompleteManagedContractUsesUnmanagedSrgb_data();
     void incompleteManagedContractUsesUnmanagedSrgb();
     void completeManagedContractUsesGamma22();
@@ -116,6 +118,56 @@ void WaylandColorManagementTest::completeManagedContractUsesGamma22() {
     PresentationSurfaceContract const presentation = selection.presentationContract();
     QCOMPARE(presentation.outputEncoding(false), PresentationOutputEncoding::Gamma22Srgb);
     QVERIFY(!presentation.hdr10Required());
+}
+
+void WaylandColorManagementTest::displaySdrUsesExplicitPrimariesWithoutHdr() {
+    auto capabilities = completeManagedSdrCapabilities();
+    capabilities.explicitPrimaries = true;
+    capabilities.explicitLuminances = true;
+    QVERIFY(capabilities.supportsManagedDisplaySdr());
+    QVERIFY(!capabilities.supportsManagedHdr10());
+    auto const selection = selectWaylandSurface(capabilities);
+    QCOMPARE(selection.presentationContract().mode, PresentationSurfaceMode::ManagedDisplaySdr);
+    QCOMPARE(selection.presentationContract().outputEncoding(false), PresentationOutputEncoding::Gamma22Display);
+    QVERIFY(!selection.presentationContract().hdr10Required());
+    QCOMPARE(selection.presentationContract().constrainTargetHeadroom(10.0f), 1.0f);
+    QVERIFY(!selection.presentationContract().usesAdaptiveHdrMapping(false, true, false));
+    capabilities.explicitLuminances = false;
+    QCOMPARE(selectWaylandSurface(capabilities).presentationContract().mode,
+             PresentationSurfaceMode::ManagedGamma22Sdr);
+    capabilities.explicitLuminances = true;
+    capabilities.explicitPrimaries = false;
+    QCOMPARE(selectWaylandSurface(capabilities).presentationContract().mode,
+             PresentationSurfaceMode::ManagedGamma22Sdr);
+
+    auto description = completeHdrDescription();
+    description.referenceWhiteNits = description.targetMaximumLuminanceNits;
+    description.targetPrimariesKnown = true;
+    description.targetPrimaries = displayP3Primaries();
+    auto const display = displayStateFromWaylandDescription(description);
+    QVERIFY(display);
+    QCOMPARE(display->colorMode, DisplayColorMode::WideColorGamut);
+    QCOMPARE(display->targetPrimaries, displayP3Primaries());
+}
+
+void WaylandColorManagementTest::displaySdrRejectionIsBounded() {
+    auto capabilities = completeManagedSdrCapabilities();
+    capabilities.explicitPrimaries = true;
+    capabilities.explicitLuminances = true;
+    capabilities.namedBt2020Primaries = true;
+    capabilities.pqTransfer = true;
+    capabilities.masteringDisplayPrimaries = true;
+    WaylandSurfaceRejection rejected{.graphicsDeviceGeneration = 7};
+    QCOMPARE(selectWaylandPresentationMode(WaylandSdrSurfaceMode::ManagedGamma22, capabilities, 7, rejected),
+             PresentationSurfaceMode::ManagedDisplaySdr);
+    rejected.mode = PresentationSurfaceMode::ManagedDisplaySdr;
+    QCOMPARE(selectWaylandPresentationMode(WaylandSdrSurfaceMode::ManagedGamma22, capabilities, 7, rejected),
+             PresentationSurfaceMode::ManagedGamma22Sdr);
+    QCOMPARE(selectWaylandPresentationMode(WaylandSdrSurfaceMode::ManagedGamma22, capabilities, 8, rejected),
+             PresentationSurfaceMode::ManagedHdr10Pq);
+    capabilities.masteringDisplayPrimaries = false;
+    QCOMPARE(selectWaylandPresentationMode(WaylandSdrSurfaceMode::ManagedGamma22, capabilities, 8, rejected),
+             PresentationSurfaceMode::ManagedDisplaySdr);
 }
 
 void WaylandColorManagementTest::hdr10CapabilitiesChooseStableHdr() {
@@ -262,7 +314,7 @@ void WaylandColorManagementTest::presentationModeTracksCapabilityAndBoundedRejec
     };
     QCOMPARE(managedSdrContract.constrainTargetHeadroom(5.0f), 1.0f);
 
-    WaylandHdrRejection const rejection{
+    WaylandSurfaceRejection const rejection{
         .graphicsDeviceGeneration = 7,
     };
     QCOMPARE(selectWaylandPresentationMode(WaylandSdrSurfaceMode::ManagedGamma22, capabilities, 7, rejection),

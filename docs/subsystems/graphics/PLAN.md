@@ -305,3 +305,12 @@ For each implemented milestone, validate at least:
 
 Performance, power, and copy-path measurement become required once decoded
 frames and libplacebo exist.
+
+## October 2026: managed Wayland WCG SDR
+
+* [x] Separate explicit display-primary SDR from HDR capability gating.
+* [x] Convert signed linear composition once into declared output primaries.
+* [x] Reuse async description preparation and bounded managed-sRGB fallback.
+* [x] Cover D65/D50 CAT16, FP16/UNORM8, UI/subtitles and retained input changes.
+
+See the [delivery plan](../../plans/graphics/2026-10-17-wayland-wcg-sdr.md).

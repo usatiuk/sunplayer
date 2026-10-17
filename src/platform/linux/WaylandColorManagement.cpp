@@ -11,6 +11,10 @@ bool WaylandColorManagementCapabilities::supportsManagedSdr() const {
            parametricDescriptions && perceptualIntent && namedSrgbPrimaries && gamma22Transfer;
 }
 
+bool WaylandColorManagementCapabilities::supportsManagedDisplaySdr() const {
+    return supportsManagedSdr() && explicitPrimaries && explicitLuminances;
+}
+
 bool WaylandColorManagementCapabilities::supportsManagedHdr10() const {
     return supportsManagedSdr() && namedBt2020Primaries && pqTransfer && masteringDisplayPrimaries;
 }
@@ -86,6 +90,14 @@ std::optional<DisplayState> displayStateFromWaylandDescription(WaylandPreferredD
     state.luminanceBehavior = DisplayLuminanceBehavior::DisplayReferred;
     state.targetPrimariesKnown = true;
     state.targetPrimaries = description.targetPrimariesKnown ? description.targetPrimaries : description.primaries;
+    if (headroom == 1.0f) {
+        auto const& p = state.targetPrimaries;
+        pl_raw_primaries const native{
+            {p.red.x, p.red.y}, {p.green.x, p.green.y}, {p.blue.x, p.blue.y}, {p.white.x, p.white.y}};
+        if (!pl_primaries_superset(pl_raw_primaries_get(PL_COLOR_PRIM_BT_709), &native)) {
+            state.colorMode = DisplayColorMode::WideColorGamut;
+        }
+    }
     state.sdrWhiteKnown = true;
     state.luminanceKnown = true;
     state.sdrWhiteNits = description.referenceWhiteNits;
@@ -104,7 +116,9 @@ PresentationSurfaceContract WaylandSurfaceSelection::presentationContract() cons
         };
     case WaylandSdrSurfaceMode::ManagedGamma22:
         return {
-            .mode = managedHdr10 ? PresentationSurfaceMode::ManagedHdr10Pq : PresentationSurfaceMode::ManagedGamma22Sdr,
+            .mode = managedHdr10        ? PresentationSurfaceMode::ManagedHdr10Pq
+                    : managedDisplaySdr ? PresentationSurfaceMode::ManagedDisplaySdr
+                                        : PresentationSurfaceMode::ManagedGamma22Sdr,
         };
     }
     Q_UNREACHABLE_RETURN(PresentationSurfaceContract{});
@@ -116,9 +130,12 @@ WaylandSurfaceSelection selectWaylandSurface(WaylandColorManagementCapabilities 
         return {
             .mode = WaylandSdrSurfaceMode::ManagedGamma22,
             .managedHdr10 = managedHdr10,
+            .managedDisplaySdr = capabilities.supportsManagedDisplaySdr(),
             .diagnostic =
                 managedHdr10
                     ? QStringLiteral("SunPlayer-owned color-management-v1 · BT.2020 PQ · managed sRGB fallback")
+                : capabilities.supportsManagedDisplaySdr()
+                    ? QStringLiteral("SunPlayer-owned color-management-v1 v2 · display primaries · gamma 2.2 SDR")
                     : QStringLiteral("SunPlayer-owned color-management-v1 · sRGB primaries · gamma 2.2"),
         };
     }
@@ -154,7 +171,7 @@ WaylandSurfaceSelection selectWaylandSurface(WaylandColorManagementCapabilities 
 PresentationSurfaceMode selectWaylandPresentationMode(WaylandSdrSurfaceMode startupMode,
                                                       WaylandColorManagementCapabilities const& capabilities,
                                                       std::uint64_t graphicsDeviceGeneration,
-                                                      std::optional<WaylandHdrRejection> const& rejection) {
+                                                      std::optional<WaylandSurfaceRejection> const& rejection) {
     if (startupMode == WaylandSdrSurfaceMode::UnmanagedSrgb) {
         return PresentationSurfaceMode::UnmanagedSrgb;
     }
@@ -162,6 +179,10 @@ PresentationSurfaceMode selectWaylandPresentationMode(WaylandSdrSurfaceMode star
     bool const rejected = rejection && rejection->graphicsDeviceGeneration == graphicsDeviceGeneration;
     if (capabilities.supportsManagedHdr10() && !rejected) {
         return PresentationSurfaceMode::ManagedHdr10Pq;
+    }
+    if (capabilities.supportsManagedDisplaySdr() &&
+        (!rejected || rejection->mode == PresentationSurfaceMode::ManagedHdr10Pq)) {
+        return PresentationSurfaceMode::ManagedDisplaySdr;
     }
     return PresentationSurfaceMode::ManagedGamma22Sdr;
 }

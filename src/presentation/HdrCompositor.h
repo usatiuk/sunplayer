@@ -7,6 +7,7 @@
 
 #include <QSize>
 
+#include "platform/ColorPrimaries.h"
 #include "subtitles/SubtitleAppearance.h"
 
 class QRhi;
@@ -31,10 +32,18 @@ struct alignas(16) HdrCompositorParameters {
     float subtitleOpacity = 1.0f;
     float subtitleBrightness = static_cast<float>(SubtitleAppearanceValues{}.brightness);
     float padding = 0.0f;
+    std::array<float, 4> outputRow0{1.0f, 0.0f, 0.0f, 0.0f};
+    std::array<float, 4> outputRow1{0.0f, 1.0f, 0.0f, 0.0f};
+    std::array<float, 4> outputRow2{0.0f, 0.0f, 1.0f, 0.0f};
+
+    void setOutputPrimaries(ColorPrimaries const& primaries);
 };
 
 static_assert(std::is_standard_layout_v<HdrCompositorParameters>);
-static_assert(sizeof(HdrCompositorParameters) == 48);
+static_assert(sizeof(HdrCompositorParameters) == 96);
+static_assert(offsetof(HdrCompositorParameters, outputRow0) == 48);
+static_assert(offsetof(HdrCompositorParameters, outputRow1) == 64);
+static_assert(offsetof(HdrCompositorParameters, outputRow2) == 80);
 static_assert(offsetof(HdrCompositorParameters, sdrScale) == 24);
 static_assert(offsetof(HdrCompositorParameters, ndcYUp) == 28);
 static_assert(offsetof(HdrCompositorParameters, outputEncoding) == 32);

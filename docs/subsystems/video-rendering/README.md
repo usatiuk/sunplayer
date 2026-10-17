@@ -445,3 +445,14 @@ to text and bitmap subtitles and precedes the shared platform-white scale and
 output encoding. Like overall opacity, brightness does not advance the subtitle
 raster revision or invalidate decoded video. Zero brightness yields black
 subtitle pixels at their existing coverage, not transparent subtitles.
+
+## Managed Wayland WCG SDR
+
+Display-primary SDR consumes the preferred target gamut independently of HDR.
+The mapper retains its signed FP16 BT.709/D65 output basis, zero content black
+and one-times headroom. The final shared compositor converts the complete
+video/UI/subtitle result into the declared primaries with CAT16 white
+adaptation, then clamps and gamma-2.2 encodes. The compositor owns physical
+display black/white mapping and calibration. Retained-frame target changes
+rerender without importing the input again. See
+[ADR 0032](../../decisions/0032-support-display-primary-wayland-sdr.md).

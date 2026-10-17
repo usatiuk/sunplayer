@@ -49,6 +49,8 @@ QString presentationModeName(PresentationSurfaceMode mode) {
         return QStringLiteral("unmanaged-srgb");
     case PresentationSurfaceMode::ManagedGamma22Sdr:
         return QStringLiteral("managed-gamma22-sdr");
+    case PresentationSurfaceMode::ManagedDisplaySdr:
+        return QStringLiteral("managed-display-gamma22-sdr");
     case PresentationSurfaceMode::ManagedHdr10Pq:
         return QStringLiteral("managed-hdr10-pq");
     }
@@ -110,6 +112,12 @@ class ColorManagerBinding final : public QtWayland::wp_color_manager_v1 {
     void wp_color_manager_v1_supported_feature(std::uint32_t feature) override {
         if (feature == feature_set_mastering_display_primaries) {
             m_capabilities.masteringDisplayPrimaries = true;
+        }
+        if (feature == feature_set_primaries) {
+            m_capabilities.explicitPrimaries = true;
+        }
+        if (feature == feature_set_luminances) {
+            m_capabilities.explicitLuminances = true;
         }
         if (feature == feature_parametric) {
             m_capabilities.parametricDescriptions = true;
@@ -187,15 +195,24 @@ class ManagedImageDescription final : public QtWayland::wp_image_description_v1 
 
 std::unique_ptr<ManagedImageDescription>
 createManagedDescription(ColorManagerBinding& colorManager, std::uint32_t primaries, std::uint32_t transferFunction,
-                         std::optional<WaylandCompositionVolume> const& volume = std::nullopt) {
+                         std::optional<WaylandCompositionVolume> const& volume = std::nullopt,
+                         std::optional<ColorPrimaries> const& outputPrimaries = std::nullopt) {
     auto* const creator = colorManager.create_parametric_creator();
     Q_ASSERT(creator);
-    wp_image_description_creator_params_v1_set_primaries_named(creator, primaries);
+    auto const coordinate = [](float value) { return static_cast<std::int32_t>(std::lround(value * 1'000'000.0f)); };
+    if (outputPrimaries) {
+        auto const& p = *outputPrimaries;
+        wp_image_description_creator_params_v1_set_primaries(
+            creator, coordinate(p.red.x), coordinate(p.red.y), coordinate(p.green.x), coordinate(p.green.y),
+            coordinate(p.blue.x), coordinate(p.blue.y), coordinate(p.white.x), coordinate(p.white.y));
+        // Relative SDR: 0 is content black and 1 is reference white. Let the
+        // compositor apply the physical display floor and reference-white map.
+        wp_image_description_creator_params_v1_set_luminances(creator, 0, 80, 80);
+    } else {
+        wp_image_description_creator_params_v1_set_primaries_named(creator, primaries);
+    }
     wp_image_description_creator_params_v1_set_tf_named(creator, transferFunction);
     if (volume) {
-        auto const coordinate = [](float value) {
-            return static_cast<std::int32_t>(std::lround(value * 1'000'000.0f));
-        };
         auto const& p = volume->primaries;
         wp_image_description_creator_params_v1_set_mastering_display_primaries(
             creator, coordinate(p.red.x), coordinate(p.red.y), coordinate(p.green.x), coordinate(p.green.y),
@@ -265,13 +282,12 @@ void roundtripOrFail(wl_display& display, char const* operation) {
     throw std::system_error(displayError != 0 ? displayError : EIO, std::generic_category(), operation);
 }
 
-void waitForManagedDescriptions(wl_display& display, ManagedImageDescription& sdrDescription,
-                                ManagedImageDescription* hdrDescription) {
+void waitForManagedDescription(wl_display& display, ManagedImageDescription& description) {
     // Creation completion is explicitly eventual. The first roundtrip flushes
-    // both requests; later dispatches wait for each terminal ready2/failed
+    // the request; later dispatches wait for its terminal ready2/failed
     // event instead of mistaking an in-flight description for rejection.
     roundtripOrFail(display, "creating managed surface descriptions");
-    while (!sdrDescription.complete() || (hdrDescription && !hdrDescription->complete())) {
+    while (!description.complete()) {
         if (wl_display_dispatch(&display) >= 0) {
             continue;
         }
@@ -418,6 +434,14 @@ class SurfaceFeedback final : public QtWayland::wp_color_management_surface_feed
 
   private:
     Change m_change;
+};
+} // namespace
+
+namespace {
+struct SurfaceDescriptionKey {
+    bool operator==(SurfaceDescriptionKey const&) const = default;
+    PresentationSurfaceMode mode;
+    WaylandCompositionVolume volume;
 };
 } // namespace
 
@@ -632,7 +656,8 @@ struct LinuxWaylandWindowContext::NativeState final {
     void detachManagedSurface() { managedSurface.reset(); }
 
     void setDeclaredMode(PresentationSurfaceMode mode) {
-        Q_ASSERT(mode == PresentationSurfaceMode::ManagedGamma22Sdr || mode == PresentationSurfaceMode::ManagedHdr10Pq);
+        Q_ASSERT(mode == PresentationSurfaceMode::ManagedGamma22Sdr ||
+                 mode == PresentationSurfaceMode::ManagedDisplaySdr || mode == PresentationSurfaceMode::ManagedHdr10Pq);
         declaredMode = mode;
         if (managedSurface) {
             applyDeclaredMode();
@@ -647,33 +672,24 @@ struct LinuxWaylandWindowContext::NativeState final {
 
         sdrDescription = createManagedDescription(*colorManager, QtWayland::wp_color_manager_v1::primaries_srgb,
                                                   QtWayland::wp_color_manager_v1::transfer_function_gamma22);
-        if (capabilities.supportsManagedHdr10()) {
-            hdrDescription = createManagedDescription(*colorManager, QtWayland::wp_color_manager_v1::primaries_bt2020,
-                                                      QtWayland::wp_color_manager_v1::transfer_function_st2084_pq);
-        }
-        waitForManagedDescriptions(display, *sdrDescription, hdrDescription.get());
+        waitForManagedDescription(display, *sdrDescription);
 
         if (!sdrDescription->ready()) {
             qCWarning(sunplayerLogPlatform, "The compositor rejected the advertised managed-sRGB "
                                             "description; using unmanaged SDR");
             capabilities.parametricDescriptions = false;
             sdrDescription.reset();
-            hdrDescription.reset();
+            targetDescription.reset();
             return;
-        }
-        if (hdrDescription && !hdrDescription->ready()) {
-            qCWarning(sunplayerLogPlatform, "The compositor rejected the advertised BT.2020/PQ "
-                                            "description; disabling managed HDR");
-            capabilities.pqTransfer = false;
-            hdrDescription.reset();
         }
     }
 
     void applyDeclaredMode() {
         Q_ASSERT(managedSurface);
-        if (declaredMode == PresentationSurfaceMode::ManagedHdr10Pq) {
-            Q_ASSERT(hdrDescription);
-            managedSurface->apply(*hdrDescription);
+        if (declaredMode == PresentationSurfaceMode::ManagedHdr10Pq ||
+            declaredMode == PresentationSurfaceMode::ManagedDisplaySdr) {
+            Q_ASSERT(targetDescription);
+            managedSurface->apply(*targetDescription);
         } else {
             Q_ASSERT(declaredMode == PresentationSurfaceMode::ManagedGamma22Sdr);
             Q_ASSERT(sdrDescription);
@@ -687,10 +703,10 @@ struct LinuxWaylandWindowContext::NativeState final {
     bool decorationManagerAdvertised = false;
     std::unique_ptr<ColorManagerBinding> colorManager;
     std::unique_ptr<ManagedImageDescription> sdrDescription;
-    std::unique_ptr<ManagedImageDescription> hdrDescription;
-    std::unique_ptr<ManagedImageDescription> pendingHdrDescription;
-    std::optional<WaylandCompositionVolume> hdrVolume;
-    std::optional<WaylandCompositionVolume> pendingHdrVolume;
+    std::unique_ptr<ManagedImageDescription> targetDescription;
+    std::unique_ptr<ManagedImageDescription> pendingTargetDescription;
+    std::optional<SurfaceDescriptionKey> descriptionKey;
+    std::optional<SurfaceDescriptionKey> pendingDescriptionKey;
     std::unique_ptr<ManagedSurface> managedSurface;
     PresentationSurfaceMode declaredMode = PresentationSurfaceMode::ManagedGamma22Sdr;
     bool displayProviderTaken = false;
@@ -709,9 +725,9 @@ LinuxWaylandWindowContext::LinuxWaylandWindowContext(QGuiApplication& applicatio
     m_colorCapabilities = m_nativeState->capabilities;
     m_requiresClientSideDecorations = !m_nativeState->decorationManagerAdvertised;
     m_surfaceSelection = selectWaylandSurface(m_colorCapabilities);
-    if (m_surfaceSelection.mode == WaylandSdrSurfaceMode::ManagedGamma22) {
-        m_nativeState->setDeclaredMode(m_surfaceSelection.presentationContract().mode);
-    }
+    // Start with the ready sRGB declaration. The first presented buffer
+    // installs its prepared target description; no unprepared WCG object is
+    // referenced while native feedback attaches before the first frame.
 
     QVersionNumber const supportedApi = m_vulkanInstance.supportedApiVersion();
     if (supportedApi < QVersionNumber(1, 3)) {
@@ -788,7 +804,7 @@ QVulkanInstance& LinuxWaylandWindowContext::vulkanInstance() {
 
 PresentationSurfaceMode LinuxWaylandWindowContext::desiredMode(std::uint64_t graphicsDeviceGeneration) {
     return selectWaylandPresentationMode(m_surfaceSelection.mode, m_colorCapabilities, graphicsDeviceGeneration,
-                                         m_hdrRejection);
+                                         m_surfaceRejection);
 }
 
 PresentationSurfaceController::Preparation
@@ -796,47 +812,59 @@ LinuxWaylandWindowContext::prepareFrame(QWindow& window, PresentationSurfaceMode
                                         ColorPrimaries const& videoPrimaries) {
     Q_ASSERT(m_window == &window);
     auto& state = *m_nativeState;
-    if (mode != PresentationSurfaceMode::ManagedHdr10Pq) {
-        state.pendingHdrDescription.reset();
-        state.pendingHdrVolume.reset();
+    if (mode != PresentationSurfaceMode::ManagedHdr10Pq && mode != PresentationSurfaceMode::ManagedDisplaySdr) {
+        state.pendingTargetDescription.reset();
+        state.pendingDescriptionKey.reset();
         return Preparation::Ready;
     }
-    Q_ASSERT(m_colorCapabilities.supportsManagedHdr10());
-    auto const volume = waylandCompositionVolume(headroom, videoPrimaries);
-    if (state.hdrVolume == volume) {
-        state.pendingHdrDescription.reset();
-        state.pendingHdrVolume.reset();
+    ColorPrimaries const srgb{{0.64f, 0.33f}, {0.30f, 0.60f}, {0.15f, 0.06f}, {0.3127f, 0.3290f}};
+    bool const displaySdr = mode == PresentationSurfaceMode::ManagedDisplaySdr;
+    Q_ASSERT(displaySdr ? m_colorCapabilities.supportsManagedDisplaySdr() : m_colorCapabilities.supportsManagedHdr10());
+    SurfaceDescriptionKey const key{
+        .mode = mode,
+        .volume = displaySdr ? WaylandCompositionVolume{.primaries = videoPrimaries.isValid() ? videoPrimaries : srgb,
+                                                        .maximumNits = 80}
+                             : waylandCompositionVolume(headroom, videoPrimaries),
+    };
+    if (state.descriptionKey == key) {
+        state.pendingTargetDescription.reset();
+        state.pendingDescriptionKey.reset();
         return Preparation::Ready;
     }
-    if (state.pendingHdrVolume != volume) {
-        state.pendingHdrDescription =
-            createManagedDescription(*state.colorManager, QtWayland::wp_color_manager_v1::primaries_bt2020,
-                                     QtWayland::wp_color_manager_v1::transfer_function_st2084_pq, volume);
-        state.pendingHdrVolume = volume;
-        state.pendingHdrDescription->completed = [window = QPointer<QWindow>(&window)] {
+    if (state.pendingDescriptionKey != key) {
+        state.pendingTargetDescription =
+            displaySdr
+                ? createManagedDescription(*state.colorManager, QtWayland::wp_color_manager_v1::primaries_srgb,
+                                           QtWayland::wp_color_manager_v1::transfer_function_gamma22, std::nullopt,
+                                           key.volume.primaries)
+                : createManagedDescription(*state.colorManager, QtWayland::wp_color_manager_v1::primaries_bt2020,
+                                           QtWayland::wp_color_manager_v1::transfer_function_st2084_pq, key.volume);
+        state.pendingDescriptionKey = key;
+        state.pendingTargetDescription->completed = [window = QPointer<QWindow>(&window)] {
             if (window) {
                 window->requestUpdate();
             }
         };
     }
-    if (!state.pendingHdrDescription->complete()) {
+    if (!state.pendingTargetDescription->complete()) {
         return Preparation::Pending;
     }
-    if (!state.pendingHdrDescription->ready()) {
+    if (!state.pendingTargetDescription->ready()) {
         return Preparation::Rejected;
     }
     // No native event dispatch occurs between preparation and presentation.
     // The new object is only queued on wl_surface by applyMode before present.
-    state.hdrDescription = std::move(state.pendingHdrDescription);
-    state.hdrVolume = volume;
-    state.pendingHdrVolume.reset();
+    state.targetDescription = std::move(state.pendingTargetDescription);
+    state.descriptionKey = key;
+    state.pendingDescriptionKey.reset();
     return Preparation::Ready;
 }
 
 void LinuxWaylandWindowContext::applyMode(QWindow& window, PresentationSurfaceMode mode) {
     Q_ASSERT(m_window == &window);
     Q_ASSERT(m_surfaceSelection.mode == WaylandSdrSurfaceMode::ManagedGamma22);
-    Q_ASSERT(mode == PresentationSurfaceMode::ManagedGamma22Sdr || mode == PresentationSurfaceMode::ManagedHdr10Pq);
+    Q_ASSERT(mode == PresentationSurfaceMode::ManagedGamma22Sdr || mode == PresentationSurfaceMode::ManagedDisplaySdr ||
+             mode == PresentationSurfaceMode::ManagedHdr10Pq);
     bool const modeChanged = m_nativeState->declaredMode != mode;
     m_nativeState->setDeclaredMode(mode);
     if (!modeChanged) {
@@ -847,12 +875,14 @@ void LinuxWaylandWindowContext::applyMode(QWindow& window, PresentationSurfaceMo
                                            << "mode=" + presentationModeName(mode) << "nativeSurface=preserved";
 }
 
-void LinuxWaylandWindowContext::rejectHdrTarget(std::uint64_t graphicsDeviceGeneration, char const* reason) {
+void LinuxWaylandWindowContext::rejectManagedTarget(std::uint64_t graphicsDeviceGeneration,
+                                                    PresentationSurfaceMode mode, char const* reason) {
     Q_ASSERT(graphicsDeviceGeneration != 0);
-    m_hdrRejection = WaylandHdrRejection{
+    m_surfaceRejection = WaylandSurfaceRejection{
         .graphicsDeviceGeneration = graphicsDeviceGeneration,
+        .mode = mode,
     };
     qCWarning(sunplayerLogPlatform).noquote()
-        << "event=wayland.hdr_surface_rejected"
+        << "event=wayland.managed_surface_rejected"
         << "deviceGeneration=" + QString::number(graphicsDeviceGeneration) << "reason=" + QString::fromUtf8(reason);
 }

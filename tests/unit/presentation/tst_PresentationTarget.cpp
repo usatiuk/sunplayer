@@ -29,6 +29,7 @@ class PresentationTargetTest final : public QObject {
     }
 
   private slots:
+    void managedSdrUsesGamutWithoutHdrHeadroom();
     void calculation_data();
     void calculation();
     void renderingIntentIsIndependentOfHeadroom();
@@ -127,6 +128,45 @@ void PresentationTargetTest::renderingIntentIsIndependentOfHeadroom() {
     QVERIFY(!native.usesAdaptiveHdrMapping(false, true, true));  // actual SDR presentation fallback
     PresentationSurfaceContract wayland{PresentationSurfaceMode::ManagedHdr10Pq};
     QVERIFY(wayland.usesAdaptiveHdrMapping(true, false, false)); // stable PQ on an SDR output
+}
+
+void PresentationTargetTest::managedSdrUsesGamutWithoutHdrHeadroom() {
+    DisplayState display;
+    display.valid = true;
+    display.colorMode = DisplayColorMode::StandardDynamicRange;
+    display.targetPrimariesKnown = true;
+    display.targetPrimaries = displayP3Primaries();
+    display.sdrWhiteKnown = true;
+    display.sdrWhiteNits = 120.0f;
+    display.luminanceKnown = true;
+    display.minLuminanceNits = 0.3f;
+    display.maxLuminanceNits = 1000.0f;
+    display.currentHeadroom = 8.0f;
+    display.potentialHeadroom = 10.0f;
+    PresentationBackendState backend;
+    backend.managedSdrPresentationActive = true;
+    auto target = calculatePresentationTarget(display, backend);
+    QVERIFY(!target.hdrPresentationActive);
+    QVERIFY(!target.absolutePqAvailable);
+    QVERIFY(target.targetPrimariesKnown);
+    QCOMPARE(target.targetPrimaries, display.targetPrimaries);
+    QCOMPARE(target.sdrWhiteNits, 120.0f);
+    QCOMPARE(target.minLuminanceNits, 0.0f); // Physical floor belongs to compositor.
+    QCOMPARE(target.maxLuminanceNits, 120.0f);
+    QCOMPARE(target.effectiveTargetHeadroom, 1.0f);
+    QCOMPARE(target.currentHeadroom, 1.0f);
+    QCOMPARE(target.potentialHeadroom, 1.0f);
+    QCOMPARE(target.sdrScale, 1.0f);
+    display.colorMode = DisplayColorMode::HighDynamicRange;
+    QCOMPARE(calculatePresentationTarget(display, backend), target);
+    display.valid = false;
+    target = calculatePresentationTarget(display, backend);
+    QVERIFY(!target.targetPrimariesKnown);
+    QCOMPARE(target.minLuminanceNits, 0.0f);
+    QCOMPARE(target.effectiveTargetHeadroom, 1.0f);
+    backend.managedSdrPresentationActive = false;
+    display.valid = true;
+    QVERIFY(!calculatePresentationTarget(display, backend).targetPrimariesKnown);
 }
 
 void PresentationTargetTest::calculation_data() {

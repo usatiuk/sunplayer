@@ -413,6 +413,8 @@ Documentation: `docs/subsystems/playback/`
 * [x] Final video, subtitle, and UI compositor
 * [x] Windows extended-linear HDR and SDR swapchain presentation
 * [x] Initial macOS EDR and SDR swapchain presentation
+* [x] Managed Wayland display-primary WCG SDR independently of HDR, with matching
+  final composition encoding and async native declarations (ADR 0032).
 * [x] Wayland Linux Vulkan SDR presentation foundation
 * [x] Wayland Linux version-2 managed HDR10/PQ presentation, stable across
   HDR/SDR output movement with complete managed-SDR presentation fallback

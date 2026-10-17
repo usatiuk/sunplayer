@@ -3,6 +3,7 @@
 #include <QFile>
 #include <QImage>
 #include <QtCore/qlogging.h>
+#include <libplacebo/colorspace.h>
 #include <rhi/qrhi.h>
 #include <rhi/qshader.h>
 
@@ -21,6 +22,23 @@ QShader loadShader(QString const& path) {
     return shader;
 }
 } // namespace
+
+void HdrCompositorParameters::setOutputPrimaries(ColorPrimaries const& primaries) {
+    Q_ASSERT(primaries.isValid());
+    pl_raw_primaries const target{
+        .red = {primaries.red.x, primaries.red.y},
+        .green = {primaries.green.x, primaries.green.y},
+        .blue = {primaries.blue.x, primaries.blue.y},
+        .white = {primaries.white.x, primaries.white.y},
+    };
+    auto const matrix = pl_get_color_mapping_matrix(pl_raw_primaries_get(PL_COLOR_PRIM_BT_709), &target,
+                                                    PL_INTENT_RELATIVE_COLORIMETRIC);
+    for (int component = 0; component < 3; ++component) {
+        outputRow0[component] = matrix.m[0][component];
+        outputRow1[component] = matrix.m[1][component];
+        outputRow2[component] = matrix.m[2][component];
+    }
+}
 
 HdrCompositor::HdrCompositor(QRhi& rhi) : m_rhi(rhi) {}
 HdrCompositor::~HdrCompositor() = default;

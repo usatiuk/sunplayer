@@ -48,13 +48,30 @@ SUNPLAYER_REQUIRE_VAAPI=1 ctest --test-dir build/linux-debug -R '^ffmpeg-first-f
 The execution environment must provide native Wayland, Vulkan, the matching
 DRM render-node permissions, and a working VAAPI driver. Run hardware tests
 outside sandboxes that hide DRM nodes. On the native Intel Arrow Lake host,
-installing the missing iHD media driver resolves initialization and all 35
-CTests pass with required VAAPI. The rendering executable reports 30 passed,
+installing the missing iHD media driver resolves initialization; the VAAPI
+delivery passed all 35 CTests with required VAAPI, with 30 rendering results
+passed at that checkpoint. The WCG rendering executable now reports 35 passed,
 0 failed, five other-platform skips, and no VAAPI skips. AMD modifier imports,
 asynchronous busy-surface retirement stress, and device-loss injection remain
 uncovered. This slice does not add a driver simulator.
 The October delivery evidence is recorded in the
 [Linux GPU decoding plan](plans/cross-cutting/2026-10-17-linux-gpu-decoding.md).
+
+The WCG SDR extension adds independent final-compositor GPU oracles for D65
+and D50/CAT16 in FP16 and UNORM8, signed extended-BT.709 P3 red, sRGB UI and
+subtitle composition. A synthetic P3 decoded AVFrame exercises retained-input
+P3 → sRGB → P3 rerendering with one import. Policy tests cover SDR headroom,
+explicit capability requirements and generation-bounded rejection. Native
+playback accepts the exact preferred primaries and zero-black `(0,80,80)`
+SDR luminance declaration; the observed swapchain is XRGB8888. These establish
+pixel/protocol correctness, not measured panel calibration or live physical
+multi-monitor movement. See the
+[WCG SDR delivery plan](plans/graphics/2026-10-17-wayland-wcg-sdr.md).
+The final WCG full serial run passes 34/35 CTests; the untouched MediaSession
+inter-frame seek assertion is intermittent (it passed the preceding serial
+rerun). The earlier parallel run also hit cancellation/playback-smoke timing
+failures that pass serially. See `DEFERRED.md`; this is not an all-green
+full-suite claim.
 
 The earlier Ubuntu system build compiles that shared media, subtitle, playback,
 and UI graph plus the native-Wayland Vulkan path. It passes 26 Linux CTests and
@@ -76,8 +93,9 @@ lifecycle acceptance.
 WSLg's Pulse-compatible cubeb output and advancing application audio clock are
 proven, and a user-confirmed real-file run is audible through WSLg. Native
 PulseAudio/PipeWire-Pulse acoustic output and live default-route switching,
-broader native GPU behavior, AMD VAAPI import, live managed gamma-2.2
-presentation, and HDR display behavior remain unproven. Intel VAAPI import and
+broader native GPU behavior, AMD VAAPI import, and HDR display behavior
+remain unproven. Native managed display-primary gamma-2.2 presentation now
+passes production playback and protocol acceptance. Intel VAAPI import and
 offscreen Vulkan captures now pass on the native host as recorded above. The production Linux build compiles the
 shared final BT.709-to-BT.2020/PQ shader. Its analytic GPU pixel oracle remains
 inside the Windows-only real-compositor test and covers neutral reference white,

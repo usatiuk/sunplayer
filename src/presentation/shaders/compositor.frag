@@ -16,6 +16,10 @@ layout(std140, binding = 3) uniform CompositorParams {
     float outputEncoding;
     float subtitleOpacity;
     float subtitleBrightness;
+    float padding;
+    vec4 outputRow0;
+    vec4 outputRow1;
+    vec4 outputRow2;
 };
 
 vec3 srgbToLinear(vec3 value)
@@ -98,7 +102,14 @@ void main()
     color *= sdrScale;
     vec3 encodedColor = clamp(color, 0.0, 1.0);
     vec3 outputColor;
-    if (outputEncoding > 2.5) {
+    if (outputEncoding > 3.5) {
+        // Extended working RGB may be negative or above one. Clamp only in
+        // the declared display-primary basis, after white-point adaptation.
+        vec3 displayRgb = vec3(dot(outputRow0.xyz, color),
+                               dot(outputRow1.xyz, color),
+                               dot(outputRow2.xyz, color));
+        outputColor = linearToGamma22(clamp(displayRgb, 0.0, 1.0));
+    } else if (outputEncoding > 2.5) {
         outputColor = linearToPq(
             max(linearSrgbToBt2020(color), vec3(0.0)));
     } else if (outputEncoding > 1.5) {

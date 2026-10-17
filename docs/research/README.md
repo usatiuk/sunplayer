@@ -52,3 +52,5 @@ the newer note or decision rather than silently rewriting the investigation.
 * [2026-08-21: Metadata-first HDR-to-SDR presentation mapping](2026-08-21-metadata-first-hdr-to-sdr-mapping.md)
 
 * [2026-10-17: Linux VAAPI and DRM PRIME integration](2026-10-17-linux-vaapi-drm-prime.md)
+
+* [2026-10-17: Wayland wide-gamut SDR output](2026-10-17-wayland-wcg-sdr.md)

@@ -20,6 +20,8 @@ struct PresentationBackendState {
     QString videoCopySummary = QStringLiteral("Unavailable");
     QString videoFallbackReason;
     bool hdrPresentationActive = false;
+    // Managed SDR can use native primaries without HDR brightness headroom.
+    bool managedSdrPresentationActive = false;
     // The active output encoding has a defined absolute luminance scale.
     bool absoluteLuminanceSupported = false;
     bool sceneReferred = false;

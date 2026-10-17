@@ -85,7 +85,7 @@ class RhiPresentationEngine final : public QObject {
     void markOutputCharacteristicsDirty();
     bool reconcileOutputCharacteristics();
     void queueSurfaceTransition();
-    void rejectRequiredHdrSurface(char const* reason);
+    void rejectManagedSurface(char const* reason);
     void rebuildForPresentIncompatibleSurface();
     void fail(ApplicationError error);
 

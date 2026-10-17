@@ -342,7 +342,7 @@ void RhiPresentationEngine::renderFrame() {
             diagnosticsActive ? PresentationSurfaceContract::pqMaximumHeadroom : targetPeak,
             presentationTarget.targetPrimariesKnown ? presentationTarget.targetPrimaries : ColorPrimaries{});
         if (prepared == PresentationSurfaceController::Preparation::Rejected) {
-            rejectRequiredHdrSurface("compositor rejected the composed target volume");
+            rejectManagedSurface("compositor rejected the composed target volume");
             return;
         }
         if (prepared == PresentationSurfaceController::Preparation::Pending) {
@@ -448,6 +448,10 @@ void RhiPresentationEngine::renderFrame() {
     bool const extendedLinearActive = m_swapChain->format() == QRhiSwapChain::HDRExtendedSrgbLinear;
     PresentationOutputEncoding const outputEncoding = m_surfaceContract.outputEncoding(extendedLinearActive);
     parameters.outputEncoding = static_cast<float>(outputEncoding);
+    if (m_surfaceContract.mode == PresentationSurfaceMode::ManagedDisplaySdr &&
+        presentationTarget.targetPrimariesKnown) {
+        parameters.setOutputPrimaries(presentationTarget.targetPrimaries);
+    }
 
     Q_ASSERT(m_compositor);
     m_compositor->render(commandBuffer, *m_swapChain->currentFrameRenderTarget(), pixelSize, parameters);
@@ -650,8 +654,8 @@ bool RhiPresentationEngine::createSwapChain() {
         m_surfaceContract, *m_swapChain, m_outputState.displayHdrEnabled(), hdr10PlatformSupported);
     if (m_surfaceContract.hdr10Required() && desiredFormat != QRhiSwapChain::HDR10) {
         m_swapChain.reset();
-        rejectRequiredHdrSurface("the current Wayland Vulkan surface does not expose "
-                                 "10-bit BT.2020/PQ plus pass-through");
+        rejectManagedSurface("the current Wayland Vulkan surface does not expose "
+                             "10-bit BT.2020/PQ plus pass-through");
         return false;
     }
     m_swapChain->setFormat(desiredFormat);
@@ -705,7 +709,7 @@ void RhiPresentationEngine::handleSwapChainFailure(char const* operation, char c
     } else if (!m_graphicsDevice->supportsPresentation(m_window)) {
         rebuildForPresentIncompatibleSurface();
     } else if (m_surfaceContract.hdr10Required()) {
-        rejectRequiredHdrSurface(hdrRejectionReason);
+        rejectManagedSurface(hdrRejectionReason);
     } else {
         scheduleSwapChainRecovery(operation);
     }
@@ -872,6 +876,10 @@ void RhiPresentationEngine::updateBackendState() {
         state.swapChainFormat = QStringLiteral("SDR / sRGB");
         break;
     }
+    if (m_surfaceContract.mode == PresentationSurfaceMode::ManagedDisplaySdr) {
+        state.managedSdrPresentationActive = true;
+        state.swapChainFormat = QStringLiteral("SDR / display primaries / gamma 2.2");
+    }
     state.videoSurfaceFormat = QStringLiteral("RGBA16F · linear sRGB · SDR-white-relative");
     RenderedVideoProducerDiagnostics const videoDiagnostics = m_videoProducer->diagnostics();
     state.videoSurfaceProducer = videoDiagnostics.producerName;
@@ -1036,11 +1044,12 @@ void RhiPresentationEngine::queueSurfaceTransition() {
         Qt::QueuedConnection);
 }
 
-void RhiPresentationEngine::rejectRequiredHdrSurface(char const* reason) {
+void RhiPresentationEngine::rejectManagedSurface(char const* reason) {
     Q_ASSERT(m_surfaceController);
     Q_ASSERT(m_graphicsDevice);
-    Q_ASSERT(m_surfaceContract.hdr10Required());
-    m_surfaceController->rejectHdrTarget(m_graphicsDevice->generation(), reason);
+    Q_ASSERT(m_surfaceContract.mode == PresentationSurfaceMode::ManagedHdr10Pq ||
+             m_surfaceContract.mode == PresentationSurfaceMode::ManagedDisplaySdr);
+    m_surfaceController->rejectManagedTarget(m_graphicsDevice->generation(), m_surfaceContract.mode, reason);
     m_outputCharacteristicsDirty = true;
     queueSurfaceTransition();
 }

@@ -48,6 +48,7 @@ extern "C" {
 #include "media/ffmpeg/FfmpegVideoPacketDecoder.h"
 #include "playback/VideoFrameQueue.h"
 #include "presentation/HdrCompositor.h"
+#include "presentation/PresentationSurfaceContract.h"
 #include "video/DecodedVideoSource.h"
 #include "video/LibplaceboDecodedVideoProducer.h"
 #include "video/VideoTargetInterop.h"
@@ -406,6 +407,9 @@ class FfmpegFirstFrameTest final : public QObject {
 #endif
     }
     void continuousVaapiDecodeAndImport();
+    void wcgSdrFinalComposition_data();
+    void wcgSdrFinalComposition();
+    void wcgSdrRetainedFrameTargetChanges();
     void retainsStreamHdr10PlusAtTheDecodeBoundary();
     void hdrInputAcceptance_data();
     void hdrInputAcceptance();
@@ -1253,6 +1257,212 @@ void FfmpegFirstFrameTest::nominalSdrTargetPreservesWcg() {
     compareNear(white[2], 0.0f, 0.03f);
     QVERIFY(pixel(capture.readback, 3, 2).red > 1.1f);
 #endif
+}
+
+void FfmpegFirstFrameTest::wcgSdrFinalComposition_data() {
+    QTest::addColumn<bool>("d50White");
+    QTest::addColumn<bool>("unorm8");
+    QTest::newRow("P3-D65-fp16") << false << false;
+    QTest::newRow("P3-D50-CAT16-fp16") << true << false;
+    QTest::newRow("P3-D65-unorm8") << false << true;
+    QTest::newRow("P3-D50-CAT16-unorm8") << true << true;
+}
+
+void FfmpegFirstFrameTest::wcgSdrFinalComposition() {
+    QFETCH(bool, d50White);
+    QFETCH(bool, unorm8);
+    auto graphics = createDeviceDomain();
+    QVERIFY(graphics);
+    auto execution = graphics->acquireExecutionScope();
+    QRhi& rhi = graphics->rhi();
+    QSize const size{8, 1};
+    // P3 red genuinely requires signed, extended BT.709 coordinates.
+    std::array<FloatPixel, 8> const pixels{{
+        {0, 0, 0, 1},
+        {1, 1, 1, 1},
+        {.18f, .18f, .18f, 1},
+        {1.224940176f, -.042056955f, -.019637555f, 1},
+        {1, 0, 0, 1},
+        {.18f, .18f, .18f, 1},
+        {.18f, .18f, .18f, 1},
+        {.18f, .18f, .18f, 1},
+    }};
+    std::array<qfloat16, 32> videoData;
+    for (std::size_t i = 0; i < pixels.size(); ++i) {
+        videoData[4 * i] = qfloat16(pixels[i].red);
+        videoData[4 * i + 1] = qfloat16(pixels[i].green);
+        videoData[4 * i + 2] = qfloat16(pixels[i].blue);
+        videoData[4 * i + 3] = qfloat16(1.0f);
+    }
+    QByteArray uiData(32, '\0');
+    QByteArray subtitleData(32, '\0');
+    auto const write = [](QByteArray& data, int x, std::array<int, 4> rgba) {
+        for (int c = 0; c < 4; ++c) {
+            data[4 * x + c] = static_cast<char>(rgba[c]);
+        }
+    };
+    write(uiData, 5, {128, 128, 128, 255});
+    write(uiData, 6, {64, 128, 192, 255});
+    write(subtitleData, 7, {0, 0, 128, 128}); // Premultiplied, half-alpha blue.
+
+    std::unique_ptr<QRhiTexture> video(rhi.newTexture(QRhiTexture::RGBA16F, size, 1));
+    std::unique_ptr<QRhiTexture> ui(rhi.newTexture(QRhiTexture::RGBA8, size, 1));
+    std::unique_ptr<QRhiTexture> subtitle(rhi.newTexture(QRhiTexture::RGBA8, size, 1));
+    std::unique_ptr<QRhiTexture> output(rhi.newTexture(unorm8 ? QRhiTexture::RGBA8 : QRhiTexture::RGBA16F, size, 1,
+                                                       QRhiTexture::RenderTarget | QRhiTexture::UsedAsTransferSource));
+    QVERIFY(video->create() && ui->create() && subtitle->create() && output->create());
+    QRhiTextureRenderTargetDescription const desc{QRhiColorAttachment(output.get())};
+    std::unique_ptr<QRhiTextureRenderTarget> target(rhi.newTextureRenderTarget(desc));
+    std::unique_ptr<QRhiRenderPassDescriptor> pass(target->newCompatibleRenderPassDescriptor());
+    target->setRenderPassDescriptor(pass.get());
+    QVERIFY(target->create());
+    HdrCompositor compositor(rhi);
+    QCOMPARE(compositor.initialize(*pass, video.get(), subtitle.get(), *ui), HdrCompositor::ResourceResult::Ready);
+    ColorPrimaries const primaries{{.68f, .32f},
+                                   {.265f, .69f},
+                                   {.15f, .06f},
+                                   d50White ? ColorChromaticity{.3457f, .3585f} : ColorChromaticity{.3127f, .329f}};
+    HdrCompositorParameters params;
+    params.viewportSize = {8, 1};
+    params.videoSize = {8, 1};
+    params.outputEncoding = static_cast<float>(PresentationOutputEncoding::Gamma22Display);
+    params.ndcYUp = rhi.isYUpInNDC() ? 1.0f : 0.0f;
+    params.subtitleBrightness = 1.0f;
+    params.setOutputPrimaries(primaries);
+    QRhiCommandBuffer* commands = nullptr;
+    QCOMPARE(rhi.beginOffscreenFrame(&commands), QRhi::FrameOpSuccess);
+    auto* uploads = rhi.nextResourceUpdateBatch();
+    auto const upload = [uploads](QRhiTexture* texture, QByteArray const& bytes) {
+        uploads->uploadTexture(texture, QRhiTextureUploadDescription(QRhiTextureUploadEntry(
+                                            0, 0, QRhiTextureSubresourceUploadDescription(bytes))));
+    };
+    upload(video.get(), QByteArray(reinterpret_cast<char const*>(videoData.data()), sizeof(videoData)));
+    upload(ui.get(), uiData);
+    upload(subtitle.get(), subtitleData);
+    commands->resourceUpdate(uploads);
+    compositor.render(*commands, *target, size, params);
+    QRhiReadbackResult readback;
+    bool completed = false;
+    readback.completed = [&] { completed = true; };
+    auto* read = rhi.nextResourceUpdateBatch();
+    read->readBackTexture(QRhiReadbackDescription(output.get()), &readback);
+    commands->resourceUpdate(read);
+    QCOMPARE(rhi.endOffscreenFrame(), QRhi::FrameOpSuccess);
+    QVERIFY(completed);
+
+    // Independent RGB->XYZ/CAT16/XYZ->RGB calculation from the published
+    // chromaticities, not a matrix returned by the production library.
+    std::array<std::array<float, 3>, 3> const d65{
+        {{.822461969f, .177538031f, 0}, {.033194199f, .966805801f, 0}, {.017082631f, .072397441f, .910519929f}}};
+    std::array<std::array<float, 3>, 3> const d50{{{.749887293f, .233530372f, .016582334f},
+                                                   {.024704439f, .954449747f, .020845815f},
+                                                   {.014613920f, .052655350f, .932730730f}}};
+    auto const& matrix = d50White ? d50 : d65;
+    auto const decodeSrgb = [](float encoded) {
+        return encoded <= .04045f ? encoded / 12.92f : std::pow((encoded + .055f) / 1.055f, 2.4f);
+    };
+    auto const captured = [&](int x) {
+        if (!unorm8) {
+            return pixel(readback, x, 0);
+        }
+        auto const* rgba = reinterpret_cast<unsigned char const*>(readback.data.constData()) + 4 * x;
+        return FloatPixel{rgba[0] / 255.0f, rgba[1] / 255.0f, rgba[2] / 255.0f, rgba[3] / 255.0f};
+    };
+    float const tolerance = unorm8 ? 2.0f / 255 : .003f;
+    for (int x = 0; x < 8; ++x) {
+        std::array<float, 3> linear{pixels[x].red, pixels[x].green, pixels[x].blue};
+        if (x == 5) {
+            linear.fill(decodeSrgb(128.0f / 255.0f));
+        }
+        if (x == 6) {
+            linear = {decodeSrgb(64.0f / 255), decodeSrgb(128.0f / 255), decodeSrgb(192.0f / 255)};
+        }
+        if (x == 7) {
+            float const alpha = 128.0f / 255;
+            linear = {.18f * (1 - alpha), .18f * (1 - alpha), alpha + .18f * (1 - alpha)};
+        }
+        auto const actual = captured(x);
+        std::array const channels{actual.red, actual.green, actual.blue};
+        for (int c = 0; c < 3; ++c) {
+            float sum = 0;
+            for (int j = 0; j < 3; ++j) {
+                sum += matrix[c][j] * linear[j];
+            }
+            compareNear(channels[c], std::pow(std::clamp(sum, 0.0f, 1.0f), 1.0f / 2.2f), tolerance);
+        }
+        compareNear(actual.alpha, 1.0f, .001f);
+    }
+    if (!d50White) {
+        compareNear(captured(3).red, 1.0f, .002f);
+        compareNear(captured(3).green, 0.0f, .003f);
+    }
+}
+
+void FfmpegFirstFrameTest::wcgSdrRetainedFrameTargetChanges() {
+    auto const freeFrame = [](AVFrame* frame) { av_frame_free(&frame); };
+    std::unique_ptr<AVFrame, decltype(freeFrame)> avFrame(av_frame_alloc(), freeFrame);
+    QVERIFY(avFrame);
+    avFrame->format = AV_PIX_FMT_RGB24;
+    avFrame->width = avFrame->height = 4;
+    avFrame->color_primaries = AVCOL_PRI_SMPTE432;
+    avFrame->color_trc = AVCOL_TRC_IEC61966_2_1;
+    avFrame->colorspace = AVCOL_SPC_RGB;
+    avFrame->color_range = AVCOL_RANGE_JPEG;
+    QVERIFY(av_frame_get_buffer(avFrame.get(), 0) >= 0);
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 4; ++x) {
+            auto* rgb = avFrame->data[0] + y * avFrame->linesize[0] + 3 * x;
+            rgb[0] = 255;
+            rgb[1] = rgb[2] = 0;
+        }
+    }
+    auto frame = DecodedVideoFrame::clone(*avFrame, {.playbackGeneration = 100, .decoderRevision = 1, .frameId = 1},
+                                          {1, 24}, std::nullopt, std::nullopt, nullptr);
+    QVERIFY(frame);
+    auto graphics = createDeviceDomain();
+    QVERIFY(graphics);
+    auto execution = graphics->acquireExecutionScope();
+    QRhi& rhi = graphics->rhi();
+    DecodedVideoSource source(frame, VideoTargetReadback::Enabled);
+    LibplaceboDecodedVideoProducer producer(*graphics, source, VideoTargetReadback::Enabled);
+    auto state = surfaceState(*graphics, source.contentRevision(), 80, {4, 4});
+    state.description.targetMinimumLuminanceNits = 0;
+    ColorPrimaries const p3{{.68f, .32f}, {.265f, .69f}, {.15f, .06f}, {.3127f, .329f}};
+    auto const capture = [&](bool wide, QRhiReadbackResult& result) {
+        state.description.targetPrimariesKnown = wide;
+        state.description.targetPrimaries = wide ? p3 : ColorPrimaries{};
+        QVERIFY(producer.needsRender(state));
+        QCOMPARE(producer.ensureSurface(state), VideoOperationResult::Ready);
+        QRhiCommandBuffer* commands = nullptr;
+        QCOMPARE(rhi.beginOffscreenFrame(&commands), QRhi::FrameOpSuccess);
+        auto const rendered = producer.render(*commands, state);
+        if (rendered == VideoOperationResult::Ready) {
+            auto* read = rhi.nextResourceUpdateBatch();
+            read->readBackTexture(QRhiReadbackDescription(&producer.textureForComposition()), &result);
+            commands->resourceUpdate(read);
+        }
+        auto const ended = rhi.endOffscreenFrame();
+        if (ended == QRhi::FrameOpSuccess) {
+            producer.submissionAccepted();
+            producer.commitPendingRender();
+        } else {
+            producer.submissionAborted();
+            producer.discardPendingRender();
+        }
+        QCOMPARE(rendered, VideoOperationResult::Ready);
+        QCOMPARE(ended, QRhi::FrameOpSuccess);
+        QVERIFY(!result.data.isEmpty());
+        QCOMPARE(producer.inputImportCount(), 1U);
+    };
+    QRhiReadbackResult wide, narrow, restored;
+    capture(true, wide);
+    capture(false, narrow);
+    capture(true, restored);
+    QVERIFY(pixel(wide, 2, 2).red > 1.1f);
+    QVERIFY(pixel(wide, 2, 2).green < 0.0f);
+    QVERIFY(wide.data != narrow.data);
+    QCOMPARE(restored.data, wide.data);
+    QCOMPARE(source.currentFrame(), frame);
 }
 
 void FfmpegFirstFrameTest::unknownSdrBlackPreservesPqNearBlack() {

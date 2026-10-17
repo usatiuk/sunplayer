@@ -16,6 +16,8 @@ struct WaylandColorManagementCapabilities {
     std::uint32_t protocolVersion = 0;
     bool inventoryComplete = false;
     bool parametricDescriptions = false;
+    bool explicitPrimaries = false;
+    bool explicitLuminances = false;
     bool perceptualIntent = false;
     bool namedSrgbPrimaries = false;
     bool namedBt2020Primaries = false;
@@ -25,6 +27,7 @@ struct WaylandColorManagementCapabilities {
 
     bool supportsManagedSdr() const;
     bool supportsManagedHdr10() const;
+    bool supportsManagedDisplaySdr() const;
 };
 
 // Outgoing PQ coordinates, covering video, sRGB overlays, and black background.
@@ -77,6 +80,7 @@ enum class WaylandSdrSurfaceMode {
 struct WaylandSurfaceSelection {
     WaylandSdrSurfaceMode mode = WaylandSdrSurfaceMode::UnmanagedSrgb;
     bool managedHdr10 = false;
+    bool managedDisplaySdr = false;
     QString diagnostic;
 
     PresentationSurfaceContract presentationContract() const;
@@ -84,13 +88,14 @@ struct WaylandSurfaceSelection {
 
 WaylandSurfaceSelection selectWaylandSurface(WaylandColorManagementCapabilities const& capabilities);
 
-struct WaylandHdrRejection {
+struct WaylandSurfaceRejection {
     std::uint64_t graphicsDeviceGeneration = 0;
+    PresentationSurfaceMode mode = PresentationSurfaceMode::ManagedHdr10Pq;
 };
 
 PresentationSurfaceMode selectWaylandPresentationMode(WaylandSdrSurfaceMode startupMode,
                                                       WaylandColorManagementCapabilities const& capabilities,
                                                       std::uint64_t graphicsDeviceGeneration,
-                                                      std::optional<WaylandHdrRejection> const& rejection);
+                                                      std::optional<WaylandSurfaceRejection> const& rejection);
 
 Q_DECLARE_METATYPE(WaylandColorManagementCapabilities)

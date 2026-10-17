@@ -13,6 +13,7 @@ enum class PresentationOutputEncoding {
     Gamma22Srgb = 1,
     LinearSrgb = 2,
     Bt2020Pq = 3,
+    Gamma22Display = 4,
 };
 
 enum class PresentationSurfaceMode {
@@ -21,6 +22,7 @@ enum class PresentationSurfaceMode {
     AdaptiveExtendedLinear,
     UnmanagedSrgb,
     ManagedGamma22Sdr,
+    ManagedDisplaySdr,
     ManagedHdr10Pq,
 };
 
@@ -39,6 +41,8 @@ struct PresentationSurfaceContract {
             return PresentationOutputEncoding::Srgb;
         case PresentationSurfaceMode::ManagedGamma22Sdr:
             return PresentationOutputEncoding::Gamma22Srgb;
+        case PresentationSurfaceMode::ManagedDisplaySdr:
+            return PresentationOutputEncoding::Gamma22Display;
         case PresentationSurfaceMode::ManagedHdr10Pq:
             return PresentationOutputEncoding::Bt2020Pq;
         }
@@ -60,6 +64,7 @@ struct PresentationSurfaceContract {
             return requestedHeadroom;
         case PresentationSurfaceMode::UnmanagedSrgb:
         case PresentationSurfaceMode::ManagedGamma22Sdr:
+        case PresentationSurfaceMode::ManagedDisplaySdr:
             return 1.0f;
         case PresentationSurfaceMode::ManagedHdr10Pq:
             return requestedHeadroom > pqMaximumHeadroom ? pqMaximumHeadroom : requestedHeadroom;
@@ -82,5 +87,6 @@ class PresentationSurfaceController {
     virtual Preparation prepareFrame(QWindow& window, PresentationSurfaceMode mode, float headroom,
                                      ColorPrimaries const& videoPrimaries) = 0;
     virtual void applyMode(QWindow& window, PresentationSurfaceMode mode) = 0;
-    virtual void rejectHdrTarget(std::uint64_t graphicsDeviceGeneration, char const* reason) = 0;
+    virtual void rejectManagedTarget(std::uint64_t graphicsDeviceGeneration, PresentationSurfaceMode mode,
+                                     char const* reason) = 0;
 };

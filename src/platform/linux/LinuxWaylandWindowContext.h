@@ -43,7 +43,8 @@ class LinuxWaylandWindowContext final : public PresentationSurfaceController {
     Preparation prepareFrame(QWindow& window, PresentationSurfaceMode mode, float headroom,
                              ColorPrimaries const& videoPrimaries) override;
     void applyMode(QWindow& window, PresentationSurfaceMode mode) override;
-    void rejectHdrTarget(std::uint64_t graphicsDeviceGeneration, char const* reason) override;
+    void rejectManagedTarget(std::uint64_t graphicsDeviceGeneration, PresentationSurfaceMode mode,
+                             char const* reason) override;
 
   private:
     struct NativeState;
@@ -51,7 +52,7 @@ class LinuxWaylandWindowContext final : public PresentationSurfaceController {
     std::unique_ptr<NativeState> m_nativeState;
     WaylandColorManagementCapabilities m_colorCapabilities;
     WaylandSurfaceSelection m_surfaceSelection;
-    std::optional<WaylandHdrRejection> m_hdrRejection;
+    std::optional<WaylandSurfaceRejection> m_surfaceRejection;
     bool m_requiresClientSideDecorations = false;
     QVulkanInstance m_vulkanInstance;
     QWindow* m_window = nullptr;

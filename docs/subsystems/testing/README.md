@@ -177,7 +177,7 @@ Current verified coverage:
 | Configured macOS development build | Apple M2/macOS 26 Debug and clean Release source builds succeed with Qt 6.11.1, stock vcpkg `arm64-osx`, QRhi Metal, libplacebo Vulkan/MoltenVK, VideoToolbox, AudioUnit, and libass. The prior final Debug suite passed 26/26 without a leaked application process; the current tree has additional platform-neutral coverage and awaits a new macOS run. macOS 13 dependency compatibility and bundle closure remain packaging gates |
 | Focused automated tests | Windows registers 38 CTest targets, including support/error descriptors and diagnostic privacy, QML Help/error-action routing, shared color policy, application and subtitle-appearance settings, the native settings dialog, single-local-drop policy, positional-cardinality rejection, a native pre-presentation background probe, and a real native-window drop probe; the suite also covers presentation policy, UI/session lifecycle, release-ordered and cancellation-safe background fullscreen gestures, bounded media/audio/subtitle queues and state, timing and generation behavior, dependency boundaries, real FFmpeg A/V/subtitle decode, libswresample/libass rendering, a silent real-WASAPI sink lifecycle, real GPU paths, and bounded application playback/fullscreen scenarios. |
 | Configured Ubuntu system build | The prior checkpoint covers Debug and Release with tests enabled and disabled. This change reruns Debug with tests and Release without tests using Qt 6.10.2 plus system media/native dependencies; the production player has native-Wayland Vulkan and system-cubeb paths |
-| Linux test suite | All 35 registered CTests pass outside the sandbox on Intel Arrow Lake/i915 with iHD 26.1.2, Mesa 26.0.8 and GNOME 50.1 Wayland, using `SUNPLAYER_REQUIRE_VAAPI=1` and no exclusions. The rendering suite reports 30 passed, 0 failed and five other-platform skips; NV12/P010 capture comparison and continuous turnover/seek execute without VAAPI skips. The initial missing-iHD initialization failure is resolved by the user-installed driver. Earlier sandbox Weston/lavapipe coverage passes 33 non-audio-device CTests and both QML lint targets; sandbox visibility is not host GPU evidence. See [VAAPI evidence](../../plans/cross-cutting/linux-port-evidence/2026-10-17-vaapi-drm-prime.md). Native route-change/acoustics, AMD, busy-surface stress, fault injection, Wayland HDR10 WSI and physical HDR remain gated. |
+| Linux test suite | The VAAPI delivery passed all 35 registered CTests outside the sandbox on Intel Arrow Lake/i915 with iHD 26.1.2, Mesa 26.0.8 and GNOME 50.1 Wayland, using `SUNPLAYER_REQUIRE_VAAPI=1` and no exclusions. At that checkpoint the rendering suite reports 30 passed, 0 failed and five other-platform skips; NV12/P010 capture comparison and continuous turnover/seek execute without VAAPI skips. The initial missing-iHD initialization failure is resolved by the user-installed driver. Earlier sandbox Weston/lavapipe coverage passes 33 non-audio-device CTests and both QML lint targets; sandbox visibility is not host GPU evidence. See [VAAPI evidence](../../plans/cross-cutting/linux-port-evidence/2026-10-17-vaapi-drm-prime.md). Native route-change/acoustics, AMD, busy-surface stress, fault injection, Wayland HDR10 WSI and physical HDR remain gated. |
 | WSLg production boundary | A prior installed Release video-only run completed fullscreen/restoration; two cursor-state timeouts kept acceptance open. The current audio-first playback run passes, while the current explicit audio-bearing fullscreen run ended in an unresolved buffer/configure protocol failure before its final assertion |
 | Linux dependency boundary | Shared FFmpeg, libplacebo, cubeb, and libass tests use platform-shaped assertions; a Linux-only link test covers Vulkan, Qt private Wayland, generated color-management-v1 client code, Wayland client, VA-API DRM, and DRM without opening native resources |
 | Audio callback boundary | Whole-block SPSC publication, sticky cancellation, bounded output-to-media mapping, hold silence, generation-safe drain, and the max-block/preroll deadlock regression pass deterministically |
@@ -212,3 +212,21 @@ future scenario runners belong under an integration tree when shared control or
 observation code becomes concrete. The first GPU boundary test is under
 `tests/integration/presentation/`, and the libplacebo binary-boundary test is
 under `tests/integration/video/`.
+
+The managed Wayland WCG SDR extension adds D65/D50 CAT16 analytic compositor
+captures on FP16 and UNORM8, signed wide-gamut coordinates, UI/subtitle
+composition, retained P3 → sRGB → P3 input reconciliation, and bounded SDR
+capability/rejection tests. Native production playback accepts the monitor's
+preferred explicit primaries with matching gamma-2.2 pixels. Physical monitor
+calibration and live multi-monitor movement remain unmeasured. See the
+[delivery evidence](../../plans/graphics/2026-10-17-wayland-wcg-sdr.md).
+
+During WCG validation, the untouched MediaSession inter-frame seek test is
+intermittent: its immediate `!seeking()` assertion can run after `Ready` but
+before seek completion. It passes a serial rerun and fails another full serial
+run. Concurrent-build decoder cancellation/playback-smoke failures also pass
+serial reruns. This does not change the passing WCG GPU/policy results; see
+`docs/DEFERRED.md` and the WCG delivery plan for the actual suite outcome.
+
+The final WCG serial run passes 34/35 CTests; its rendering executable passes
+35 QtTest results with five other-platform skips and no VAAPI skips.

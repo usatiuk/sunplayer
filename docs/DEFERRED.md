@@ -366,3 +366,22 @@ QRhi/libplacebo swapchain while the real Cubeb clock advances. Command-driven
 actual-process play/pause/seek/error scenarios remain missing. Direct router
 saturation/cancellation tests exist, but no real media fixture deliberately
 exhausts the startup packet budget with pathological stream interleave.
+
+### Wayland WCG SDR precision and physical validation
+
+Display-primary SDR is implemented independently of HDR (ADR 0032). The native
+Qt 6.10 baseline selects XRGB8888. Dedicated 10-bit SDR selection is not exposed
+by QRhi and is deferred; do not claim 10-bit output. GPU captures verify
+encoding and native traces verify accepted declarations, not physical monitor
+calibration or live multi-monitor movement. Those measurements remain pending.
+
+### Media test timing sensitivity observed during WCG validation
+
+The WCG native run intermittently fails the untouched
+`MediaSessionTest::interFrameSeekPublishesRequestedFrame` assertion at
+`tst_MediaSession.cpp:1439`: waiting for `Ready` can finish before `seeking`
+clears. A serial rerun passed, but a complete serial run reproduced it. The
+parallel run concurrent with compilation also hit decoder cancellation and
+application playback-smoke timing failures; both passed serially. Investigate
+completion-state synchronization in a playback/test-focused change rather
+than expanding the WCG implementation. See its delivery plan for evidence.
