@@ -96,15 +96,16 @@ software-hosted packaging and playback, not those hardware/display behaviors.
 CI invokes the same build command and uploads the AppImage and checksum. The
 generated release notes state the Ubuntu 26.04 baseline and host-library/driver
 requirements alongside the automatically generated change list. The
-AppImage job follows Windows because Windows currently owns creation of the
-unpublished release commit and Git bundle. In release mode it checks out that
-exact bundle revision before building. Publication waits for both jobs and
+AppImage and Windows jobs run in parallel through the shared build workflow.
+In release mode a preceding preparation job supplies the unpublished release
+commit and Git bundle; both builders verify that exact revision. Draft release
+creation waits for both jobs and
 attaches the AppImage/checksum alongside the existing Store upload; re-runs
 retain existing nonempty assets and upload missing ones. An existing AppImage
 or checksum must match the current artifact byte-for-byte before recovery can
 continue, preventing a rebuilt checksum from describing an older binary.
 No separate updater,
-signing, release workflow or automatic desktop installation is added.
+signing or automatic desktop installation is added.
 
 Current delivery evidence is recorded in the
 [AppImage delivery plan](../../docs/plans/cross-cutting/2026-10-17-docker-appimage.md).

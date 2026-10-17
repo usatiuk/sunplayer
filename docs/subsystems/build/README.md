@@ -488,19 +488,21 @@ provides `winapp` v0.6.0, and CI
 checks every file in that release archive against a reviewed SHA-256 digest
 before execution. The packaging script remains installation-free. The workflow
 does not cache build trees, the shared in-job
-`vcpkg_installed` tree, downloads, artifacts, or credentials. Until the new
-release path succeeds in a hosted run, it is implemented and locally reviewed
-configuration rather than a claim that hosted packaging passes.
+`vcpkg_installed` tree, downloads, artifacts, or credentials.
+The workflow split and draft release path still require hosted validation;
+see [the release workflow plan](../../plans/cross-cutting/2026-10-17-release-workflows.md).
 
-The CI workflow is also reusable. A separate, owner-only manual **Release**
-workflow calls it in release mode using `RelWithDebInfo`; this keeps an ordinary
-manual CI run available without duplicating the Windows pipeline. Release mode
-bumps the root
-`VERSION.txt`, creates the release commit locally, and builds that exact
-revision as `RelWithDebInfo`. After the Store MSIX and full `sunplayer.pdb`
+CI and Release are separate entry-point workflows. CI owns Linux checks and
+calls `build.yml` for Windows and AppImage packaging, with no release jobs in
+its graph. The owner-only manual Release workflow prepares the version-bumped
+`VERSION.txt` commit and uploads its Git bundle before calling those same
+package builders. Windows and AppImage run in parallel and verify the prepared
+SHA and version before building. Release packages use `RelWithDebInfo`.
+After the Store MSIX and full `sunplayer.pdb`
 APPXSYM are successfully wrapped in an MSIXUPLOAD and the matching AppImage
 passes its smoke test, a separate write-scoped job
-atomically pushes the commit and tag and creates the GitHub Release. Failed
+atomically pushes the commit and tag and creates a draft GitHub Release for
+review before manual publication. Failed
 GitHub Release creation can be re-run against those exact refs. The workflow
 attaches the AppImage and SHA-256 file alongside the MSIXUPLOAD. Existing
 AppImage assets are compared before any recovery upload; conflicting rebuilt

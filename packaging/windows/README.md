@@ -116,9 +116,10 @@ from Partner Center's Product identity page:
 * `WINDOWS_STORE_PUBLISHER_DISPLAY_NAME`
 
 To release, open **Actions → Release → Run workflow** on `main` and choose
-`major`, `minor`, or `patch`. The first Store release starts from the checked-in
-`0.1.0`, so choose `major` to produce SunPlayer `1.0.0`, package version
-`1.0.0.0`, tag `v1.0.0`, and the matching GitHub Release.
+`major`, `minor`, or `patch`. Preparation creates the version-bumped commit
+once; shared Windows and AppImage jobs build it in parallel. A final job pushes
+the release commit and tag and creates a **draft** GitHub Release with both
+platform packages. Review its notes and assets before publishing it manually.
 
 The release uses `RelWithDebInfo`. Its `.msixupload` contains the unsigned x64
 MSIX and an `.appxsym` containing the complete linker-produced
@@ -127,7 +128,7 @@ manually to Partner Center. No certificate, GitHub Secret, Store credential, or
 automatic Store submission is involved.
 
 The same release also builds the [Linux AppImage](../appimage/README.md) from
-the exact release commit. Publication waits for its Docker smoke and attaches
+the exact release commit. Draft creation waits for its Docker smoke and attaches
 the AppImage and checksum alongside the Windows MSIXUPLOAD.
 
 ## Local signed package

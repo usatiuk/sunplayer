@@ -1,0 +1,336 @@
+name: Package builds
+
+on:
+  workflow_call:
+    inputs:
+      release:
+        description: Build Store packages instead of development packages
+        type: boolean
+        default: false
+      version:
+        description: Prepared release version
+        type: string
+        default: ''
+      release-sha:
+        description: Exact commit in the release revision artifact
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows · Qt 6.11.1
+    runs-on: windows-2022
+    timeout-minutes: 180
+    env:
+      VCPKG_ROOT: C:\vcpkg
+      SUNPLAYER_PACKAGE_CONFIGURATION: ${{ inputs.release && 'RelWithDebInfo' || 'Release' }}
+      SUNPLAYER_DISPLAY_NAME: ${{ inputs.release && 'SunPlayer' || 'SunPlayer (Dev)' }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Download exact release revision
+        if: inputs.release
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sunplayer-release-revision
+          path: ${{ runner.temp }}/sunplayer-release
+
+      - name: Select exact release revision
+        if: inputs.release
+        shell: pwsh
+        env:
+          RELEASE_SHA: ${{ inputs.release-sha }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          $bundle = Join-Path $env:RUNNER_TEMP 'sunplayer-release/sunplayer-release.bundle'
+          git bundle verify $bundle
+          if ($LASTEXITCODE -ne 0) { throw 'Could not verify the release bundle.' }
+          git fetch $bundle refs/heads/release-build
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch the release revision.' }
+          git checkout --detach FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Could not select the release revision.' }
+          if ((git rev-parse HEAD).Trim() -ne $env:RELEASE_SHA -or
+              (Get-Content -LiteralPath VERSION.txt -Raw).Trim() -ne $env:RELEASE_VERSION) {
+            throw 'Release revision or version does not match preparation.'
+          }
+
+      - name: Restore Qt
+        id: qt-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}\Qt\6.11.1
+          key: windows-2022-qt-6.11.1-msvc2022_64-with-sources-r2
+
+      - name: Install Qt
+        if: steps.qt-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          python -m pip install "aqtinstall @ https://github.com/miurahr/aqtinstall/archive/8c3695d4a4e1ceabf6a74dc6c79681656dc6b74b.zip"
+          python -m aqt install-qt `
+            --outputdir "$env:RUNNER_TEMP\Qt" `
+            windows desktop 6.11.1 win64_msvc2022_64 `
+            -m qtshadertools
+          python -m aqt install-src `
+            --outputdir "$env:RUNNER_TEMP\Qt" `
+            windows 6.11.1 `
+            --archives qtbase qtdeclarative qtimageformats qtsvg
+
+      - name: Verify Qt and vcpkg
+        shell: pwsh
+        run: |
+          $qtRoot = "$env:RUNNER_TEMP\Qt\6.11.1\msvc2022_64"
+          $binaryCache = "$env:RUNNER_TEMP\sunplayer-vcpkg-binary-cache"
+          $requiredPaths = @(
+            "$qtRoot\lib\cmake\Qt6\Qt6Config.cmake",
+            "$qtRoot\lib\cmake\Qt6ShaderTools\Qt6ShaderToolsConfig.cmake",
+            "$qtRoot\bin\qsb.exe",
+            "$qtRoot\bin\windeployqt.exe",
+            "$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
+          )
+          foreach ($path in $requiredPaths) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw "Required dependency path is missing: $path"
+            }
+          }
+          New-Item -ItemType Directory -Force -Path $binaryCache | Out-Null
+
+      - name: Resolve vcpkg cache identity
+        id: vcpkg-cache
+        shell: pwsh
+        run: |
+          $toolRevision = (git -C $env:VCPKG_ROOT rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $toolRevision -notmatch '^[0-9a-f]{40}$') {
+            throw 'Could not resolve the hosted vcpkg revision.'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:ImageVersion)) {
+            throw 'The hosted runner did not report its image version.'
+          }
+          "tool_revision=$toolRevision" >> $env:GITHUB_OUTPUT
+          "image_version=$($env:ImageVersion)" >> $env:GITHUB_OUTPUT
+
+      - name: Restore vcpkg binaries
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}\sunplayer-vcpkg-binary-cache
+          key: windows-2022-vcpkg-x64-windows-clangcl-r2-${{ steps.vcpkg-cache.outputs.image_version }}-${{ steps.vcpkg-cache.outputs.tool_revision }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'cmake/vcpkg/**') }}
+          restore-keys: |
+            windows-2022-vcpkg-x64-windows-clangcl-r2-${{ steps.vcpkg-cache.outputs.image_version }}-${{ steps.vcpkg-cache.outputs.tool_revision }}-
+            windows-2022-vcpkg-x64-windows-clangcl-r2-
+            windows-2022-vcpkg-x64-windows-clangcl-r1-
+
+      - name: Configure
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b %errorlevel%
+          set "VCPKG_BINARY_SOURCES=clear;files,%RUNNER_TEMP%\sunplayer-vcpkg-binary-cache,readwrite"
+          cmake -S . -B "%RUNNER_TEMP%\sunplayer-windows-debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DVCPKG_INSTALLED_DIR=%RUNNER_TEMP%\sunplayer-vcpkg-installed" "-DCMAKE_PREFIX_PATH=%RUNNER_TEMP%\Qt\6.11.1\msvc2022_64"
+          if errorlevel 1 exit /b %errorlevel%
+
+      - name: Build
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b %errorlevel%
+          cmake --build "%RUNNER_TEMP%\sunplayer-windows-debug" --parallel %NUMBER_OF_PROCESSORS%
+          if errorlevel 1 exit /b %errorlevel%
+
+      - name: Lint QML
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b %errorlevel%
+          cmake --build "%RUNNER_TEMP%\sunplayer-windows-debug" --target all_qmllint --parallel %NUMBER_OF_PROCESSORS%
+          if errorlevel 1 exit /b %errorlevel%
+
+      - name: Test deterministic boundaries
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b %errorlevel%
+          ctest --test-dir "%RUNNER_TEMP%\sunplayer-windows-debug" --output-on-failure --parallel %NUMBER_OF_PROCESSORS% -LE "device|gpu"
+          if errorlevel 1 exit /b %errorlevel%
+
+      - name: Configure distribution bundle
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b %errorlevel%
+          set "VCPKG_BINARY_SOURCES=clear;files,%RUNNER_TEMP%\sunplayer-vcpkg-binary-cache,readwrite"
+          cmake -S . -B "%RUNNER_TEMP%\sunplayer-windows-release" -G Ninja -DCMAKE_BUILD_TYPE=%SUNPLAYER_PACKAGE_CONFIGURATION% -DBUILD_TESTING=OFF "-DSUNPLAYER_DISPLAY_NAME=%SUNPLAYER_DISPLAY_NAME%" "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DVCPKG_INSTALLED_DIR=%RUNNER_TEMP%\sunplayer-vcpkg-installed" "-DCMAKE_PREFIX_PATH=%RUNNER_TEMP%\Qt\6.11.1\msvc2022_64"
+          if errorlevel 1 exit /b %errorlevel%
+
+      - name: Build distribution bundle
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b %errorlevel%
+          cmake --build "%RUNNER_TEMP%\sunplayer-windows-release" --target sunplayer --parallel %NUMBER_OF_PROCESSORS%
+          if errorlevel 1 exit /b %errorlevel%
+
+      - name: Stage distribution bundle
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b %errorlevel%
+          cmake --install "%RUNNER_TEMP%\sunplayer-windows-release" --config %SUNPLAYER_PACKAGE_CONFIGURATION% --prefix "%RUNNER_TEMP%\sunplayer-windows-artifact"
+          if errorlevel 1 exit /b %errorlevel%
+          if not exist "%RUNNER_TEMP%\sunplayer-windows-artifact\bin\qt.conf" exit /b 1
+          "%RUNNER_TEMP%\sunplayer-windows-artifact\bin\sunplayer.exe" --verify-qml
+          if errorlevel 1 exit /b %errorlevel%
+
+      - name: Upload Windows developer bundle
+        if: inputs.release != true && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sunplayer-windows-release-${{ github.sha }}
+          path: ${{ runner.temp }}\sunplayer-windows-artifact
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Set up winapp
+        uses: microsoft/setup-WinAppCli@b93bbddc1f7abc061ca0d3a8119e3a0c7dd71495 # v0.2
+        with:
+          version: v0.6.0
+
+      - name: Verify winapp
+        shell: pwsh
+        run: |
+          $winapp = (Get-Command winapp -CommandType Application -ErrorAction Stop).Source
+          $expected = @{
+            'libSkiaSharp.dll' = '9A0D95E8CAAA852C70D085AF6A40A744242172AD9EA3FD6BC7599875A8A1DBCD'
+            'winapp.exe' = '0AA2A43086AD07C7FDC35C94ECCA0A586E815B1AB46E9B3109D73123E9190C90'
+            'winapp.pdb' = '56E7B951A0A6F9969A21C764C4E1A39BA29DBC056DF2AE3B9A77CBD727A052A7'
+          }
+          $entries = @(Get-ChildItem -LiteralPath (Split-Path $winapp) -Force)
+          $nameDifference = Compare-Object @($expected.Keys | Sort-Object) @($entries.Name | Sort-Object)
+          if ($nameDifference -or ($entries | Where-Object PSIsContainer)) {
+            throw "Unexpected contents in the winapp v0.6.0 release archive."
+          }
+          foreach ($file in $entries) {
+            $actual = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+            if ($actual -ne $expected[$file.Name]) {
+              throw "winapp v0.6.0 hash mismatch for $($file.Name)."
+            }
+          }
+
+      - name: Package unsigned development MSIX
+        if: inputs.release != true
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b %errorlevel%
+          pwsh -NoLogo -NoProfile -File packaging\windows\Package-WindowsStore.ps1 -InstallPrefix "%RUNNER_TEMP%\sunplayer-windows-artifact" -Output "%RUNNER_TEMP%\SunPlayerDevelopment.msix" -PackageVersion 1.0.0.0 -IdentityName SunPlayerDevelopment -Publisher "CN=SunPlayerDevelopment" -PublisherDisplayName "SunPlayer Development" -DisplayName "%SUNPLAYER_DISPLAY_NAME%"
+          if errorlevel 1 exit /b %errorlevel%
+
+      - name: Upload unsigned development MSIX
+        if: inputs.release != true && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sunplayer-windows-msix-${{ github.sha }}
+          path: ${{ runner.temp }}\SunPlayerDevelopment.msix
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Package Store MSIX upload
+        if: inputs.release
+        shell: pwsh
+        env:
+          STORE_PACKAGE_VERSION: ${{ inputs.version }}.0
+          STORE_IDENTITY_NAME: ${{ vars.WINDOWS_STORE_IDENTITY_NAME }}
+          STORE_PUBLISHER: ${{ vars.WINDOWS_STORE_PUBLISHER }}
+          STORE_PUBLISHER_DISPLAY_NAME: ${{ vars.WINDOWS_STORE_PUBLISHER_DISPLAY_NAME }}
+        run: |
+          $msix = Join-Path $env:RUNNER_TEMP "SunPlayer_$($env:STORE_PACKAGE_VERSION)_x64.msix"
+          & .\packaging\windows\Package-WindowsStore.ps1 `
+            -InstallPrefix "$env:RUNNER_TEMP\sunplayer-windows-artifact" `
+            -Output $msix `
+            -PackageVersion $env:STORE_PACKAGE_VERSION `
+            -IdentityName $env:STORE_IDENTITY_NAME `
+            -Publisher $env:STORE_PUBLISHER `
+            -PublisherDisplayName $env:STORE_PUBLISHER_DISPLAY_NAME
+
+          $pdb = Join-Path $env:RUNNER_TEMP 'sunplayer-windows-release\sunplayer.pdb'
+          if (-not (Test-Path -LiteralPath $pdb -PathType Leaf) -or
+              (Get-Item -LiteralPath $pdb).Length -eq 0) {
+            throw "The full SunPlayer linker PDB is missing: $pdb"
+          }
+          if (Get-ChildItem -LiteralPath "$env:RUNNER_TEMP\sunplayer-windows-artifact" -Filter *.pdb -File -Recurse) {
+            throw 'PDB files must remain outside the installed MSIX payload.'
+          }
+
+          $symbolZip = Join-Path $env:RUNNER_TEMP 'SunPlayerSymbols.zip'
+          $appxSym = Join-Path $env:RUNNER_TEMP "SunPlayer_$($env:STORE_PACKAGE_VERSION)_x64.appxsym"
+          Compress-Archive `
+            -LiteralPath $pdb `
+            -DestinationPath $symbolZip `
+            -CompressionLevel Optimal
+          Move-Item -LiteralPath $symbolZip -Destination $appxSym
+
+          $zip = Join-Path $env:RUNNER_TEMP 'SunPlayerStoreUpload.zip'
+          $upload = Join-Path $env:RUNNER_TEMP "SunPlayer_$($env:STORE_PACKAGE_VERSION)_x64.msixupload"
+          Compress-Archive -LiteralPath @($msix, $appxSym) -DestinationPath $zip -CompressionLevel Optimal
+          Move-Item -LiteralPath $zip -Destination $upload
+
+      - name: Upload release inputs
+        if: inputs.release
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sunplayer-release-${{ inputs.version }}
+          path: |
+            ${{ runner.temp }}\SunPlayer_${{ inputs.version }}.0_x64.msixupload
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 1
+
+  appimage:
+    name: Linux · AppImage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Download exact release revision
+        if: inputs.release
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sunplayer-release-revision
+          path: ${{ runner.temp }}/sunplayer-release
+
+      - name: Select exact release revision
+        if: inputs.release
+        env:
+          RELEASE_SHA: ${{ inputs.release-sha }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/sunplayer-release/sunplayer-release.bundle"
+          git bundle verify "$bundle"
+          git fetch "$bundle" refs/heads/release-build
+          git checkout --detach FETCH_HEAD
+          [[ "$(git rev-parse HEAD)" == "$RELEASE_SHA" ]]
+          [[ "$(cat VERSION.txt)" == "$RELEASE_VERSION" ]]
+
+      - name: Build and smoke-test AppImage in Docker
+        run: packaging/appimage/build.sh
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sunplayer-appimage-${{ inputs.release && inputs.version || github.sha }}
+          path: out/appimage/*.AppImage*
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
+

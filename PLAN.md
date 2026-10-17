@@ -66,6 +66,10 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 
 ## Current implementation status
 
+CI and Release now have separate job graphs with shared parallel package
+builds and draft release publication; hosted delivery is tracked in
+[the release workflow plan](docs/plans/cross-cutting/2026-10-17-release-workflows.md).
+
 Decoded PQ/HDR10+/Dolby Vision has a shared source reference-white control,
 100–203 nits with default 100 and preset buttons. Its bounded mapping and
 paused-frame validation are tracked in
