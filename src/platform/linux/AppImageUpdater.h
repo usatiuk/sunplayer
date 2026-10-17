@@ -23,6 +23,8 @@ class AppImageUpdater final : public QObject {
     bool available() const { return m_available; }
     bool updating() const;
     QString error() const { return m_error; }
+    void check();
+    Q_INVOKABLE void dismiss();
     Q_INVOKABLE void updateAndRestart();
     void cancelForMedia();
 

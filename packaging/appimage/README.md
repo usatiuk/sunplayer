@@ -105,8 +105,10 @@ retain existing nonempty assets and upload missing ones. An existing AppImage
 or checksum must match the current artifact byte-for-byte before recovery can
 continue, preventing a rebuilt checksum from describing an older binary.
 Release builds sign the AppImage and publish matching `.AppImage.zsync` delta
-metadata. Only signed releases enable the bundled AppImageUpdate CLI: it checks
-once per launch and offers Update and restart on the empty Open video screen.
+metadata. Only signed releases enable the bundled AppImageUpdate CLI. First use
+asks whether to check at startup; Settings → Application can change that choice.
+When enabled, it checks once per launch and offers Update and restart or Dismiss
+on the empty Open video screen. It never installs without the explicit action.
 The updater operates on a staged copy, then replaces the existing path and
 relaunches the outer AppImage. Opening media cancels an in-progress update.
 Development builds remain unsigned with updating disabled.

@@ -5,12 +5,16 @@ assets are published. Physical-desktop update/relaunch remains a manual check.
 
 ## Accepted behavior
 
-- Official signed AppImage releases check the published stable channel once per
-  normal launch, asynchronously. No daemon, persistent schedule or polling loop.
+- Official signed AppImage releases ask whether to check the published stable
+  channel at startup. The saved Yes enables one asynchronous check per normal
+  launch; No skips it. Settings → Application changes this preference. See the
+  [follow-up plan](2026-10-17-update-preferences-and-idle-controls.md).
+  No daemon, persistent schedule or polling loop.
 - Show **Update available** only inside PlayerPage's existing `emptyState`
   (`MediaSession.Empty`), beside Open video. No playback notification or popup.
 - An explicit **Update and restart** action starts the update. Use an
   indeterminate Updating indicator; upstream CLI output is not a progress API.
+  **Dismiss** hides the notice for this launch without changing the preference.
 - Opening media remains possible. Leaving Empty cancels an ongoing update;
   recheck the latest media state before activation. Playback never triggers an
   update restart. No persisted ready-to-install state or session restoration.

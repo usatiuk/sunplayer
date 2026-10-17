@@ -28,6 +28,9 @@ After the transport finishes its idle fade during uninterrupted playback, the
 cursor hides over an available video frame and returns with the controls on
 the next pointer movement. It remains visible when no frame is ready or while
 the controls, menu, sliders, or playback-details panel need interaction.
+The Linux CSD hover observer uses the same PlayerPage movement filter as the
+video area, so repeated stationary hover updates do not reset the idle timer
+in windowed or maximized playback. Fullscreen uses that same activity policy.
 Its position/duration timeline performs seek through the session's
 generation-scoped restart boundary and previews the selected time while the
 scrubber is pressed. Persisted volume and session-lifetime mute remain wired to
@@ -104,7 +107,20 @@ WindowCommands. Player's existing empty state alone shows its update action,
 Updating status and error. It is absent during opening/playback/error and from
 HDR Lab; ordinary builds and other platforms have no updater capability. The
 Linux owner handles subprocesses, staging and restart without graphics or media
-integration. Media leaving Empty cancels an active update.
+integration. Media leaving Empty cancels an active update. The notice offers
+Update and restart and Dismiss; dismissal lasts this launch and is disabled
+while updating.
+
+Only updater-enabled Linux AppImages add an Application settings tab with one
+immediate “Check for updates on startup” checkbox. Linux `AppImageUpdateUi`
+owns that page, the first-use Yes/No question and the `linux/appimage/checkOnStartup`
+key in the existing application settings file. Missing means unanswered; no
+check runs before consent. The question waits for Empty, closes if media opens,
+and a dismissed question waits until next launch. Yes checks immediately and
+once per future launch; No skips automatic checks. Enabling the checkbox checks
+immediately. Checks remain asynchronous during playback; installation always
+requires the empty-screen action. Other platforms and ordinary Linux builds
+have no update preference tab or prompt.
 
 ## Page structure
 

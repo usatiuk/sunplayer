@@ -64,7 +64,8 @@ belong in ignored local agent or IDE configuration.
 
 Signed AppImage releases bundle AppImageUpdate as an isolated CLI and its GnuPG
 engine. These are packaging-only dependencies; normal Linux compilation uses
-Qt Core for the small platform owner. Release-only environment secrets sign the
+Qt Core for the process owner and the existing Qt Widgets dependency for its
+Linux-only consent/settings UI. Release-only environment secrets sign the
 image with appimagetool and publish `.zsync`; development packages stay unsigned
 and do not enable self-update. See the [updater delivery plan](../../plans/cross-cutting/2026-10-17-appimage-updates.md).
 

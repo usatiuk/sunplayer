@@ -41,6 +41,7 @@ int runUpdaterChild(QCoreApplication& app) {
             app.exit(11);
         }
     });
+    updater->check();
     QTimer mediaOpen;
     if (qEnvironmentVariable("TEST_UPDATE_MODE") == QStringLiteral("cancel")) {
         QObject::connect(&mediaOpen, &QTimer::timeout, &app, [&] {

@@ -175,6 +175,11 @@ class ShellTestApplicationUpdate final : public QObject {
     QString error;
     int updateCount = 0;
     Q_INVOKABLE void updateAndRestart() { ++updateCount; }
+    Q_INVOKABLE void dismiss() {
+        available = false;
+        error.clear();
+        emit changed();
+    }
 
   signals:
     void changed();

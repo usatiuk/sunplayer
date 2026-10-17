@@ -1190,6 +1190,17 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif ()
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    qt_add_executable(sunplayer_appimage_update_ui_tests
+            integration/platform/tst_AppImageUpdateUi.cpp
+            ../src/platform/linux/AppImageUpdateUi.cpp
+            ../src/platform/linux/AppImageUpdateUi.h
+            ../src/platform/linux/AppImageUpdater.cpp
+            ../src/platform/linux/AppImageUpdater.h)
+    target_include_directories(sunplayer_appimage_update_ui_tests PRIVATE ../src)
+    target_link_libraries(sunplayer_appimage_update_ui_tests PRIVATE Qt6::Widgets Qt6::Test)
+    add_test(NAME appimage-update-ui COMMAND sunplayer_appimage_update_ui_tests)
+    set_tests_properties(appimage-update-ui PROPERTIES LABELS "platform;ui;integration;linux"
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 30)
     qt_add_executable(sunplayer_appimage_updater_tests
             integration/platform/tst_AppImageUpdater.cpp
             ../src/platform/linux/AppImageUpdater.cpp

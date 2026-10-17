@@ -899,8 +899,20 @@ helper processes: staged replacement, executable permissions, stable installed
 path, clean outer-launcher environment and cancellation when media opens. It
 checks observable completed output and cleanup, without testing upstream crypto.
 Basic/Fusion shell tests cover the optional update action only in the empty
-Open video state. AppImage packaging smoke checks the bundled helper/GnuPG,
+Open video state, its explicit install/dismiss actions and disabled actions
+during an update. They also deliver stationary pointer events through the real
+QML shell in CSD windowed, maximized and fullscreen states: controls/cursor must
+hide after inactivity and return on movement. This regression failed against
+the original CSD handler, which treated every hover update as activity.
+
+Linux `appimage-update-ui` uses real Qt Widgets, explicit temporary settings and
+a controlled helper process to cover Yes/No persistence, deferred and dismissed
+questions, immediate checkbox changes, startup checks and dismissal. The Linux
+UI receives the application's actual backing filename, preserving isolated
+playback/fullscreen smoke settings; tests do not write the user's preferences.
+AppImage packaging smoke checks the bundled helper/GnuPG,
 and signed builds validate the expected signer and emit matching delta metadata.
 A successful signed old-to-new update through the packaged helper is recorded
 in the [updater delivery plan](plans/cross-cutting/2026-10-17-appimage-updates.md).
-Physical-desktop update/relaunch and hosted release execution are not claimed.
+Hosted v1.4.0 release execution passed. Physical-desktop update/relaunch remains
+a manual check; the user confirmed the cursor-hide fix on their desktop.

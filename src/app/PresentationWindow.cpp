@@ -47,6 +47,7 @@
 #include "video/DiagnosticVideoSource.h"
 
 #ifdef Q_OS_LINUX
+#include "platform/linux/AppImageUpdateUi.h"
 #include "platform/linux/AppImageUpdater.h"
 #include "platform/linux/LinuxWaylandWindowContext.h"
 #endif
@@ -152,9 +153,18 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
 #ifdef Q_OS_LINUX
     m_appImageUpdater =
         AppImageUpdater::create([this] { return m_mediaSession->state() == MediaSession::State::Empty; });
+    if (m_appImageUpdater) {
+        m_appImageUpdateUi = std::make_unique<AppImageUpdateUi>(
+            *m_appImageUpdater, *this, [this] { return m_mediaSession->state() == MediaSession::State::Empty; },
+            m_applicationSettings.filePath());
+        QTimer::singleShot(0, m_appImageUpdateUi.get(), &AppImageUpdateUi::reconcile);
+    }
     connect(m_mediaSession.get(), &MediaSession::sessionChanged, this, [this] {
         if (m_appImageUpdater && m_mediaSession->state() != MediaSession::State::Empty) {
             m_appImageUpdater->cancelForMedia();
+        }
+        if (m_appImageUpdateUi) {
+            m_appImageUpdateUi->reconcile();
         }
     });
 #endif
@@ -243,6 +253,7 @@ PresentationWindow::~PresentationWindow() {
     delete m_settingsDialog;
     m_nativeMediaControls.reset();
 #ifdef Q_OS_LINUX
+    m_appImageUpdateUi.reset();
     m_appImageUpdater.reset();
 #endif
     m_engine.reset();
@@ -320,6 +331,11 @@ void PresentationWindow::showSettings(int page) {
     }
 
     auto* const dialog = new SettingsDialog(*m_subtitleSettings);
+#ifdef Q_OS_LINUX
+    if (m_appImageUpdateUi) {
+        dialog->addPage(*m_appImageUpdateUi->createSettingsPage(), tr("Application"));
+    }
+#endif
     m_settingsDialog = dialog;
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     auto const refreshPlayback = [this, dialog] {

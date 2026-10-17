@@ -11,7 +11,6 @@
 #include <QLockFile>
 #include <QProcessEnvironment>
 #include <QTemporaryDir>
-#include <QTimer>
 
 namespace {
 QByteArray fileHash(QString const& path) {
@@ -51,15 +50,28 @@ AppImageUpdater::AppImageUpdater(QString image, QString appDir, std::function<bo
     connect(&m_process, &QProcess::readyReadStandardOutput, this, [this] { m_process.readAllStandardOutput(); });
     connect(&m_process, &QProcess::readyReadStandardError, this,
             [this] { m_diagnostics = (m_diagnostics + m_process.readAllStandardError()).right(4096); });
-    QTimer::singleShot(0, this, [this] {
-        m_operation = Operation::Checking;
-        run({QStringLiteral("--check-for-update"), m_image});
-    });
 }
 
 AppImageUpdater::~AppImageUpdater() { stop(); }
 
 bool AppImageUpdater::updating() const { return m_operation == Operation::Updating; }
+
+void AppImageUpdater::check() {
+    if (m_operation != Operation::Idle) {
+        return;
+    }
+    m_operation = Operation::Checking;
+    run({QStringLiteral("--check-for-update"), m_image});
+}
+
+void AppImageUpdater::dismiss() {
+    if (m_operation != Operation::Idle) {
+        return;
+    }
+    m_available = false;
+    m_error.clear();
+    emit changed();
+}
 
 void AppImageUpdater::run(QStringList arguments) {
     m_diagnostics.clear();

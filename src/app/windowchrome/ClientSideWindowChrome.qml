@@ -12,7 +12,7 @@ Item {
     required property real renderDevicePixelRatio
     required property bool titleRequested
     required property bool contentInsetRequested
-    signal userActivity
+    signal userActivity(point position)
     readonly property real titleBarHeight: 38
     readonly property bool available:
         controller.enabled && !controller.fullscreen
@@ -156,7 +156,7 @@ Item {
     HoverHandler {
         enabled: root.controller.enabled
             && !root.controller.fullscreen
-        onPointChanged: root.userActivity()
+        onPointChanged: root.userActivity(point.position)
     }
 
     MouseArea {

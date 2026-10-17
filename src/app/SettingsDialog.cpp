@@ -389,6 +389,8 @@ SettingsDialog::SettingsDialog(SubtitleSettings& subtitleSettings) : m_subtitleS
     refreshSubtitles();
 }
 
+void SettingsDialog::addPage(QWidget& page, QString const& title) { m_tabs->addTab(&page, title); }
+
 void SettingsDialog::showPage(int page) {
     m_tabs->setCurrentIndex(page == SubtitlesPage ? SubtitlesPage : PlaybackPage);
 }

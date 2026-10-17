@@ -252,6 +252,8 @@ target_link_libraries(sunplayer_diagnostics
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_library(sunplayer_linux_platform STATIC
+            src/platform/linux/AppImageUpdateUi.cpp
+            src/platform/linux/AppImageUpdateUi.h
             src/platform/linux/AppImageUpdater.cpp
             src/platform/linux/AppImageUpdater.h
             src/platform/linux/LinuxWaylandWindowContext.cpp
@@ -278,6 +280,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
             PRIVATE
             Qt6::GuiPrivate
             Qt6::WaylandClientPrivate
+            Qt6::Widgets
             Vulkan::Vulkan
             Wayland::Client
             libplacebo::libplacebo

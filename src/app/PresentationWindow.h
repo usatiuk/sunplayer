@@ -127,6 +127,7 @@ class PresentationWindow : public QWindow {
 #ifdef Q_OS_LINUX
     LinuxWaylandWindowContext& m_windowContext;
     std::unique_ptr<class AppImageUpdater> m_appImageUpdater;
+    std::unique_ptr<class AppImageUpdateUi> m_appImageUpdateUi;
 #endif
     bool m_restoreMaximizedAfterFullscreen = false;
     bool m_cursorHidden = false;

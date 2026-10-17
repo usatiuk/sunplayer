@@ -42,6 +42,9 @@ Startup currently:
    settings identity, parses command-line options, and installs the application
    logger.
 3. Constructs one `ApplicationSettings` adapter over Qt's native user store.
+   Linux AppImage update consent uses that same backing file, including isolated
+   smoke-run settings. Its preference key and native UI belong to the optional
+   Linux updater UI owner, not the shared playback settings model.
    Real-window smoke modes use a temporary explicit INI store instead.
 4. Asks `GraphicsBackendFactory` to configure Qt Quick for D3D11 on Windows,
    Metal on macOS, or Vulkan on Linux.

@@ -121,9 +121,10 @@ Item {
             || playerPage.controlsShouldShow
         contentInsetRequested: root.currentPage !== 0
             || !playerPage.sessionActive
-        onUserActivity: {
+        onUserActivity: function(position) {
             if (root.currentPage === 0)
-                playerPage.revealControls()
+                playerPage.observePointerMovement(
+                    windowChrome.mapToItem(playerPage, position.x, position.y))
         }
     }
 

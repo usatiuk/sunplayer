@@ -37,6 +37,7 @@ class SettingsDialog final : public QDialog {
     };
 
     void showPage(int page);
+    void addPage(QWidget& page, QString const& title);
     void setPlaybackState(PlaybackState const& state);
 
   signals:

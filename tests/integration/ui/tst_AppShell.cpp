@@ -2,6 +2,7 @@
 #include <memory>
 
 #include <QColor>
+#include <QMouseEvent>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQmlProperty>
@@ -9,6 +10,7 @@
 #include <QQuickWindow>
 #include <QTemporaryFile>
 #include <QTest>
+#include <QTimer>
 #include <QVariant>
 
 #include "QmlShellTestTypes.h"
@@ -333,6 +335,19 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_VERIFY(updateError->isVisible());
     QCOMPARE(updateError->property("text").toString(), QStringLiteral("Update failed"));
     QVERIFY(applicationUpdate.setProperty("error", QString{}));
+    auto* const dismissUpdateButton =
+        rootItem->findChild<QQuickItem*>(QStringLiteral("applicationUpdateDismissButton"));
+    QVERIFY(dismissUpdateButton);
+    QTRY_VERIFY(dismissUpdateButton->isVisible());
+    QCOMPARE(updateButton->property("text").toString(), QStringLiteral("Update and restart"));
+    QVERIFY(applicationUpdate.setProperty("updating", true));
+    QTRY_VERIFY(!dismissUpdateButton->isEnabled());
+    QVERIFY(applicationUpdate.setProperty("updating", false));
+    QVERIFY(QMetaObject::invokeMethod(dismissUpdateButton, "clicked", Qt::DirectConnection));
+    QTRY_VERIFY(!updateButton->isVisible());
+    QVERIFY(!dismissUpdateButton->isVisible());
+    QCOMPARE(applicationUpdate.updateCount, 1);
+    QVERIFY(applicationUpdate.setProperty("available", true));
 
     QTRY_VERIFY(idleMoreButton->property("visible").toBool());
     // A light control palette on the dark player canvas must keep both the
@@ -698,6 +713,30 @@ void AppShellTest::publishesActiveViewport() {
     QCOMPARE(supportController.aboutCount(), 2);
 
     mediaSession.setState(ShellTestMediaSession::State::Ready, true);
+    // Qt can deliver hover updates without pointer movement. CSD must not
+    // interpret those updates as activity and continually restart the timer.
+    for (int mode = 0; mode < 3; ++mode) {
+        windowCommands.windowChromeController().setState(true, mode == 1, mode == 2);
+        QPointF pointerPosition(300, 200);
+        ulong timestamp = 0;
+        auto const deliverPointer = [&] {
+            QMouseEvent event(QEvent::MouseMove, pointerPosition, pointerPosition, Qt::NoButton, Qt::NoButton,
+                              Qt::NoModifier);
+            event.setTimestamp(++timestamp);
+            QCoreApplication::sendEvent(&quickWindow, &event);
+        };
+        QTimer stationaryPointer;
+        connect(&stationaryPointer, &QTimer::timeout, &quickWindow, deliverPointer);
+        stationaryPointer.start(16);
+        QVERIFY(QMetaObject::invokeMethod(playerPage, "revealControls", Qt::DirectConnection));
+        QTRY_VERIFY_WITH_TIMEOUT(transportIsland->opacity() < 0.05, 4000);
+        QTRY_VERIFY(windowCommands.cursorHidden());
+        pointerPosition.rx() += 20;
+        deliverPointer();
+        QTRY_VERIFY(transportIsland->opacity() > 0.9);
+        QTRY_VERIFY(!windowCommands.cursorHidden());
+    }
+    windowCommands.windowChromeController().setState(false, false, false);
     playerPage->setProperty("controlsVisibleByActivity", false);
     QTRY_VERIFY(transportIsland->opacity() < 0.1);
     mediaSession.setPlaybackInterruption(ShellTestMediaSession::PlaybackInterruption::Buffering);

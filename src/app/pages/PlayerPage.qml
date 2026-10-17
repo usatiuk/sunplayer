@@ -465,16 +465,33 @@ VideoPage {
             onClicked: root.windowCommands.chooseMedia()
         }
 
-        Button {
-            objectName: "applicationUpdateButton"
+        ColumnLayout {
             Layout.alignment: Qt.AlignHCenter
             visible: root.applicationUpdate !== null
                 && root.applicationUpdate.available
-            enabled: visible && !root.applicationUpdate.updating
-            text: root.applicationUpdate !== null
-                && root.applicationUpdate.updating
-                    ? qsTr("Updating…") : qsTr("Update available — update and restart")
-            onClicked: root.applicationUpdate.updateAndRestart()
+
+            Label {
+                Layout.alignment: Qt.AlignHCenter
+                text: qsTr("Update available")
+            }
+
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                Button {
+                    objectName: "applicationUpdateButton"
+                    enabled: root.applicationUpdate !== null && !root.applicationUpdate.updating
+                    text: root.applicationUpdate !== null && root.applicationUpdate.updating
+                        ? qsTr("Updating…") : qsTr("Update and restart")
+                    onClicked: root.applicationUpdate.updateAndRestart()
+                }
+
+                Button {
+                    objectName: "applicationUpdateDismissButton"
+                    text: qsTr("Dismiss")
+                    enabled: root.applicationUpdate !== null && !root.applicationUpdate.updating
+                    onClicked: root.applicationUpdate.dismiss()
+                }
+            }
         }
 
         Label {
