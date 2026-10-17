@@ -212,6 +212,38 @@ the complete post-QRhi composition rather than video alone.
 
 ## CI and release engineering
 
+### AppImage distribution coverage
+
+Qt's Linux portal platform theme does not forward application dark-scheme
+requests to its base theme in the checked Qt 6.10/6.11 sources. Shared controls
+now handle light palettes correctly without changing portal selection or
+introducing Linux theme policy into Windows/macOS UI. Native Windows/macOS
+control appearance and complete keyboard traversal still need desktop checks.
+The existing transport auto-hide policy does not pin controls for keyboard
+focus; that policy is outside the current contrast/focus-indicator fix.
+
+The Docker-built Ubuntu 26.04 x86-64 AppImage passes isolated QML/A/V smoke
+and a native Intel VAAPI playback check. AMD VAAPI, NVIDIA Vulkan presentation,
+older-distro portability, normal FUSE-mounted launch and physical HDR output
+remain unverified for this package. The native check used Docker's device and
+socket mounts plus the host iHD driver; it did not establish portal power
+inhibition because the container could not connect to the session bus.
+A packaged `--fullscreen-smoke` attempt continued rendering but timed out in
+stage 0 waiting for cursor idle (`cursorHidden=0`), before fullscreen entry.
+This is not packaged fullscreen acceptance; repeat in a controlled desktop
+session or check fullscreen manually rather than changing player timing here.
+A later native playback rerun decoded with Intel VAAPI and presented all audio
+but timed out without distinct video-presentation revisions; repeat visible
+playback in a controlled session. The desktop-integration rebuild passes
+isolated A/V and icon rendering, and its native Qt probe dispatches portal
+`OpenFile` using the host Yaru theme. Picker visual parity remains a manual
+desktop check.
+The initial runtime baseline intentionally requires compatible host graphics
+libraries instead of bundling vendor drivers or adding loader fallbacks.
+The CI/release configuration is locally checked but has not been pushed or
+executed on hosted runners. See the
+[delivery evidence](plans/cross-cutting/2026-10-17-docker-appimage.md).
+
 ### Hosted hardware and mixed-test coverage
 
 Generic Windows CI builds the complete codebase but excludes CTests labeled

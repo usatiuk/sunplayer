@@ -595,6 +595,9 @@ Documentation: `docs/TESTING.md` and `docs/subsystems/testing/`
   verification, certification, and controlled Store release
 * [ ] macOS packaging
 * [ ] Wayland Linux packaging and runtime requirements
+  * [x] Docker-built x86-64 AppImage and shared CI/release path;
+    matching Qt theme/SVG plugins and host portal file-picker integration;
+    see [the delivery plan](docs/plans/cross-cutting/2026-10-17-docker-appimage.md).
 * [ ] Runtime capability reporting for optional dependency features
 
 Documentation: `docs/subsystems/build/`

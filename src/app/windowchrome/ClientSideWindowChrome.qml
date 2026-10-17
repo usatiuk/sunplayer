@@ -96,12 +96,13 @@ Item {
                 icon.color: "#e8eaf0"
                 background: Rectangle {
                     color: windowButton.down ? "#424650"
-                        : windowButton.hovered ? "#2b2e36"
+                        : windowButton.hovered || windowButton.visualFocus ? "#2b2e36"
                         : "transparent"
                 }
             }
 
             WindowButton {
+                objectName: "minimizeWindowButton"
                 themeIconName: "window-minimize-symbolic"
                 fallbackIconSource: "icons/lucide/minus.svg"
                 Accessible.name: qsTr("Minimize")
@@ -109,6 +110,7 @@ Item {
             }
 
             WindowButton {
+                objectName: "maximizeWindowButton"
                 themeIconName: root.controller.maximized
                     ? "window-restore-symbolic"
                     : "window-maximize-symbolic"
@@ -122,13 +124,14 @@ Item {
 
             WindowButton {
                 id: closeButton
+                objectName: "closeWindowButton"
 
                 themeIconName: "window-close-symbolic"
                 fallbackIconSource: "icons/lucide/x.svg"
                 Accessible.name: qsTr("Close")
                 background: Rectangle {
                     color: closeButton.down ? "#b71c2a"
-                        : closeButton.hovered ? "#d52b3f"
+                        : closeButton.hovered || closeButton.visualFocus ? "#d52b3f"
                         : "transparent"
                 }
                 onClicked: root.controller.close()

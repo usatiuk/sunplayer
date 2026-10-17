@@ -284,7 +284,7 @@ VideoPage {
             radius: height / 2
             color: control.down
                 ? Qt.rgba(1, 1, 1, 0.24)
-                : control.hovered
+                : control.hovered || control.visualFocus
                     ? Qt.rgba(1, 1, 1, 0.15)
                     : control.prominent
                         ? Qt.rgba(1, 1, 1, 0.11)
@@ -1215,7 +1215,7 @@ VideoPage {
         }
     }
 
-    ToolButton {
+    Button {
         id: idleMoreButton
         objectName: "idleMoreButton"
         anchors {
@@ -1227,7 +1227,9 @@ VideoPage {
         visible: !root.sessionActive
         text: qsTr("More actions")
         display: AbstractButton.IconOnly
+        implicitWidth: implicitHeight
         icon.source: "icons/lucide/ellipsis.svg"
+        icon.color: palette.buttonText
         icon.width: 18
         icon.height: 18
         onClicked: transportMenu.popup(

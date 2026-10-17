@@ -16,6 +16,14 @@ keeps the timeline above its controls, and fades during uninterrupted playback.
 The transport uses a small vendored Lucide 1.28.0 SVG subset inside fully
 custom rounded buttons, avoiding font-dependent glyphs and platform-style
 pressed backgrounds. The player and compositor background is pure black.
+The idle overflow action is a square, icon-only standard `Button`: its
+background remains present and its icon follows `palette.buttonText`, keeping
+idle, pressed and keyboard-focused states readable in light and dark styles.
+Custom transport and titlebar buttons expose `visualFocus` through their
+existing hover highlight. HDR Lab's four switches set both `palette.text`
+and `palette.windowText` for their intentionally dark surface; Fusion uses
+the former, while Basic and native Windows/macOS styles use the latter.
+These are shared control contracts, independent of Linux portal selection.
 After the transport finishes its idle fade during uninterrupted playback, the
 cursor hides over an available video frame and returns with the controls on
 the next pointer movement. It remains visible when no frame is ready or while
@@ -275,6 +283,13 @@ the optional Player details panel, but HDR Lab controls do not become ordinary
 player preferences or production presentation state.
 
 ## Verification
+
+The shell scenario runs with Basic and Fusion styles to exercise their distinct
+switch label roles. It covers the idle overflow action's light palette and
+Tab-reason focus, plus focus highlights on custom transport/window controls.
+Native Windows/macOS rendering and full keyboard traversal still need desktop
+validation. See the [control contrast research](../../research/2026-10-17-qt-control-contrast.md)
+for the style contracts and rejected alternatives.
 
 Focused Qt Test coverage verifies viewport geometry, visibility, notification,
 and renderability. A non-presenting Qt Quick component test creates the real

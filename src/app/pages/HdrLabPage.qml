@@ -317,17 +317,21 @@ VideoPage {
 
                     Switch {
                         id: toneMapSwitch
+                        objectName: "toneMapSwitch"
 
                         text: qsTr("Tone map")
                         palette.windowText: "#f2f4f8"
+                        palette.text: "#f2f4f8"
                         checked: root.videoSource.toneMappingEnabled
                         onToggled:
                             root.videoSource.toneMappingEnabled = checked
                     }
 
                     Switch {
+                        objectName: "animatePatternSwitch"
                         text: qsTr("Animate")
                         palette.windowText: "#f2f4f8"
+                        palette.text: "#f2f4f8"
                         checked: root.videoSource.animatePattern
                         onToggled:
                             root.videoSource.animatePattern = checked
@@ -339,8 +343,10 @@ VideoPage {
                     spacing: 12
 
                     Switch {
+                        objectName: "automaticTargetPeakSwitch"
                         text: qsTr("Auto display peak")
                         palette.windowText: "#f2f4f8"
+                        palette.text: "#f2f4f8"
                         checked:
                             root.presentationSettings.automaticTargetPeak
                         onToggled:
@@ -389,6 +395,7 @@ VideoPage {
                             ? qsTr("libplacebo")
                             : qsTr("Procedural QRhi")
                         palette.windowText: "#f2f4f8"
+                        palette.text: "#f2f4f8"
                         checked: root.videoSource.useLibplacebo
                         onToggled:
                             root.videoSource.useLibplacebo = checked

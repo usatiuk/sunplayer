@@ -34,11 +34,14 @@ class AppShellTest final : public QObject {
 
   private slots:
     void publishesActiveViewport();
+    void transportButtonShowsKeyboardFocus();
 
   public:
     static void initMain() {
         qputenv("QT_QPA_PLATFORM", "offscreen");
-        qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
+        if (qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE")) {
+            qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
+        }
 #ifdef Q_OS_WIN
         SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 #endif
@@ -284,9 +287,14 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(seekSliderItem);
     QVERIFY(volumeSliderItem);
     QVERIFY(moreButtonItem);
-    QObject* const rendererSwitchContent = qvariant_cast<QObject*>(rendererSwitch->property("contentItem"));
-    QVERIFY(rendererSwitchContent);
-    QCOMPARE(rendererSwitchContent->property("color").value<QColor>(), QColor(QStringLiteral("#f2f4f8")));
+    for (auto const* name :
+         {"toneMapSwitch", "animatePatternSwitch", "automaticTargetPeakSwitch", "videoRendererSwitch"}) {
+        auto* const control = rootItem->findChild<QObject*>(QString::fromLatin1(name));
+        QVERIFY(control);
+        auto* const content = qvariant_cast<QObject*>(control->property("contentItem"));
+        QVERIFY(content);
+        QCOMPARE(content->property("color").value<QColor>(), QColor(QStringLiteral("#f2f4f8")));
+    }
     QCOMPARE(rendererSwitch->property("checked").toBool(), true);
     QCOMPARE(hdrLabHeaderPanel->property("color").value<QColor>(), QColor(Qt::black));
     QCOMPARE(hdrLabOutputPanel->property("color").value<QColor>(), QColor(Qt::black));
@@ -306,6 +314,21 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_VERIFY(!videoViewport.visible());
     QTRY_VERIFY(emptyState->property("visible").toBool());
     QTRY_VERIFY(idleMoreButton->property("visible").toBool());
+    // A light control palette on the dark player canvas must keep both the
+    // idle icon and the keyboard-focused button readable.
+    auto* const idleButtonItem = qobject_cast<QQuickItem*>(idleMoreButton);
+    QVERIFY(idleButtonItem);
+    QVERIFY(QQmlProperty(idleMoreButton, QStringLiteral("palette.button")).write(QColor(Qt::white)));
+    QVERIFY(QQmlProperty(idleMoreButton, QStringLiteral("palette.buttonText")).write(QColor(Qt::black)));
+    QCOMPARE(QQmlProperty(idleMoreButton, QStringLiteral("icon.color")).read().value<QColor>(), QColor(Qt::black));
+    auto* const idleBackground = qvariant_cast<QObject*>(idleMoreButton->property("background"));
+    QVERIFY(idleBackground);
+    QTRY_VERIFY(idleBackground->property("visible").toBool());
+    idleButtonItem->forceActiveFocus(Qt::TabFocusReason);
+    QTRY_VERIFY(idleMoreButton->property("visualFocus").toBool());
+    QVERIFY(idleBackground->property("visible").toBool());
+    QCOMPARE(QQmlProperty(idleMoreButton, QStringLiteral("icon.color")).read().value<QColor>(), QColor(Qt::black));
+    rootItem->forceActiveFocus(Qt::OtherFocusReason);
     QVERIFY(!windowsAppIsolationWarning->property("visible").toBool());
     QVERIFY(supportController.setProperty("windowsAppIsolationWarningVisible", true));
     QTRY_VERIFY(windowsAppIsolationWarning->property("visible").toBool());
@@ -344,6 +367,18 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(clientSideTitleBar->height() > 0.0);
     QTRY_COMPARE(clientSideWindowChrome->property("contentTop").toReal(), clientSideTitleBar->height());
     QTRY_VERIFY(clientSideTitleBar->isVisible());
+    // Every custom titlebar button must reveal keyboard focus without a
+    // pointer hover, including the close button's separate background.
+    for (auto const* name : {"minimizeWindowButton", "maximizeWindowButton", "closeWindowButton"}) {
+        auto* const button = rootItem->findChild<QQuickItem*>(QString::fromLatin1(name));
+        QVERIFY(button);
+        auto* const background = qvariant_cast<QObject*>(button->property("background"));
+        QVERIFY(background);
+        button->forceActiveFocus(Qt::TabFocusReason);
+        QTRY_VERIFY(button->property("visualFocus").toBool());
+        QVERIFY(background->property("color").value<QColor>().alpha() > 0);
+    }
+    rootItem->forceActiveFocus(Qt::OtherFocusReason);
     QTRY_VERIFY(clientSideWindowOutline->isVisible());
     QCOMPARE(clientSideWindowOutline->position(), QPointF());
     QCOMPARE(clientSideWindowOutline->size(), clientSideWindowChrome->size());
@@ -881,6 +916,55 @@ void AppShellTest::publishesActiveViewport() {
     QCOMPARE(windowCommands.openCount(), 2);
     QCOMPARE(windowCommands.lastOpenedUrl(), droppedMediaUrl);
     QCOMPARE(mediaSession.openCount(), 0);
+}
+
+void AppShellTest::transportButtonShowsKeyboardFocus() {
+    ShellTestPresentationOutputState outputState(nullptr);
+    ShellTestWindowCommands windowCommands(nullptr);
+    ShellTestPresentationSettings presentationSettings(nullptr);
+    ShellTestDiagnosticVideoSource videoSource(nullptr);
+    ShellTestMediaSession mediaSession(nullptr);
+    ShellTestActiveVideoSource activeVideoSource(nullptr);
+    ShellTestSupportController supportController(nullptr);
+    VideoViewportState videoViewport(nullptr);
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(SUNPLAYER_QT_QML_IMPORT_PATH));
+    QQmlComponent component(&engine);
+    component.loadFromModule(QStringLiteral("SunPlayerShellTest"), QStringLiteral("Main"));
+    std::unique_ptr<QObject> object(component.createWithInitialProperties({
+        {QStringLiteral("renderDevicePixelRatio"), 1.0},
+        {QStringLiteral("applicationDisplayName"), QStringLiteral("SunPlayer (Test)")},
+        {QStringLiteral("windowCommands"), QVariant::fromValue(&windowCommands)},
+        {QStringLiteral("presentationOutput"), QVariant::fromValue(&outputState)},
+        {QStringLiteral("presentationPolicy"), QVariant::fromValue(&presentationSettings)},
+        {QStringLiteral("diagnosticSource"), QVariant::fromValue(&videoSource)},
+        {QStringLiteral("mediaSession"), QVariant::fromValue(&mediaSession)},
+        {QStringLiteral("activeVideoSource"), QVariant::fromValue(&activeVideoSource)},
+        {QStringLiteral("viewportState"), QVariant::fromValue(&videoViewport)},
+        {QStringLiteral("supportController"), QVariant::fromValue(&supportController)},
+    }));
+    QVERIFY2(object, qPrintable(componentErrorText(component)));
+    auto* const root = qobject_cast<QQuickItem*>(object.get());
+    QVERIFY(root);
+    auto* const button = root->findChild<QQuickItem*>(QStringLiteral("moreButton"));
+    QVERIFY(button);
+    auto* const background = qvariant_cast<QObject*>(button->property("background"));
+    QVERIFY(background);
+    QQuickWindow window;
+    window.resize(1100, 760);
+    root->setParentItem(window.contentItem());
+    root->setSize(window.size());
+    window.show();
+    QTRY_VERIFY(window.isExposed());
+    mediaSession.setState(ShellTestMediaSession::State::Ready);
+    QTRY_VERIFY(button->isVisible() && button->isEnabled());
+    QCOMPARE(background->property("color").value<QColor>().alpha(), 0);
+    button->forceActiveFocus(Qt::TabFocusReason);
+    QTRY_VERIFY(button->property("visualFocus").toBool());
+    QVERIFY(background->property("color").value<QColor>().alpha() > 0);
+    window.contentItem()->forceActiveFocus(Qt::OtherFocusReason);
+    QTRY_VERIFY(!button->property("visualFocus").toBool());
+    QCOMPARE(background->property("color").value<QColor>().alpha(), 0);
 }
 
 QTEST_MAIN(AppShellTest)

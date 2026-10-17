@@ -126,6 +126,10 @@ MSIX and an `.appxsym` containing the complete linker-produced
 manually to Partner Center. No certificate, GitHub Secret, Store credential, or
 automatic Store submission is involved.
 
+The same release also builds the [Linux AppImage](../appimage/README.md) from
+the exact release commit. Publication waits for its Docker smoke and attaches
+the AppImage and checksum alongside the Windows MSIXUPLOAD.
+
 ## Local signed package
 
 For a local install test, use the development identity consistently in the

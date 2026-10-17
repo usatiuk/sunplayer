@@ -745,6 +745,10 @@ add_test(
         NAME qml-shell
         COMMAND sunplayer_qml_shell_tests
 )
+add_test(
+        NAME qml-shell-fusion
+        COMMAND sunplayer_qml_shell_tests
+)
 
 if (WIN32)
     set(sunplayer_test_platform_label windows)
@@ -919,12 +923,15 @@ set_tests_properties(
 
 set_tests_properties(
         qml-shell
+        qml-shell-fusion
         PROPERTIES
         LABELS "component;ui"
         TIMEOUT 30
         ENVIRONMENT_MODIFICATION
             "PATH=path_list_prepend:${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}"
 )
+set_tests_properties(qml-shell PROPERTIES ENVIRONMENT "QT_QUICK_CONTROLS_STYLE=Basic")
+set_tests_properties(qml-shell-fusion PROPERTIES ENVIRONMENT "QT_QUICK_CONTROLS_STYLE=Fusion")
 
 add_test(
         NAME ffmpeg-dependency

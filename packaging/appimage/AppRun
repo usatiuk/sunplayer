@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+APPDIR=${APPDIR:-$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)}
+export LD_LIBRARY_PATH="$APPDIR/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export QT_PLUGIN_PATH="$APPDIR/usr/plugins"
+export QML_IMPORT_PATH="$APPDIR/usr/qml"
+# Qt's portal theme can leave file dialogs unopened when FileChooser is absent.
+# Respect explicit theme choices and otherwise select it only on a live portal.
+if [ -z "${QT_QPA_PLATFORMTHEME:-}" ] &&
+    "$APPDIR/usr/libexec/sunplayer/dbus-send" --session --print-reply --reply-timeout=1000 \
+        --dest=org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop \
+        org.freedesktop.DBus.Properties.Get \
+        string:org.freedesktop.portal.FileChooser string:version >/dev/null 2>&1; then
+    export QT_QPA_PLATFORMTHEME=xdgdesktopportal
+fi
+exec "$APPDIR/usr/bin/sunplayer" "$@"

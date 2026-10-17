@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=SunPlayer
+Comment=HDR video player
+Exec=sunplayer %f
+Icon=sunplayer
+Terminal=false
+Categories=AudioVideo;Video;Player;
+MimeType=video/mp4;video/x-matroska;video/webm;video/quicktime;video/mpeg;

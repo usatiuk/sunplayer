@@ -11,7 +11,7 @@ libass/bitmap rendering, shared subtitle state, Wayland capability inventory,
 the Linux Vulkan graphics domain, and system-cubeb output are integrated.
 VAAPI/DRM PRIME device negotiation and input import are implemented using the
 existing system dependencies. Native Linux route-change/recovery, AMD VAAPI,
-managed-HDR execution evidence, and complete distributable packaging remain
+managed-HDR execution evidence, and cross-distro packaging validation remain
 open. Intel VAAPI NV12/P010 captures and turnover/seek now pass after the
 missing iHD runtime driver was installed. The macOS development build,
 Metal/MoltenVK presentation, VideoToolbox, AudioUnit, and shared tests are
@@ -59,6 +59,19 @@ Local absolute Qt, CMake, and developer-shell paths remain machine-specific and
 belong in ignored local agent or IDE configuration.
 
 ## Dependency management
+
+The Docker-based x86-64 AppImage recipe, runtime ownership contract and local
+build command are documented in
+[packaging/appimage](../../../packaging/appimage/README.md). It reuses the Linux
+CMake install, bundles Qt/QML and media dependencies, and leaves the native
+graphics/VAAPI driver stack host-owned. Matching GTK/portal platform themes
+and the SVG icon engine preserve host desktop integration. A bounded session
+FileChooser check selects the portal by default when available; explicit
+`QT_QPA_PLATFORMTHEME` choices remain respected. CI builds and smoke-tests that same
+recipe; release publication consumes the exact release Git-bundle revision
+and includes the AppImage and checksum alongside the Windows upload. See the
+[delivery evidence](../../plans/cross-cutting/2026-10-17-docker-appimage.md) for current
+validation and remaining hardware coverage.
 
 Windows and macOS use vcpkg manifest mode. The repository owns:
 
@@ -281,11 +294,13 @@ have production graphics startup.
 
 ## Installation
 
-CMake installs the executable or bundle through `GNUInstallDirs`. Linux embeds
+CMake installs the executable or bundle through `GNUInstallDirs`. The normal Linux install embeds
 the SunPlayer QML module in the executable while keeping Qt's imported QML
 modules and native/media libraries system-owned; it does not run Qt's
 deployment copier. The eventual distro package must express those runtime
-package dependencies. On Windows, vcpkg's app-local dependency walker installs
+package dependencies. The AppImage recipe separately bundles the application
+dependencies from that install tree while retaining the host graphics stack.
+On Windows, vcpkg's app-local dependency walker installs
 the executable's complete transitive runtime-DLL set before
 `qt_generate_deploy_qml_app_script()` supplies the current Qt deployment step
 with:
@@ -425,11 +440,15 @@ See [../testing/PLAN.md](../testing/PLAN.md).
 
 ## Continuous integration
 
-[The CI workflow](../../../.github/workflows/ci.yml) uses two explicit jobs
-because dependency ownership and runtime capabilities differ materially by
-platform. Both configure from the repository root into a runner-temporary
+[The CI workflow](../../../.github/workflows/ci.yml) has Linux and Windows test
+jobs because dependency ownership and runtime capabilities differ materially
+by platform. Both configure from the repository root into a runner-temporary
 Debug build tree, build all production and test targets, run `all_qmllint`, and
 invoke CTest directly.
+
+A separate Docker AppImage job runs the same local packaging entry point and
+its isolated packaged-application smoke. It depends on Windows so release
+builds can consume the unpublished release commit from the existing Git bundle.
 
 The Linux job runs the official Ubuntu 26.04 container on `ubuntu-24.04`, uses
 the documented system packages, and intends to run all registered Linux tests.
@@ -475,10 +494,14 @@ manual CI run available without duplicating the Windows pipeline. Release mode
 bumps the root
 `VERSION.txt`, creates the release commit locally, and builds that exact
 revision as `RelWithDebInfo`. After the Store MSIX and full `sunplayer.pdb`
-APPXSYM are successfully wrapped in an MSIXUPLOAD, a separate write-scoped job
+APPXSYM are successfully wrapped in an MSIXUPLOAD and the matching AppImage
+passes its smoke test, a separate write-scoped job
 atomically pushes the commit and tag and creates the GitHub Release. Failed
 GitHub Release creation can be re-run against those exact refs. The workflow
-does not use Store credentials or submit to Partner Center. Clean-machine
+attaches the AppImage and SHA-256 file alongside the MSIXUPLOAD. Existing
+AppImage assets are compared before any recovery upload; conflicting rebuilt
+bytes fail rather than publish a mismatched checksum. It does not use Store
+credentials or submit to Partner Center. Clean-machine
 verification, certification, and Store submission remain separate release
 steps.
 

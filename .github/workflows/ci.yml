@@ -620,6 +620,51 @@ jobs:
           overwrite: true
           retention-days: 1
 
+  appimage:
+    name: Linux · AppImage
+    needs: windows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Download exact release revision
+        if: inputs.release
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sunplayer-release-${{ needs.windows.outputs.application-version }}
+          path: ${{ runner.temp }}/sunplayer-release
+
+      - name: Select exact release revision
+        if: inputs.release
+        env:
+          RELEASE_SHA: ${{ needs.windows.outputs.release-sha }}
+          RELEASE_VERSION: ${{ needs.windows.outputs.application-version }}
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/sunplayer-release/sunplayer-release.bundle"
+          git bundle verify "$bundle"
+          git fetch "$bundle" refs/heads/release-build
+          git checkout --detach FETCH_HEAD
+          [[ "$(git rev-parse HEAD)" == "$RELEASE_SHA" ]]
+          [[ "$(cat VERSION.txt)" == "$RELEASE_VERSION" ]]
+
+      - name: Build and smoke-test AppImage in Docker
+        run: packaging/appimage/build.sh
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sunplayer-appimage-${{ inputs.release && needs.windows.outputs.application-version || github.sha }}
+          path: out/appimage/*.AppImage*
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
+
   publish:
     name: Publish release
     if: >-
@@ -627,7 +672,7 @@ jobs:
       github.actor == 'usatiuk' &&
       github.triggering_actor == 'usatiuk' &&
       github.ref == 'refs/heads/main'
-    needs: windows
+    needs: [windows, appimage]
     runs-on: ubuntu-24.04
     permissions:
       actions: read
@@ -643,6 +688,12 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: sunplayer-release-${{ needs.windows.outputs.application-version }}
+          path: ${{ runner.temp }}/sunplayer-release
+
+      - name: Download release AppImage
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sunplayer-appimage-${{ needs.windows.outputs.application-version }}
           path: ${{ runner.temp }}/sunplayer-release
 
       - name: Push exact release revision
@@ -687,24 +738,43 @@ jobs:
           VERSION: ${{ needs.windows.outputs.application-version }}
         run: |
           set -euo pipefail
-          upload="$RUNNER_TEMP/sunplayer-release/SunPlayer_${STORE_VERSION}_x64.msixupload"
+          uploads=(
+            "$RUNNER_TEMP/sunplayer-release/SunPlayer_${STORE_VERSION}_x64.msixupload"
+            "$RUNNER_TEMP/sunplayer-release/SunPlayer-${VERSION}-x86_64.AppImage"
+            "$RUNNER_TEMP/sunplayer-release/SunPlayer-${VERSION}-x86_64.AppImage.sha256"
+          )
+          existing_dir="$(mktemp -d)"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            asset_name="$(basename "$upload")"
-            asset_info="$(gh release view "$TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --json assets \
-              --jq ".assets[] | select(.name == \"$asset_name\") | .size")"
-            if [[ -z "$asset_info" ]]; then
-              gh release upload "$TAG" "$upload" --repo "$GITHUB_REPOSITORY"
-            else
-              if [[ "$asset_info" -le 0 ]]; then
-                echo "Existing release asset $asset_name is incomplete; refusing to replace it." >&2
-                exit 1
+            missing_uploads=()
+            for upload in "${uploads[@]}"; do
+              asset_name="$(basename "$upload")"
+              asset_info="$(gh release view "$TAG" \
+                --repo "$GITHUB_REPOSITORY" \
+                --json assets \
+                --jq ".assets[] | select(.name == \"$asset_name\") | .size")"
+              if [[ -z "$asset_info" ]]; then
+                missing_uploads+=("$upload")
+              else
+                if [[ "$asset_info" -le 0 ]]; then
+                  echo "Existing release asset $asset_name is incomplete; refusing to replace it." >&2
+                  exit 1
+                fi
+                if [[ "$asset_name" == *.AppImage* ]]; then
+                  gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+                    --pattern "$asset_name" --dir "$existing_dir"
+                  if ! cmp "$upload" "$existing_dir/$asset_name"; then
+                    echo "Existing AppImage asset differs; refusing to mix release builds." >&2
+                    exit 1
+                  fi
+                fi
+                echo "Release asset $asset_name already exists; leaving it unchanged."
               fi
-              echo "Release asset $asset_name already exists; leaving it unchanged."
+            done
+            if (( ${#missing_uploads[@]} != 0 )); then
+              gh release upload "$TAG" "${missing_uploads[@]}" --repo "$GITHUB_REPOSITORY"
             fi
           else
-            gh release create "$TAG" "$upload" \
+            gh release create "$TAG" "${uploads[@]}" \
               --repo "$GITHUB_REPOSITORY" \
               --title "SunPlayer $VERSION" \
               --generate-notes \

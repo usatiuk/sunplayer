@@ -2,6 +2,19 @@
 
 ## Status and intent
 
+The [AppImage build](../packaging/appimage/README.md) exercises the packaged QML
+and application A/V playback boundaries in a separate Ubuntu 26.04 container
+without the builder's Qt/QML installation, and checks that the Qt/media
+libraries resolve from the bundle rather than system copies. A public Qt
+icon probe checks rendering of the four symbolic window icons
+with host Adwaita assets and bundled theme/SVG plugins. Portal picker dispatch
+requires a native session-bus check; probe exit alone does not prove it.
+Weston, lavapipe and a Pulse null sink provide the native Wayland, software
+Vulkan and audio edges. This
+does not replace native-driver VAAPI/DRM PRIME or compositor/HDR validation;
+packaged hardware evidence is tracked in the
+[delivery plan](plans/cross-cutting/2026-10-17-docker-appimage.md).
+
 This document defines SunPlayer's testing direction. It is an architectural
 guide, not a requirement to build every layer before the corresponding player
 feature exists.
@@ -87,6 +100,11 @@ The QML shell scenario also protects the full-root application outline's
 media-independent visibility and DPR-derived thickness. The original missing-
 outline regression is additionally covered by an interactive production WSLg
 check because the component test cannot observe the redirected GPU texture.
+The shell runs under both Basic and Fusion styles. It checks all four HDR Lab
+switch label colors, an idle overflow button with a light background/dark
+foreground palette, and visible Tab-reason focus highlights on the custom
+transport and window buttons. This verifies focus indication, not complete
+Tab traversal or native Windows/macOS rendering; those remain desktop checks.
 One bounded run completes; two other attempts timed out on cursor-state
 convergence, so this is narrow path evidence rather than complete WSLg
 lifecycle acceptance.
