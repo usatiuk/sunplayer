@@ -212,6 +212,12 @@ createManagedDescription(ColorManagerBinding& colorManager, std::uint32_t primar
         wp_image_description_creator_params_v1_set_primaries_named(creator, primaries);
     }
     wp_image_description_creator_params_v1_set_tf_named(creator, transferFunction);
+    if (transferFunction == QtWayland::wp_color_manager_v1::transfer_function_st2084_pq) {
+        Q_ASSERT(colorManager.capabilities().explicitLuminances);
+        // PQ defaults to a 0.005-nit primary minimum. Our complete composition
+        // includes zero-black backgrounds, so declare the actual encoding range.
+        wp_image_description_creator_params_v1_set_luminances(creator, 0, 10000, 203);
+    }
     if (volume) {
         auto const& p = volume->primaries;
         wp_image_description_creator_params_v1_set_mastering_display_primaries(
@@ -441,7 +447,7 @@ namespace {
 struct SurfaceDescriptionKey {
     bool operator==(SurfaceDescriptionKey const&) const = default;
     PresentationSurfaceMode mode;
-    WaylandCompositionVolume volume;
+    std::optional<WaylandCompositionVolume> volume;
 };
 } // namespace
 
@@ -822,9 +828,11 @@ LinuxWaylandWindowContext::prepareFrame(QWindow& window, PresentationSurfaceMode
     Q_ASSERT(displaySdr ? m_colorCapabilities.supportsManagedDisplaySdr() : m_colorCapabilities.supportsManagedHdr10());
     SurfaceDescriptionKey const key{
         .mode = mode,
-        .volume = displaySdr ? WaylandCompositionVolume{.primaries = videoPrimaries.isValid() ? videoPrimaries : srgb,
-                                                        .maximumNits = 80}
-                             : waylandCompositionVolume(headroom, videoPrimaries),
+        .volume = displaySdr ? std::optional{WaylandCompositionVolume{
+                                   .primaries = videoPrimaries.isValid() ? videoPrimaries : srgb, .maximumNits = 80}}
+                  : m_colorCapabilities.masteringDisplayPrimaries
+                      ? std::optional{waylandCompositionVolume(headroom, videoPrimaries)}
+                      : std::nullopt,
     };
     if (state.descriptionKey == key) {
         state.pendingTargetDescription.reset();
@@ -836,7 +844,7 @@ LinuxWaylandWindowContext::prepareFrame(QWindow& window, PresentationSurfaceMode
             displaySdr
                 ? createManagedDescription(*state.colorManager, QtWayland::wp_color_manager_v1::primaries_srgb,
                                            QtWayland::wp_color_manager_v1::transfer_function_gamma22, std::nullopt,
-                                           key.volume.primaries)
+                                           key.volume->primaries)
                 : createManagedDescription(*state.colorManager, QtWayland::wp_color_manager_v1::primaries_bt2020,
                                            QtWayland::wp_color_manager_v1::transfer_function_st2084_pq, key.volume);
         state.pendingDescriptionKey = key;

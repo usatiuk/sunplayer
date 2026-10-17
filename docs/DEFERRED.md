@@ -385,3 +385,12 @@ parallel run concurrent with compilation also hit decoder cancellation and
 application playback-smoke timing failures; both passed serially. Investigate
 completion-state synchronization in a playback/test-focused change rather
 than expanding the WCG implementation. See its delivery plan for evidence.
+
+### Native mastering-capable Wayland acceptance
+
+The optional-mastering HDR regression is fixed and native PQ/XR30 works on the
+baseline compositor without mastering support (ADR 0033). Its supported branch
+retains policy/volume tests but requires a different compositor for native
+request/readiness validation. The short native HDR fixture run has no automated
+smoke completion marker; physical luminance and monitor-movement validation
+also remain pending. Do not confuse these evidence gaps with absent HDR support.

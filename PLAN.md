@@ -413,6 +413,8 @@ Documentation: `docs/subsystems/playback/`
 * [x] Final video, subtitle, and UI compositor
 * [x] Windows extended-linear HDR and SDR swapchain presentation
 * [x] Initial macOS EDR and SDR swapchain presentation
+* [x] Restore Wayland PQ HDR without optional mastering metadata and declare
+  explicit zero-black primary luminances (ADR 0033).
 * [x] Managed Wayland display-primary WCG SDR independently of HDR, with matching
   final composition encoding and async native declarations (ADR 0032).
 * [x] Wayland Linux Vulkan SDR presentation foundation

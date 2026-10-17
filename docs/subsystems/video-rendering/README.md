@@ -456,3 +456,9 @@ adaptation, then clamps and gamma-2.2 encodes. The compositor owns physical
 display black/white mapping and calibration. Retained-frame target changes
 rerender without importing the input again. See
 [ADR 0032](../../decisions/0032-support-display-primary-wayland-sdr.md).
+
+Managed Wayland HDR does not depend on optional mastering metadata. Its PQ
+primary range is explicitly zero-to-10000 nits with reference white 203;
+mastering-capable compositors additionally receive the tighter composed volume.
+Otherwise the full primary volume is declared. This changes transport
+eligibility, not decoded-video mapping or output scaling (ADR 0033).

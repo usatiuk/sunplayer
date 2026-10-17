@@ -376,3 +376,8 @@ fallback path, packaging claim, or validation matrix.
 * [x] Cover D65/D50 CAT16, FP16/UNORM8, UI/subtitles and retained input changes.
 
 See the [delivery plan](../../plans/graphics/2026-10-17-wayland-wcg-sdr.md).
+
+* [x] Restore managed HDR when optional mastering metadata is absent; require
+  explicit zero-black PQ luminances, keep tighter metadata where supported
+  (ADR 0033). Native PQ/XR30 presentation is accepted and user-observed HDR;
+  both capability variants are regression-tested.

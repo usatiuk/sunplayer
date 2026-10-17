@@ -10,6 +10,8 @@
 
 Current policy amendments: [ADR 0027](0027-separate-rendering-intent-from-headroom.md) separates rendering intent
 from headroom and updates PQ fallback and Wayland composition declarations.
+[ADR 0033](0033-keep-wayland-hdr-mastering-optional.md) makes mastering optional
+and explicitly includes zero black in the PQ primary volume.
 
 ## Context
 

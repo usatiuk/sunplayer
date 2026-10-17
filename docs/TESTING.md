@@ -823,3 +823,16 @@ preset preservation, default reset, and unchanged raster revision. GPU readback
 covers 0%, 25%, 80%, and 100% through sRGB, gamma-2.2, extended-linear, and PQ
 output. Opaque subtitles remain opaque even at zero brightness; translucent
 colored subtitles retain independent opacity and layer ordering.
+
+### Optional Wayland HDR mastering regression
+
+Both mastering-present and mastering-absent capabilities select HDR with PQ,
+BT.2020 and explicit luminances; missing required encoding capabilities still
+select SDR. Bounded HDR → WCG SDR → managed-sRGB rejection remains covered.
+The native regression run passes `presentation-target`,
+`wayland-color-management` and `ffmpeg-first-frame` with VAAPI required.
+The accepted native PQ description uses `(0,10000,203)`, omits unsupported
+mastering requests and precedes XR30 buffer commits. The user confirms HDR
+appearance. The run has no automated playback-smoke completion marker; this
+is transport/decode acceptance, not complete smoke or physical calibration.
+See [the delivery plan](plans/graphics/2026-10-17-wayland-hdr-optional-mastering.md).

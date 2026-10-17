@@ -43,15 +43,20 @@ tracked in [PLAN.md](PLAN.md). Known limitations are also collected in
 
 ## Composed Wayland color volume
 
-Managed PQ requires `set_mastering_display_primaries` support and declares the
+Managed PQ requires explicit luminances and declares its primary encoding as
+BT.2020/PQ with `(0,10000,203)` luminances. Optional
+`set_mastering_display_primaries` support additionally describes the
 already-mapped composition's gamut and zero-to-ceil(203H) luminance range.
+Without mastering support, omit both mastering requests and retain the full
+primary volume; HDR remains supported.
 Include sRGB UI/subtitles and black letterboxing. P3 and other same-D65 gamut
 unions use BT.2020 with a conservative matrix-derived peak. Different white
 points retain the full transport volume; HDR Lab bypass permits the transport peak.
 One latest asynchronous description is prepared before visible frame submission
 and applied immediately before its matching buffer. No render-loop roundtrip or
 new swapchain is needed for volume changes. Rejection uses existing bounded SDR
-fallback. See [ADR 0027](../../decisions/0027-separate-rendering-intent-from-headroom.md).
+fallback. See [ADR 0027](../../decisions/0027-separate-rendering-intent-from-headroom.md)
+and its [optional-mastering amendment](../../decisions/0033-keep-wayland-hdr-mastering-optional.md).
 
 ## Responsibilities
 
@@ -449,8 +454,10 @@ canonical managed-sRGB description for that graphics generation. Qt selects
 the SDR format; native baseline output is XRGB8888, not a claimed 10-bit mode.
 See [ADR 0032](../../decisions/0032-support-display-primary-wayland-sdr.md).
 
-Named BT.2020, PQ, and the mastering-display feature additionally select a
-stable managed HDR content surface.
+Named BT.2020, PQ and explicit luminances additionally select a stable managed
+HDR content surface. Mastering support is optional: advertise the tighter
+composed target volume when available, otherwise use the full primary volume.
+PQ primary luminances are explicitly `(0,10000,203)` to include zero black.
 SunPlayer applies a ready BT.2020/PQ description to the existing `wl_surface`,
 requires QRhi's `HDR10` plus raw Vulkan RGB10A2/HDR10 and RGB10A2/pass-through
 pairs, and emits the matching final encoding. The surface stays HDR10 while

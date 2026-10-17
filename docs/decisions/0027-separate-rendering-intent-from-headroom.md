@@ -38,6 +38,12 @@ adds an OOTF nor claims physically calibrated HLG reference appearance.
 
 ## Wayland composition declarations
 
+Amended by [ADR 0033](0033-keep-wayland-hdr-mastering-optional.md): mastering
+metadata is optional, not an HDR prerequisite. The original requirement below
+caused a native HDR regression. Current PQ uses explicit `(0,10000,203)`
+primary luminances and omits tighter mastering metadata when unsupported.
+
+
 The encoding stays BT.2020/PQ with reference white 203. Managed HDR additionally
 requires the mastering-display-primaries feature (which also gates mastering
 luminance). Declare composition minimum zero, not the video mapper's black.

@@ -16,7 +16,7 @@ bool WaylandColorManagementCapabilities::supportsManagedDisplaySdr() const {
 }
 
 bool WaylandColorManagementCapabilities::supportsManagedHdr10() const {
-    return supportsManagedSdr() && namedBt2020Primaries && pqTransfer && masteringDisplayPrimaries;
+    return supportsManagedSdr() && namedBt2020Primaries && pqTransfer && explicitLuminances;
 }
 
 WaylandCompositionVolume waylandCompositionVolume(float headroom, ColorPrimaries const& videoPrimaries) {

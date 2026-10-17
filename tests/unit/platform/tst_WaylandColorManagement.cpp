@@ -12,6 +12,7 @@ class WaylandColorManagementTest final : public QObject {
     void incompleteManagedContractUsesUnmanagedSrgb_data();
     void incompleteManagedContractUsesUnmanagedSrgb();
     void completeManagedContractUsesGamma22();
+    void hdr10CapabilitiesChooseStableHdr_data();
     void hdr10CapabilitiesChooseStableHdr();
     void composedVolumeCoversOverlaysAndEncodedPeak();
     void completePreferredDescriptionPublishesDisplayState();
@@ -167,22 +168,38 @@ void WaylandColorManagementTest::displaySdrRejectionIsBounded() {
              PresentationSurfaceMode::ManagedHdr10Pq);
     capabilities.masteringDisplayPrimaries = false;
     QCOMPARE(selectWaylandPresentationMode(WaylandSdrSurfaceMode::ManagedGamma22, capabilities, 8, rejected),
-             PresentationSurfaceMode::ManagedDisplaySdr);
+             PresentationSurfaceMode::ManagedHdr10Pq);
+    QCOMPARE(selectWaylandPresentationMode(WaylandSdrSurfaceMode::ManagedGamma22, capabilities, 7, rejected),
+             PresentationSurfaceMode::ManagedGamma22Sdr);
+}
+
+void WaylandColorManagementTest::hdr10CapabilitiesChooseStableHdr_data() {
+    QTest::addColumn<bool>("masteringSupported");
+    QTest::newRow("optional-mastering-absent") << false;
+    QTest::newRow("optional-mastering-present") << true;
 }
 
 void WaylandColorManagementTest::hdr10CapabilitiesChooseStableHdr() {
+    QFETCH(bool, masteringSupported);
     auto capabilities = completeManagedSdrCapabilities();
-    capabilities.namedBt2020Primaries = false;
+    capabilities.masteringDisplayPrimaries = masteringSupported;
+    capabilities.explicitLuminances = true;
+    capabilities.pqTransfer = true;
     QVERIFY(!capabilities.supportsManagedHdr10());
     capabilities.namedBt2020Primaries = true;
     capabilities.pqTransfer = false;
     QVERIFY(!capabilities.supportsManagedHdr10());
     capabilities.pqTransfer = true;
-    capabilities.masteringDisplayPrimaries = true;
+    capabilities.explicitLuminances = false;
+    QVERIFY(!capabilities.supportsManagedHdr10());
+    capabilities.explicitLuminances = true;
     QVERIFY(capabilities.supportsManagedHdr10());
     WaylandSurfaceSelection const selection = selectWaylandSurface(capabilities);
     QCOMPARE(selection.mode, WaylandSdrSurfaceMode::ManagedGamma22);
     QVERIFY(selection.presentationContract().hdr10Required());
+    QCOMPARE(selection.presentationContract().outputEncoding(false), PresentationOutputEncoding::Bt2020Pq);
+    QCOMPARE(selectWaylandPresentationMode(selection.mode, capabilities, 7, std::nullopt),
+             PresentationSurfaceMode::ManagedHdr10Pq);
 }
 
 void WaylandColorManagementTest::composedVolumeCoversOverlaysAndEncodedPeak() {
@@ -218,12 +235,6 @@ void WaylandColorManagementTest::composedVolumeCoversOverlaysAndEncodedPeak() {
     differentWhite.white = {0.3457f, 0.3585f};
     QCOMPARE(waylandCompositionVolume(4.0f, differentWhite).primaries, conservative.primaries);
     QCOMPARE(waylandCompositionVolume(4.0f, differentWhite).maximumNits, 10000U);
-    auto capabilities = completeManagedSdrCapabilities();
-    capabilities.namedBt2020Primaries = true;
-    capabilities.pqTransfer = true;
-    QVERIFY(!capabilities.supportsManagedHdr10());
-    QCOMPARE(selectWaylandSurface(capabilities).presentationContract().mode,
-             PresentationSurfaceMode::ManagedGamma22Sdr);
 }
 
 void WaylandColorManagementTest::completePreferredDescriptionPublishesDisplayState() {
@@ -295,6 +306,7 @@ void WaylandColorManagementTest::presentationModeTracksCapabilityAndBoundedRejec
 
     capabilities.namedBt2020Primaries = true;
     capabilities.pqTransfer = true;
+    capabilities.explicitLuminances = true;
     capabilities.masteringDisplayPrimaries = true;
     QCOMPARE(selectWaylandPresentationMode(WaylandSdrSurfaceMode::ManagedGamma22, capabilities, 7, std::nullopt),
              PresentationSurfaceMode::ManagedHdr10Pq);

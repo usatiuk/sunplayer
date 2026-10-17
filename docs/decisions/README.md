@@ -47,3 +47,5 @@ with a new decision when the accepted choice changes materially.
 * [0031: Import Linux VAAPI surfaces through libplacebo DRM PRIME](0031-import-vaapi-through-libplacebo-drm-prime.md)
 
 * [0032: Support display-primary SDR independently of Wayland HDR](0032-support-display-primary-wayland-sdr.md)
+
+* [0033: Keep Wayland HDR mastering metadata optional](0033-keep-wayland-hdr-mastering-optional.md)
