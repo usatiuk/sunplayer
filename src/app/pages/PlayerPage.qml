@@ -15,6 +15,7 @@ VideoPage {
     required property PresentationOutputState outputState
     required property WindowCommands windowCommands
     required property SupportController supportController
+    readonly property var applicationUpdate: windowCommands.applicationUpdate
 
     readonly property bool sessionReady:
         session.state === MediaSession.Ready
@@ -462,6 +463,29 @@ VideoPage {
             Layout.alignment: Qt.AlignHCenter
             text: qsTr("Open video…")
             onClicked: root.windowCommands.chooseMedia()
+        }
+
+        Button {
+            objectName: "applicationUpdateButton"
+            Layout.alignment: Qt.AlignHCenter
+            visible: root.applicationUpdate !== null
+                && root.applicationUpdate.available
+            enabled: visible && !root.applicationUpdate.updating
+            text: root.applicationUpdate !== null
+                && root.applicationUpdate.updating
+                    ? qsTr("Updating…") : qsTr("Update available — update and restart")
+            onClicked: root.applicationUpdate.updateAndRestart()
+        }
+
+        Label {
+            objectName: "applicationUpdateError"
+            Layout.alignment: Qt.AlignHCenter
+            Layout.maximumWidth: Math.max(240, root.width - 64)
+            visible: text.length > 0
+            text: root.applicationUpdate !== null
+                ? root.applicationUpdate.error : ""
+            color: "#d7ae68"
+            wrapMode: Text.Wrap
         }
     }
 

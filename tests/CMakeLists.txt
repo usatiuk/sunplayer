@@ -1188,3 +1188,14 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
             LABELS "platform;media;integration;linux" TIMEOUT 30
             ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif ()
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    qt_add_executable(sunplayer_appimage_updater_tests
+            integration/platform/tst_AppImageUpdater.cpp
+            ../src/platform/linux/AppImageUpdater.cpp
+            ../src/platform/linux/AppImageUpdater.h)
+    target_include_directories(sunplayer_appimage_updater_tests PRIVATE ../src)
+    target_link_libraries(sunplayer_appimage_updater_tests PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME appimage-updater COMMAND sunplayer_appimage_updater_tests)
+    set_tests_properties(appimage-updater PROPERTIES LABELS "platform;packaging;integration;linux" TIMEOUT 30)
+endif ()

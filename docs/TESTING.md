@@ -891,3 +891,16 @@ native builds, SMTC/Control Center/media-key interaction, competing-player
 arbitration, app attribution and live teardown require those platform hosts.
 Linux GNOME/KDE shell behavior, long-hold slider extrapolation and daemon-loss
 reconnection also remain native acceptance checks, not claims of wire tests.
+
+## AppImage updater integration
+
+Linux `appimage-updater` exercises the production controller through controlled
+helper processes: staged replacement, executable permissions, stable installed
+path, clean outer-launcher environment and cancellation when media opens. It
+checks observable completed output and cleanup, without testing upstream crypto.
+Basic/Fusion shell tests cover the optional update action only in the empty
+Open video state. AppImage packaging smoke checks the bundled helper/GnuPG,
+and signed builds validate the expected signer and emit matching delta metadata.
+A successful signed old-to-new update through the packaged helper is recorded
+in the [updater delivery plan](plans/cross-cutting/2026-10-17-appimage-updates.md).
+Physical-desktop update/relaunch and hosted release execution are not claimed.

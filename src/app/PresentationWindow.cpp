@@ -47,6 +47,7 @@
 #include "video/DiagnosticVideoSource.h"
 
 #ifdef Q_OS_LINUX
+#include "platform/linux/AppImageUpdater.h"
 #include "platform/linux/LinuxWaylandWindowContext.h"
 #endif
 
@@ -148,6 +149,15 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
     m_diagnosticVideoSource = std::make_unique<DiagnosticVideoSource>(VideoTargetReadback::Disabled);
     m_mediaSession = std::make_unique<MediaSession>(VideoTargetReadback::Disabled);
     m_subtitleSettings = std::make_unique<SubtitleSettings>();
+#ifdef Q_OS_LINUX
+    m_appImageUpdater =
+        AppImageUpdater::create([this] { return m_mediaSession->state() == MediaSession::State::Empty; });
+    connect(m_mediaSession.get(), &MediaSession::sessionChanged, this, [this] {
+        if (m_appImageUpdater && m_mediaSession->state() != MediaSession::State::Empty) {
+            m_appImageUpdater->cancelForMedia();
+        }
+    });
+#endif
     m_playbackPowerInhibitor = createPlaybackPowerInhibitor();
     connect(m_mediaSession.get(), &MediaSession::sessionChanged, this,
             [this] { m_playbackPowerInhibitor->reconcile(*m_mediaSession); });
@@ -232,6 +242,9 @@ PresentationWindow::~PresentationWindow() {
     m_presentationLifecycle = PresentationLifecycle::Releasing;
     delete m_settingsDialog;
     m_nativeMediaControls.reset();
+#ifdef Q_OS_LINUX
+    m_appImageUpdater.reset();
+#endif
     m_engine.reset();
 #ifdef Q_OS_LINUX
     m_outputState.reset();
@@ -688,4 +701,12 @@ bool PresentationWindow::launchRestart() {
         ApplicationError(ApplicationError::Code::RestartFailed, tr("SunPlayer could not restart."),
                          QStringLiteral("QProcess::startDetached rejected the replacement process")));
     return false;
+}
+
+QObject* PresentationWindow::applicationUpdate() const {
+#ifdef Q_OS_LINUX
+    return m_appImageUpdater.get();
+#else
+    return nullptr;
+#endif
 }

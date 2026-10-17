@@ -246,6 +246,7 @@ jobs:
             "$RUNNER_TEMP/sunplayer-release/SunPlayer_${STORE_VERSION}_x64.msixupload"
             "$RUNNER_TEMP/sunplayer-release/SunPlayer-${VERSION}-ubuntu26.04-x86_64.AppImage"
             "$RUNNER_TEMP/sunplayer-release/SunPlayer-${VERSION}-ubuntu26.04-x86_64.AppImage.sha256"
+            "$RUNNER_TEMP/sunplayer-release/SunPlayer-${VERSION}-ubuntu26.04-x86_64.AppImage.zsync"
           )
           existing_dir="$(mktemp -d)"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then

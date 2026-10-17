@@ -313,6 +313,27 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_VERIFY(!windowCommands.windowShortcutsBlocked());
     QTRY_VERIFY(!videoViewport.visible());
     QTRY_VERIFY(emptyState->property("visible").toBool());
+    auto* const updateButton = rootItem->findChild<QQuickItem*>(QStringLiteral("applicationUpdateButton"));
+    auto* const updateError = rootItem->findChild<QQuickItem*>(QStringLiteral("applicationUpdateError"));
+    QVERIFY(updateButton);
+    QVERIFY(updateError);
+    QVERIFY(!updateButton->isVisible());
+    ShellTestApplicationUpdate applicationUpdate;
+    windowCommands.setApplicationUpdate(&applicationUpdate);
+    QVERIFY(!updateButton->isVisible());
+    QVERIFY(applicationUpdate.setProperty("available", true));
+    QTRY_VERIFY(updateButton->isVisible());
+    QVERIFY(QMetaObject::invokeMethod(updateButton, "clicked", Qt::DirectConnection));
+    QCOMPARE(applicationUpdate.updateCount, 1);
+    QVERIFY(applicationUpdate.setProperty("updating", true));
+    QTRY_VERIFY(!updateButton->isEnabled());
+    QVERIFY(updateButton->property("text").toString().contains(QStringLiteral("Updating")));
+    QVERIFY(applicationUpdate.setProperty("updating", false));
+    QVERIFY(applicationUpdate.setProperty("error", QStringLiteral("Update failed")));
+    QTRY_VERIFY(updateError->isVisible());
+    QCOMPARE(updateError->property("text").toString(), QStringLiteral("Update failed"));
+    QVERIFY(applicationUpdate.setProperty("error", QString{}));
+
     QTRY_VERIFY(idleMoreButton->property("visible").toBool());
     // A light control palette on the dark player canvas must keep both the
     // idle icon and the keyboard-focused button readable.
@@ -410,6 +431,7 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(!errorState->property("visible").toBool());
     QVERIFY(!seekSlider->property("visible").toBool());
     supportController.requestHdrLab();
+    QTRY_VERIFY(!updateButton->isVisible());
     QTRY_COMPARE(activeVideoSource.route(), ShellTestActiveVideoSource::Route::Diagnostics);
     rootItem->setSize({760.0, 560.0});
     quickWindow.resize(760, 560);
@@ -440,6 +462,8 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_COMPARE(activeVideoSource.route(), ShellTestActiveVideoSource::Route::Player);
 
     mediaSession.setState(ShellTestMediaSession::State::Opening);
+    QTRY_VERIFY(!updateButton->isVisible());
+    QTRY_VERIFY(!updateError->isVisible());
     QTRY_VERIFY(openingState->property("visible").toBool());
     QVERIFY(!videoViewport.visible());
     QVERIFY(QMetaObject::invokeMethod(cancelOpenButton, "clicked", Qt::DirectConnection));
@@ -450,6 +474,7 @@ void AppShellTest::publishesActiveViewport() {
     // Keep the playback chrome and presentation viewport active so that frame
     // selection can make progress instead of deadlocking behind hasFrame.
     mediaSession.setState(ShellTestMediaSession::State::Ready, false);
+    QTRY_VERIFY(!updateButton->isVisible());
     QVERIFY(QMetaObject::invokeMethod(playerPage, "revealControls", Qt::DirectConnection));
     QTRY_VERIFY(videoViewport.visible());
     QTRY_VERIFY(!idleMoreButton->property("visible").toBool());
@@ -696,6 +721,7 @@ void AppShellTest::publishesActiveViewport() {
     mediaSession.setState(ShellTestMediaSession::State::Ready, true);
     QTRY_VERIFY(!playbackActivityState->property("visible").toBool());
     mediaSession.setState(ShellTestMediaSession::State::Error);
+    QTRY_VERIFY(!updateButton->isVisible());
     QTRY_VERIFY(errorState->property("visible").toBool());
     QVERIFY(retryMediaButton->property("enabled").toBool());
     QVERIFY(QMetaObject::invokeMethod(retryMediaButton, "clicked", Qt::DirectConnection));

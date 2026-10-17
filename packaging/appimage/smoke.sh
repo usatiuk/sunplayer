@@ -42,6 +42,9 @@ pactl info >/dev/null
 # Extracting tests the same payload without requiring FUSE inside Docker.
 cd "$runtime"
 "$1" --appimage-extract > /dev/null
+# The update helper and its GnuPG engine must work without host command lookup.
+PATH=/nonexistent ./squashfs-root/usr/libexec/sunplayer/appimageupdatetool --help
+./squashfs-root/usr/libexec/sunplayer/updater/gpg/usr/bin/gpg --version
 # PulseAudio pulls some FFmpeg libraries through its ALSA plugin dependency.
 # Verify that application libraries actually resolve inside the bundle.
 LD_LIBRARY_PATH="$runtime/squashfs-root/usr/lib" \

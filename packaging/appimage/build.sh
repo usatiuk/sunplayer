@@ -14,7 +14,22 @@ fi
 
 docker build --platform linux/amd64 --target builder --tag sunplayer-appimage-builder \
     "$source_dir/packaging/appimage"
+signing_args=()
+if [[ -n ${APPIMAGE_SIGNING_KEY_FILE:-} ]]; then
+    : "${APPIMAGE_SIGNING_PASSPHRASE_FILE:?Missing signing passphrase file}"
+    : "${APPIMAGE_SIGNING_FINGERPRINT:?Missing signing fingerprint}"
+    signing_args=(
+        --mount "type=bind,source=$APPIMAGE_SIGNING_KEY_FILE,target=/run/signing-key.asc,readonly"
+        --mount "type=bind,source=$APPIMAGE_SIGNING_PASSPHRASE_FILE,target=/run/signing-passphrase,readonly"
+        --env APPIMAGE_SIGNING_KEY_FILE=/run/signing-key.asc
+        --env APPIMAGE_SIGNING_PASSPHRASE_FILE=/run/signing-passphrase
+        --env "APPIMAGE_SIGNING_FINGERPRINT=$APPIMAGE_SIGNING_FINGERPRINT"
+    )
+fi
 docker run --rm --platform linux/amd64 \
+    "${signing_args[@]}" \
+    --tmpfs /source/.local-secrets:mode=0700 \
+    --tmpfs /tmp:mode=1777 \
     --user "$container_user" \
     --mount "type=bind,source=$source_dir,target=/source,readonly" \
     --mount "type=bind,source=$output_dir,target=/output" \

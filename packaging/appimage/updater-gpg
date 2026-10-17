@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+# The updater and distro GnuPG use different crypto library ABIs.
+root=${0%/usr/bin/gpg}
+export LD_LIBRARY_PATH="$root/usr/lib"
+exec "$root/usr/bin/gpg.real" --no-options --no-autostart "$@"

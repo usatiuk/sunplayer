@@ -104,8 +104,23 @@ attaches the AppImage/checksum alongside the existing Store upload; re-runs
 retain existing nonempty assets and upload missing ones. An existing AppImage
 or checksum must match the current artifact byte-for-byte before recovery can
 continue, preventing a rebuilt checksum from describing an older binary.
-No separate updater,
-signing or automatic desktop installation is added.
+Release builds sign the AppImage and publish matching `.AppImage.zsync` delta
+metadata. Only signed releases enable the bundled AppImageUpdate CLI: it checks
+once per launch and offers Update and restart on the empty Open video screen.
+The updater operates on a staged copy, then replaces the existing path and
+relaunches the outer AppImage. Opening media cancels an in-progress update.
+Development builds remain unsigned with updating disabled.
+
+Signing inputs are `APPIMAGE_SIGNING_KEY_FILE`,
+`APPIMAGE_SIGNING_PASSPHRASE_FILE`, and `APPIMAGE_SIGNING_FINGERPRINT`.
+The release job obtains these from the main-only `appimage-release` GitHub
+environment. Files are mounted read-only into the builder, GPG state is temporary
+memory, and the source mount masks `.local-secrets`. Keys never enter Docker
+image layers or the persistent build volume. Upstream tools sign and validate
+the finished output before its checksum and delta metadata are published.
+The initial unsigned releases need one manual download of an updater-enabled
+signed release. Retain the same signing fingerprint; automatic key rotation is
+outside this implementation.
 
 Current delivery evidence is recorded in the
 [AppImage delivery plan](../../docs/plans/cross-cutting/2026-10-17-docker-appimage.md).

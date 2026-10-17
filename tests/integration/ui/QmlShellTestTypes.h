@@ -163,6 +163,23 @@ class ShellTestWindowChromeController final : public QObject {
     bool m_tiled = false;
 };
 
+class ShellTestApplicationUpdate final : public QObject {
+    Q_OBJECT
+    Q_PROPERTY(bool available MEMBER available NOTIFY changed)
+    Q_PROPERTY(bool updating MEMBER updating NOTIFY changed)
+    Q_PROPERTY(QString error MEMBER error NOTIFY changed)
+
+  public:
+    bool available = false;
+    bool updating = false;
+    QString error;
+    int updateCount = 0;
+    Q_INVOKABLE void updateAndRestart() { ++updateCount; }
+
+  signals:
+    void changed();
+};
+
 class ShellTestWindowCommands final : public QWindow {
     Q_OBJECT
     QML_NAMED_ELEMENT(WindowCommands)
@@ -174,6 +191,7 @@ class ShellTestWindowCommands final : public QWindow {
     Q_PROPERTY(bool blankOtherDisplaysInFullscreen READ blankOtherDisplaysInFullscreen WRITE
                    setBlankOtherDisplaysInFullscreen NOTIFY blankOtherDisplaysInFullscreenChanged)
     Q_PROPERTY(QObject* windowChrome READ windowChrome CONSTANT)
+    Q_PROPERTY(QObject* applicationUpdate READ applicationUpdate NOTIFY applicationUpdateChanged)
 
   public:
     explicit ShellTestWindowCommands(QWindow* parent) : QWindow(parent), m_windowChrome(this) {}
@@ -224,8 +242,14 @@ class ShellTestWindowCommands final : public QWindow {
         emit mediaPickerRequested();
     }
     QObject* windowChrome() { return &m_windowChrome; }
+    QObject* applicationUpdate() { return m_applicationUpdate; }
+    void setApplicationUpdate(QObject* updater) {
+        m_applicationUpdate = updater;
+        emit applicationUpdateChanged();
+    }
 
   signals:
+    void applicationUpdateChanged();
     void otherDisplayBlankingAvailableChanged();
     void blankOtherDisplaysInFullscreenChanged();
     void relativeSeekRequested(qlonglong milliseconds);
@@ -233,6 +257,7 @@ class ShellTestWindowCommands final : public QWindow {
     void mediaPickerRequested();
 
   private:
+    QObject* m_applicationUpdate = nullptr;
     ShellTestWindowChromeController m_windowChrome;
     int m_toggleCount = 0;
     int m_openCount = 0;

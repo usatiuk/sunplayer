@@ -5,6 +5,10 @@ APPDIR=${APPDIR:-$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)}
 export LD_LIBRARY_PATH="$APPDIR/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export QT_PLUGIN_PATH="$APPDIR/usr/plugins"
 export QML_IMPORT_PATH="$APPDIR/usr/qml"
+unset SUNPLAYER_APPIMAGE_UPDATES
+if [ -f "$APPDIR/usr/share/sunplayer/appimage-updates" ]; then
+    export SUNPLAYER_APPIMAGE_UPDATES=1
+fi
 # Qt's portal theme can leave file dialogs unopened when FileChooser is absent.
 # Respect explicit theme choices and otherwise select it only on a live portal.
 if [ -z "${QT_QPA_PLATFORMTHEME:-}" ] &&

@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+runtime=$(CDPATH='' cd -- "${0%/*}/updater" && pwd)
+# GPGME discovers only our GnuPG engine, never host gpgconf or gpg.
+export PATH="$runtime/gpg/usr/bin"
+export LD_LIBRARY_PATH="$runtime/lib"
+exec "$runtime/bin/appimageupdatetool" "$@"

@@ -3,7 +3,7 @@ FROM ubuntu:26.04@sha256:c098726dd9b9733f3e885f8de0ef375206a311b0a317eadc40d347b
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install --yes --no-install-recommends \
     build-essential cmake ninja-build pkg-config git ca-certificates curl \
-    desktop-file-utils file dbus-bin \
+    desktop-file-utils file dbus-bin gnupg \
     qt6-base-dev qt6-base-private-dev \
     qt6-declarative-dev qt6-declarative-private-dev qt6-declarative-dev-tools \
     qt6-wayland qt6-wayland-dev qt6-wayland-private-dev \
@@ -24,10 +24,12 @@ RUN set -eu; \
     curl -fL --retry 3 -O https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage; \
     curl -fL --retry 3 -O https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage; \
     curl -fL --retry 3 -O https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage; \
+    curl -fL --retry 3 -O https://github.com/AppImageCommunity/AppImageUpdate/releases/download/continuous/appimageupdatetool-x86_64.AppImage; \
+    curl -fL --retry 3 -O https://github.com/AppImageCommunity/AppImageUpdate/releases/download/continuous/validate-x86_64.AppImage; \
     curl -fL --retry 3 -O https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64; \
     sha256sum --check tools.sha256; \
     chmod +x *.AppImage; \
-    for tool in linuxdeploy linuxdeploy-plugin-qt appimagetool; do \
+    for tool in linuxdeploy linuxdeploy-plugin-qt appimagetool appimageupdatetool validate; do \
         mkdir "$tool"; \
         (cd "$tool" && "../$tool-x86_64.AppImage" --appimage-extract >/dev/null); \
         chmod -R a+rX "$tool/squashfs-root"; \

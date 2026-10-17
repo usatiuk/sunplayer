@@ -1,0 +1,4 @@
+AppImageUpdate.txt: AppImageCommunity/AppImageUpdate, a211784dfc746fdb6d8d32d6bb39add451c1ddeb, LICENSE.txt
+zsync2.txt: AppImageCommunity/zsync2, fc62ae7851ef28dc390a57fbdbe90b0afc5e3102, COPYING
+OpenSSL-1.1.txt: openssl/openssl, OpenSSL_1_1_1w, LICENSE
+Other bundled distro-library notices are included under usr/share/doc and usr/share/common-licenses.

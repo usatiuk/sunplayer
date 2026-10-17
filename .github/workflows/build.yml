@@ -293,6 +293,7 @@ jobs:
   appimage:
     name: Linux · AppImage
     runs-on: ubuntu-24.04
+    environment: ${{ inputs.release && 'appimage-release' || 'appimage-build' }}
     timeout-minutes: 60
 
     steps:
@@ -322,8 +323,31 @@ jobs:
           [[ "$(git rev-parse HEAD)" == "$RELEASE_SHA" ]]
           [[ "$(cat VERSION.txt)" == "$RELEASE_VERSION" ]]
 
-      - name: Build and smoke-test AppImage in Docker
+      - name: Build and smoke-test development AppImage in Docker
+        if: inputs.release != true
         run: packaging/appimage/build.sh
+
+      - name: Build and smoke-test signed release AppImage in Docker
+        if: inputs.release
+        env:
+          APPIMAGE_SIGNING_PRIVATE_KEY: ${{ secrets.APPIMAGE_SIGNING_PRIVATE_KEY }}
+          APPIMAGE_SIGNING_PASSPHRASE: ${{ secrets.APPIMAGE_SIGNING_PASSPHRASE }}
+          APPIMAGE_SIGNING_FINGERPRINT: ${{ vars.APPIMAGE_SIGNING_FINGERPRINT }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_WORKFLOW" == Release && "$GITHUB_EVENT_NAME" == workflow_dispatch && "$GITHUB_REF" == refs/heads/main ]]
+          : "${APPIMAGE_SIGNING_PRIVATE_KEY:?Missing release signing key}"
+          : "${APPIMAGE_SIGNING_PASSPHRASE:?Missing release signing passphrase}"
+          : "${APPIMAGE_SIGNING_FINGERPRINT:?Missing release signing fingerprint}"
+          signing_dir=$(mktemp -d)
+          trap 'rm -rf "$signing_dir"' EXIT
+          umask 077
+          export APPIMAGE_SIGNING_KEY_FILE="$signing_dir/private-key.asc"
+          export APPIMAGE_SIGNING_PASSPHRASE_FILE="$signing_dir/passphrase"
+          printf '%s\n' "$APPIMAGE_SIGNING_PRIVATE_KEY" > "$APPIMAGE_SIGNING_KEY_FILE"
+          printf '%s\n' "$APPIMAGE_SIGNING_PASSPHRASE" > "$APPIMAGE_SIGNING_PASSPHRASE_FILE"
+          unset APPIMAGE_SIGNING_PRIVATE_KEY APPIMAGE_SIGNING_PASSPHRASE
+          packaging/appimage/build.sh
 
       - name: Upload AppImage
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

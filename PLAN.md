@@ -611,6 +611,9 @@ Documentation: `docs/TESTING.md` and `docs/subsystems/testing/`
   * [x] Docker-built x86-64 AppImage and shared CI/release path;
     matching Qt theme/SVG plugins and host portal file-picker integration;
     see [the delivery plan](docs/plans/cross-cutting/2026-10-17-docker-appimage.md).
+  * [x] Signed AppImage self-updates, offered only on the empty Open video screen;
+    signed-package/helper and controller integration validated locally;
+    see [the updater plan](docs/plans/cross-cutting/2026-10-17-appimage-updates.md).
 * [ ] Runtime capability reporting for optional dependency features
 
 Documentation: `docs/subsystems/build/`

@@ -99,6 +99,13 @@ their titlebar and controls. Linux forwards the tiled state already sampled by
 the shadow helper to the chrome controller; no second native observer is needed.
 SSD appearance remains compositor-owned.
 
+Signed AppImage releases expose one optional `applicationUpdate` capability on
+WindowCommands. Player's existing empty state alone shows its update action,
+Updating status and error. It is absent during opening/playback/error and from
+HDR Lab; ordinary builds and other platforms have no updater capability. The
+Linux owner handles subprocesses, staging and restart without graphics or media
+integration. Media leaving Empty cancels an active update.
+
 ## Page structure
 
 Keep one native presentation window, one QML engine, one redirected Qt Quick

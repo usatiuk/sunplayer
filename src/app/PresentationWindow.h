@@ -29,6 +29,7 @@ class PresentationWindow : public QWindow {
     Q_PROPERTY(bool blankOtherDisplaysInFullscreen READ blankOtherDisplaysInFullscreen WRITE
                    setBlankOtherDisplaysInFullscreen NOTIFY blankOtherDisplaysInFullscreenChanged)
     Q_PROPERTY(WindowChromeController* windowChrome READ windowChrome CONSTANT)
+    Q_PROPERTY(QObject* applicationUpdate READ applicationUpdate CONSTANT)
 
   public:
 #ifdef Q_OS_LINUX
@@ -59,6 +60,7 @@ class PresentationWindow : public QWindow {
     bool blankOtherDisplaysInFullscreen() const;
     void setBlankOtherDisplaysInFullscreen(bool enabled);
     WindowChromeController* windowChrome();
+    QObject* applicationUpdate() const;
 
   signals:
     void videoFramePresented(qulonglong contentRevision);
@@ -124,6 +126,7 @@ class PresentationWindow : public QWindow {
     WindowChromeController m_windowChrome;
 #ifdef Q_OS_LINUX
     LinuxWaylandWindowContext& m_windowContext;
+    std::unique_ptr<class AppImageUpdater> m_appImageUpdater;
 #endif
     bool m_restoreMaximizedAfterFullscreen = false;
     bool m_cursorHidden = false;

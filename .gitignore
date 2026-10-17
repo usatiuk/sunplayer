@@ -42,6 +42,7 @@ Makefile
 .qmlls.ini
 
 # Local Windows packages and development certificates
+.local-secrets/
 *.appxsym
 *.cer
 *.msix

@@ -252,6 +252,8 @@ target_link_libraries(sunplayer_diagnostics
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_library(sunplayer_linux_platform STATIC
+            src/platform/linux/AppImageUpdater.cpp
+            src/platform/linux/AppImageUpdater.h
             src/platform/linux/LinuxWaylandWindowContext.cpp
             src/platform/linux/LinuxWaylandWindowContext.h
             src/platform/linux/WaylandColorManagement.cpp
