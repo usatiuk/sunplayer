@@ -488,7 +488,11 @@ checkout credentials, and pins actions by full commit SHA. Every event stages
 and probes a Windows distribution tree. Pull requests and main pushes use
 `Release` and package it with the unsigned `SunPlayerDevelopment` identity;
 main pushes and ordinary manual CI runs upload the tree and MSIX as separate
-seven-day artifacts.
+seven-day artifacts. The CI MSIX publisher includes Microsoft's unsigned-package
+namespace OID. On Windows 11, install that development artifact from elevated
+PowerShell with `Add-AppxPackage -Path .\SunPlayerDevelopment.msix -AllowUnsigned`;
+the existing framework dependency requirements still apply. See
+[Microsoft's unsigned-package instructions](https://learn.microsoft.com/en-us/windows/msix/package/unsigned-package).
 Microsoft's pinned setup action
 provides `winapp` v0.6.0, and CI
 checks every file in that release archive against a reviewed SHA-256 digest

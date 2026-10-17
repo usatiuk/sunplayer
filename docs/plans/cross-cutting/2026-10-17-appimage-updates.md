@@ -210,3 +210,11 @@ forward only the two named signing secrets from Release; actual values remain
 in the main-only environment and are not inherited by ordinary CI. The public
 fingerprint variable already resolved correctly. No image was published.
 Source: [GitHub reusable-workflow environment secrets](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows).
+
+The third dispatch (39040949398) successfully signed and validated the expected
+key, then its smoke container could not traverse the artifact directory. The
+release step's private-file umask leaked into directory creation by build.sh.
+Scope that umask to the two secret writes; ordinary build outputs retain their
+normal readable permissions while secrets stay 0600 inside the 0700 temporary
+directory. The separately requested unsigned Windows CI publisher OID fix is
+included in this correction, without changing Store or loose-run identities.
