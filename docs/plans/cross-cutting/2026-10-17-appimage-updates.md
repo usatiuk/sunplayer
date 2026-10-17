@@ -1,7 +1,7 @@
 # AppImage updates
 
-Status: Implemented and validated locally. User authorized commit/push and a
-minor release (v1.4.0). Hosted release execution is pending.
+Status: Shipped in v1.4.0. Local and hosted package validation pass; release
+assets are published. Physical-desktop update/relaunch remains a manual check.
 
 ## Accepted behavior
 
@@ -218,3 +218,22 @@ Scope that umask to the two secret writes; ordinary build outputs retain their
 normal readable permissions while secrets stay 0600 inside the 0700 temporary
 directory. The separately requested unsigned Windows CI publisher OID fix is
 included in this correction, without changing Store or loose-run identities.
+
+### Published v1.4.0
+
+[Release workflow 39041499671](https://github.com/usatiuk/sunplayer/actions/runs/39041499671)
+completed successfully on attempt 2. Linux signed packaging, expected-signer
+validation, packaged QML/playback smoke and Windows Store packaging pass.
+The first attempt's Windows FFmpeg decoder test exited without diagnostics;
+the same commit passed regular CI, and the unchanged failed-job rerun passed.
+No code, test timeout or retry policy was changed for that isolated failure;
+its cause remains unclassified.
+[Regular CI 39041499643](https://github.com/usatiuk/sunplayer/actions/runs/39041499643)
+also passes all Linux/Windows jobs, including the unsigned Windows CI package.
+
+[v1.4.0](https://github.com/usatiuk/sunplayer/releases/tag/v1.4.0) is published
+with the Store MSIXUPLOAD, signed AppImage, SHA-256 file and `.zsync`.
+All four assets have nonzero uploaded sizes; the AppImage's GitHub asset digest
+matches the uploaded checksum. Release notes explain the manual first download
+for existing unsigned AppImages. Signing material stayed outside Git/artifacts;
+the user-confirmed local backup remains in the ignored directory noted above.
