@@ -572,3 +572,14 @@ cached vcpkg static archives were built for the newer host target; rebuilding
 and validating the
 complete dependency graph for macOS 13 is intentionally deferred to packaging,
 and no release-support claim is made from that binary.
+
+## AppImage builder tool execution
+
+Pinned packaging tools are extracted with fail-fast shell semantics. Their
+payload trees are normalized readable/traversable for the runtime build user;
+linuxdeploy and appimagetool otherwise create root-owned 0700 directories that
+mask failures in rootless local Docker but break rootful CI's non-root UID.
+Builder-image construction executes all three tools as UID 65534 before source
+compilation, checking actual executable/loader access. Runtime UID selection,
+tool hashes, deployment policy and release gating remain unchanged. See the
+[AppImage delivery plan](../../plans/cross-cutting/2026-10-17-docker-appimage.md).

@@ -20,17 +20,27 @@ RUN apt-get update && apt-get install --yes --no-install-recommends \
 WORKDIR /opt/tools
 COPY tools.sha256 .
 # Upstream continuous tags move. Hashes deliberately fail closed on replacement.
-RUN curl -fL --retry 3 -O https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage \
-    && curl -fL --retry 3 -O https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage \
-    && curl -fL --retry 3 -O https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage \
-    && curl -fL --retry 3 -O https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64 \
-    && sha256sum --check tools.sha256 \
-    && chmod +x *.AppImage \
-    && for tool in linuxdeploy linuxdeploy-plugin-qt appimagetool; do \
+RUN set -eu; \
+    curl -fL --retry 3 -O https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage; \
+    curl -fL --retry 3 -O https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage; \
+    curl -fL --retry 3 -O https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage; \
+    curl -fL --retry 3 -O https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64; \
+    sha256sum --check tools.sha256; \
+    chmod +x *.AppImage; \
+    for tool in linuxdeploy linuxdeploy-plugin-qt appimagetool; do \
         mkdir "$tool"; \
         (cd "$tool" && "../$tool-x86_64.AppImage" --appimage-extract >/dev/null); \
+        chmod -R a+rX "$tool/squashfs-root"; \
         ln -s "/opt/tools/$tool/squashfs-root/AppRun" "/usr/local/bin/$tool"; \
     done
+
+# Some AppImage extractors create root-only directories. Check the actual
+# CI execution contract; rootless local builds otherwise mask this defect.
+USER 65534:65534
+RUN cd /tmp && linuxdeploy --version \
+    && linuxdeploy-plugin-qt --help \
+    && appimagetool --version
+USER root
 
 COPY package.sh /usr/local/bin/package-sunplayer
 RUN install -d -m1777 /work

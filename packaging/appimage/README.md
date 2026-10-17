@@ -23,6 +23,12 @@ Docker runs the build as your UID/GID; rootless Docker uses container root,
 which maps to your host user. No host build packages, FUSE mounts, privileged
 containers or GPU access are needed to build.
 
+Builder-image creation verifies the downloaded hashes, extracts with immediate
+failure on errors, and makes the extracted tool trees readable/traversable by
+the build user. All three packaging tools are executed as an unprivileged UID
+before the builder image is accepted, catching permissions or runtime-loader
+failures even when the local Docker daemon is rootless.
+
 ## Runtime contract
 
 The initial baseline is Ubuntu 26.04 x86-64 or a separately validated system

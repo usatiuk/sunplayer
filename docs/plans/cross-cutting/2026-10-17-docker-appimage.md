@@ -176,3 +176,36 @@ passes and the artifact digest differs from the preceding package. Build to a
 separate output directory and atomically replace the normal artifact, keeping
 already-running AppImage mounts intact. Final formatting and diff checks pass.
 No commit, push, CI dispatch or release publication was performed.
+
+## Rootful CI tool-permission repair
+
+CI reached package-sunplayer's linuxdeploy call after successful Release compile
+and installation, then reported command not found. Read-only inspection and
+reproduction established root-owned 0700 extraction directories under
+`/opt/tools/linuxdeploy/squashfs-root` and appimagetool's equivalent. Rootless
+local builds run as container root and masked the failure; running the existing
+image as `--user 1001:1001` reproduced exit 127 through the otherwise-correct
+/usr/local/bin symlink. This was not a PATH or missing-download problem.
+
+The Dockerfile now applies `chmod -R a+rX` to each extracted tool tree, retaining
+read-only/nonexecutable data semantics while allowing directory traversal and
+execution of existing executables. `set -eu` prevents extraction failures being
+masked by a later successful symlink command. Image construction executes
+linuxdeploy --version, linuxdeploy-plugin-qt --help and appimagetool --version
+as UID 65534, then restores root for image setup. This catches the real runtime
+contract without adding a test framework, alternate user policy or new tools.
+All three checks also pass as the previously failing UID 1001 after the repair.
+
+Three independent read-only reviews covered tool installation, pipeline/cache
+behavior, and simplicity/failure handling. A focused recheck found the applied
+fix resolves the findings. No change to release orchestration was warranted:
+the visible Publish release job requires the reusable workflow's release input
+plus the authorized actor/main conditions; normal push CI cannot publish.
+The builder's tool layer was freshly executed, including all pinned downloads
+and checksums, rather than relying on the old cached successful root build.
+Full packaging and separate-container dependency/icon/QML/playback smoke pass.
+Playback reports Pulse, position 1519 ms and 72947 presented audio frames.
+The new AppImage and checksum verify; the normal local artifacts are refreshed
+by atomic file replacement. This proves software-hosted packaging and execution,
+not new physical GPU/HDR evidence. Release conditions were inspected and left
+unchanged. The conversation's CI heartbeat was disabled at the user's request.
