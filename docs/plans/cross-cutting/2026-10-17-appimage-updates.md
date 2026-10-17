@@ -194,3 +194,11 @@ its separate CLI/server/Node distribution machinery is not needed here.
 
 The first signed updater-enabled release must be downloaded manually by users
 of existing unsigned packages. No user data/configuration is migrated.
+
+### Hosted delivery follow-up
+
+The first v1.4.0 dispatch (39040561835) was cancelled before publication after a
+clean-source Docker probe reproduced a missing-directory mount error. Local
+builds had the ignored key directory; CI does not. Mask that directory only
+when it exists, retaining read-only source mounts and release-only signing-file
+mounts. The replacement dispatch uses this small packaging correction.

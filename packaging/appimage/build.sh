@@ -14,6 +14,10 @@ fi
 
 docker build --platform linux/amd64 --target builder --tag sunplayer-appimage-builder \
     "$source_dir/packaging/appimage"
+source_mask_args=()
+if [[ -d "$source_dir/.local-secrets" ]]; then
+    source_mask_args=(--tmpfs /source/.local-secrets:mode=0700)
+fi
 signing_args=()
 if [[ -n ${APPIMAGE_SIGNING_KEY_FILE:-} ]]; then
     : "${APPIMAGE_SIGNING_PASSPHRASE_FILE:?Missing signing passphrase file}"
@@ -28,7 +32,7 @@ if [[ -n ${APPIMAGE_SIGNING_KEY_FILE:-} ]]; then
 fi
 docker run --rm --platform linux/amd64 \
     "${signing_args[@]}" \
-    --tmpfs /source/.local-secrets:mode=0700 \
+    "${source_mask_args[@]}" \
     --tmpfs /tmp:mode=1777 \
     --user "$container_user" \
     --mount "type=bind,source=$source_dir,target=/source,readonly" \
