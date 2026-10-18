@@ -264,10 +264,17 @@ update-request path rerenders paused video when it changes.
 
 `ApplicationSettings` persists playback volume, the supported fullscreen
 display-blanking preference, and global subtitle appearance. It
-default-constructs `QSettings` in
-user-scoped native format, so Qt selects the Windows registry, macOS
-preferences, or an XDG configuration file without platform-specific storage
-code in SunPlayer. Organization and system fallbacks are disabled.
+uses `QSettings` with organization and system fallbacks disabled. Packaged
+Windows builds store `settings.ini` in the package-owned WinRT
+`ApplicationData.Current.LocalFolder`; a Windows-only constructor resolves the
+path and balances its own runtime initialization. Unexpected package-identity
+or LocalFolder resolution failures are fatal deployment errors, not a trigger
+for another store. Unpackaged Windows retains the native registry store; macOS
+preferences and Linux XDG storage are unchanged. There is no migration or dual
+write. Explicit-path test/smoke stores are marked temporary independently of
+format, so production INI settings retain normal Jellyfin credential identity
+and automatic restoration. See the
+[LocalFolder delivery plan](../../plans/cross-cutting/2026-10-18-windows-settings-localfolder.md).
 
 Stored values are validated before the existing runtime owners receive them:
 finite volume in `[0, 1]` goes to `MediaSession`, while display blanking is

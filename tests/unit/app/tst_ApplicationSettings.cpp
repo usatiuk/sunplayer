@@ -83,6 +83,8 @@ void ApplicationSettingsTest::defaultsAndRoundTrip() {
     writeValue(path, QStringLiteral("future/value"), 17);
     {
         ApplicationSettings settings(path);
+        QVERIFY(settings.isTemporaryStore());
+        QCOMPARE(settings.format(), QSettings::IniFormat);
         ApplicationSettings::Values const defaults = settings.load();
         QVERIFY(!defaults.volume);
         QVERIFY(!defaults.preferHdr10Plus);

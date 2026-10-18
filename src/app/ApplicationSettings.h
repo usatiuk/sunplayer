@@ -24,6 +24,7 @@ class ApplicationSettings final {
     Values load();
     QString filePath() const { return m_settings.fileName(); }
     QSettings::Format format() const { return m_settings.format(); }
+    bool isTemporaryStore() const { return m_temporaryStore; }
     void setVolume(qreal volume);
     void setPreferHdr10Plus(bool enabled);
     void setAbsolutePqEnabled(bool enabled);
@@ -39,5 +40,6 @@ class ApplicationSettings final {
     void reportFault(QString const& reason, QString const& key = {});
 
     QSettings m_settings;
+    bool m_temporaryStore = false;
     bool m_faultReported = false;
 };

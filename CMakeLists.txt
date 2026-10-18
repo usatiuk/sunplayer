@@ -569,6 +569,7 @@ if (WIN32)
     )
     target_sources(sunplayer PRIVATE
             packaging/windows/SunPlayer.rc
+            src/platform/windows/WindowsApplicationSettings.cpp
             src/platform/windows/WindowsDesktopIntegration.cpp
             src/platform/windows/WindowsDesktopIntegration.h
             src/platform/windows/WindowsDisplayStateProvider.cpp

@@ -153,7 +153,7 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
     m_diagnosticVideoSource = std::make_unique<DiagnosticVideoSource>(VideoTargetReadback::Disabled);
     m_mediaSession = std::make_unique<MediaSession>(VideoTargetReadback::Disabled);
     m_jellyfin = std::make_unique<JellyfinBrowser>(m_applicationSettings.filePath(), m_applicationSettings.format(),
-                                                   m_applicationSettings.format() == QSettings::NativeFormat);
+                                                   !m_applicationSettings.isTemporaryStore());
     m_jellyfinPlayback = std::make_unique<JellyfinPlaybackAdapter>(*m_jellyfin, *m_mediaSession);
     connect(m_jellyfinPlayback.get(), &JellyfinPlaybackAdapter::mediaOpened, this,
             &PresentationWindow::mediaOpenRequested);

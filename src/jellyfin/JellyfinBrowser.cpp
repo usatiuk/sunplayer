@@ -14,10 +14,10 @@ void logSettings(QSettings const& settings, char const* stage) {
 }
 } // namespace
 
-JellyfinBrowser::JellyfinBrowser(QString const& settingsPath, QSettings::Format format, bool shouldRestore,
+JellyfinBrowser::JellyfinBrowser(QString const& settingsPath, QSettings::Format format, bool persistentCredentials,
                                  QObject* parent)
     : QAbstractListModel(parent),
-      m_tokens(format == QSettings::NativeFormat
+      m_tokens(persistentCredentials
                    ? QStringLiteral("jellyfin-token")
                    : QStringLiteral("jellyfin-test-") +
                          QString::fromLatin1(
@@ -32,7 +32,7 @@ JellyfinBrowser::JellyfinBrowser(QString const& settingsPath, QSettings::Format 
         clearLibrary();
         showMessage(tr("Login has expired. Sign in again."));
     });
-    if (shouldRestore) {
+    if (persistentCredentials) {
         QTimer::singleShot(0, this, &JellyfinBrowser::restore);
     }
 }

@@ -15,6 +15,12 @@ qt_add_executable(sunplayer_application_settings_tests
         ../src/app/ApplicationSettings.h
 )
 
+if (WIN32)
+    target_sources(sunplayer_application_settings_tests PRIVATE
+            ../src/platform/windows/WindowsApplicationSettings.cpp)
+    target_link_libraries(sunplayer_application_settings_tests PRIVATE RuntimeObject WindowsApp)
+endif ()
+
 qt_add_executable(sunplayer_subtitle_settings_tests
         unit/subtitles/tst_SubtitleSettings.cpp
         ../src/subtitles/SubtitleSettings.cpp

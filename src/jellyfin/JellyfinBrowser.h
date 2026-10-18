@@ -44,7 +44,8 @@ class JellyfinBrowser final : public QAbstractListModel {
     };
     enum HomeSection { ContinueWatching, RecentMovies, RecentShows };
     Q_ENUM(HomeSection)
-    JellyfinBrowser(QString const& settingsPath, QSettings::Format format, bool restore, QObject* parent = nullptr);
+    JellyfinBrowser(QString const& settingsPath, QSettings::Format format, bool persistentCredentials,
+                    QObject* parent = nullptr);
     int rowCount(QModelIndex const& parent = {}) const override;
     QVariant data(QModelIndex const& index, int role) const override;
     QHash<int, QByteArray> roleNames() const override;

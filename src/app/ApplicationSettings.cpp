@@ -131,9 +131,12 @@ std::optional<T> parseChoice(QVariant const& value, std::initializer_list<std::p
 
 } // namespace
 
+#ifndef Q_OS_WIN
 ApplicationSettings::ApplicationSettings() : m_settings() { m_settings.setFallbacksEnabled(false); }
+#endif
 
-ApplicationSettings::ApplicationSettings(QString const& filePath) : m_settings(filePath, QSettings::IniFormat) {
+ApplicationSettings::ApplicationSettings(QString const& filePath)
+    : m_settings(filePath, QSettings::IniFormat), m_temporaryStore(true) {
     m_settings.setFallbacksEnabled(false);
 }
 

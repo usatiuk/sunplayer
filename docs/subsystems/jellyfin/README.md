@@ -179,3 +179,14 @@ stages and PasswordVault result/HRESULT records now identify the earliest
 failure without credentials or account/server values; retrieve the session
 file through About → Open logs. This instrumentation does not claim the
 underlying metadata write failure is fixed.
+
+
+Installed diagnostics confirmed PasswordVault write success but the first
+QSettings registry write failed with AccessError. The user confirmed ordinary
+settings persist in the same unpackaged binaries. Packaged Windows now shares
+one QSettings INI file in ApplicationData.Current.LocalFolder for preferences
+and Jellyfin metadata. Tokens remain in PasswordVault. Production credential
+identity/restoration follows explicit temporary-store intent, not QSettings
+format; test/smoke stores keep unique token entries and skip restoration.
+Installed persistence and restart/restore remain user acceptance; see the
+[LocalFolder plan](../../plans/cross-cutting/2026-10-18-windows-settings-localfolder.md).
