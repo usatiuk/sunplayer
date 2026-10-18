@@ -431,7 +431,7 @@ VideoPage {
     Rectangle {
         anchors.fill: parent
         visible: !root.frameReady
-        color: "#000000"
+        color: root.sessionActive ? "#000000" : "#181818"
     }
 
     MouseArea {

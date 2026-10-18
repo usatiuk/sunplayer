@@ -1148,7 +1148,7 @@ void AppShellTest::publishesActiveViewport() {
     auto* title = rootItem->findChild<QQuickItem*>(QStringLiteral("jellyfinTitle"));
     auto* browserBackground = rootItem->findChild<QQuickItem*>(QStringLiteral("jellyfinBackground"));
     QVERIFY(tabs && title && browserBackground);
-    QCOMPARE(browserBackground->property("color").value<QColor>(), QColor(Qt::black));
+    QCOMPARE(browserBackground->property("color").value<QColor>(), QColor(QStringLiteral("#181818")));
     for (int width : {1280, 800, 760}) {
         rootItem->setSize({qreal(width), 900});
         quickWindow.resize(width, 900);

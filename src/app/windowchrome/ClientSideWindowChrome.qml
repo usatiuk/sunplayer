@@ -39,7 +39,7 @@ Item {
         visible: root.available
         enabled: visible && root.titleRequested
         opacity: root.titleRequested ? 1 : 0
-        color: "#000000"
+        color: "#181818"
 
         Behavior on opacity {
             NumberAnimation {

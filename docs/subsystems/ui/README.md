@@ -489,6 +489,10 @@ and receive the app-wide appearance request; OS-owned pickers may keep their
 own behavior. No per-control theme or palette machinery is added. See the
 [dark-appearance plan](../../plans/ui/2026-10-18-dark-appearance.md).
 
+The browser, idle Open video canvas and custom title bar use dark grey
+(`#181818`) so dark stock scrollbars remain distinguishable. Playback loading
+and video letterboxing retain black.
+
 Controls retain style-provided foreground/background pairs. Do not force
 application or shell-wide foreground colors onto native button backgrounds.
 Only text directly on the custom dark canvas is explicitly light, including

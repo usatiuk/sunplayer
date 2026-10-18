@@ -12,7 +12,7 @@ VideoPage {
     Rectangle {
         anchors.fill: parent
         objectName: "jellyfinBackground"
-        color: "#000000"
+        color: "#181818"
     }
     Control {
         anchors.fill: parent
