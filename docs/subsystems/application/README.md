@@ -421,3 +421,12 @@ play-intent holds and corrects position at hold/resume and actual jumps; shell
 extrapolation during long holds is best-effort. Windows/macOS native builds and
 interaction require host validation; see the
 [delivery plan](../../plans/cross-cutting/2026-10-17-native-media-controls.md).
+
+## Jellyfin ownership
+
+The window owns one JellyfinBrowser and JellyfinPlaybackAdapter alongside
+MediaSession, outside QML/graphics lifetimes. Typed constructor injection gives
+the Quick scene its browser. Window close/application quit captures final
+position before teardown and permits a bounded three-second report completion
+window. Temporary INI smoke settings disable remembered-login restoration.
+See [Jellyfin](../jellyfin/README.md) for service/credential/reporting contracts.

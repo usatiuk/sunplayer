@@ -23,6 +23,7 @@ class ApplicationSettings final {
 
     Values load();
     QString filePath() const { return m_settings.fileName(); }
+    QSettings::Format format() const { return m_settings.format(); }
     void setVolume(qreal volume);
     void setPreferHdr10Plus(bool enabled);
     void setAbsolutePqEnabled(bool enabled);

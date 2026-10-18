@@ -62,6 +62,14 @@ void FfmpegDependencyTest::pinnedMinimalFeatureSet() {
 #else
 #error "Define the required FFmpeg hardware facilities for this platform"
 #endif
+    void* opaque = nullptr;
+    QSet<QByteArray> protocols;
+    while (auto* protocol = avio_enum_protocols(&opaque, 0)) {
+        protocols.insert(protocol);
+    }
+    for (auto* required : {"http", "https", "tcp", "tls"}) {
+        QVERIFY2(protocols.contains(required), required);
+    }
     QVERIFY(avcodec_find_decoder(AV_CODEC_ID_H264));
     QVERIFY(avcodec_find_decoder(AV_CODEC_ID_HEVC));
 }

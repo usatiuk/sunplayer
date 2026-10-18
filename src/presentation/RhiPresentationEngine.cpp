@@ -84,13 +84,13 @@ RhiPresentationEngine::RhiPresentationEngine(QWindow& window, PresentationOutput
                                              PresentationSettings& settings, ActiveVideoSource& videoSource,
                                              DiagnosticVideoSource& diagnosticSource, MediaSession& mediaSession,
                                              VideoViewportState& videoViewport, SubtitleSettings& subtitleSettings,
-                                             SupportController& supportController,
+                                             SupportController& supportController, JellyfinBrowser& jellyfin,
                                              PresentationSurfaceContract surfaceContract,
                                              PresentationSurfaceController* surfaceController, QObject* parent)
     : QObject(parent), m_window(window), m_outputState(outputState), m_settings(settings), m_videoSource(videoSource),
       m_diagnosticSource(diagnosticSource), m_mediaSession(mediaSession), m_videoViewport(videoViewport),
-      m_subtitleSettings(subtitleSettings), m_supportController(supportController), m_surfaceContract(surfaceContract),
-      m_surfaceController(surfaceController) {
+      m_subtitleSettings(subtitleSettings), m_supportController(supportController), m_jellyfin(jellyfin),
+      m_surfaceContract(surfaceContract), m_surfaceController(surfaceController) {
     Q_ASSERT((m_surfaceController != nullptr) ==
              (m_surfaceContract.mode != PresentationSurfaceMode::AdaptiveExtendedLinear));
     m_deviceRecoveryTimer.setSingleShot(true);
@@ -588,8 +588,9 @@ bool RhiPresentationEngine::initializeDevice() {
     Q_ASSERT(m_graphicsDevice);
     Q_ASSERT(m_rhi);
 
-    m_quickUi = std::make_unique<QuickUiLayer>(m_window, *m_rhi, m_outputState, m_settings, m_diagnosticSource,
-                                               m_mediaSession, m_videoSource, m_videoViewport, m_supportController);
+    m_quickUi =
+        std::make_unique<QuickUiLayer>(m_window, *m_rhi, m_outputState, m_settings, m_diagnosticSource, m_mediaSession,
+                                       m_videoSource, m_videoViewport, m_supportController, m_jellyfin);
     connect(m_quickUi.get(), &QuickUiLayer::updateRequested, this, &RhiPresentationEngine::requestFrame);
     QuickUiLayer::InitializationResult const result = m_quickUi->initialize();
     if (result == QuickUiLayer::InitializationResult::DeviceLost) {

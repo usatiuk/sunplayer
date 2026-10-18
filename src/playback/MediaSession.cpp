@@ -364,8 +364,7 @@ void MediaSession::invalidateGraphicsDevice() {
     if (m_state != State::Opening && m_state != State::Ready) {
         return;
     }
-    QString const path = m_mediaUrl.toLocalFile();
-    if (path.isEmpty()) {
+    if (!m_input.isValid()) {
         return;
     }
 
@@ -399,8 +398,7 @@ void MediaSession::setVideoDecodeCapability(VideoHardwareDecodeCapability capabi
     m_reopenAfterGraphicsRecovery = false;
     std::int64_t const recoveryPosition = std::exchange(m_graphicsRecoveryPositionMicroseconds, 0);
     bool const seeking = std::exchange(m_graphicsRecoverySeeking, false);
-    QString const path = m_mediaUrl.toLocalFile();
-    if (!path.isEmpty()) {
+    if (m_input.isValid()) {
         restartAt(recoveryPosition, m_videoDecodeCapability, seeking);
     }
 }
@@ -408,26 +406,33 @@ void MediaSession::setVideoDecodeCapability(VideoHardwareDecodeCapability capabi
 void MediaSession::openMedia(QUrl const& url) {
     Q_ASSERT(QThread::currentThread() == thread());
     if (!url.isValid() || !url.isLocalFile()) {
-        failWithoutWorker(url, tr("Only local media files are supported right now."));
+        failWithoutWorker(url, tr("Open a local file or choose media from the Jellyfin browser."));
         return;
     }
+    openMedia(MediaInput(url.toLocalFile()));
+}
 
-    QString const path = url.toLocalFile();
-    if (path.isEmpty()) {
-        failWithoutWorker(url, tr("The selected media path is empty."));
+void MediaSession::openMedia(MediaInput const& input, qlonglong startingPositionMilliseconds) {
+    Q_ASSERT(QThread::currentThread() == thread());
+    if (!input.isValid() || startingPositionMilliseconds < 0 ||
+        startingPositionMilliseconds > std::numeric_limits<qlonglong>::max() / 1000) {
+        failWithoutWorker(input.publicUrl(), tr("The media input or starting position is invalid."));
         return;
     }
+    emit mediaClosing(m_mediaItemId, positionMilliseconds());
+    m_input = input;
     m_playbackIntent = PlaybackIntent::Playing;
     m_audioPlayIntent.store(true, std::memory_order_release);
     m_reopenAfterGraphicsRecovery = false;
     m_graphicsRecoveryPositionMicroseconds = 0;
     m_graphicsRecoverySeeking = false;
     m_hardwareImportFallbackConsumed = false;
-    startOpen(url, path, m_videoDecodeCapability);
+    startOpen(m_videoDecodeCapability, startingPositionMilliseconds * 1000);
 }
 
 void MediaSession::cancel() {
     Q_ASSERT(QThread::currentThread() == thread());
+    emit mediaClosing(m_mediaItemId, positionMilliseconds());
     advanceGeneration();
     std::uint64_t const generation = m_playbackGeneration;
     cancelPipeline();
@@ -444,6 +449,7 @@ void MediaSession::cancel() {
     m_audioPlayIntent.store(true, std::memory_order_release);
     m_state = State::Empty;
     m_mediaItemId = 0;
+    m_input = {};
     m_mediaUrl = QUrl{};
     m_displayName.clear();
     m_errorMessage.clear();
@@ -458,10 +464,13 @@ void MediaSession::cancel() {
 
 void MediaSession::retry() {
     Q_ASSERT(QThread::currentThread() == thread());
-    if (!m_mediaUrl.isValid()) {
+    if (!m_input.isValid()) {
         return;
     }
-    openMedia(m_mediaUrl);
+    m_playbackIntent = PlaybackIntent::Playing;
+    m_reopenAfterGraphicsRecovery = false;
+    m_hardwareImportFallbackConsumed = false;
+    restartAt(0, m_videoDecodeCapability, false);
 }
 
 void MediaSession::play() {
@@ -471,8 +480,7 @@ void MediaSession::play() {
         return;
     }
     if (m_ended || stopped()) {
-        QString const path = m_mediaUrl.toLocalFile();
-        if (!path.isEmpty()) {
+        if (m_input.isValid()) {
             m_playbackIntent = PlaybackIntent::Playing;
             m_hardwareImportFallbackConsumed = false;
             if (m_reopenAfterGraphicsRecovery) {
@@ -560,6 +568,9 @@ void MediaSession::haltPlayback(PlaybackIntent intent) {
     // Freeze before changing intent: the monotonic snapshot advances only
     // while playing. Record intent before observing a fallible output edge.
     auto const position = mediaClockSnapshotAt(now).positionMicroseconds;
+    if (intent == PlaybackIntent::Stopped) {
+        emit playbackFinishing(m_mediaItemId, position / 1000);
+    }
     m_playbackIntent = intent;
     m_audioPlayIntent.store(false, std::memory_order_release);
     if (m_state == State::Ready) {
@@ -703,21 +714,20 @@ void MediaSession::selectAudioStream(int streamIndex) {
     restartAt(position, m_activeVideoDecodeCapability, false);
 }
 
-void MediaSession::startOpen(QUrl const& url, QString const& path, VideoHardwareDecodeCapability hardwareDecode) {
-    startDecode(url, path, std::move(hardwareDecode), 0, true, false);
+void MediaSession::startOpen(VideoHardwareDecodeCapability hardwareDecode, std::int64_t positionMicroseconds) {
+    startDecode(std::move(hardwareDecode), positionMicroseconds, true, positionMicroseconds > 0);
 }
 
 void MediaSession::restartAt(std::int64_t positionMicroseconds, VideoHardwareDecodeCapability hardwareDecode,
                              bool seeking) {
-    QString const path = m_mediaUrl.toLocalFile();
-    if (path.isEmpty()) {
+    if (!m_input.isValid()) {
         return;
     }
-    startDecode(m_mediaUrl, path, std::move(hardwareDecode), positionMicroseconds, false, seeking);
+    startDecode(std::move(hardwareDecode), positionMicroseconds, false, seeking);
 }
 
-void MediaSession::startDecode(QUrl const& url, QString const& path, VideoHardwareDecodeCapability hardwareDecode,
-                               std::int64_t requestedPositionMicroseconds, bool newMedia, bool seeking) {
+void MediaSession::startDecode(VideoHardwareDecodeCapability hardwareDecode, std::int64_t requestedPositionMicroseconds,
+                               bool newMedia, bool seeking) {
     Q_ASSERT(requestedPositionMicroseconds >= 0);
     auto const previousPosition = this->positionMilliseconds();
     advanceGeneration();
@@ -733,8 +743,8 @@ void MediaSession::startDecode(QUrl const& url, QString const& path, VideoHardwa
     if (newMedia) {
         // An open occurrence retains its identity across decoder restarts.
         m_mediaItemId = generation;
-        m_mediaUrl = url;
-        m_displayName = QFileInfo(path).fileName();
+        m_mediaUrl = m_input.publicUrl();
+        m_displayName = m_input.displayName;
         resetMediaTracks();
         m_selectedSubtitleStreamIndex = -1;
         m_subtitleTracks.setTracks({}, -1);
@@ -751,14 +761,15 @@ void MediaSession::startDecode(QUrl const& url, QString const& path, VideoHardwa
                                                        : "event=playback.restart_start")
                                          << "generation=" + QString::number(generation)
                                          << "positionUs=" + QString::number(requestedPositionMicroseconds);
-    qCDebug(sunplayerLogPlayback).noquote() << "event=playback.decode_request"
-                                          << "generation=" + QString::number(generation) << "path=" + path;
+    qCDebug(sunplayerLogPlayback).noquote()
+        << "event=playback.decode_request"
+        << "generation=" + QString::number(generation) << "media=" + m_input.displayName;
 
     std::int64_t decodePosition = requestedPositionMicroseconds;
     if (m_durationMicroseconds && decodePosition >= *m_durationMicroseconds) {
         decodePosition = std::max<std::int64_t>(0, *m_durationMicroseconds - 1);
     }
-    bool const seekToTarget = !newMedia && m_timelineOrigin.has_value();
+    bool const seekToTarget = requestedPositionMicroseconds > 0 || (!newMedia && m_timelineOrigin.has_value());
 
     VideoFrameIdentity const identity{
         .playbackGeneration = generation,
@@ -771,7 +782,7 @@ void MediaSession::startDecode(QUrl const& url, QString const& path, VideoHardwa
             {
                 .video =
                     {
-                        .path = path,
+                        .input = m_input,
                         .firstFrameIdentity = identity,
                         .hardwareDecode = std::move(hardwareDecode),
                         .extraHardwareFrames = static_cast<int>(VideoFrameQueue::capacity + 2),
@@ -1146,6 +1157,7 @@ void MediaSession::completeDecode(std::uint64_t generation, FfmpegMediaDecodeRes
         emit subtitleChanged();
     }
     if (!result.isSuccess()) {
+        emit playbackFinishing(m_mediaItemId, positionMilliseconds());
         std::string audioFailure;
         if (m_audioSink) {
             audioFailure = m_audioSink->failureReason();
@@ -1260,6 +1272,8 @@ void MediaSession::handleVideoFrameChanged() {
 }
 
 void MediaSession::failWithoutWorker(QUrl const& url, QString const& message) {
+    emit mediaClosing(m_mediaItemId, positionMilliseconds());
+    m_input = {};
     advanceGeneration();
     std::uint64_t const generation = m_playbackGeneration;
     cancelPipeline();
@@ -1292,8 +1306,7 @@ void MediaSession::handlePresentationFailure(VideoFailure const& failure) {
         return;
     }
     if (failure.kind == VideoFailureKind::HardwareFrameImportUnavailable && !m_hardwareImportFallbackConsumed) {
-        QString const path = m_mediaUrl.toLocalFile();
-        if (!path.isEmpty()) {
+        if (m_input.isValid()) {
             std::int64_t const restartPosition =
                 mediaClockSnapshotAt(std::chrono::steady_clock::now()).positionMicroseconds;
             m_hardwareImportFallbackConsumed = true;
@@ -1312,6 +1325,7 @@ void MediaSession::handlePresentationFailure(VideoFailure const& failure) {
         }
     }
 
+    emit playbackFinishing(m_mediaItemId, positionMilliseconds());
     advanceGeneration();
     std::uint64_t const generation = m_playbackGeneration;
     cancelPipeline();
@@ -1593,6 +1607,7 @@ bool MediaSession::failCurrentAudioOutput(AudioPresentationSnapshot const& snaps
         << "event=playback.audio_output_failed"
         << "generation=" + QString::number(m_playbackGeneration) << "error=" + reason;
 
+    emit playbackFinishing(m_mediaItemId, positionMilliseconds());
     std::uint64_t const generation = m_playbackGeneration;
     cancelPipeline();
     m_frameQueue.reset(generation);
@@ -1775,6 +1790,27 @@ MediaSession::selectFrameForPresentation(std::chrono::steady_clock::time_point n
     }
 
     MediaClockSnapshot const clock = mediaClockSnapshotAt(now, audio ? &*audio : nullptr);
+    // Video-only remote sources have no audio sink to freeze their clock when
+    // network reads stall. Reconcile at the last displayed frame's endpoint.
+    if (m_input.isRemote() && !currentGenerationUsesAudioClock() && !m_decoderDrained && playRequested()) {
+        auto const next = m_frameQueue.front(m_playbackGeneration);
+        if (m_playbackInterruption == PlaybackInterruption::Buffering) {
+            if (!next) {
+                return {};
+            }
+            m_clockAnchorTime = now;
+            setPlaybackInterruption(PlaybackInterruption::None);
+        } else if (auto end = m_frameScheduler.currentFrameEnd(); !next && end && clock.positionMicroseconds >= *end) {
+            m_clockAnchorMediaMicroseconds = *end;
+            m_clockAnchorTime = now;
+            setPlaybackInterruption(PlaybackInterruption::Buffering);
+            return {};
+        }
+    } else if (m_playbackInterruption == PlaybackInterruption::Buffering && !currentGenerationUsesAudioClock() &&
+               m_decoderDrained) {
+        m_clockAnchorTime = now;
+        setPlaybackInterruption(PlaybackInterruption::None);
+    }
     bool const playbackInputDrained =
         m_decoderDrained && (!currentGenerationUsesAudioClock() || m_audioTailClockActive);
     VideoFrameSelection selection = m_frameScheduler.selectForPresentation(

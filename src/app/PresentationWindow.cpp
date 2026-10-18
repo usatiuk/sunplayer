@@ -36,6 +36,8 @@
 #include "app/WindowShortcut.h"
 #include "diagnostics/LogCategories.h"
 #include "graphics/GraphicsBackendFactory.h"
+#include "jellyfin/JellyfinBrowser.h"
+#include "jellyfin/JellyfinPlaybackAdapter.h"
 #include "platform/DisplayStateProvider.h"
 #include "platform/NativeMediaControls.h"
 #include "platform/PlaybackPowerInhibitor.h"
@@ -149,6 +151,12 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
     m_settings = std::make_unique<PresentationSettings>(nullptr);
     m_diagnosticVideoSource = std::make_unique<DiagnosticVideoSource>(VideoTargetReadback::Disabled);
     m_mediaSession = std::make_unique<MediaSession>(VideoTargetReadback::Disabled);
+    m_jellyfin = std::make_unique<JellyfinBrowser>(m_applicationSettings.filePath(), m_applicationSettings.format(),
+                                                   m_applicationSettings.format() == QSettings::NativeFormat);
+    m_jellyfinPlayback = std::make_unique<JellyfinPlaybackAdapter>(*m_jellyfin, *m_mediaSession);
+    connect(m_jellyfinPlayback.get(), &JellyfinPlaybackAdapter::mediaOpened, this,
+            &PresentationWindow::mediaOpenRequested);
+    qGuiApp->installEventFilter(this);
     m_subtitleSettings = std::make_unique<SubtitleSettings>();
 #ifdef Q_OS_LINUX
     m_appImageUpdater =
@@ -320,7 +328,39 @@ void PresentationWindow::restartApplication() {
     }
 }
 
-void PresentationWindow::quitApplication() { QCoreApplication::quit(); }
+void PresentationWindow::quitApplication() {
+    if (m_quitPending) {
+        return;
+    }
+    m_quitPending = true;
+    m_jellyfinPlayback->close();
+    auto finish = [this] {
+        if (m_quitReady) {
+            return;
+        }
+        m_quitReady = true;
+        QCoreApplication::quit();
+    };
+    if (!m_jellyfinPlayback->pending()) {
+        finish();
+        return;
+    }
+    connect(m_jellyfinPlayback.get(), &JellyfinPlaybackAdapter::settled, this, finish, Qt::SingleShotConnection);
+    QTimer::singleShot(3000, this, [this, finish] {
+        if (!m_quitReady) {
+            qCWarning(sunplayerLogApplication, "Final Jellyfin progress reporting did not complete before shutdown.");
+            finish();
+        }
+    });
+}
+
+bool PresentationWindow::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == qGuiApp && event->type() == QEvent::Quit && !m_quitReady) {
+        quitApplication();
+        return true;
+    }
+    return QWindow::eventFilter(watched, event);
+}
 
 void PresentationWindow::showSettings(int page) {
     if (m_settingsDialog) {
@@ -571,6 +611,11 @@ bool PresentationWindow::nativeEvent(QByteArray const& eventType, void* message,
 #endif
 
 bool PresentationWindow::event(QEvent* event) {
+    if (event->type() == QEvent::Close && !m_quitReady) {
+        event->ignore();
+        quitApplication();
+        return true;
+    }
     // Native-surface teardown must always reach a live engine. A terminal
     // presentation error suspends rendering before destroying the failed
     // engine on the next event-loop turn, and the surface may disappear in
@@ -621,9 +666,10 @@ bool PresentationWindow::createPresentationEngine() {
     Q_ASSERT(m_presentationLifecycle == PresentationLifecycle::Initializing ||
              m_presentationLifecycle == PresentationLifecycle::Suspended);
     m_presentationLifecycle = PresentationLifecycle::Initializing;
-    m_engine = std::make_unique<RhiPresentationEngine>(
-        *this, *m_outputState, *m_settings, *m_activeVideoSource, *m_diagnosticVideoSource, *m_mediaSession,
-        *m_videoViewport, *m_subtitleSettings, m_supportController, m_surfaceContract, m_surfaceController);
+    m_engine = std::make_unique<RhiPresentationEngine>(*this, *m_outputState, *m_settings, *m_activeVideoSource,
+                                                       *m_diagnosticVideoSource, *m_mediaSession, *m_videoViewport,
+                                                       *m_subtitleSettings, m_supportController, *m_jellyfin,
+                                                       m_surfaceContract, m_surfaceController);
     connect(m_engine.get(), &RhiPresentationEngine::videoFramePresented, this,
             &PresentationWindow::videoFramePresented);
     connect(m_engine.get(), &RhiPresentationEngine::terminalError, this, &PresentationWindow::handlePresentationError);

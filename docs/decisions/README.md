@@ -51,3 +51,5 @@ with a new decision when the accepted choice changes materially.
 * [0033: Keep Wayland HDR mastering metadata optional](0033-keep-wayland-hdr-mastering-optional.md)
 * [0034: Isolate CSD shadows in the Linux Wayland integration](0034-isolate-wayland-csd-shadows.md)
 * [0035: Share playback actions with native desktop media controls](0035-share-playback-actions-with-native-media-controls.md)
+
+* [0036: Keep Jellyfin outside the shared Direct Play pipeline](0036-jellyfin-direct-play.md)

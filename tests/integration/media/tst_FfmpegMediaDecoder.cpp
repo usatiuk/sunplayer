@@ -94,7 +94,7 @@ FfmpegMediaDecodeRequest requestFor(QString const& path, std::uint64_t generatio
     return {
         .video =
             {
-                .path = path,
+                .input = path,
                 .firstFrameIdentity =
                     {
                         .playbackGeneration = generation,

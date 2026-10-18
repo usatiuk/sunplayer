@@ -76,6 +76,25 @@ if (NOT SUNPLAYER_PROJECT_VERSION MATCHES
     message(FATAL_ERROR "VERSION.txt must contain one X.Y.Z version.")
 endif ()
 
+# vcpkg installs manifest dependencies during project(). Give only QtKeychain
+# the already selected Qt SDK prefix; this never runs on Linux.
+if(CMAKE_HOST_WIN32 OR CMAKE_HOST_APPLE)
+    set(_sunplayer_qt_candidates ${CMAKE_PREFIX_PATH})
+    if(Qt6_DIR)
+        get_filename_component(_sunplayer_existing_qt_prefix "${Qt6_DIR}/../../.." ABSOLUTE)
+        list(PREPEND _sunplayer_qt_candidates "${_sunplayer_existing_qt_prefix}")
+    endif()
+    foreach(_sunplayer_qt_candidate IN LISTS _sunplayer_qt_candidates)
+        if(EXISTS "${_sunplayer_qt_candidate}/lib/cmake/Qt6/Qt6Config.cmake")
+            set(ENV{SUNPLAYER_QT_PREFIX} "${_sunplayer_qt_candidate}")
+            break()
+        endif()
+    endforeach()
+    if(NOT EXISTS "$ENV{SUNPLAYER_QT_PREFIX}/lib/cmake/Qt6/Qt6Config.cmake")
+        message(FATAL_ERROR "Set CMAKE_PREFIX_PATH to the existing Qt installation before configuring SunPlayer.")
+    endif()
+endif()
+
 project(SunPlayer VERSION ${SUNPLAYER_PROJECT_VERSION} LANGUAGES C CXX)
 
 set(SUNPLAYER_SOURCE_URL "https://github.com/usatiuk/sunplayer")
@@ -320,6 +339,9 @@ add_library(sunplayer_media STATIC
         src/media/FfmpegHardwareDevice.h
         src/media/FfmpegMediaDecoder.cpp
         src/media/FfmpegMediaDecoder.h
+        src/media/MediaInput.h
+        src/media/ffmpeg/FfmpegNetworkInput.cpp
+        src/media/ffmpeg/FfmpegNetworkInput.h
         src/media/MediaStreamTypes.h
         src/media/FfmpegVideoDecoder.cpp
         src/media/FfmpegVideoDecoder.h
@@ -451,6 +473,18 @@ elseif (APPLE)
     )
 endif ()
 
+find_package(Qt6 REQUIRED COMPONENTS Network)
+find_package(Qt6Keychain CONFIG REQUIRED)
+
+add_library(sunplayer_jellyfin STATIC
+        src/jellyfin/JellyfinClient.cpp
+        src/jellyfin/JellyfinClient.h
+        src/jellyfin/TokenStore.cpp
+        src/jellyfin/TokenStore.h
+)
+target_include_directories(sunplayer_jellyfin PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_link_libraries(sunplayer_jellyfin PUBLIC Qt6::Network PRIVATE qt6keychain)
+
 qt_add_executable(sunplayer
         src/playback/CoalescedGenerationWake.h
         src/playback/MediaTrackModel.cpp
@@ -467,6 +501,12 @@ qt_add_executable(sunplayer
         src/app/ApplicationError.h
         src/app/LocalMediaDrop.cpp
         src/app/LocalMediaDrop.h
+        src/jellyfin/JellyfinBrowser.cpp
+        src/jellyfin/JellyfinBrowser.h
+        src/jellyfin/JellyfinImages.cpp
+        src/jellyfin/JellyfinImages.h
+        src/jellyfin/JellyfinPlaybackAdapter.cpp
+        src/jellyfin/JellyfinPlaybackAdapter.h
         src/app/main.cpp
         src/app/PresentationSettings.cpp
         src/app/PresentationSettings.h
@@ -597,6 +637,10 @@ set_source_files_properties(src/app/icons/lucide/LICENSE PROPERTIES
         QT_RESOURCE_ALIAS icons/lucide/LICENSE
 )
 
+set_source_files_properties(src/app/pages/JellyfinPage.qml PROPERTIES QT_RESOURCE_ALIAS JellyfinPage.qml)
+foreach(_jellyfin_component JellyfinPoster JellyfinShelf JellyfinDetail JellyfinEpisode)
+    set_source_files_properties(src/app/pages/${_jellyfin_component}.qml PROPERTIES QT_RESOURCE_ALIAS ${_jellyfin_component}.qml)
+endforeach()
 qt_add_qml_module(sunplayer
         URI SunPlayer
         VERSION 1.0
@@ -606,6 +650,11 @@ qt_add_qml_module(sunplayer
         src/app/windowchrome/ClientSideWindowChrome.qml
         src/app/pages/HdrLabPage.qml
         src/app/pages/PlayerPage.qml
+        src/app/pages/JellyfinPage.qml
+        src/app/pages/JellyfinPoster.qml
+        src/app/pages/JellyfinShelf.qml
+        src/app/pages/JellyfinDetail.qml
+        src/app/pages/JellyfinEpisode.qml
         src/app/pages/VideoPage.qml
         RESOURCES
         src/app/icons/SunPlayer.png
@@ -655,6 +704,7 @@ target_link_libraries(sunplayer
         Qt6::QuickControls2
         Qt6::QuickDialogs2
         sunplayer_diagnostics
+        sunplayer_jellyfin
         sunplayer_video_pipeline
 )
 
@@ -670,6 +720,7 @@ target_include_directories(sunplayer
         "${CMAKE_CURRENT_BINARY_DIR}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
         # qmltyperegistrar includes declaratively registered types by basename.
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/jellyfin"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/app"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/playback"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/presentation"

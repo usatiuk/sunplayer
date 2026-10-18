@@ -369,10 +369,11 @@ Documentation: `docs/subsystems/application/`
 
 * [x] Cancellable continuous local-file open/demux/decode
 * [x] Generation invalidation for superseded pipeline work
-* [ ] Small media-input request for local or remote locators, safe display
-  label, authentication headers, and FFmpeg open options
-* [ ] FFmpeg-native HTTP/range/HLS input before application-owned networking
-* [ ] Network-source cancellation and timeout model
+* [x] Small media-input value for local/HTTP(S) locators and safe display label;
+  common native FFmpeg protocol/time/TLS policy
+* [x] FFmpeg-native HTTP/range input before custom media networking
+* [ ] HLS input (outside Jellyfin V1)
+* [x] HTTP-source cooperative cancellation and bounded read timeout
 * [ ] Observable duration/byte-aware encoded-packet read-ahead
 * [ ] Custom FFmpeg AVIO byte caching only when native protocol behavior is
   insufficient
@@ -380,6 +381,16 @@ Documentation: `docs/subsystems/application/`
 * [ ] Clear source-stall and recovery states
 
 Documentation: `docs/subsystems/media-io/`
+
+Jellyfin V1 is implemented for one server/account: password login with secure
+optional token storage, library tiles/tabs, Continue Watching and Recently Added,
+paged poster galleries and show/season/episode details, artwork and descriptions,
+watched controls, original-file Direct Play, resume and final
+progress reporting. Shared `MediaInput` retains remote sources through normal
+player restarts. Linux and AppImage validation is recorded in the
+[delivery plan](docs/plans/cross-cutting/2026-10-18-jellyfin-client.md);
+user real-server and native Windows/macOS acceptance remain pending.
+Documentation: [Jellyfin subsystem](docs/subsystems/jellyfin/README.md).
 
 ### 3. FFmpeg media integration
 

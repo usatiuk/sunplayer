@@ -17,3 +17,17 @@ Playing a file does not modify or delete it.
 The application stores preferences locally and may write bounded session logs
 to the local temporary-data directory. Those logs can contain technical
 playback and graphics details. SunPlayer does not upload them.
+
+## Optional Jellyfin connection
+
+When you connect to a Jellyfin server, SunPlayer sends authentication requests,
+library queries, artwork requests, media-stream requests, playback start/final
+position reports, and explicit watched/unwatched changes to that server. Your
+server operator controls its data handling. These requests do not go to the
+SunPlayer project.
+
+Remembered login stores the access token in the operating system's credential
+store; passwords are not persisted. Server/account metadata is stored with local
+preferences. If secure storage is unavailable, login can remain session-only.
+There is no background progress synchronization or telemetry. A crash or failed
+connection can prevent the final playback position from reaching your server.

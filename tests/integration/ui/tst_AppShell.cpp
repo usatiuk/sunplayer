@@ -1,13 +1,20 @@
 #include <algorithm>
 #include <memory>
 
+#include "../jellyfin/HttpEdge.h"
+#include "jellyfin/JellyfinBrowser.h"
+#include "jellyfin/JellyfinImages.h"
 #include <QColor>
+#include <QDir>
 #include <QMouseEvent>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQmlProperty>
 #include <QQuickItem>
+#include <QQuickStyle>
 #include <QQuickWindow>
+#include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QTemporaryFile>
 #include <QTest>
 #include <QTimer>
@@ -65,7 +72,10 @@ void AppShellTest::publishesActiveViewport() {
     ShellTestActiveVideoSource activeVideoSource(nullptr);
     ShellTestSupportController supportController(nullptr);
     VideoViewportState videoViewport(nullptr);
+    QTemporaryDir jellyfinSettings;
+    JellyfinBrowser jellyfin(jellyfinSettings.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat, false);
     QVariantMap const initialProperties{
+        {QStringLiteral("jellyfin"), QVariant::fromValue(&jellyfin)},
         {
             QStringLiteral("renderDevicePixelRatio"),
             1.0,
@@ -112,6 +122,16 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY2(object, qPrintable(componentErrorText(component)));
     QQuickItem* const rootItem = qobject_cast<QQuickItem*>(object.get());
     QVERIFY(rootItem);
+    rootItem->setProperty("currentPage", 2);
+    QTRY_VERIFY(rootItem->findChild<QObject*>(QStringLiteral("jellyfinServer")));
+    QVERIFY(!rootItem->property("activeVideoViewportVisible").toBool());
+    QVERIFY(rootItem->findChild<QObject*>(QStringLiteral("jellyfinPassword")));
+    auto* remember = rootItem->findChild<QObject*>(QStringLiteral("jellyfinRemember"));
+    QVERIFY(remember);
+    auto* rememberText = remember->property("contentItem").value<QQuickItem*>();
+    QVERIFY(rememberText);
+    QVERIFY(rememberText->property("color").value<QColor>().lightnessF() > 0.8);
+    rootItem->setProperty("currentPage", 0);
     QObject* const rendererSwitch = rootItem->findChild<QObject*>(QStringLiteral("videoRendererSwitch"));
     QObject* const hdrLabHeaderPanel = rootItem->findChild<QObject*>(QStringLiteral("hdrLabHeaderPanel"));
     QObject* const hdrLabOutputPanel = rootItem->findChild<QObject*>(QStringLiteral("hdrLabOutputPanel"));
@@ -1005,6 +1025,123 @@ void AppShellTest::publishesActiveViewport() {
     QCOMPARE(windowCommands.openCount(), 2);
     QCOMPARE(windowCommands.lastOpenedUrl(), droppedMediaUrl);
     QCOMPARE(mediaSession.openCount(), 0);
+
+    auto* const playerBack = rootItem->findChild<QQuickItem*>(QStringLiteral("playerBackButton"));
+    auto* const openJellyfin = rootItem->findChild<QQuickItem*>(QStringLiteral("openJellyfinButton"));
+    auto* const browserBack = rootItem->findChild<QQuickItem*>(QStringLiteral("jellyfinBackButton"));
+    auto* const detailsItem = qobject_cast<QQuickItem*>(playbackDetailsPanel);
+    QVERIFY(playerBack);
+    QVERIFY(openJellyfin);
+    QVERIFY(browserBack);
+    QVERIFY(detailsItem);
+    mediaSession.pause();
+    playerPage->setProperty("showPlaybackDetails", true);
+    for (auto const [csd, fullscreen] : {std::pair{true, false}, std::pair{true, true}, std::pair{false, false}}) {
+        windowCommands.windowChromeController().setState(csd, fullscreen, false);
+        qreal const inset = csd && !fullscreen ? clientSideTitleBar->height() : 0;
+        QTRY_COMPARE(playerBack->mapToScene(QPointF()).y(), inset + 24);
+        QTRY_COMPARE(detailsItem->mapToScene(QPointF()).y(), inset + 20);
+        QTRY_VERIFY(detailsItem->mapToScene({0, detailsItem->height()}).y() <= rootItem->height() - 20);
+        QTRY_COMPARE(videoViewport.rect().y(), 0.0);
+        QTRY_COMPARE(videoViewport.rect().height(), rootItem->height());
+    }
+
+    // Jellyfin playback returns to the retained browser; the browser's Back
+    // returns to the Open video screen. Local playback returns there directly.
+    mediaSession.setState(ShellTestMediaSession::State::Empty);
+    QTRY_VERIFY(openJellyfin->isVisible());
+    QVERIFY(!playerBack->isVisible());
+    QVERIFY(QMetaObject::invokeMethod(openJellyfin, "clicked", Qt::DirectConnection));
+    QTRY_COMPARE(rootItem->property("currentPage").toInt(), 2);
+    windowCommands.windowChromeController().setState(true, false, false);
+    QTRY_VERIFY(browserBack->mapToScene(QPointF()).y() >= clientSideTitleBar->height() + 24);
+    emit windowCommands.mediaOpenRequested();
+    mediaSession.setState(ShellTestMediaSession::State::Ready, true);
+    QTRY_COMPARE(rootItem->property("currentPage").toInt(), 0);
+    QVERIFY(QMetaObject::invokeMethod(playerBack, "clicked", Qt::DirectConnection));
+    QCOMPARE(mediaSession.state(), ShellTestMediaSession::State::Empty);
+    QTRY_COMPARE(rootItem->property("currentPage").toInt(), 2);
+    QVERIFY(QMetaObject::invokeMethod(browserBack, "clicked", Qt::DirectConnection));
+    QTRY_COMPARE(rootItem->property("currentPage").toInt(), 0);
+    QTRY_VERIFY(openMediaButton->property("visible").toBool());
+    emit windowCommands.mediaOpenRequested();
+    mediaSession.setState(ShellTestMediaSession::State::Ready, true);
+    QVERIFY(QMetaObject::invokeMethod(playerBack, "clicked", Qt::DirectConnection));
+    QCOMPARE(mediaSession.state(), ShellTestMediaSession::State::Empty);
+    QCOMPARE(rootItem->property("currentPage").toInt(), 0);
+
+    // A direct launch can establish playback before QML exists. With no open
+    // event/history, Back must still return to Open video.
+    mediaSession.setState(ShellTestMediaSession::State::Ready, true);
+    std::unique_ptr<QObject> directLaunch(component.createWithInitialProperties(initialProperties));
+    QVERIFY2(directLaunch, qPrintable(componentErrorText(component)));
+    auto* const directBack = directLaunch->findChild<QObject*>(QStringLiteral("playerBackButton"));
+    QVERIFY(directBack);
+    QVERIFY(QMetaObject::invokeMethod(directBack, "clicked", Qt::DirectConnection));
+    QCOMPARE(mediaSession.state(), ShellTestMediaSession::State::Empty);
+    QCOMPARE(directLaunch->property("currentPage").toInt(), 0);
+    directLaunch.reset();
+
+    // Populate the real browser through a controlled HTTP edge, including its
+    // authenticated image provider. Capture the actual shell under both styles.
+    HttpEdge galleryServer;
+    galleryServer.galleryFixtures = true;
+    engine.addImageProvider(QStringLiteral("jellyfin"), new JellyfinImages(jellyfin.client()));
+    QSignalSpy qmlWarnings(&engine, &QQmlEngine::warnings);
+    rootItem->setProperty("currentPage", 2);
+    windowCommands.windowChromeController().setState(true, false, false);
+    jellyfin.login(galleryServer.base().toString(), QStringLiteral("user"), QStringLiteral("password"), false);
+    QTRY_VERIFY(jellyfin.authenticated() && !jellyfin.busy());
+    auto imagesReady = [&] {
+        int images = 0;
+        bool ready = true;
+        auto visit = [&](auto&& self, QQuickItem* parent) -> void {
+            for (auto* item : parent->childItems()) {
+                if (item->property("source").toUrl().scheme() == QStringLiteral("image")) {
+                    ++images;
+                    ready &= item->property("status").toInt() == 1;
+                }
+                self(self, item);
+            }
+        };
+        visit(visit, rootItem);
+        return images > 0 && ready;
+    };
+    QDir().mkpath(QStringLiteral(SUNPLAYER_UI_SNAPSHOT_DIR));
+    auto snapshot = [&](QString const& name) {
+        QImage const image = quickWindow.grabWindow();
+        return !image.isNull() &&
+               image.save(QStringLiteral(SUNPLAYER_UI_SNAPSHOT_DIR "/%1-%2.png").arg(name, QQuickStyle::name()));
+    };
+    for (int width : {1280, 800}) {
+        rootItem->setSize({qreal(width), 900});
+        quickWindow.resize(width, 900);
+        QTRY_VERIFY(imagesReady());
+        QVERIFY(snapshot(QStringLiteral("jellyfin-home-%1").arg(width)));
+    }
+    jellyfin.selectLibrary(0);
+    QTRY_VERIFY(!jellyfin.busy());
+    QTRY_VERIFY(rootItem->findChild<QQuickItem*>(QStringLiteral("jellyfinItems")));
+    QTRY_VERIFY(imagesReady());
+    QVERIFY(snapshot(QStringLiteral("jellyfin-movies-800")));
+    jellyfin.home();
+    QTRY_VERIFY(!jellyfin.busy());
+    jellyfin.selectLibrary(1);
+    QTRY_VERIFY(!jellyfin.busy());
+    jellyfin.enter(0);
+    QTRY_VERIFY(!jellyfin.busy());
+    QTRY_VERIFY(imagesReady());
+    QVERIFY(snapshot(QStringLiteral("jellyfin-show-800")));
+    jellyfin.enter(0);
+    QTRY_VERIFY(!jellyfin.busy());
+    QTRY_VERIFY(rootItem->findChild<QQuickItem*>(QStringLiteral("jellyfinEpisodes")));
+    QTRY_VERIFY(imagesReady());
+    QVERIFY(snapshot(QStringLiteral("jellyfin-season-800")));
+    rootItem->setSize({640, 900});
+    quickWindow.resize(640, 900);
+    QTRY_VERIFY(imagesReady());
+    QVERIFY(snapshot(QStringLiteral("jellyfin-season-640")));
+    QCOMPARE(qmlWarnings.size(), 0);
 }
 
 void AppShellTest::transportButtonShowsKeyboardFocus() {

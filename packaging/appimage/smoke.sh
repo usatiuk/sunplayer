@@ -49,9 +49,15 @@ PATH=/nonexistent ./squashfs-root/usr/libexec/sunplayer/appimageupdatetool --hel
 # Verify that application libraries actually resolve inside the bundle.
 LD_LIBRARY_PATH="$runtime/squashfs-root/usr/lib" \
     ldd ./squashfs-root/usr/bin/sunplayer > "$runtime/dependencies.log"
-for library in libQt6Core libQt6Quick libavcodec libavformat libavutil libswresample libplacebo libcubeb libass; do
+for library in libQt6Core libQt6Quick libqt6keychain libavcodec libavformat libavutil libswresample libplacebo libcubeb libass; do
     grep -F "=> $runtime/squashfs-root/usr/lib/$library.so" "$runtime/dependencies.log"
 done
+# QtKeychain loads libsecret at runtime, so ldd on the player cannot prove it.
+test -f ./squashfs-root/usr/lib/libsecret-1.so.0
+LD_LIBRARY_PATH="$runtime/squashfs-root/usr/lib" \
+    ldd ./squashfs-root/usr/lib/libsecret-1.so.0 > "$runtime/secret-dependencies.log"
+! grep -F "not found" "$runtime/secret-dependencies.log"
+test -f ./squashfs-root/usr/plugins/tls/libqopensslbackend.so
 # The system provides icon data; the bundle must provide the Qt engine/theme plugins.
 LD_LIBRARY_PATH="$runtime/squashfs-root/usr/lib" \
     QT_PLUGIN_PATH="$runtime/squashfs-root/usr/plugins" \

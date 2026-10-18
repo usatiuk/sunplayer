@@ -315,28 +315,24 @@ reproducible supported-environment failure.
 
 ### Remote media input, source read-ahead, and Jellyfin
 
-`MediaSession` currently rejects non-local URLs and the FFmpeg request carries
-a filesystem path. The shared production operation nevertheless has the right
-single-pass shape for remote media: one `AVFormatContext` feeds both selected
-audio and video streams. Its 128-packet/8-MiB router is post-demux buffering,
-not a controllable source-byte cache, so slow SMB reads or network bursts can
-still drain playback.
+Local files and Jellyfin Direct Play now share `MediaInput` and native FFmpeg
+HTTP/range/TLS, with bounded reads, cooperative cancellation and video-only
+Buffering. Existing packet/PCM/frame budgets remain; no source-byte cache.
+Kernel-blocked mounted-filesystem reads remain uncontained and remote seeking
+still reopens/probes. Custom AVIO, read-ahead, caching, reconnect/retry and
+packet-duration budget work require measured need.
 
-The planned first step is a small sanitized media-input request and FFmpeg's
-native HTTP/range/HLS support, followed by timeout, stall, occupancy, and
-Buffering telemetry. A duration-aware encoded-packet budget may be enough for
-ordinary burstiness. Custom AVIO with bounded memory or disk read-ahead remains
-available when real sources demonstrate that FFmpeg-native I/O cannot provide
-the required caching, credential refresh, retry, or cancellation behavior.
-It must replace the existing input edge rather than create a second reader.
-
-A Jellyfin client is possible future product scope, not part of the current V1
-commitment. A server layer would own authentication, library/navigation,
-playback negotiation, progress reporting, and transcode-session lifetime, then
-hand one direct-play, remux, or HLS locator to the ordinary media pipeline.
-Audio-track selection, remote subtitle discovery/download, and efficient remote
-seeking remain prerequisites for a complete experience. See
-[media input and source buffering](subsystems/media-io/README.md).
+Jellyfin V1 defers Quick Connect, multiple accounts, search,
+auto-next/queues, periodic/background/offline sync, external subtitles,
+remux/transcoding/HLS, and server plugins. Crashes/network failure can lose
+progress since the last final report. The initial real-server version and
+end-to-end acceptance will be recorded when the user tests their server.
+Native secure-store save/restore/delete/failure acceptance, Windows/macOS
+builds and packaged HTTPS remain pending on their respective hosts; these were
+not attempted on Linux. AppImage requires a host keyring service to remember
+login. See [Jellyfin](subsystems/jellyfin/README.md),
+[media input](subsystems/media-io/README.md), and the
+[delivery plan](plans/cross-cutting/2026-10-18-jellyfin-client.md).
 
 ### Pre-Qt startup diagnostics
 
@@ -484,3 +480,24 @@ passed tests and packaging. The cause is unclassified;
 investigate its process exit/diagnostics in a media-test-focused change. This
 UI/updater change adds no automatic retries, timeout changes or decoder fixes.
 See [the follow-up delivery evidence](plans/cross-cutting/2026-10-17-update-preferences-and-idle-controls.md).
+
+### Media-session seek regression timing
+
+During the Jellyfin gallery follow-up, `interFrameSeekPublishesRequestedFrame`
+failed once at its immediate `!session.seeking()` assertion after waiting for
+`Ready`; the full unmodified media-session test passed on rerun. The test assumes
+those observations settle together. Investigate that test/notification ordering
+separately rather than broadening the gallery change. No playback defect was
+established by this isolated failure.
+
+### Qt touchpad scrolling limitation
+
+The user confirmed overscroll works after restoring Jellyfin's Qt defaults and
+that an untouched stock Qt window feels equally stiff. They also observed no
+inertia in Chrome and chose standard Qt behavior. No SunPlayer-specific scroll
+regression was established. Keep defaults; no Qt patch, sensitivity override,
+custom physics or device-specific bounds policy is planned. Upstream
+QTBUG-149567 fixes a rounded-pixel touchpad stutter trigger present in the trace;
+it does not implement release inertia. Track that through normal dependency
+maintenance, not application workarounds. See the
+[Jellyfin research follow-up](research/2026-10-18-jellyfin-client.md).

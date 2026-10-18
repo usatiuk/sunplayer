@@ -81,7 +81,11 @@ startup capability inventory finds no xdg-decoration manager. It overlays the
 existing scene; it is not another window or presentation layer. Its black
 titlebar follows the same pointer-activity fade as playback controls, while an
 active video viewport remains full-window and does not jump as chrome fades.
-Empty/non-player content requests a stable titlebar inset. Compositor-owned
+Empty/non-player content requests a stable titlebar inset. Player navigation
+and the playback-details panel reserve that same CSD height above their floating
+content, including the panel's maximum height; fullscreen/native decorations
+need no inset. The video viewport itself remains stable as controls fade.
+Compositor-owned
 move/resize begins through public `QWindow` operations. Chrome is absent in
 fullscreen and its
 resize zones are absent while maximized.
@@ -431,3 +435,31 @@ QML. An external position jump or Stop, Close, replacement open or error clears
 pending UI preview so it cannot overwrite a later native command. Stop adds no
 new button, black viewport or teardown-driven UI state; its retained frame is
 presented like a paused frame, and Play restarts the item at zero.
+
+## Jellyfin browser
+
+The empty Open video screen offers local-file opening and Jellyfin. During
+playback, an upper-left Back action closes media and returns to the page that
+opened it (Jellyfin retains its library/season view; local opening returns to
+Open video). Direct launches without UI history default to Open video. This is
+one QML return-page value, not a navigation stack or media-source abstraction.
+The browser's Back navigates to its parent, then returns from home to Open video
+and cancels a pending playback resolve. Home has library tiles/tabs, Continue
+Watching, and Recently Added shelves. Shared poster, shelf, detail-header and
+episode-row components show artwork, descriptions and watched/progress state.
+The password form clears its password after submit.
+Browser selection supplies the ordinary player, with Resume/Play from start.
+The browser owns no video viewport and blocks player keyboard shortcuts while
+editing credentials. API/authorization logic stays in C++.
+See [Jellyfin](../jellyfin/README.md) for exact scope and acceptance gaps.
+
+The shell regression checks navigation from local/Jellyfin/direct launch and
+actual overlay bounds under CSD, fullscreen and native decorations, while
+verifying that active video still occupies its full viewport. Both Basic and
+Fusion style runs cover the same behavior.
+
+Jellyfin scrolling uses Qt's default Flickable/ListView/GridView gesture,
+inertia and bounds behavior with standard attached scrollbars, including a
+horizontal scrollbar for home shelves. Do not add custom wheel/velocity logic
+or override those defaults without a demonstrated requirement. Descriptions
+wrap fully within their scrollable page; no expansion state is maintained.

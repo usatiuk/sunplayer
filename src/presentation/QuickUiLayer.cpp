@@ -18,6 +18,8 @@
 #include "app/SupportController.h"
 #include "app/VideoViewportState.h"
 #include "diagnostics/LogCategories.h"
+#include "jellyfin/JellyfinBrowser.h"
+#include "jellyfin/JellyfinImages.h"
 #include "playback/MediaSession.h"
 #include "presentation/PresentationOutputState.h"
 #include "video/ActiveVideoSource.h"
@@ -43,10 +45,11 @@ class RenderControl final : public QQuickRenderControl {
 QuickUiLayer::QuickUiLayer(QWindow& renderWindow, QRhi& rhi, PresentationOutputState& outputState,
                            PresentationSettings& settings, DiagnosticVideoSource& diagnosticSource,
                            MediaSession& mediaSession, ActiveVideoSource& activeVideoSource,
-                           VideoViewportState& videoViewport, SupportController& supportController, QObject* parent)
+                           VideoViewportState& videoViewport, SupportController& supportController,
+                           JellyfinBrowser& jellyfin, QObject* parent)
     : QObject(parent), m_renderWindow(renderWindow), m_rhi(rhi), m_outputState(outputState), m_settings(settings),
       m_diagnosticSource(diagnosticSource), m_mediaSession(mediaSession), m_activeVideoSource(activeVideoSource),
-      m_videoViewport(videoViewport), m_supportController(supportController) {}
+      m_videoViewport(videoViewport), m_supportController(supportController), m_jellyfin(jellyfin) {}
 
 QuickUiLayer::~QuickUiLayer() {
     Q_ASSERT(m_renderControl);
@@ -82,6 +85,7 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
     m_quickWindow->setGraphicsDevice(QQuickGraphicsDevice::fromRhi(&m_rhi));
 
     m_qmlEngine = std::make_unique<QQmlEngine>();
+    m_qmlEngine->addImageProvider(QStringLiteral("jellyfin"), new JellyfinImages(m_jellyfin.client()));
 
     QQmlComponent component(m_qmlEngine.get());
     component.loadFromModule(QStringLiteral("SunPlayer"), QStringLiteral("Main"));
@@ -91,6 +95,7 @@ QuickUiLayer::InitializationResult QuickUiLayer::initialize() {
     }
 
     QVariantMap const initialProperties{
+        {QStringLiteral("jellyfin"), QVariant::fromValue(&m_jellyfin)},
         {
             QStringLiteral("renderDevicePixelRatio"),
             m_renderWindow.devicePixelRatio(),

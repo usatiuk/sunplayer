@@ -1,4 +1,5 @@
 #include "media/FfmpegVideoDecoder.h"
+#include "media/ffmpeg/FfmpegNetworkInput.h"
 
 #include <algorithm>
 #include <atomic>
@@ -219,7 +220,7 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(FfmpegVideoDecodeRequest const&
                               ? QString::number(*request.start.targetPositionMicroseconds)
                               : QStringLiteral("none"))
         << "demuxSeek=" + QString(request.start.performDemuxSeek ? QStringLiteral("true") : QStringLiteral("false"))
-        << "path=" + request.path;
+        << "media=" + request.input.displayName;
 
     AVFormatContext* rawFormatContext = avformat_alloc_context();
     if (!rawFormatContext) {
@@ -232,8 +233,7 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(FfmpegVideoDecodeRequest const&
         interruptFfmpeg,
         &interruptState,
     };
-    QByteArray const encodedPath = request.path.toUtf8();
-    int status = avformat_open_input(&rawFormatContext, encodedPath.constData(), nullptr, nullptr);
+    int status = openFfmpegInput(&rawFormatContext, request.input);
     if (status < 0) {
         if (rawFormatContext) {
             avformat_close_input(&rawFormatContext);
@@ -281,7 +281,12 @@ FfmpegVideoDecodeResult decodeVideoFramesAttempt(FfmpegVideoDecodeRequest const&
         if (!formatContext->pb || !(formatContext->pb->seekable & AVIO_SEEKABLE_NORMAL)) {
             return fail(QStringLiteral("The selected media source is not seekable"));
         }
-        VideoTimelineOrigin const& origin = *request.start.timelineOrigin;
+        auto const originValue =
+            ffmpegSharedTimelineOrigin(*formatContext, stream, nullptr, request.start.timelineOrigin);
+        if (!originValue) {
+            return fail(QStringLiteral("The media timeline has no stable origin"));
+        }
+        VideoTimelineOrigin const& origin = *originValue;
         auto const targetTimestamp = videoStreamTimestampForPosition(origin, {streamTimeBase.num, streamTimeBase.den},
                                                                      *request.start.targetPositionMicroseconds);
         if (!targetTimestamp) {
@@ -417,12 +422,11 @@ std::optional<std::int64_t> videoStreamTimestampForPosition(VideoTimelineOrigin 
 
 bool VideoDecodeStart::isValid() const {
     return (!targetPositionMicroseconds || *targetPositionMicroseconds >= 0) &&
-           (!timelineOrigin || timelineOrigin->isValid()) && (!targetPositionMicroseconds || timelineOrigin) &&
-           (!performDemuxSeek || targetPositionMicroseconds);
+           (!timelineOrigin || timelineOrigin->isValid()) && (!performDemuxSeek || targetPositionMicroseconds);
 }
 
 bool FfmpegVideoDecodeRequest::isValid() const {
-    return !path.isEmpty() && firstFrameIdentity.isValid() && extraHardwareFrames >= 0 && start.isValid();
+    return input.isValid() && firstFrameIdentity.isValid() && extraHardwareFrames >= 0 && start.isValid();
 }
 
 bool FfmpegVideoStreamDiagnostics::isValid() const {

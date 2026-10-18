@@ -22,6 +22,7 @@ class QRhiTextureRenderTarget;
 class QWindow;
 class VideoViewportState;
 class SupportController;
+class JellyfinBrowser;
 
 // Redirected Qt Quick scene exposed as one compositor texture.
 class QuickUiLayer final : public QObject {
@@ -44,7 +45,7 @@ class QuickUiLayer final : public QObject {
     QuickUiLayer(QWindow& renderWindow, QRhi& rhi, PresentationOutputState& outputState, PresentationSettings& settings,
                  DiagnosticVideoSource& diagnosticSource, MediaSession& mediaSession,
                  ActiveVideoSource& activeVideoSource, VideoViewportState& videoViewport,
-                 SupportController& supportController, QObject* parent = nullptr);
+                 SupportController& supportController, JellyfinBrowser& jellyfin, QObject* parent = nullptr);
     ~QuickUiLayer() override;
 
     InitializationResult initialize();
@@ -73,6 +74,7 @@ class QuickUiLayer final : public QObject {
     ActiveVideoSource& m_activeVideoSource;
     VideoViewportState& m_videoViewport;
     SupportController& m_supportController;
+    JellyfinBrowser& m_jellyfin;
     std::unique_ptr<QQuickRenderControl> m_renderControl;
     std::unique_ptr<QQuickWindow> m_quickWindow;
     std::unique_ptr<QQmlEngine> m_qmlEngine;

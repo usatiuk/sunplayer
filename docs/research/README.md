@@ -19,6 +19,7 @@ the newer note or decision rather than silently rewriting the investigation.
 
 ## Index
 
+* [2026-10-18: Jellyfin login, browsing, streaming, and credentials](2026-10-18-jellyfin-client.md)
 * [2026-10-17: Native desktop media controls across platforms](2026-10-17-native-media-controls.md)
 * [2026-10-17: Qt control contrast across styles](2026-10-17-qt-control-contrast.md)
 * [2026-10-17: Wayland CSD shadows, rounded corners, and window states](2026-10-17-wayland-csd-shadows-and-rounding.md)

@@ -49,8 +49,8 @@ Qt Wayland Compositor and `wayland-server` from the existing system development
 packages. These are test dependencies, not player runtime dependencies.
 
 The validated macOS development configuration uses Apple Clang 16, ordinary
-CMake/Ninja, Qt 6.11.1 from the Online Installer, the stock vcpkg `arm64-osx`
-triplet, FFmpeg 8.1.2 with VideoToolbox, libplacebo 7.360.1 with Vulkan,
+CMake/Ninja, Qt 6.11.1 from the Online Installer, the project `arm64-osx`
+triplet (stock platform/linkage plus the existing Qt prefix for QtKeychain), FFmpeg 8.1.2 with VideoToolbox, libplacebo 7.360.1 with Vulkan,
 MoltenVK 1.4.2, the pinned cubeb AudioUnit backend, and libass. It is a host
 validation claim, not yet a distributable macOS 13 compatibility claim.
 
@@ -115,7 +115,7 @@ On Windows the vcpkg executable may be supplied by Visual Studio. On macOS the
 developer supplies a normal vcpkg checkout. CMake uses an explicitly supplied
 toolchain when present, then falls back to `VCPKG_ROOT` or the Visual Studio
 vcpkg discovered from a sourced developer environment. Windows configurations
-default to `x64-windows-clangcl`; macOS defaults to stock `arm64-osx`; both
+default to `x64-windows-clangcl`; macOS defaults to the project `arm64-osx`; both
 preserve an explicit caller override.
 
 Manifest installation output lives under the configured build directory's
@@ -138,7 +138,7 @@ The Ubuntu 26.04 reference development install is:
 ```sh
 sudo apt install \
   build-essential cmake ninja-build pkg-config \
-  qt6-base-dev qt6-base-private-dev \
+  qt6-base-dev qt6-base-private-dev qtkeychain-qt6-dev \
   qt6-declarative-dev qt6-declarative-private-dev \
   qt6-declarative-dev-tools \
   qt6-wayland qt6-wayland-dev qt6-wayland-private-dev \
@@ -196,7 +196,7 @@ requirement consistently to allocator payloads and public/private object
 offsets, with a compile-time layout check; other platforms retain the upstream
 `max_align_t` alignment.
 
-The FFmpeg dependency uses the official registry port with `avcodec`,
+The FFmpeg dependency uses the baseline registry port snapshot with `avcodec`,
 `avformat`, `swresample`, and `zlib`; `avutil` is core. zlib is required for
 Matroska tracks using `ContentCompression`, including real embedded PGS files.
 The Windows port enables
@@ -596,3 +596,26 @@ Builder-image construction executes all three tools as UID 65534 before source
 compilation, checking actual executable/loader access. Runtime UID selection,
 tool hashes, deployment policy and release gating remain unchanged. See the
 [AppImage delivery plan](../../plans/cross-cutting/2026-10-17-docker-appimage.md).
+
+## Jellyfin dependency changes (2026-10-18)
+
+Qt Network is part of the existing Qt SDK. Secure token persistence adds the
+approved QtKeychain dependency: Linux uses system `qtkeychain-qt6-dev` and
+`find_package(Qt6Keychain)`/`qt6keychain`, with no vcpkg. Windows/macOS use the
+project `qtkeychain` 0.15.0 vcpkg overlay without any vcpkg Qt dependency.
+Before manifest installation, CMake supplies the existing Qt SDK prefix from
+`Qt6_DIR`/`CMAKE_PREFIX_PATH`; the platform triplet passes/tracks it only for
+QtKeychain. No second Qt installation is introduced.
+
+The `ffmpeg` overlay copies the pinned baseline recipe and adds only explicit
+`--enable-securetransport` for macOS. Windows retains Schannel. The baseline
+disables autodetection, so native Apple TLS must be requested explicitly.
+No OpenSSL dependency is added for Windows/macOS. These recipes have not been
+built or tested on this Linux host; native acceptance remains required.
+
+The AppImage builder installs the distro QtKeychain development package and
+libsecret, bundles the linked QtKeychain runtime, and explicitly deploys its
+runtime-loaded libsecret dependencies. Smoke checks bundle resolution and Qt
+TLS plugin presence. Host Secret Service/KWallet remains required for saved
+login. See [AppImage](../../../packaging/appimage/README.md) and
+[Jellyfin](../jellyfin/README.md).

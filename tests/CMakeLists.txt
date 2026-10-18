@@ -139,6 +139,10 @@ qt_add_executable(sunplayer_active_video_source_tests
 qt_add_executable(sunplayer_qml_shell_tests
         integration/ui/tst_AppShell.cpp
         integration/ui/QmlShellTestTypes.h
+        ../src/jellyfin/JellyfinImages.cpp
+        ../src/jellyfin/JellyfinImages.h
+        ../src/jellyfin/JellyfinBrowser.cpp
+        ../src/jellyfin/JellyfinBrowser.h
         ../src/app/VideoViewportState.cpp
         ../src/app/VideoViewportState.h
 )
@@ -235,6 +239,10 @@ set_source_files_properties(../src/app/icons/lucide/LICENSE PROPERTIES
         QT_RESOURCE_ALIAS icons/lucide/LICENSE
 )
 
+set_source_files_properties(../src/app/pages/JellyfinPage.qml PROPERTIES QT_RESOURCE_ALIAS JellyfinPage.qml)
+foreach(_jellyfin_component JellyfinPoster JellyfinShelf JellyfinDetail JellyfinEpisode)
+    set_source_files_properties(../src/app/pages/${_jellyfin_component}.qml PROPERTIES QT_RESOURCE_ALIAS ${_jellyfin_component}.qml)
+endforeach()
 qt_add_qml_module(sunplayer_qml_shell_tests
         URI SunPlayerShellTest
         VERSION 1.0
@@ -243,6 +251,11 @@ qt_add_qml_module(sunplayer_qml_shell_tests
         ../src/app/AppShell.qml
         ../src/app/windowchrome/ClientSideWindowChrome.qml
         ../src/app/pages/HdrLabPage.qml
+        ../src/app/pages/JellyfinPage.qml
+        ../src/app/pages/JellyfinPoster.qml
+        ../src/app/pages/JellyfinShelf.qml
+        ../src/app/pages/JellyfinDetail.qml
+        ../src/app/pages/JellyfinEpisode.qml
         ../src/app/pages/PlayerPage.qml
         ../src/app/pages/VideoPage.qml
         RESOURCES
@@ -357,6 +370,7 @@ target_include_directories(sunplayer_active_video_source_tests
 )
 
 target_include_directories(sunplayer_qml_shell_tests
+        PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../src/jellyfin"
         PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../src"
         "${CMAKE_CURRENT_SOURCE_DIR}/../src/app"
@@ -367,6 +381,8 @@ target_compile_definitions(
         sunplayer_qml_shell_tests
         PRIVATE
         SUNPLAYER_QT_QML_IMPORT_PATH="${QT6_INSTALL_PREFIX}/${QT6_INSTALL_QML}"
+        SUNPLAYER_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
+        SUNPLAYER_UI_SNAPSHOT_DIR="${CMAKE_CURRENT_BINARY_DIR}/ui-snapshots"
 )
 
 target_link_libraries(sunplayer_presentation_target_tests
@@ -522,6 +538,7 @@ target_link_libraries(sunplayer_active_video_source_tests
 )
 
 target_link_libraries(sunplayer_qml_shell_tests
+        PRIVATE sunplayer_jellyfin
         PRIVATE
         Qt6::Quick
         Qt6::QuickControls2
@@ -1210,3 +1227,21 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_test(NAME appimage-updater COMMAND sunplayer_appimage_updater_tests)
     set_tests_properties(appimage-updater PROPERTIES LABELS "platform;packaging;integration;linux" TIMEOUT 30)
 endif ()
+
+qt_add_executable(sunplayer_jellyfin_tests
+        integration/jellyfin/tst_Jellyfin.cpp
+        ../src/jellyfin/JellyfinBrowser.cpp
+        ../src/jellyfin/JellyfinBrowser.h
+        ../src/jellyfin/JellyfinPlaybackAdapter.cpp
+        ../src/jellyfin/JellyfinPlaybackAdapter.h
+        ../src/playback/MediaSession.cpp
+        ../src/playback/MediaSession.h
+        ../src/playback/MediaTrackModel.cpp
+        ../src/playback/MediaTrackModel.h
+        ../src/playback/VideoFrameQueue.cpp
+        ../src/playback/VideoFrameScheduler.cpp
+)
+target_link_libraries(sunplayer_jellyfin_tests PRIVATE Qt6::Test Qt6::Quick sunplayer_jellyfin sunplayer_video_pipeline)
+target_compile_definitions(sunplayer_jellyfin_tests PRIVATE SUNPLAYER_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+add_test(NAME jellyfin COMMAND sunplayer_jellyfin_tests)
+set_tests_properties(jellyfin PROPERTIES LABELS "integration;media;network" TIMEOUT 60)

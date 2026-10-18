@@ -15,6 +15,9 @@ VideoPage {
     required property PresentationOutputState outputState
     required property WindowCommands windowCommands
     required property SupportController supportController
+    property real topContentInset: 0
+    property bool jellyfinAvailable: false
+    signal jellyfinRequested()
     readonly property var applicationUpdate: windowCommands.applicationUpdate
 
     readonly property bool sessionReady:
@@ -465,6 +468,14 @@ VideoPage {
             onClicked: root.windowCommands.chooseMedia()
         }
 
+        Button {
+            objectName: "openJellyfinButton"
+            Layout.alignment: Qt.AlignHCenter
+            text: "Jellyfin"
+            visible: root.jellyfinAvailable
+            onClicked: root.jellyfinRequested()
+        }
+
         ColumnLayout {
             Layout.alignment: Qt.AlignHCenter
             visible: root.applicationUpdate !== null
@@ -629,7 +640,7 @@ VideoPage {
 
             Button {
                 objectName: "retryMediaButton"
-                text: qsTr("Retry")
+                text: qsTr("Retry from start")
                 enabled: root.session.mediaUrl.toString().length > 0
                 onClicked: root.session.retry()
             }
@@ -668,12 +679,13 @@ VideoPage {
             right: parent.right
             top: parent.top
             margins: 20
+            topMargin: root.topContentInset + 20
         }
         z: 20
         visible: root.showPlaybackDetails && root.sessionActive
         width: Math.min(400, Math.max(280, root.width - 40))
         height: Math.min(detailsLayout.implicitHeight + 24,
-                         Math.max(1, root.height - 40))
+                         Math.max(1, root.height - root.topContentInset - 40))
         radius: 14
         color: Qt.rgba(12 / 255, 14 / 255, 18 / 255, 0.86)
         border.color: Qt.rgba(1, 1, 1, 0.16)

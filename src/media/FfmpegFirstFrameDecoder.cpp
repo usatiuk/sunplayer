@@ -22,7 +22,7 @@ FfmpegFirstFrameResult decodeFirstVideoFrame(QString const& path, VideoFrameIden
     FfmpegFirstFrameResult firstFrame;
     FfmpegVideoDecodeResult const decoded = decodeVideoFrames(
         {
-            .path = path,
+            .input = path,
             .firstFrameIdentity = identity,
             .hardwareDecode = hardwareDecode,
             .extraHardwareFrames = 2,

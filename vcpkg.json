@@ -43,6 +43,11 @@
     {
       "name": "moltenvk",
       "platform": "osx"
+    },
+    {
+      "name": "qtkeychain",
+      "default-features": false,
+      "platform": "windows | osx"
     }
   ]
 }

@@ -36,7 +36,7 @@ with compatible glibc, C++ runtime and native graphics libraries. This is not
 an older-distro or universal-Linux compatibility claim.
 
 The image bundles Qt 6.10, imported QML modules, native Qt Wayland plugins,
-FFmpeg, libplacebo, cubeb, libass and their non-system dependencies. The host
+FFmpeg, libplacebo, cubeb, libass, QtKeychain, libsecret and their non-system dependencies. The host
 provides the Wayland compositor, Vulkan 1.3-capable driver/loader, libva/libva-drm/libva-x11
 (build baseline VA-API 1.23), DRM, GBM, EGL/GL and Wayland system libraries.
 VAAPI additionally requires the appropriate host media driver and accessible
@@ -126,3 +126,23 @@ outside this implementation.
 
 Current delivery evidence is recorded in the
 [AppImage delivery plan](../../docs/plans/cross-cutting/2026-10-17-docker-appimage.md).
+
+## Jellyfin
+
+The same AppImage includes the Jellyfin browser, native HTTP(S) Direct Play,
+resume and final progress reports. QtKeychain is linked from the bundle;
+libsecret is explicitly deployed because QtKeychain loads it at runtime.
+The smoke checks QtKeychain bundle resolution, libsecret dependency closure,
+and presence of the Qt TLS backend before normal QML/A/V scenarios.
+
+Remembered login uses the host Secret Service/KWallet over the session bus.
+The bundle does not run its own keyring service. If secure storage is missing
+or locked, sign-in remains session-only with an error; credentials never fall
+back to a plaintext file. Real-server login, secure-store persistence and
+remote playback acceptance are separate manual checks; packaging smoke does
+not contact the user's server or keyring.
+
+The 2026-10-18 Jellyfin delivery rebuilt the unsigned AppImage and passed these
+dependency checks plus packaged QML/A/V smoke in the separate runtime container.
+Its evidence and real-server/native-store acceptance gaps are recorded in the
+[Jellyfin delivery plan](../../docs/plans/cross-cutting/2026-10-18-jellyfin-client.md).

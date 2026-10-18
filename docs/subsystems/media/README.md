@@ -322,3 +322,11 @@ A separate hashed two-second Matroska fixture interleaves two FFV1 video
 streams and two FLAC audio streams. Crossed explicit selections must change
 the decoded center-pixel luma and PCM polarity, while invalid or wrong-type
 stream indexes fail instead of falling back.
+
+## Input boundary
+
+Decode requests carry `MediaInput`, not a filesystem path. Local files and
+Jellyfin original HTTP(S) files use the same FFmpeg open helper and one demux
+operation. It sets protocol/time/TLS policy and a redacting diagnostic callback;
+initial seek discovers/retains the normalized shared timeline origin.
+See [media input](../media-io/README.md) and [Jellyfin](../jellyfin/README.md).

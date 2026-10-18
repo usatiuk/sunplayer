@@ -508,7 +508,7 @@ void FfmpegFirstFrameTest::retainsStreamHdr10PlusAtTheDecodeBoundary() {
 
     FfmpegVideoDecodeResult const result = decodeFfmpegVideoPackets(
         {
-            .path = QStringLiteral("memory:hdr10plus"),
+            .input = QStringLiteral("memory:hdr10plus"),
             .firstFrameIdentity =
                 {
                     .playbackGeneration = 31,
@@ -579,7 +579,7 @@ void FfmpegFirstFrameTest::retainsStreamHdr10PlusAtTheDecodeBoundary() {
     std::vector<std::shared_ptr<DecodedVideoFrame const>> unsupportedVersionFrames;
     FfmpegVideoDecodeResult const unsupportedVersionResult = decodeFfmpegVideoPackets(
         {
-            .path = QStringLiteral("memory:unsupported-dovi-version"),
+            .input = QStringLiteral("memory:unsupported-dovi-version"),
             .firstFrameIdentity =
                 {
                     .playbackGeneration = 32,
@@ -890,7 +890,7 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
     std::uint64_t const playbackGeneration = 40U + static_cast<std::uint64_t>(formatKind);
     FfmpegVideoDecodeResult const decoded = decodeVideoFrames(
         {
-            .path = fixture,
+            .input = fixture,
             .firstFrameIdentity =
                 {
                     .playbackGeneration = playbackGeneration,
@@ -1980,7 +1980,7 @@ void FfmpegFirstFrameTest::continuousDecodeDrainsEveryFrame() {
     std::vector<std::shared_ptr<DecodedVideoFrame const>> frames;
     FfmpegVideoDecodeResult const result = decodeVideoFrames(
         {
-            .path = fixture,
+            .input = fixture,
             .firstFrameIdentity =
                 {
                     .playbackGeneration = 17,
@@ -2027,7 +2027,7 @@ void FfmpegFirstFrameTest::seekDecodesInterFramePreroll() {
     std::optional<VideoSignalDescription> decodedSignal;
     FfmpegVideoDecodeResult const sought = decodeVideoFrames(
         {
-            .path = fixture,
+            .input = fixture,
             .firstFrameIdentity =
                 {
                     .playbackGeneration = 19,
@@ -2087,7 +2087,7 @@ void FfmpegFirstFrameTest::longTimelineSeekUses64BitTarget() {
     std::optional<std::int64_t> firstSoughtPts;
     FfmpegVideoDecodeResult const sought = decodeVideoFrames(
         {
-            .path = fixture,
+            .input = fixture,
             .firstFrameIdentity =
                 {
                     .playbackGeneration = 21,
@@ -2140,7 +2140,7 @@ void FfmpegFirstFrameTest::hardwareDecodeFailureRetriesSoftware() {
                 capability.unavailableReason.contains(QStringLiteral("Injected post-selection hardware failure"));
             return decodeVideoFrames(
                 {
-                    .path = fixture,
+                    .input = fixture,
                     .firstFrameIdentity = identity,
                     .hardwareDecode = capability,
                     .extraHardwareFrames = 2,
@@ -2388,7 +2388,7 @@ void FfmpegFirstFrameTest::continuousVaapiDecodeAndImport() {
         return true;
     };
     auto const request = FfmpegVideoDecodeRequest{
-        .path = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-h264-seek.mkv"),
+        .input = QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/sdr-bt709-h264-seek.mkv"),
         .firstFrameIdentity = {.playbackGeneration = 71, .decoderRevision = 1, .frameId = 1},
         .hardwareDecode = capability,
         .extraHardwareFrames = static_cast<int>(VideoFrameQueue::capacity + 2),
@@ -2439,7 +2439,7 @@ void FfmpegFirstFrameTest::continuousVideoToolboxDecodeAndImport() {
     std::vector<std::shared_ptr<DecodedVideoFrame const>> frames;
     FfmpegVideoDecodeResult const decoded = decodeVideoFrames(
         {
-            .path = fixture,
+            .input = fixture,
             .firstFrameIdentity =
                 {
                     .playbackGeneration = 61,
@@ -2507,7 +2507,7 @@ void FfmpegFirstFrameTest::continuousD3d11DecodeRetainsBoundedFrames() {
     std::vector<std::shared_ptr<DecodedVideoFrame const>> frames;
     FfmpegVideoDecodeResult const result = decodeVideoFrames(
         {
-            .path = fixture,
+            .input = fixture,
             .firstFrameIdentity =
                 {
                     .playbackGeneration = 29,

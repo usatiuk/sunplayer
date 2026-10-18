@@ -1,4 +1,5 @@
 #include "media/FfmpegMediaDecoder.h"
+#include "media/ffmpeg/FfmpegNetworkInput.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -1305,8 +1306,7 @@ FfmpegMediaDecodeResult decodeMediaFrames(FfmpegMediaDecodeRequest const& reques
         interruptFfmpeg,
         &interrupt,
     };
-    QByteArray const path = request.video.path.toUtf8();
-    int status = avformat_open_input(&rawFormat, path.constData(), nullptr, nullptr);
+    int status = openFfmpegInput(&rawFormat, request.video.input);
     if (status < 0) {
         if (rawFormat) {
             avformat_close_input(&rawFormat);

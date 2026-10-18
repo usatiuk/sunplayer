@@ -10,6 +10,7 @@
 
 #include "media/DecodedVideoFrame.h"
 #include "media/FfmpegHardwareDevice.h"
+#include "media/MediaInput.h"
 
 struct VideoTimelineOrigin {
     bool operator==(VideoTimelineOrigin const&) const = default;
@@ -36,7 +37,7 @@ struct VideoDecodeStart {
 };
 
 struct FfmpegVideoDecodeRequest {
-    QString path;
+    MediaInput input;
     VideoFrameIdentity firstFrameIdentity;
     VideoHardwareDecodeCapability hardwareDecode;
     int extraHardwareFrames = 0;

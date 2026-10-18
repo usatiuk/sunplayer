@@ -83,6 +83,7 @@ class PresentationWindow : public QWindow {
     bool nativeEvent(QByteArray const& eventType, void* message, qintptr* result) override;
 #endif
     bool event(QEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
   private:
     enum class PresentationLifecycle {
@@ -113,6 +114,10 @@ class PresentationWindow : public QWindow {
     std::unique_ptr<class PresentationSettings> m_settings;
     std::unique_ptr<class DiagnosticVideoSource> m_diagnosticVideoSource;
     std::unique_ptr<class MediaSession> m_mediaSession;
+    std::unique_ptr<class JellyfinBrowser> m_jellyfin;
+    std::unique_ptr<class JellyfinPlaybackAdapter> m_jellyfinPlayback;
+    bool m_quitPending = false;
+    bool m_quitReady = false;
     std::unique_ptr<class NativeMediaControls> m_nativeMediaControls;
     std::unique_ptr<class PlaybackPowerInhibitor> m_playbackPowerInhibitor;
     std::unique_ptr<class ActiveVideoSource> m_activeVideoSource;

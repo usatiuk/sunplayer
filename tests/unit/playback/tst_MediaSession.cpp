@@ -1017,10 +1017,15 @@ void MediaSessionTest::audioOutputFailureBecomesSessionError() {
     QVERIFY(audioSink->snapshot().producerFinished);
     QCOMPARE(session.state(), MediaSession::State::Ready);
 
+    QSignalSpy finishing(&session, &MediaSession::playbackFinishing);
+    auto const finalPosition = session.positionMilliseconds();
+    QVERIFY(finalPosition > 0);
     constexpr auto reason = "Injected post-decode device failure";
     audioSink->fail(session.playbackGeneration(), reason);
     QTRY_COMPARE_WITH_TIMEOUT(session.state(), MediaSession::State::Error, 1'000);
     QCOMPARE(session.errorMessage(), QString::fromLatin1(reason));
+    QCOMPARE(finishing.size(), 1);
+    QCOMPARE(finishing.front()[1].toLongLong(), finalPosition);
     QVERIFY(!session.hasFrame());
     QVERIFY(!session.playing());
 }
@@ -1904,7 +1909,7 @@ void MediaSessionTest::newerOpenRejectsStaleCompletion() {
     MediaSession session(VideoTargetReadback::Disabled,
                          [delayed](FfmpegVideoDecodeRequest const& request, FfmpegVideoFrameSink const& sink,
                                    std::stop_token stopToken) {
-                             if (request.path.endsWith(QStringLiteral("blocked.mkv"))) {
+                             if (request.input.ffmpegLocator().endsWith(QStringLiteral("blocked.mkv"))) {
                                  return delayed->wait(stopToken);
                              }
                              return decodeVideoFrames(request, sink, stopToken);
@@ -1957,14 +1962,20 @@ void MediaSessionTest::destructionCancelsWorker() {
 
 void MediaSessionTest::presentationFailureBecomesSessionError() {
     MediaSession session(VideoTargetReadback::Disabled);
-    session.openMedia(QUrl::fromLocalFile(fixturePath()));
+    session.openMedia(MediaInput(playbackFixturePath()), 2500);
     QTRY_COMPARE_WITH_TIMEOUT(session.state(), MediaSession::State::Ready, 5000);
 
+    session.pause();
+    auto const finalPosition = session.positionMilliseconds();
+    QVERIFY(finalPosition >= 2500);
+    QSignalSpy finishing(&session, &MediaSession::playbackFinishing);
     QVERIFY(session.videoSource().reportPresentationFailure({
         .kind = VideoFailureKind::General,
         .reason = QStringLiteral("unsupported mapped surface"),
     }));
     QCOMPARE(session.state(), MediaSession::State::Error);
+    QCOMPARE(finishing.size(), 1);
+    QCOMPARE(finishing.front()[1].toLongLong(), finalPosition);
     QVERIFY(!session.hasFrame());
     QCOMPARE(session.errorMessage(), QStringLiteral("unsupported mapped surface"));
 }

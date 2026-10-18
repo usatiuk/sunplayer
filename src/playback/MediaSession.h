@@ -175,6 +175,7 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     void setVideoDecodeCapability(VideoHardwareDecodeCapability capability);
 
     Q_INVOKABLE void openMedia(QUrl const& url);
+    void openMedia(MediaInput const& input, qlonglong startingPositionMilliseconds = 0);
     Q_INVOKABLE void cancel();
     Q_INVOKABLE void retry();
     Q_INVOKABLE void play();
@@ -189,6 +190,8 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     Q_INVOKABLE void selectSubtitleStream(int streamIndex);
 
   signals:
+    void mediaClosing(qulonglong mediaItemId, qlonglong positionMilliseconds);
+    void playbackFinishing(qulonglong mediaItemId, qlonglong positionMilliseconds);
     void sessionChanged();
     void playbackMetricsChanged();
     void timelineChanged();
@@ -208,10 +211,10 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
         FfmpegMediaDecodeRequest decode;
     };
 
-    void startOpen(QUrl const& url, QString const& path, VideoHardwareDecodeCapability hardwareDecode);
+    void startOpen(VideoHardwareDecodeCapability hardwareDecode, std::int64_t positionMicroseconds);
     void restartAt(std::int64_t positionMicroseconds, VideoHardwareDecodeCapability hardwareDecode, bool seeking);
-    void startDecode(QUrl const& url, QString const& path, VideoHardwareDecodeCapability hardwareDecode,
-                     std::int64_t requestedPositionMicroseconds, bool newMedia, bool seeking);
+    void startDecode(VideoHardwareDecodeCapability hardwareDecode, std::int64_t requestedPositionMicroseconds,
+                     bool newMedia, bool seeking);
     void submitOpen(OpenRequest request);
     void cancelPipeline();
     void workerLoop(std::stop_token workerStopToken);
@@ -264,6 +267,7 @@ class MediaSession final : public QObject, private DecodedVideoFrameSelector {
     VideoFrameQueue m_frameQueue;
     VideoFrameScheduler m_frameScheduler;
     State m_state = State::Empty;
+    MediaInput m_input;
     QUrl m_mediaUrl;
     QString m_displayName;
     QString m_errorMessage;

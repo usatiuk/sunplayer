@@ -287,3 +287,14 @@ on Close; live decoder generation retains its cancellation meaning.
 `positionJumped` reports logical seeks/replay jumps from any caller. Ordinary
 progress and same-position restarts are not jumps. Existing `seekable` now
 reflects actual public seek acceptance, with source capability kept internally.
+
+## Service-backed media
+
+`openMedia(MediaInput, initialPositionMilliseconds)` accepts source-neutral
+local or HTTP(S) inputs and retains them through seek/retry/track/recovery
+paths. Initial resume discovers the shared timeline origin during probing.
+`mediaClosing` captures logical item/position before replacement or cancellation;
+`playbackFinishing` captures position before stop or terminal error resets.
+Service adapters use these signals without putting service IDs in playback.
+Remote video-only starvation freezes at the current frame horizon with the
+existing Buffering interruption. See [media input](../media-io/README.md).

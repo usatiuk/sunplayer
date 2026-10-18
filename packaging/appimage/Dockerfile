@@ -4,7 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install --yes --no-install-recommends \
     build-essential cmake ninja-build pkg-config git ca-certificates curl \
     desktop-file-utils file dbus-bin gnupg \
-    qt6-base-dev qt6-base-private-dev \
+    qt6-base-dev qt6-base-private-dev qtkeychain-qt6-dev \
     qt6-declarative-dev qt6-declarative-private-dev qt6-declarative-dev-tools \
     qt6-wayland qt6-wayland-dev qt6-wayland-private-dev \
     qt6-shadertools-dev qt6-shader-baker qt6-svg-plugins spirv-tools \
@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install --yes --no-install-recommends \
     libavcodec-dev libavformat-dev libavutil-dev libswresample-dev \
     libplacebo-dev libcubeb-dev libass-dev libvulkan-dev \
     libwayland-dev libwayland-bin wayland-protocols libva-dev libdrm-dev \
-    libpulse0 \
+    libpulse0 libsecret-1-0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/tools

@@ -44,7 +44,8 @@ for library in "${host_libraries[@]}"; do
     exclusions+=("--exclude-library=$library")
 done
 linuxdeploy --appdir "$appdir" --plugin qt \
-    --executable "$appdir/usr/libexec/sunplayer/dbus-send" "${exclusions[@]}"
+    --executable "$appdir/usr/libexec/sunplayer/dbus-send" \
+    --library /usr/lib/x86_64-linux-gnu/libsecret-1.so.0 "${exclusions[@]}"
 # The nested Qt plugin does not honor all linuxdeploy exclusions (upstream #205).
 for library in "${host_libraries[@]}"; do
     find "$appdir/usr/lib" -name "$library" -delete

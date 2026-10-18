@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -16,9 +18,12 @@ Item {
     required property VideoViewportState viewportState
     required property SupportController supportController
 
+    property JellyfinBrowser jellyfin: null
     property int currentPage: 0
+    property int playbackReturnPage: 0
+    readonly property real chromeTop: windowChrome.available ? windowChrome.titleBarHeight : 0
     readonly property VideoPage activePage:
-        currentPage === 0 ? playerPage : hdrLabPage
+        currentPage === 0 ? playerPage : currentPage === 1 ? hdrLabPage : (browserLoader.item as VideoPage)
     readonly property rect activeVideoViewportRect:
         Qt.rect(pageStack.x + activePage.x
                     + activePage.videoViewportRect.x,
@@ -44,15 +49,16 @@ Item {
     Binding {
         target: root.activeVideoSource
         property: "route"
-        value: root.currentPage === 0
-            ? ActiveVideoSource.Player
-            : ActiveVideoSource.Diagnostics
+        value: root.currentPage === 1
+            ? ActiveVideoSource.Diagnostics
+            : ActiveVideoSource.Player
     }
 
     Connections {
         target: root.windowCommands
 
         function onMediaOpenRequested() {
+            root.playbackReturnPage = root.currentPage
             root.currentPage = 0
         }
     }
@@ -97,6 +103,9 @@ Item {
             outputState: root.presentationOutput
             windowCommands: root.windowCommands
             supportController: root.supportController
+            topContentInset: root.chromeTop - pageStack.y
+            jellyfinAvailable: root.jellyfin !== null
+            onJellyfinRequested: root.currentPage = 2
         }
 
         HdrLabPage {
@@ -105,6 +114,37 @@ Item {
             outputState: root.presentationOutput
             presentationSettings: root.presentationPolicy
             videoSource: root.diagnosticSource
+        }
+        Loader {
+            id: browserLoader
+            active: root.jellyfin !== null
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            sourceComponent: JellyfinPage {
+                id: jellyfinPage
+                browser: root.jellyfin
+                onBackRequested: {
+                    root.mediaSession.cancel()
+                    root.currentPage = 0
+                }
+            }
+        }
+
+    }
+
+    Button {
+        objectName: "playerBackButton"
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.margins: 24
+        anchors.topMargin: root.chromeTop + 24
+        z: 30
+        visible: root.currentPage === 0 && root.mediaSession.state !== MediaSession.Empty
+            && (!playerPage.sessionActive || playerPage.controlsShouldShow)
+        text: qsTr("← Back")
+        onClicked: {
+            root.mediaSession.cancel()
+            root.currentPage = root.playbackReturnPage
         }
     }
 

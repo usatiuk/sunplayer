@@ -28,6 +28,7 @@ class SubtitleRenderer;
 class RenderedVideoProducer;
 class VideoViewportState;
 class SupportController;
+class JellyfinBrowser;
 class SubtitleSettings;
 enum class VideoOperationResult;
 
@@ -40,8 +41,8 @@ class RhiPresentationEngine final : public QObject {
                           ActiveVideoSource& videoSource, DiagnosticVideoSource& diagnosticSource,
                           MediaSession& mediaSession, VideoViewportState& videoViewport,
                           SubtitleSettings& subtitleSettings, SupportController& supportController,
-                          PresentationSurfaceContract surfaceContract, PresentationSurfaceController* surfaceController,
-                          QObject* parent = nullptr);
+                          JellyfinBrowser& jellyfin, PresentationSurfaceContract surfaceContract,
+                          PresentationSurfaceController* surfaceController, QObject* parent = nullptr);
     ~RhiPresentationEngine() override;
 
     bool start();
@@ -98,6 +99,7 @@ class RhiPresentationEngine final : public QObject {
     VideoViewportState& m_videoViewport;
     SubtitleSettings& m_subtitleSettings;
     SupportController& m_supportController;
+    JellyfinBrowser& m_jellyfin;
     PresentationSurfaceContract m_surfaceContract;
     PresentationSurfaceController* m_surfaceController = nullptr;
     std::unique_ptr<GraphicsDeviceDomain> m_graphicsDevice;

@@ -28,6 +28,11 @@ struct VideoFrameSelection {
 class VideoFrameScheduler final {
   public:
     void reset();
+    std::optional<std::int64_t> currentFrameEnd() const {
+        return m_currentFrameTimeMicroseconds
+                   ? std::optional<std::int64_t>(*m_currentFrameTimeMicroseconds + m_currentFrameDurationMicroseconds)
+                   : std::nullopt;
+    }
     VideoFrameSelection selectFirst(VideoFrameQueue& queue, std::uint64_t playbackGeneration);
     VideoFrameSelection selectForPresentation(VideoFrameQueue& queue, std::uint64_t playbackGeneration,
                                               MediaClockSnapshot clock, bool decoderDrained,

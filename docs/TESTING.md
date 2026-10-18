@@ -916,3 +916,45 @@ A successful signed old-to-new update through the packaged helper is recorded
 in the [updater delivery plan](plans/cross-cutting/2026-10-17-appimage-updates.md).
 Hosted v1.4.0 release execution passed. Physical-desktop update/relaunch remains
 a manual check; the user confirmed the cursor-hide fix on their desktop.
+
+## Jellyfin V1 coverage
+
+The `jellyfin` CTest crosses real Qt Network, browser/adapter/MediaSession and
+native FFmpeg using loopback HTTP/range/TLS fixtures. It checks login/base path,
+original-source GET/static stream resolution, exact 2-second keyframe preroll for a 2.5-second resume,
+HTTP cancellation, final report item/session/position and ordering, explicit
+watched ordering, authentication loss before new login, video-only buffering,
+redirect credential isolation, untrusted-certificate rejection and diagnostic
+redaction. Home cases verify bounded resume/recent queries, shelf command item
+identity, fresh movie details, partial feed failure and auth clearing. QML shell
+tests check CSD-safe control bounds, local/Jellyfin/direct-launch Back behavior,
+and login without a video viewport. Populated Basic/Fusion snapshots cover home
+at 1280/800 px, movie/show/season galleries at 800 px, and compact season details
+at 640 px, with synthetic artwork served through the real image provider.
+Captures are written under `build/linux-debug/tests/ui-snapshots/`; no QML
+warnings are accepted. Real-server artwork/error presentation and large-library
+acceptance remain manual checks.
+MediaSession tests verify pre-reset position snapshots on audio/presentation
+failure. No real keyring or personal settings are mutated by these tests.
+
+AppImage smoke additionally checks linked QtKeychain comes from the bundle,
+runtime-loaded libsecret resolves, and the Qt TLS backend exists. It runs normal
+packaged QML/A/V playback in the isolated runtime; this does not prove remote
+playback or secure-store persistence.
+
+User real-server acceptance remains pending: record server version; browse
+show/season/episode artwork/descriptions and multiple pages; play SDR/HDR
+originals with embedded tracks; resume and Play from start; close/reopen,
+end-of-media watched policy, watched/unwatched, logout and orderly app quit.
+Test saved-login restore/delete, failed/locked/missing keyring, and failed-sync
+feedback explicitly. Windows/macOS dependency builds, packaged HTTPS and native
+keychain behavior must be checked on those hosts, not on Linux. See
+[Jellyfin](subsystems/jellyfin/README.md) and its
+[delivery plan](plans/cross-cutting/2026-10-18-jellyfin-client.md).
+
+The Jellyfin delivery's final serial run passed 40/41 CTests. The remaining
+media-controls test failed before behavior on a sandbox AppArmor policy lookup;
+the unmodified executable then passed on a disposable private D-Bus daemon
+with test-only AppArmor integration disabled. No host policy was changed.
+The final AppImage build/dependency/QML/A/V smoke passed. Exact commands and
+capability skips are in the delivery plan; this is not native hardware evidence.

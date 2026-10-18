@@ -7,3 +7,7 @@ set(
     VCPKG_CHAINLOAD_TOOLCHAIN_FILE
     "${CMAKE_CURRENT_LIST_DIR}/../toolchains/clang-cl.cmake"
 )
+
+if(PORT STREQUAL "qtkeychain")
+    list(APPEND VCPKG_ENV_PASSTHROUGH SUNPLAYER_QT_PREFIX)
+endif()
