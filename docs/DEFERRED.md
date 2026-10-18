@@ -510,3 +510,13 @@ locations rather than immediately returning to Open video. Open transitions
 currently use a retained-visit boolean, not entries in browser history. Keep
 logical Up separate; fix/test this history edge separately from the Windows
 palette/network regression.
+
+### Windows credential backend acceptance and cache cleanup
+
+The PasswordVault implementation replaces QtKeychain's Generic Credential APIs
+on Windows without changing TokenStore consumers or permissions. Hosted desktop
+round-trip tests do not establish installed AppSilo save/restore/logout behavior;
+the user will test the CI MSIX. The dormant Windows QtKeychain triplet clause is
+intentionally retained until the next dependency-cache refresh, avoiding ABI
+cache invalidation for otherwise unchanged ports. No legacy-token migration
+or runtime backend fallback is planned.

@@ -6,7 +6,7 @@
 ## Decision
 
 One concrete Jellyfin client owns authentication/API validation; a Qt model
-owns navigation, QtKeychain owns token persistence, and a playback adapter owns
+owns navigation, TokenStore owns native token persistence, and a playback adapter owns
 resolution/reporting. The application owns their lifetime outside rebuilt QML
 scenes. Use existing Qt Network/JSON/models/images and native FFmpeg HTTP(S).
 No server extension, generic provider registry, custom HTTP media reader or
@@ -30,7 +30,12 @@ periodic reporting timer, durable queue or retry framework.
 ## Alternatives and limits
 
 Qt has no native cross-platform credential-store API; QSettings is not secure
-storage. Use the approved QtKeychain dependency with insecure fallback disabled.
+storage. Use PasswordVault through the existing SDK on Windows and the approved
+QtKeychain dependency on Linux/macOS, with insecure fallback disabled. The
+Windows Generic Credential backend used by QtKeychain has reported access
+restrictions in isolated MSIX; PasswordVault is documented for AppContainer and
+desktop use. Keep one shared interface with build-selected implementations;
+no runtime fallback or extra credential capability.
 Linux uses distro packages; Windows/macOS vcpkg builds against the existing Qt
 SDK. AppImage bundles runtime libraries while the host owns its keyring service.
 

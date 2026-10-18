@@ -474,16 +474,22 @@ elseif (APPLE)
 endif ()
 
 find_package(Qt6 REQUIRED COMPONENTS Network)
-find_package(Qt6Keychain CONFIG REQUIRED)
 
 add_library(sunplayer_jellyfin STATIC
         src/jellyfin/JellyfinClient.cpp
         src/jellyfin/JellyfinClient.h
-        src/jellyfin/TokenStore.cpp
         src/jellyfin/TokenStore.h
 )
 target_include_directories(sunplayer_jellyfin PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_link_libraries(sunplayer_jellyfin PUBLIC Qt6::Network PRIVATE qt6keychain)
+target_link_libraries(sunplayer_jellyfin PUBLIC Qt6::Network)
+if (WIN32)
+    target_sources(sunplayer_jellyfin PRIVATE src/jellyfin/TokenStoreWindows.cpp)
+    target_link_libraries(sunplayer_jellyfin PRIVATE RuntimeObject WindowsApp)
+else ()
+    find_package(Qt6Keychain CONFIG REQUIRED)
+    target_sources(sunplayer_jellyfin PRIVATE src/jellyfin/TokenStore.cpp)
+    target_link_libraries(sunplayer_jellyfin PRIVATE qt6keychain)
+endif ()
 
 qt_add_executable(sunplayer
         src/playback/CoalescedGenerationWake.h

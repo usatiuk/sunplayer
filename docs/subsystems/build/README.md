@@ -601,8 +601,10 @@ tool hashes, deployment policy and release gating remain unchanged. See the
 
 Qt Network is part of the existing Qt SDK. Secure token persistence adds the
 approved QtKeychain dependency: Linux uses system `qtkeychain-qt6-dev` and
-`find_package(Qt6Keychain)`/`qt6keychain`, with no vcpkg. Windows/macOS use the
+`find_package(Qt6Keychain)`/`qt6keychain`, with no vcpkg. macOS uses the
 project `qtkeychain` 0.15.0 vcpkg overlay without any vcpkg Qt dependency.
+Windows uses PasswordVault from the existing SDK/C++WinRT instead; it neither
+finds nor links QtKeychain and adds no new dependency.
 Before manifest installation, CMake supplies the existing Qt SDK prefix from
 `Qt6_DIR`/`CMAKE_PREFIX_PATH`; the platform triplet passes/tracks it only for
 QtKeychain. No second Qt installation is introduced.
@@ -627,3 +629,8 @@ public-server or enterprise authentication permission is requested. Native
 Windows-style shell tests run on hosted Windows alongside Basic/Fusion;
 unpackaged HTTP tests do not validate installed AppContainer networking or
 credential-store access.
+
+The Windows vcpkg triplet remains byte-for-byte unchanged during the
+PasswordVault switch so other cached port ABIs are preserved. Its dormant
+QtKeychain-only clause is cleanup for the next intended dependency refresh.
+The manifest now requests QtKeychain only on macOS.

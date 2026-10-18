@@ -38,8 +38,10 @@ search, account switching, or background sync.
   JSON validation, typed item/playback values, and HTTP timeouts. Password login
   establishes the same session used by every consumer. A later login method can
   establish that session without changing the player or browser.
-* `TokenStore` wraps asynchronous QtKeychain read/write/delete. It stores only
-  the access token, with insecure fallback disabled. Native credentials use
+* `TokenStore` exposes queued read/write/delete callbacks. CMake selects the
+  independent Windows PasswordVault implementation or Linux/macOS QtKeychain
+  implementation; native APIs never enter the browser/client header. It stores
+  only the access token, with no insecure fallback. Native credentials use
   service `SunPlayer`, entry `jellyfin-token`; ordinary application settings
   hold server/user/device metadata and a remember flag. Failed save leaves a
   usable session-only login. Sign-out disables restoration before deletion;
@@ -100,10 +102,15 @@ underrun behavior. There is no second reader, clock, cache, or retry engine.
 
 ## Dependencies and packaging
 
-Linux uses system `qtkeychain-qt6-dev`, never vcpkg. Windows/macOS use the
-approved QtKeychain vcpkg overlay against the already installed Qt SDK; it has
-no vcpkg Qt dependency. Secure stores are native QtKeychain backends (Windows
-Credential Store, macOS Keychain, Linux Secret Service/KWallet).
+Linux uses system `qtkeychain-qt6-dev`, never vcpkg. macOS uses the approved
+QtKeychain vcpkg overlay against the already installed Qt SDK, without vcpkg Qt.
+QtKeychain uses macOS Keychain or Linux Secret Service/KWallet. Windows uses
+PasswordVault through the existing Windows SDK/C++WinRT and adds no dependency
+or capability. The Windows implementation owns local WinRT initialization,
+queues operations on its QObject, and releases native objects before completion.
+Missing deletion succeeds; other failures include a safe HRESULT. Tokens stored
+by the former Windows Generic Credential backend are not migrated; sign in
+again after this backend change.
 
 The AppImage bundles QtKeychain and explicitly deploys runtime-loaded libsecret
 and its dependencies. Its Qt TLS backend and native FFmpeg TLS libraries are
@@ -151,13 +158,17 @@ library ancestors; those selections retain the returned media hierarchy without
 guessing a matching tab. Cancelling/replacing media invalidates a pending Home
 selection as well as playback resolution.
 
-Windows QtKeychain links statically to avoid windeployqt treating its Qt-prefixed
-DLL as a Qt SDK module; the Qt SDK and CRT remain dynamically linked. Hosted CI
-verifies Windows packaging; no Windows/macOS builds run on the Linux host.
+Windows no longer links QtKeychain. Its unused vcpkg triplet clause remains
+until a deliberate dependency-cache refresh to avoid invalidating other ports.
+Hosted CI builds Windows and exercises the actual PasswordVault backend with a
+unique disposable test entry; Linux does not build or run native Windows/macOS.
 
 Windows packages require the standard public-client and private-network
 capabilities for remote Jellyfin access. Network failures without an HTTP
 response show the Qt network-error category rather than HTTP 0; diagnostics
 do not embed raw error strings that might contain addresses or credentials.
-QtKeychain's Windows Credential Manager backend needs separate AppSilo
-acceptance testing; no extra credential capability is assumed or added.
+PasswordVault save/restore/delete inside the installed AppSilo package remains
+user acceptance; the hosted integration test is an ordinary desktop process.
+Secure-storage and metadata-settings failures are both preserved when they
+coincide. No extra credential capability is assumed or added. See the
+[Windows token-store delivery plan](../../plans/cross-cutting/2026-10-18-windows-token-store.md).

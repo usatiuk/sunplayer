@@ -981,3 +981,12 @@ Hosted Windows additionally runs the Windows style. Linux Basic/Fusion results
 do not establish native Windows rendering. Jellyfin connection-refused coverage
 checks a real failed TCP connection produces the Qt error category, not HTTP 0.
 Installed Windows package network/credential access remains manual acceptance.
+
+`windows-token-store` (hosted Windows only) uses a unique disposable entry in
+the actual PasswordVault backend. It covers missing reads, deferred callbacks,
+write/read across store owners, overwrite, idempotent remove, and owner
+destruction cancelling queued writes. Cleanup addresses only that test entry.
+It does not validate installed AppContainer/AppSilo behavior. Combined secure
+store/metadata error preservation is code-reviewed; no fake keyring failure
+injection is introduced. User acceptance remains save → restart → restore →
+logout in the downloadable MSIX.

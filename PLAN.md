@@ -397,6 +397,9 @@ Windows acceptance exposed global palette overrides and missing package network
 capabilities; local corrections restore system control colors, declare only
 public/LAN network access, and add native-style hosted coverage. Installed
 Windows networking and secure-store acceptance remain pending.
+The [Windows token-store plan](docs/plans/cross-cutting/2026-10-18-windows-token-store.md)
+replaces Generic Credential APIs with SDK PasswordVault behind TokenStore;
+Linux/macOS retain QtKeychain, with no new dependency or permission.
 
 ### 3. FFmpeg media integration
 

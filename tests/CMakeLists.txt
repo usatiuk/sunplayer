@@ -1256,3 +1256,14 @@ target_link_libraries(sunplayer_jellyfin_tests PRIVATE Qt6::Test Qt6::Quick sunp
 target_compile_definitions(sunplayer_jellyfin_tests PRIVATE SUNPLAYER_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 add_test(NAME jellyfin COMMAND sunplayer_jellyfin_tests)
 set_tests_properties(jellyfin PROPERTIES LABELS "integration;media;network" TIMEOUT 60)
+
+if (WIN32)
+    qt_add_executable(sunplayer_windows_token_store_tests integration/jellyfin/tst_WindowsTokenStore.cpp)
+    target_link_libraries(sunplayer_windows_token_store_tests PRIVATE Qt6::Test sunplayer_jellyfin)
+    add_test(NAME windows-token-store COMMAND sunplayer_windows_token_store_tests)
+    set_tests_properties(windows-token-store PROPERTIES
+        LABELS "integration;windows"
+        TIMEOUT 30
+        ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}"
+    )
+endif ()

@@ -217,7 +217,8 @@ void JellyfinBrowser::login(QString address, QString username, QString password,
             m_settings.setValue(QStringLiteral("jellyfin/remember"), error.isEmpty());
             m_settings.sync();
             if (m_settings.status() != QSettings::NoError) {
-                error = tr("Login settings could not be saved. This login may not be remembered.");
+                auto const settingsError = tr("Login settings could not be saved. This login may not be remembered.");
+                error = error.isEmpty() ? settingsError : error + u'\n' + settingsError;
             }
             m_busy = false;
             m_message = error;

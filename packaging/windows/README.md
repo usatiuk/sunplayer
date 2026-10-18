@@ -213,9 +213,12 @@ The checked-in manifest is an x64 appSilo desktop application using
 outbound public-server access and `privateNetworkClientServer` for LAN Jellyfin
 servers. These are general-use Store capabilities; Windows offers no LAN
 client-only capability. No public-listener capability or FullTrust entry point
-is added. QtKeychain uses Windows Credential Manager; remembered-login behavior
-inside AppSilo remains a native packaged acceptance check, not a consequence of
-network permission.
+is added. Windows remembered login uses PasswordVault from the existing SDK,
+selected at build time behind TokenStore. It adds no credential capability or
+QtKeychain dependency. Generic Credential tokens from older builds are not
+migrated; sign in again after updating. Hosted tests cover a disposable
+PasswordVault entry outside AppContainer; save/restart/restore/logout inside
+the installed AppSilo package remains a separate acceptance check.
 It declares one common-video-container file-type association for `.avi`,
 `.flv`, `.m2ts`, `.m4v`, `.mkv`, `.mov`, `.mp4`, `.mpeg`, `.mpg`, `.mts`,
 `.ts`, `.webm`, and `.wmv`, with

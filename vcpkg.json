@@ -47,7 +47,7 @@
     {
       "name": "qtkeychain",
       "default-features": false,
-      "platform": "windows | osx"
+      "platform": "osx"
     }
   ]
 }
