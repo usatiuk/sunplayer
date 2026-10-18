@@ -58,3 +58,12 @@ coverage, packaged-QML validation and qmllint all passed. Self-review confirmed
 all six attachment sites use the shared component and its production/test QML
 aliases match. No color or input behavior changed beyond the two additional
 Windows scrollbar consumers.
+
+## Hosted Windows diagnostic follow-up
+
+Run 39168137309 built but all three shell-style tests failed without captured
+output, alongside the existing decoder failure. Do not assume the shell failures
+are flaky or change behavior without an assertion. Add standard QtTest JUnit XML
+files alongside console output and print those reports on Windows CTest failure.
+Linux Basic/Fusion tests pass with both loggers. An isolated Linux probe with the
+palette bindings active also passes; this does not establish Windows behavior.

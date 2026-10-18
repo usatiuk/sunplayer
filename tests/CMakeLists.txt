@@ -768,11 +768,11 @@ add_test(
 
 add_test(
         NAME qml-shell
-        COMMAND sunplayer_qml_shell_tests
+        COMMAND sunplayer_qml_shell_tests -o -,txt -o "${CMAKE_CURRENT_BINARY_DIR}/qml-shell.xml,junitxml"
 )
 add_test(
         NAME qml-shell-fusion
-        COMMAND sunplayer_qml_shell_tests
+        COMMAND sunplayer_qml_shell_tests -o -,txt -o "${CMAKE_CURRENT_BINARY_DIR}/qml-shell-fusion.xml,junitxml"
 )
 
 if (WIN32)
@@ -958,7 +958,8 @@ set_tests_properties(
 set_tests_properties(qml-shell PROPERTIES ENVIRONMENT "QT_QUICK_CONTROLS_STYLE=Basic")
 set_tests_properties(qml-shell-fusion PROPERTIES ENVIRONMENT "QT_QUICK_CONTROLS_STYLE=Fusion")
 if (WIN32)
-    add_test(NAME qml-shell-windows COMMAND sunplayer_qml_shell_tests)
+    add_test(NAME qml-shell-windows COMMAND sunplayer_qml_shell_tests
+        -o -,txt -o "${CMAKE_CURRENT_BINARY_DIR}/qml-shell-windows.xml,junitxml")
     set_tests_properties(qml-shell-windows PROPERTIES
         LABELS "component;ui"
         TIMEOUT 30
