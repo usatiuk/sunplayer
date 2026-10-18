@@ -41,14 +41,14 @@ Startup currently:
 2. Creates `QGuiApplication`, establishes the stable `usatiuk` / `SunPlayer`
    settings identity, parses command-line options, and installs the application
    logger.
-3. Constructs one `ApplicationSettings` adapter over Qt's native user store.
-   Linux AppImage update consent uses that same backing file, including isolated
+3. Constructs one `ApplicationSettings` adapter owning the selected SettingsStore.
+   Linux AppImage update consent and Jellyfin borrow that same instance, including isolated
    smoke-run settings. Its preference key and native UI belong to the optional
    Linux updater UI owner, not the shared playback settings model.
    Real-window smoke modes use a temporary explicit INI store instead.
 4. Asks `GraphicsBackendFactory` to configure Qt Quick for D3D11 on Windows,
    Metal on macOS, or Vulkan on Linux.
-5. Installs one dark application palette used by the interface.
+5. Retains system control colors; custom dark surfaces define their own text colors.
 6. On Linux, inventories optional Wayland color/decorations capabilities and
    creates the window-scoped `QVulkanInstance`.
 7. Constructs and shows one `PresentationWindow`, then enters the event loop.

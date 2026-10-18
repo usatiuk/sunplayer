@@ -105,3 +105,29 @@ an unqualified IInspectable using-declaration collided with the Windows SDK's
 global COM IInspectable. Qualify the C++/WinRT return type directly and remove
 the alias; no runtime behavior or dependency changes. Native compilation
 remains delegated exclusively to hosted CI.
+
+
+The follow-up `500c2d1` compiled successfully on Windows. All changed-feature
+suites passed there, including application-settings, Jellyfin, Basic/Fusion/native
+Windows QML, and PasswordVault. The first attempt then failed solely in the
+previously observed ffmpeg-media-decoder test with no diagnostic output.
+Reran the failed Windows job once without code or test modifications; Linux and
+AppImage already passed. No flaky marker, test suppression or automatic-retry
+policy was introduced.
+
+## Delivery evidence
+
+Implementation `f6e70cb` plus the compile-only correction `500c2d1` passed
+[CI run 39154852490](https://github.com/usatiuk/sunplayer/actions/runs/39154852490).
+Linux and AppImage passed on the first attempt; the failed Windows job was
+rerun once without source/test changes and passed all 34 selected CTests,
+release build, deployment and MSIX packaging. The initial blank-output decoder
+failure remains separate from this settings implementation; tests were not
+suppressed or marked flaky.
+
+[Download the tested MSIX](https://github.com/usatiuk/sunplayer/actions/runs/39154852490/artifacts/12146928668).
+This artifact is the code-bearing `500c2d1` build. Later documentation-only
+bookkeeping does not require another package for user acceptance. No native
+Windows/macOS build ran locally. Temporary PML parsers were removed; the user's
+original trace was left untouched. Installed preference restart, remembered
+login across two restarts and logout/restart remain acceptance checks.
