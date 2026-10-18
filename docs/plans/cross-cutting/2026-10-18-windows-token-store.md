@@ -56,3 +56,22 @@ jellyfin, qml-shell Basic/Fusion, and packaged-qml-module suites passed 4/4 in
 compiled here. Three independent API/lifetime, error, and simplicity/evidence implementation
 reviews found no material issue. No runtime backend
 selection, extra permission, or platform SDK dependency was introduced.
+
+## Delivery evidence
+
+Implementation commit `2f2ec028fadd543ab1fa7f871c3254cb3b9ea745` passed
+[hosted CI](https://github.com/usatiuk/sunplayer/actions/runs/39140370120):
+Windows, Linux, and AppImage all succeeded. Windows passed all 34 selected
+CTests, including `windows-token-store` against real PasswordVault (0.06 s),
+and produced the developer bundle and unsigned MSIX. Both native SDK builds
+and packaging completed without a follow-up code fix.
+
+The Windows vcpkg cache restored all 24 required packages in 2.9 s; keeping the
+triplet unchanged preserved those cached ABIs. No new third-party dependency
+was added. The metadata-settings failure is not claimed fixed by a backend
+round trip; combined failures now remain visible for installed acceptance.
+
+[Download the tested Windows MSIX artifact](https://github.com/usatiuk/sunplayer/actions/runs/39140370120/artifacts/12142125131).
+Use this artifact for the user's installed AppSilo sign-in with Remember me,
+restart/restore, and sign-out/deletion check. Hosted desktop success does not
+replace that package acceptance. No local Windows/macOS execution occurred.
