@@ -25,7 +25,7 @@ ColumnLayout {
         clip: true
         orientation: ListView.Horizontal
         spacing: 18
-        ScrollBar.horizontal: ScrollBar {}
+        ScrollBar.horizontal: JellyfinScrollBar {}
         model: root.items
         delegate: JellyfinPoster {
             required property var modelData

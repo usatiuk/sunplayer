@@ -518,3 +518,13 @@ to macOS and removing the dormant Windows QtKeychain triplet block. Windows
 uses PasswordVault, so both Windows-specific remnants are unnecessary; editing
 the triplet can invalidate unrelated dependency cache identities. Keep both
 unchanged until separately requested. Retain the low-volume persistence logs.
+
+### Remaining Qt appearance/display follow-up
+
+Track the Linux portal dark-request limitation, touchpad upstream fix and
+Windows HDR/display-selection issue in the
+[Qt issue index](research/2026-10-18-qt-issues.md). No Qt patch or dependency change
+is included. The approved CSD hover-scope fix and Windows browser scrollbar
+palette workaround are implemented in the
+[UI delivery plan](plans/ui/2026-10-18-hover-and-scrollbar.md); installed Windows
+contrast acceptance remains manual.

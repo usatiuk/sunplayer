@@ -46,6 +46,7 @@ class AppShellTest final : public QObject {
     void initTestCase() { QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark); }
     void publishesActiveViewport();
     void transportButtonShowsKeyboardFocus();
+    void browserScrollbarPreservesPlatformPalette();
 
   public:
     static void initMain() {
@@ -1153,6 +1154,34 @@ void AppShellTest::publishesActiveViewport() {
         rootItem->setSize({qreal(width), 900});
         quickWindow.resize(width, 900);
         QTRY_VERIFY(imagesReady());
+        if (width == 1280) {
+            auto findCard = [&](auto&& self, QQuickItem* parent) -> QQuickItem* {
+                if (parent->isVisible() && parent->property("item").isValid() &&
+                    parent->property("landscape").isValid()) {
+                    return parent;
+                }
+                for (auto* child : parent->childItems()) {
+                    if (auto* card = self(self, child)) {
+                        return card;
+                    }
+                }
+                return nullptr;
+            };
+            auto* card = findCard(findCard, rootItem);
+            QVERIFY(card);
+            QPoint const cardPoint = card->mapToScene(QPointF(card->width() / 2, 30)).toPoint();
+            QTest::mouseMove(&quickWindow, cardPoint);
+            QTRY_VERIFY(card->property("hovered").toBool());
+            QTest::mousePress(&quickWindow, Qt::LeftButton, Qt::NoModifier, cardPoint);
+            QTest::mouseMove(&quickWindow, QPoint(10, 10));
+            QTest::mouseRelease(&quickWindow, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));
+            QTRY_VERIFY(!card->property("hovered").toBool());
+            QVERIFY(!card->property("pressed").toBool());
+            QTest::mouseMove(&quickWindow, cardPoint);
+            QTRY_VERIFY(card->property("hovered").toBool());
+            QTest::mouseMove(&quickWindow, QPoint(10, 10));
+            QTRY_VERIFY(!card->property("hovered").toBool());
+        }
         QTRY_VERIFY(tabs->width() > 0);
         QTRY_VERIFY(std::abs(tabs->mapToScene(QPointF(0, tabs->height() / 2)).y() -
                              title->mapToScene(QPointF(0, title->height() / 2)).y()) < 1);
@@ -1248,6 +1277,29 @@ void AppShellTest::transportButtonShowsKeyboardFocus() {
     window.contentItem()->forceActiveFocus(Qt::OtherFocusReason);
     QTRY_VERIFY(!button->property("visualFocus").toBool());
     QCOMPARE(background->property("color").value<QColor>().alpha(), 0);
+}
+
+void AppShellTest::browserScrollbarPreservesPlatformPalette() {
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(SUNPLAYER_QT_QML_IMPORT_PATH));
+    QQmlComponent component(&engine);
+    component.loadFromModule(QStringLiteral("SunPlayerShellTest"), QStringLiteral("JellyfinScrollBar"));
+    std::unique_ptr<QObject> scrollbar(component.create());
+    QVERIFY2(scrollbar, qPrintable(componentErrorText(component)));
+    auto color = [](QObject* control, char const* role) {
+        return QQmlProperty(control, QString::fromLatin1(role)).read().value<QColor>();
+    };
+#ifdef Q_OS_WIN
+    QCOMPARE(color(scrollbar.get(), "palette.mid"), color(scrollbar.get(), "palette.text"));
+    QCOMPARE(color(scrollbar.get(), "palette.dark"), color(scrollbar.get(), "palette.text"));
+#else
+    QQmlComponent stockComponent(&engine);
+    stockComponent.setData("import QtQuick.Controls; ScrollBar {}", QUrl());
+    std::unique_ptr<QObject> stock(stockComponent.create());
+    QVERIFY2(stock, qPrintable(componentErrorText(stockComponent)));
+    QCOMPARE(color(scrollbar.get(), "palette.mid"), color(stock.get(), "palette.mid"));
+    QCOMPARE(color(scrollbar.get(), "palette.dark"), color(stock.get(), "palette.dark"));
+#endif
 }
 
 QTEST_MAIN(AppShellTest)

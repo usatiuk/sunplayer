@@ -1002,3 +1002,11 @@ It does not validate installed AppContainer/AppSilo behavior. Combined secure
 store/metadata error preservation is code-reviewed; no fake keyring failure
 injection is introduced. The installed MSIX is user-reported working; the
 individual save → restart → restore → logout cases are not separately recorded.
+
+
+The shell's browser fixture also exercises card hover entry, press/leave/release
+and re-entry with CSD enabled. This catches a full-window chrome observer hiding
+hover from lower siblings. The shared browser scrollbar test checks Windows
+mid/dark against readable theme text and compares non-Windows roles with an
+unmodified stock ScrollBar. Hosted Fluent coverage exercises the actual shipped
+style; installed Windows scrollbar appearance remains a manual check.

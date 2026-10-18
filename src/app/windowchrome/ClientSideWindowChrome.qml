@@ -154,6 +154,7 @@ Item {
     }
 
     HoverHandler {
+        parent: titleBar
         enabled: root.controller.enabled
             && !root.controller.fullscreen
         onPointChanged: root.userActivity(point.position)

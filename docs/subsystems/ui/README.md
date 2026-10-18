@@ -504,3 +504,24 @@ About → Open logs opens the current session log's folder, rather than guessing
 a host temp path for sandboxed processes. When session file initialization
 failed or --no-log-file was supplied, this action is disabled with an
 unavailable tooltip. Native folder-launch failure remains visible in About.
+
+
+## Qt appearance/input fixes and follow-up
+
+The CSD activity HoverHandler is parented to the title bar rather than the
+full-window chrome overlay. PlayerPage already observes content movement; the
+chrome observer must not prevent browser cards underneath from receiving hover.
+Existing scene coordinates remain valid because the title bar and chrome share
+their top-left origin. Full-shell coverage checks hover entry, press/leave,
+release and re-entry with CSD enabled, plus existing inactivity behavior.
+
+Four browser scrollbars use JellyfinScrollBar, a stock ScrollBar with only
+Windows palette.mid/dark bound to its theme text color (QTBUG-138957). Bindings
+are inactive elsewhere, preserving non-Windows palettes. Thumb layout, opacity,
+fade and input remain Qt defaults; no global palette or custom scrollbar renderer
+is introduced. Hosted Windows checks the palette; installed appearance remains
+a user check. See the [delivery plan](../../plans/ui/2026-10-18-hover-and-scrollbar.md).
+
+Linux AppImage portal appearance still does not honor the explicit dark request
+in the examined Qt versions. Track that limitation, Windows HDR/display issues
+and upstream status in the [Qt issue index](../../research/2026-10-18-qt-issues.md).

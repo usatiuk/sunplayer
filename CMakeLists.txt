@@ -655,7 +655,7 @@ set_source_files_properties(src/app/icons/lucide/LICENSE PROPERTIES
 )
 
 set_source_files_properties(src/app/pages/JellyfinPage.qml PROPERTIES QT_RESOURCE_ALIAS JellyfinPage.qml)
-foreach(_jellyfin_component JellyfinPoster JellyfinShelf JellyfinDetail JellyfinEpisode)
+foreach(_jellyfin_component JellyfinPoster JellyfinShelf JellyfinDetail JellyfinEpisode JellyfinScrollBar)
     set_source_files_properties(src/app/pages/${_jellyfin_component}.qml PROPERTIES QT_RESOURCE_ALIAS ${_jellyfin_component}.qml)
 endforeach()
 qt_add_qml_module(sunplayer
@@ -669,6 +669,7 @@ qt_add_qml_module(sunplayer
         src/app/pages/PlayerPage.qml
         src/app/pages/JellyfinPage.qml
         src/app/pages/JellyfinPoster.qml
+        src/app/pages/JellyfinScrollBar.qml
         src/app/pages/JellyfinShelf.qml
         src/app/pages/JellyfinDetail.qml
         src/app/pages/JellyfinEpisode.qml
