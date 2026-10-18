@@ -9,5 +9,8 @@ set(
 )
 
 if(PORT STREQUAL "qtkeychain")
+    # windeployqt treats qt6keychain.dll as a Qt SDK module by its name.
+    # Link this third-party library statically instead of modifying the SDK.
+    set(VCPKG_LIBRARY_LINKAGE static)
     list(APPEND VCPKG_ENV_PASSTHROUGH SUNPLAYER_QT_PREFIX)
 endif()
