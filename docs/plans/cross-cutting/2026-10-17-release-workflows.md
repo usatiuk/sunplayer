@@ -30,3 +30,25 @@ revision/rerun correctness, permissions and workflow semantics, and KISS/DRY
 scope. No blocking findings; draft labels and stale documentation were fixed.
 Build recipes and existing version/ref recovery checks are otherwise retained.
 PowerShell execution and cross-job artifact consumption await the hosted run.
+
+
+## Development MSIX update versioning (2026-10-19)
+
+Fixed development version 1.0.0.0 prevented reliable in-place updates. Use
+`1.<run_number >> 16>.<run_number & 65535>.<run_attempt>` for development CI
+packages only. Keep identity stable, use GitHub's existing counters, and retain
+all field-range validation. A Development switch permits a nonzero revision;
+Store callers keep the strict ending-in-zero requirement and release version.
+No app version bump, dependency, platform runtime change or new counter service.
+
+Validate counter carry/order boundaries locally, inspect the workflow/script
+diff, then use hosted packaging and inspect the produced MSIX manifest version.
+Native Windows/macOS builds remain prohibited on this Linux host. Installed
+in-place update/data preservation is a user acceptance check.
+
+Local checks parsed workflow YAML, verified the release caller omits Development,
+and checked versions for runs 1, 65535, 65536, 65537 and 4294967295. Counter carry
+and rerun ordering remain strictly increasing and all fields fit uint16. The
+existing script validates the final version; uint32 conversion rejects counter
+overflow. PowerShell execution/package validation is delegated to Windows CI;
+no host dependency was installed and no native Windows build ran locally.

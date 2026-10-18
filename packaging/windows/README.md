@@ -108,6 +108,21 @@ install tree with the unsigned `SunPlayerDevelopment` identity. Main pushes and
 manual CI runs retain the development bundle and MSIX for seven days; pull
 requests retain neither.
 
+Development MSIX versions use `1.<run high 16 bits>.<run low 16 bits>.<attempt>`
+from GitHub's workflow run number and run attempt. This supports over four billion
+workflow runs and gives reruns distinct versions, allowing normal package updates
+without uninstalling saved data. The development package identity stays stable
+and separate from the Store package. `-Development` permits its nonzero revision;
+the default Store path still requires the release version ending in `.0`.
+All four fields retain the existing 0–65535 validation; counter overflow fails.
+
+For an unsigned development update (close the player first):
+
+```powershell
+Add-AppxPackage -Path .\SunPlayerDevelopment.msix -AllowUnsigned
+```
+
+
 After reserving SunPlayer, configure these public GitHub repository variables
 from Partner Center's Product identity page:
 

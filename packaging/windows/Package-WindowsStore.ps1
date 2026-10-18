@@ -7,6 +7,7 @@ param(
     [Parameter(Mandatory = $true)] [string]$Publisher,
     [Parameter(Mandatory = $true)] [string]$PublisherDisplayName,
     [string]$DisplayName = "SunPlayer",
+    [switch]$Development,
     [string]$CertificatePath,
     [string]$CertificatePassword
 )
@@ -16,7 +17,7 @@ $ErrorActionPreference = "Stop"
 
 $versionParts = @($PackageVersion -split '\.')
 if ($versionParts.Count -ne 4) {
-    throw "PackageVersion must contain four numeric components and end in .0."
+    throw "PackageVersion must contain four numeric components."
 }
 $versionNumbers = foreach ($part in $versionParts) {
     $number = 0
@@ -26,8 +27,11 @@ $versionNumbers = foreach ($part in $versionParts) {
     }
     $number
 }
-if ($versionNumbers[0] -eq 0 -or $versionNumbers[3] -ne 0) {
-    throw "PackageVersion must have a nonzero first component and end in .0."
+if ($versionNumbers[0] -eq 0) {
+    throw "PackageVersion must have a nonzero first component."
+}
+if (-not $Development -and $versionNumbers[3] -ne 0) {
+    throw "Store PackageVersion must end in .0."
 }
 
 $install = [System.IO.Path]::GetFullPath($InstallPrefix)
