@@ -96,3 +96,12 @@ unpackaged Windows keep QSettings; native LocalSettings compilation and package
 production await hosted CI. Its installed save/restart/restore/logout acceptance
 is not claimed by these tests. Both deferred QtKeychain cleanup items and
 low-volume persistence logs remain intact.
+
+
+## Hosted compile follow-up
+
+Initial commit `f6e70cb` reached hosted Windows compilation but failed because
+an unqualified IInspectable using-declaration collided with the Windows SDK's
+global COM IInspectable. Qualify the C++/WinRT return type directly and remove
+the alias; no runtime behavior or dependency changes. Native compilation
+remains delegated exclusively to hosted CI.

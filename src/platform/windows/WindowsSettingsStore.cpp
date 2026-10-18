@@ -11,7 +11,6 @@
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Storage.h>
 
-using winrt::Windows::Foundation::IInspectable;
 using winrt::Windows::Foundation::IPropertyValue;
 using winrt::Windows::Foundation::PropertyType;
 using winrt::Windows::Foundation::Collections::IPropertySet;
@@ -20,7 +19,7 @@ using winrt::Windows::Storage::ApplicationData;
 namespace {
 winrt::hstring nativeKey(QAnyStringView key) { return winrt::hstring(key.toString().toStdWString()); }
 
-IInspectable boxValue(QVariant const& value) {
+winrt::Windows::Foundation::IInspectable boxValue(QVariant const& value) {
     switch (value.metaType().id()) {
     case QMetaType::Bool:
         return winrt::box_value(value.toBool());
