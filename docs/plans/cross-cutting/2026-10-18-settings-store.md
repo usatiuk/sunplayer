@@ -131,3 +131,22 @@ bookkeeping does not require another package for user acceptance. No native
 Windows/macOS build ran locally. Temporary PML parsers were removed; the user's
 original trace was left untouched. Installed preference restart, remembered
 login across two restarts and logout/restart remain acceptance checks.
+
+
+## Installed acceptance and productization cleanup
+
+On 2026-10-18 the user confirmed the installed Windows build works. This closes
+the reported login/settings persistence blocker; it does not separately attest
+each item in the detailed restart/logout checklist. Keep that matrix as manual
+coverage rather than an unresolved implementation blocker.
+
+The user requested a multiagent cleanup/productization cycle. Three independent
+read-only reviews found no actionable runtime cleanup or new regression. The
+store is shared, the failed LocalFolder path is gone, and the native apartment
+helper has two real consumers. Consolidate current docs, retire the resolved
+DEFERRED entry, and preserve historical plans/research. Keep explicitly useful
+logs and both deferred QtKeychain build cleanups. No extra storage code, tests,
+retry/migration/fallback machinery or native platform execution is justified.
+
+The separately requested dark-control improvement is tracked in the
+[UI plan](../ui/2026-10-18-dark-appearance.md).

@@ -23,6 +23,8 @@
 #include <QPushButton>
 #include <QQmlComponent>
 #include <QQmlEngine>
+#include <QQuickStyle>
+#include <QStyleHints>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QUrl>
@@ -524,6 +526,10 @@ int main(int argc, char* argv[]) {
     prepareLinuxWaylandPlatform();
 #endif
     QApplication app(argc, argv);
+    app.styleHints()->setColorScheme(Qt::ColorScheme::Dark);
+#ifdef Q_OS_WIN
+    QQuickStyle::setStyle(QStringLiteral("FluentWinUI3"));
+#endif
     QCoreApplication::setOrganizationName(QStringLiteral("usatiuk"));
     QCoreApplication::setApplicationName(QStringLiteral("SunPlayer"));
     QGuiApplication::setApplicationDisplayName(QStringLiteral(SUNPLAYER_DISPLAY_NAME));

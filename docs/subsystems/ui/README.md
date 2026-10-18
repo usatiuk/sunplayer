@@ -317,7 +317,8 @@ player preferences or production presentation state.
 
 ## Verification
 
-The shell scenario runs with Basic and Fusion styles to exercise their distinct
+The shell scenario requests dark appearance and runs with Basic and Fusion styles
+(and FluentWinUI3 on hosted Windows) to exercise their distinct
 switch label roles. It covers the idle overflow action's light palette and
 Tab-reason focus, plus focus highlights on custom transport/window controls.
 Native Windows/macOS rendering and full keyboard traversal still need desktop
@@ -479,7 +480,16 @@ ancestors so Up and playback return retain the actual media hierarchy.
 Browser Backspace remains an editing key. See the
 [header/navigation plan](../../plans/ui/2026-10-18-jellyfin-header-navigation.md).
 
-Native controls retain the system/style palette and color scheme. Do not force
+The application requests Dark through QStyleHints before constructing UI.
+Windows Quick controls use Qt's stock FluentWinUI3 style, because the default
+Quick Windows style in Qt 6.11.1 explicitly uses light appearance. Linux/macOS
+retain their default Quick styles; Linux appearance override support depends on
+the platform-theme plugin. QWidget dialogs retain their platform widget style
+and receive the app-wide appearance request; OS-owned pickers may keep their
+own behavior. No per-control theme or palette machinery is added. See the
+[dark-appearance plan](../../plans/ui/2026-10-18-dark-appearance.md).
+
+Controls retain style-provided foreground/background pairs. Do not force
 application or shell-wide foreground colors onto native button backgrounds.
 Only text directly on the custom dark canvas is explicitly light, including
 descriptive labels and the Remember me checkbox label. Jellyfin toolbar actions

@@ -159,36 +159,31 @@ library ancestors; those selections retain the returned media hierarchy without
 guessing a matching tab. Cancelling/replacing media invalidates a pending Home
 selection as well as playback resolution.
 
-Windows no longer links QtKeychain. Its unused vcpkg triplet clause remains
-until a deliberate dependency-cache refresh to avoid invalidating other ports.
-Hosted CI builds Windows and exercises the actual PasswordVault backend with a
-unique disposable test entry; Linux does not build or run native Windows/macOS.
+## Windows integration and persistence
 
-Windows packages require the standard public-client and private-network
-capabilities for remote Jellyfin access. Network failures without an HTTP
-response show the Qt network-error category rather than HTTP 0; diagnostics
-do not embed raw error strings that might contain addresses or credentials.
-PasswordVault save/restore/delete inside the installed AppSilo package remains
-user acceptance; the hosted integration test is an ordinary desktop process.
-Secure-storage and metadata-settings failures are both preserved when they
-coincide. No extra credential capability is assumed or added. See the
-[Windows token-store delivery plan](../../plans/cross-cutting/2026-10-18-windows-token-store.md).
+Windows uses SDK PasswordVault behind TokenStore; Linux/macOS retain QtKeychain.
+The unused Windows QtKeychain build configuration remains explicitly deferred
+until separately requested, avoiding dependency-cache churn. No legacy token
+migration, insecure fallback or extra credential capability is needed.
 
-Installed Windows acceptance still reported metadata settings failure after
-the PasswordVault switch. The two errors remain separate. Info-level settings
-stages and PasswordVault result/HRESULT records now identify the earliest
-failure without credentials or account/server values; retrieve the session
-file through About → Open logs. This instrumentation does not claim the
-underlying metadata write failure is fixed.
+Preferences, Jellyfin metadata and AppImage consent share one
+application-owned SettingsStore. Packaged Windows uses SDK LocalSettings;
+QSettings retains native storage elsewhere and temporary INI tests. Browser
+consumers know neither backend paths nor formats. Temporary browsers skip
+restore and use unique test token keys; production keeps its stable token key.
 
+The user confirmed the installed Windows build works after this correction.
+Hosted CI also builds/packages Windows and exercises PasswordVault through a
+unique disposable desktop test entry. Detailed restart/logout steps are not
+individually recorded by that general acceptance report; see
+[testing coverage](../../TESTING.md) and the
+[settings-store plan](../../plans/cross-cutting/2026-10-18-settings-store.md).
+The prior registry/INI failures are recorded in the
+[trace research](../../research/2026-10-18-appsilo-settings-rename.md).
 
-Installed diagnostics and a Process Monitor trace established successful
-PasswordVault writes but failed registry/INI persistence. The unsuccessful
-LocalFolder INI implementation is removed. Preferences, Jellyfin metadata and
-AppImage consent now share one application-owned SettingsStore. Packaged
-Windows uses SDK LocalSettings; QSettings retains other platforms/unpackaged
-Windows and isolated tests. Production credential identity/restoration follows
-explicit temporary-store intent; temporary browsers skip restore and receive
-unique test token keys. Tokens remain separate in PasswordVault/QtKeychain.
-Installed preference and remembered-login restart acceptance remain required;
-see the [settings-store plan](../../plans/cross-cutting/2026-10-18-settings-store.md).
+Packages declare public-client and private-network access for Jellyfin. Network
+failures without a response show the Qt error category rather than HTTP 0.
+Credential and metadata errors are both preserved; native LocalSettings failures
+log the operation and original HRESULT. Low-volume persistence-stage and vault
+result logs contain no credentials, account/server values or settings contents.
+About → Open logs opens the actual session file's folder.

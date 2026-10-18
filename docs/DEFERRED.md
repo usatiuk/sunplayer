@@ -511,17 +511,6 @@ currently use a retained-visit boolean, not entries in browser history. Keep
 logical Up separate; fix/test this history edge separately from the Windows
 palette/network regression.
 
-### Windows credential backend acceptance and cache cleanup
-
-The PasswordVault implementation replaces QtKeychain's Generic Credential APIs
-on Windows without changing TokenStore consumers or permissions. Hosted desktop
-round-trip tests do not establish installed AppSilo save/restore/logout behavior;
-the user will test the CI MSIX. The dormant Windows QtKeychain triplet clause is
-intentionally retained until the next dependency-cache refresh, avoiding ABI
-cache invalidation for otherwise unchanged ports. No legacy-token migration
-or runtime backend fallback is planned.
-
-
 ### QtKeychain build-configuration cleanup
 
 The user deferred both restricting pre-project QtKeychain Qt-prefix discovery
@@ -529,14 +518,3 @@ to macOS and removing the dormant Windows QtKeychain triplet block. Windows
 uses PasswordVault, so both Windows-specific remnants are unnecessary; editing
 the triplet can invalidate unrelated dependency cache identities. Keep both
 unchanged until separately requested. Retain the low-volume persistence logs.
-
-### Installed AppSilo settings atomic rename
-
-The attempted packaged Windows LocalFolder INI settings failed installed acceptance.
-The supplied Process Monitor trace proves file creation/write/flush and lock
-creation succeed; four SetRenameInformationFile operations to settings.ini
-return ACCESS DENIED. Do not treat the LocalFolder change as a complete fix or
-apply mkdir/atomic-sync switches without evidence. Its replacement is SDK
-LocalSettings behind the shared SettingsStore; installed persistence/restore
-acceptance remains pending. Investigation:
-[AppSilo settings rename](research/2026-10-18-appsilo-settings-rename.md).

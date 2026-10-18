@@ -14,6 +14,7 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QSignalSpy>
+#include <QStyleHints>
 #include <QTemporaryDir>
 #include <QTemporaryFile>
 #include <QTest>
@@ -42,6 +43,7 @@ class AppShellTest final : public QObject {
     Q_OBJECT
 
   private slots:
+    void initTestCase() { QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark); }
     void publishesActiveViewport();
     void transportButtonShowsKeyboardFocus();
 

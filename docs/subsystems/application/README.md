@@ -48,7 +48,8 @@ Startup currently:
    Real-window smoke modes use a temporary explicit INI store instead.
 4. Asks `GraphicsBackendFactory` to configure Qt Quick for D3D11 on Windows,
    Metal on macOS, or Vulkan on Linux.
-5. Retains system control colors; custom dark surfaces define their own text colors.
+5. Requests Qt dark appearance and selects FluentWinUI3 Quick controls on Windows;
+   custom dark surfaces define their own text colors.
 6. On Linux, inventories optional Wayland color/decorations capabilities and
    creates the window-scoped `QVulkanInstance`.
 7. Constructs and shows one `PresentationWindow`, then enters the event loop.
@@ -286,6 +287,7 @@ preferences, Linux XDG storage and explicit temporary INI test/smoke files, with
 organization/system fallbacks disabled. Temporary credential intent is separate
 from backend selection. See the
 [settings-store delivery plan](../../plans/cross-cutting/2026-10-18-settings-store.md).
+The user confirmed the installed Windows build works; the general report does not separately enumerate every restart/logout case.
 
 Stored values are validated before the existing runtime owners receive them:
 finite volume in `[0, 1]` goes to `MediaSession`, while display blanking is

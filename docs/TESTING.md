@@ -411,9 +411,10 @@ scalar persistence and exact/group removal preserving prefix siblings. Jellyfin
 metadata is restored through a recreated real store without touching credentials.
 AppImage consent uses the same injected store and retains its existing integration
 coverage. Packaged Windows uses SDK LocalSettings, which hosted unpackaged tests
-cannot exercise. Installed
-acceptance must change a preference and restart, sign in with Remember me and
-restart twice, then sign out and restart to verify restoration stays disabled.
+cannot exercise. The user reports that the installed LocalSettings build works.
+The detailed manual regression checklist remains: change a preference and restart,
+sign in with Remember me and restart twice, then sign out and restart to verify
+restoration stays disabled. Those steps were not individually reported.
 Tokens must remain in PasswordVault, with only metadata in LocalSettings.
 
 Fullscreen smoke pre-seeds that isolated store before constructing the real
@@ -987,10 +988,11 @@ remain hidden on non-Windows platforms.
 
 Shell tests compare main Open video/Jellyfin and Sign in button palettes to an
 unparented stock control, catching unwanted inherited foreground overrides.
-Hosted Windows additionally runs the Windows style. Linux Basic/Fusion results
+Hosted Windows additionally runs the shipped FluentWinUI3 style. Linux Basic/Fusion results
 do not establish native Windows rendering. Jellyfin connection-refused coverage
 checks a real failed TCP connection produces the Qt error category, not HTTP 0.
-Installed Windows package network/credential access remains manual acceptance.
+Installed Windows login/settings are user-reported working; detailed package
+network/credential scenarios remain manual coverage.
 
 `windows-token-store` (hosted Windows only) uses a unique disposable entry in
 the actual PasswordVault backend. It covers missing reads, deferred callbacks,
@@ -998,5 +1000,5 @@ write/read across store owners, overwrite, idempotent remove, and owner
 destruction cancelling queued writes. Cleanup addresses only that test entry.
 It does not validate installed AppContainer/AppSilo behavior. Combined secure
 store/metadata error preservation is code-reviewed; no fake keyring failure
-injection is introduced. User acceptance remains save → restart → restore →
-logout in the downloadable MSIX.
+injection is introduced. The installed MSIX is user-reported working; the
+individual save → restart → restore → logout cases are not separately recorded.

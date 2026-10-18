@@ -390,14 +390,13 @@ watched controls, original-file Direct Play, resume and final
 progress reporting. Shared `MediaInput` retains remote sources through normal
 player restarts. Linux and AppImage validation is recorded in the
 [delivery plan](docs/plans/cross-cutting/2026-10-18-jellyfin-client.md);
-user real-server and native Windows/macOS acceptance remain pending.
+broader real-server and native macOS acceptance remain tracked there.
 Documentation: [Jellyfin subsystem](docs/subsystems/jellyfin/README.md).
 The compact consistent header and conventional Back/Forward follow-up is tracked
 in the [navigation plan](docs/plans/ui/2026-10-18-jellyfin-header-navigation.md).
-Windows acceptance exposed global palette overrides and missing package network
-capabilities; local corrections restore system control colors, declare only
-public/LAN network access, and add native-style hosted coverage. Installed
-Windows networking and secure-store acceptance remain pending.
+Windows controls retain style-provided foreground/background pairs; packages
+declare only public/LAN network access. The user confirmed the installed
+Windows login/settings build works after the settings-store correction.
 The [Windows token-store plan](docs/plans/cross-cutting/2026-10-18-windows-token-store.md)
 replaces Generic Credential APIs with SDK PasswordVault behind TokenStore;
 Linux/macOS retain QtKeychain, with no new dependency or permission.
@@ -406,7 +405,7 @@ SettingsStore. Packaged Windows uses SDK LocalSettings after the LocalFolder
 INI experiment failed at atomic rename; unpackaged Windows and other OS
 storage remain QSettings. See the
 [settings-store plan](docs/plans/cross-cutting/2026-10-18-settings-store.md)
-for validation and installed acceptance.
+for validation and the installed acceptance report.
 
 ### 3. FFmpeg media integration
 

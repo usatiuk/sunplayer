@@ -957,7 +957,7 @@ if (WIN32)
     set_tests_properties(qml-shell-windows PROPERTIES
         LABELS "component;ui"
         TIMEOUT 30
-        ENVIRONMENT "QT_QUICK_CONTROLS_STYLE=Windows"
+        ENVIRONMENT "QT_QUICK_CONTROLS_STYLE=FluentWinUI3"
         ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}"
     )
 endif ()
