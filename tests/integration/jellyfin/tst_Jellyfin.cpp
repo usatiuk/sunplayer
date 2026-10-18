@@ -16,6 +16,7 @@ extern "C" {
 #include <QTest>
 #include <QTimer>
 #include <QUrlQuery>
+#include <QUuid>
 
 #include "jellyfin/JellyfinBrowser.h"
 #include "jellyfin/JellyfinClient.h"
@@ -55,6 +56,7 @@ class JellyfinTest final : public QObject {
     void navigationHistory();
     void homeOpeningCancellationAndGroupedViews();
     void serverAddressDefaultsToHttps();
+    void metadataUsesSharedStore();
     void httpDecodeAndInitialResume();
     void stalledHttpCancels();
     void browserAndFinalReportOrdering();
@@ -136,7 +138,8 @@ void JellyfinTest::homeShelvesAndDetails() {
     HttpEdge edge;
     edge.galleryFixtures = true;
     QTemporaryDir directory;
-    JellyfinBrowser browser(directory.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat, false);
+    auto settings = createTemporarySettingsStore(directory.filePath(QStringLiteral("settings.ini")));
+    JellyfinBrowser browser(*settings, false);
     browser.login(edge.base().toString(), QStringLiteral("user"), QStringLiteral("password"), false);
     QTRY_VERIFY(browser.authenticated() && !browser.busy());
     QCOMPARE(browser.libraries().size(), 2);
@@ -225,7 +228,8 @@ void JellyfinTest::navigationHistory() {
     HttpEdge edge;
     edge.galleryFixtures = true;
     QTemporaryDir directory;
-    JellyfinBrowser browser(directory.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat, false);
+    auto settings = createTemporarySettingsStore(directory.filePath(QStringLiteral("settings.ini")));
+    JellyfinBrowser browser(*settings, false);
     browser.login(edge.base().toString(), QStringLiteral("user"), QStringLiteral("password"), false);
     QTRY_VERIFY(browser.authenticated() && !browser.busy());
     QVERIFY(!browser.canGoBack());
@@ -288,7 +292,8 @@ void JellyfinTest::homeOpeningCancellationAndGroupedViews() {
     edge.galleryFixtures = true;
     edge.groupedViews = true;
     QTemporaryDir directory;
-    JellyfinBrowser browser(directory.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat, false);
+    auto settings = createTemporarySettingsStore(directory.filePath(QStringLiteral("settings.ini")));
+    JellyfinBrowser browser(*settings, false);
     browser.login(edge.base().toString(), QStringLiteral("user"), QStringLiteral("password"), false);
     QTRY_VERIFY(browser.authenticated() && !browser.busy());
     browser.openHomeItem(JellyfinBrowser::RecentShows, 0);
@@ -318,12 +323,42 @@ void JellyfinTest::homeOpeningCancellationAndGroupedViews() {
     QCOMPARE(player.state(), MediaSession::State::Empty);
 }
 
+void JellyfinTest::metadataUsesSharedStore() {
+    HttpEdge edge;
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    auto const path = directory.filePath(QStringLiteral("settings.ini"));
+    QString device;
+    {
+        auto settings = createTemporarySettingsStore(path);
+        settings->setValue(u"playback/volume", 0.35);
+        JellyfinBrowser browser(*settings, false);
+        browser.login(edge.base().toString(), QStringLiteral("user"), QStringLiteral("password"), false);
+        QTRY_VERIFY(browser.authenticated());
+        QTRY_VERIFY(!browser.busy());
+        QCOMPARE(settings->value(u"jellyfin/server").toString(), edge.base().toString());
+        QVERIFY(settings->contains(u"jellyfin/user"));
+        device = settings->value(u"jellyfin/device").toString();
+        QVERIFY(!QUuid(device).isNull());
+        settings->sync();
+        QCOMPARE(settings->status(), SettingsStore::Status::NoError);
+    }
+    auto restored = createTemporarySettingsStore(path);
+    JellyfinBrowser browser(*restored, false);
+    QCOMPARE(browser.savedServer(), edge.base().toString());
+    QCOMPARE(restored->value(u"jellyfin/device").toString(), device);
+    QCOMPARE(restored->value(u"playback/volume").toDouble(), 0.35);
+    QVERIFY(!restored->value(u"jellyfin/remember").toBool());
+    QVERIFY(!browser.authenticated());
+}
+
 void JellyfinTest::serverAddressDefaultsToHttps() {
     HttpEdge edge;
     auto const bare = edge.base().toString().mid(QStringLiteral("http://").size());
     for (auto const& address : {bare, edge.base().toString(), QStringLiteral("https://") + bare}) {
         QTemporaryDir directory;
-        JellyfinBrowser browser(directory.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat, false);
+        auto settings = createTemporarySettingsStore(directory.filePath(QStringLiteral("settings.ini")));
+        JellyfinBrowser browser(*settings, false);
         browser.login(QStringLiteral("  ") + address + QStringLiteral("  "), QStringLiteral("user"),
                       QStringLiteral("password"), false);
         auto const expectedScheme =
@@ -397,7 +432,8 @@ void JellyfinTest::stalledHttpCancels() {
 void JellyfinTest::browserAndFinalReportOrdering() {
     HttpEdge edge;
     QTemporaryDir directory;
-    JellyfinBrowser browser(directory.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat, false);
+    auto settings = createTemporarySettingsStore(directory.filePath(QStringLiteral("settings.ini")));
+    JellyfinBrowser browser(*settings, false);
     // Session-only login never writes native credentials.
     browser.login(edge.base().toString(), QStringLiteral("user"), QStringLiteral("password"), false);
     QTRY_VERIFY(browser.authenticated() && !browser.busy() && browser.libraries().size() == 1);
@@ -470,7 +506,8 @@ void JellyfinTest::authenticationLossClosesOldPlayback() {
     HttpEdge oldServer;
     HttpEdge newServer;
     QTemporaryDir directory;
-    JellyfinBrowser browser(directory.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat, false);
+    auto settings = createTemporarySettingsStore(directory.filePath(QStringLiteral("settings.ini")));
+    JellyfinBrowser browser(*settings, false);
     MediaSession player(VideoTargetReadback::Disabled,
                         [](FfmpegVideoDecodeRequest const& request, FfmpegVideoFrameSink const& sink,
                            std::stop_token token) { return decodeVideoFrames(request, sink, token); });

@@ -264,17 +264,28 @@ update-request path rerenders paused video when it changes.
 
 `ApplicationSettings` persists playback volume, the supported fullscreen
 display-blanking preference, and global subtitle appearance. It
-uses `QSettings` with organization and system fallbacks disabled. Packaged
-Windows builds store `settings.ini` in the package-owned WinRT
-`ApplicationData.Current.LocalFolder`; a Windows-only constructor resolves the
-path and balances its own runtime initialization. Unexpected package-identity
-or LocalFolder resolution failures are fatal deployment errors, not a trigger
-for another store. Unpackaged Windows retains the native registry store; macOS
-preferences and Linux XDG storage are unchanged. There is no migration or dual
-write. Explicit-path test/smoke stores are marked temporary independently of
-format, so production INI settings retain normal Jellyfin credential identity
-and automatic restoration. See the
-[LocalFolder delivery plan](../../plans/cross-cutting/2026-10-18-windows-settings-localfolder.md).
+owns one `SettingsStore` for the application lifetime. JellyfinBrowser and the
+Linux AppImage consent UI borrow that same instance; no consumer reconstructs
+storage from a path or format. Consumers own their keys, validation and defaults;
+storage owns persistence and error classification.
+
+The narrow interface supplies contains/value/setValue/remove/sync/status and a
+diagnostic backend name. Removal covers an exact key and slash-delimited
+descendants, preserving similarly named siblings. Values are scalar booleans,
+numbers and strings; the first access/format failure stays observable.
+
+Packaged Windows selects SDK `ApplicationData.Current.LocalSettings.Values`.
+The Windows-only backend boxes/unboxes scalar values and logs operation/HRESULT
+on failure without values. Its runtime owner outlives native objects; setters
+persist immediately, so sync needs no additional flush. The unsuccessful
+LocalFolder INI constructor is removed. No migration, registry fallback, dual
+write, extra permission or dependency is added.
+
+QSettings remains the implementation for unpackaged Windows registry, macOS
+preferences, Linux XDG storage and explicit temporary INI test/smoke files, with
+organization/system fallbacks disabled. Temporary credential intent is separate
+from backend selection. See the
+[settings-store delivery plan](../../plans/cross-cutting/2026-10-18-settings-store.md).
 
 Stored values are validated before the existing runtime owners receive them:
 finite volume in `[0, 1]` goes to `MediaSession`, while display blanking is
@@ -285,8 +296,9 @@ window-owned `SubtitleSettings`. Those owners remain the live sources of
 truth; change signals write only dirty keys back to the adapter. Restore
 defaults removes the complete `subtitles/appearance` group. Missing or invalid
 values retain product defaults, and a corrupt or inaccessible store produces
-one bounded warning without preventing playback. `QSettings` batches ordinary
-writes and is explicitly synchronized on orderly shutdown.
+one bounded warning without preventing playback. The shared store is explicitly
+synchronized on orderly shutdown; QSettings batches writes, while LocalSettings
+writes are synchronous and managed by Windows.
 
 The application smoke modes retain a `QTemporaryDir` for the complete lifetime
 of an explicit INI-backed adapter, so verification neither reads nor changes a
@@ -321,7 +333,9 @@ The focused `application-settings` Qt Test uses only explicit INI files under
 `QTemporaryDir`. It covers missing defaults, typed round trips, preservation of
 unknown and independently written keys, strict value rejection, corrupt-file
 recovery, deterministic access failure, and bounded warning behavior without
-reading or modifying the host's native store.
+reading or modifying the host's native store. Shared-store regressions also
+cover metadata/preference coexistence, missing defaults, scalar values, exact
+and descendant removal, and preservation of similarly named siblings.
 
 The real fullscreen smoke pre-seeds its temporary store before window
 construction, verifies restored volume and capability-gated display blanking,

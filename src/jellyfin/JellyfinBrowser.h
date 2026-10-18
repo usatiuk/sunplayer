@@ -2,8 +2,8 @@
 
 #include "jellyfin/JellyfinClient.h"
 #include "jellyfin/TokenStore.h"
+#include "settings/SettingsStore.h"
 #include <QAbstractListModel>
-#include <QSettings>
 #include <QtQml/qqmlregistration.h>
 #include <array>
 
@@ -44,8 +44,7 @@ class JellyfinBrowser final : public QAbstractListModel {
     };
     enum HomeSection { ContinueWatching, RecentMovies, RecentShows };
     Q_ENUM(HomeSection)
-    JellyfinBrowser(QString const& settingsPath, QSettings::Format format, bool persistentCredentials,
-                    QObject* parent = nullptr);
+    JellyfinBrowser(SettingsStore& settings, bool persistentCredentials, QObject* parent = nullptr);
     int rowCount(QModelIndex const& parent = {}) const override;
     QVariant data(QModelIndex const& index, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
@@ -109,7 +108,7 @@ class JellyfinBrowser final : public QAbstractListModel {
     QString deviceId();
     JellyfinClient m_client;
     TokenStore m_tokens;
-    QSettings m_settings;
+    SettingsStore& m_settings;
     QList<JellyfinItem> m_items;
     QList<QList<JellyfinItem>> m_history{QList<JellyfinItem>{}};
     int m_historyIndex = 0;

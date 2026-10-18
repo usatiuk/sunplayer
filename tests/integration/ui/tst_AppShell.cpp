@@ -73,7 +73,8 @@ void AppShellTest::publishesActiveViewport() {
     ShellTestSupportController supportController(nullptr);
     VideoViewportState videoViewport(nullptr);
     QTemporaryDir jellyfinSettings;
-    JellyfinBrowser jellyfin(jellyfinSettings.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat, false);
+    auto settings = createTemporarySettingsStore(jellyfinSettings.filePath(QStringLiteral("settings.ini")));
+    JellyfinBrowser jellyfin(*settings, false);
     QVariantMap const initialProperties{
         {QStringLiteral("jellyfin"), QVariant::fromValue(&jellyfin)},
         {

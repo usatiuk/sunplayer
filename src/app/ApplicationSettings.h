@@ -2,7 +2,7 @@
 
 #include <optional>
 
-#include <QSettings>
+#include "settings/SettingsStore.h"
 #include <QString>
 
 #include "subtitles/SubtitleAppearance.h"
@@ -22,8 +22,7 @@ class ApplicationSettings final {
     explicit ApplicationSettings(QString const& filePath);
 
     Values load();
-    QString filePath() const { return m_settings.fileName(); }
-    QSettings::Format format() const { return m_settings.format(); }
+    SettingsStore& store() { return *m_settings; }
     bool isTemporaryStore() const { return m_temporaryStore; }
     void setVolume(qreal volume);
     void setPreferHdr10Plus(bool enabled);
@@ -39,7 +38,7 @@ class ApplicationSettings final {
     void reportStatus();
     void reportFault(QString const& reason, QString const& key = {});
 
-    QSettings m_settings;
+    std::unique_ptr<SettingsStore> m_settings;
     bool m_temporaryStore = false;
     bool m_faultReported = false;
 };

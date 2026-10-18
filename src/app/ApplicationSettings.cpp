@@ -131,53 +131,49 @@ std::optional<T> parseChoice(QVariant const& value, std::initializer_list<std::p
 
 } // namespace
 
-#ifndef Q_OS_WIN
-ApplicationSettings::ApplicationSettings() : m_settings() { m_settings.setFallbacksEnabled(false); }
-#endif
+ApplicationSettings::ApplicationSettings() : m_settings(createSettingsStore()) {}
 
 ApplicationSettings::ApplicationSettings(QString const& filePath)
-    : m_settings(filePath, QSettings::IniFormat), m_temporaryStore(true) {
-    m_settings.setFallbacksEnabled(false);
-}
+    : m_settings(createTemporarySettingsStore(filePath)), m_temporaryStore(true) {}
 
 ApplicationSettings::Values ApplicationSettings::load() {
-    m_settings.sync();
-    if (m_settings.status() != QSettings::NoError) {
+    m_settings->sync();
+    if (m_settings->status() != SettingsStore::Status::NoError) {
         reportStatus();
         return {};
     }
 
     Values values;
-    if (m_settings.contains(QLatin1StringView(volumeKey))) {
-        values.volume = parseVolume(m_settings.value(QLatin1StringView(volumeKey)));
+    if (m_settings->contains(QLatin1StringView(volumeKey))) {
+        values.volume = parseVolume(m_settings->value(QLatin1StringView(volumeKey)));
         if (!values.volume) {
             reportInvalidValue(QString::fromLatin1(volumeKey));
         }
     }
-    if (m_settings.contains(QLatin1StringView(blankOtherDisplaysKey))) {
+    if (m_settings->contains(QLatin1StringView(blankOtherDisplaysKey))) {
         values.blankOtherDisplaysInFullscreen =
-            parseBoolean(m_settings.value(QLatin1StringView(blankOtherDisplaysKey)));
+            parseBoolean(m_settings->value(QLatin1StringView(blankOtherDisplaysKey)));
         if (!values.blankOtherDisplaysInFullscreen) {
             reportInvalidValue(QString::fromLatin1(blankOtherDisplaysKey));
         }
     }
 
-    if (m_settings.contains(QLatin1StringView(preferHdr10PlusKey))) {
-        values.preferHdr10Plus = parseBoolean(m_settings.value(QLatin1StringView(preferHdr10PlusKey)));
+    if (m_settings->contains(QLatin1StringView(preferHdr10PlusKey))) {
+        values.preferHdr10Plus = parseBoolean(m_settings->value(QLatin1StringView(preferHdr10PlusKey)));
         if (!values.preferHdr10Plus) {
             reportInvalidValue(QString::fromLatin1(preferHdr10PlusKey));
         }
     }
 
-    if (m_settings.contains(QLatin1StringView(absolutePqEnabledKey))) {
-        values.absolutePqEnabled = parseBoolean(m_settings.value(QLatin1StringView(absolutePqEnabledKey)));
+    if (m_settings->contains(QLatin1StringView(absolutePqEnabledKey))) {
+        values.absolutePqEnabled = parseBoolean(m_settings->value(QLatin1StringView(absolutePqEnabledKey)));
         if (!values.absolutePqEnabled) {
             reportInvalidValue(QString::fromLatin1(absolutePqEnabledKey));
         }
     }
 
-    if (m_settings.contains(QLatin1StringView(sourceHdrReferenceWhiteKey))) {
-        auto const nits = parseNumber(m_settings.value(QLatin1StringView(sourceHdrReferenceWhiteKey)),
+    if (m_settings->contains(QLatin1StringView(sourceHdrReferenceWhiteKey))) {
+        auto const nits = parseNumber(m_settings->value(QLatin1StringView(sourceHdrReferenceWhiteKey)),
                                       DecodedVideoSource::minimumSourceHdrReferenceWhiteNits,
                                       DecodedVideoSource::maximumSourceHdrReferenceWhiteNits);
         if (nits && std::trunc(*nits) == *nits) {
@@ -189,15 +185,15 @@ ApplicationSettings::Values ApplicationSettings::load() {
 
     bool const hasSubtitleAppearance =
         std::any_of(subtitleAppearanceKeys.cbegin(), subtitleAppearanceKeys.cend(),
-                    [this](char const* key) { return m_settings.contains(QLatin1StringView(key)); });
+                    [this](char const* key) { return m_settings->contains(QLatin1StringView(key)); });
     if (hasSubtitleAppearance) {
         SubtitleAppearanceValues appearance;
         auto invalid = [this](char const* key) { reportInvalidValue(QString::fromLatin1(key)); };
         auto load = [this, &invalid]<typename T>(char const* key, auto parser, T& destination) {
-            if (!m_settings.contains(QLatin1StringView(key))) {
+            if (!m_settings->contains(QLatin1StringView(key))) {
                 return;
             }
-            auto const parsed = parser(m_settings.value(QLatin1StringView(key)));
+            auto const parsed = parser(m_settings->value(QLatin1StringView(key)));
             if (parsed) {
                 destination = *parsed;
             } else {
@@ -259,7 +255,7 @@ ApplicationSettings::Values ApplicationSettings::load() {
         values.subtitleAppearance = appearance;
     }
 
-    if (m_settings.status() != QSettings::NoError) {
+    if (m_settings->status() != SettingsStore::Status::NoError) {
         reportStatus();
         return {};
     }
@@ -268,29 +264,29 @@ ApplicationSettings::Values ApplicationSettings::load() {
 
 void ApplicationSettings::setVolume(qreal volume) {
     Q_ASSERT(std::isfinite(volume) && volume >= 0.0 && volume <= 1.0);
-    m_settings.setValue(QLatin1StringView(volumeKey), volume);
+    m_settings->setValue(QLatin1StringView(volumeKey), volume);
     reportStatus();
 }
 
 void ApplicationSettings::setPreferHdr10Plus(bool enabled) {
-    m_settings.setValue(QLatin1StringView(preferHdr10PlusKey), enabled);
+    m_settings->setValue(QLatin1StringView(preferHdr10PlusKey), enabled);
     reportStatus();
 }
 
 void ApplicationSettings::setAbsolutePqEnabled(bool enabled) {
-    m_settings.setValue(QLatin1StringView(absolutePqEnabledKey), enabled);
+    m_settings->setValue(QLatin1StringView(absolutePqEnabledKey), enabled);
     reportStatus();
 }
 
 void ApplicationSettings::setSourceHdrReferenceWhiteNits(int nits) {
     Q_ASSERT(nits >= DecodedVideoSource::minimumSourceHdrReferenceWhiteNits &&
              nits <= DecodedVideoSource::maximumSourceHdrReferenceWhiteNits);
-    m_settings.setValue(QLatin1StringView(sourceHdrReferenceWhiteKey), nits);
+    m_settings->setValue(QLatin1StringView(sourceHdrReferenceWhiteKey), nits);
     reportStatus();
 }
 
 void ApplicationSettings::setBlankOtherDisplaysInFullscreen(bool enabled) {
-    m_settings.setValue(QLatin1StringView(blankOtherDisplaysKey), enabled);
+    m_settings->setValue(QLatin1StringView(blankOtherDisplaysKey), enabled);
     reportStatus();
 }
 
@@ -298,7 +294,7 @@ void ApplicationSettings::setSubtitleAppearance(SubtitleAppearanceValues const& 
                                                 SubtitleAppearanceFields dirtyFields) {
     auto write = [this, dirtyFields](SubtitleAppearanceFields field, char const* key, QVariant const& value) {
         if ((dirtyFields & field) != 0) {
-            m_settings.setValue(QLatin1StringView(key), value);
+            m_settings->setValue(QLatin1StringView(key), value);
         }
     };
     write(SubtitleAppearanceField::AppearanceMode, appearanceModeKey,
@@ -330,25 +326,25 @@ void ApplicationSettings::setSubtitleAppearance(SubtitleAppearanceValues const& 
 }
 
 void ApplicationSettings::removeSubtitleAppearance() {
-    m_settings.remove(QLatin1StringView(subtitleAppearancePrefix));
+    m_settings->remove(QLatin1StringView(subtitleAppearancePrefix));
     reportStatus();
 }
 
 void ApplicationSettings::sync() {
-    m_settings.sync();
+    m_settings->sync();
     reportStatus();
 }
 
 void ApplicationSettings::reportInvalidValue(QString const& key) { reportFault(QStringLiteral("invalid_value"), key); }
 
 void ApplicationSettings::reportStatus() {
-    switch (m_settings.status()) {
-    case QSettings::NoError:
+    switch (m_settings->status()) {
+    case SettingsStore::Status::NoError:
         return;
-    case QSettings::AccessError:
+    case SettingsStore::Status::AccessError:
         reportFault(QStringLiteral("access_error"));
         return;
-    case QSettings::FormatError:
+    case SettingsStore::Status::FormatError:
         reportFault(QStringLiteral("format_error"));
         return;
     }

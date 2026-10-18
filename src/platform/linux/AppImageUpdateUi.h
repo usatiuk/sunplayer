@@ -3,9 +3,9 @@
 #include <functional>
 #include <optional>
 
+#include "settings/SettingsStore.h"
 #include <QObject>
 #include <QPointer>
-#include <QSettings>
 
 class AppImageUpdater;
 class QDialog;
@@ -18,7 +18,7 @@ class AppImageUpdateUi final : public QObject {
 
   public:
     AppImageUpdateUi(AppImageUpdater& updater, QWindow& window, std::function<bool()> mediaEmpty,
-                     QString const& settingsFile);
+                     SettingsStore& settings);
     ~AppImageUpdateUi() override;
     void reconcile();
     QWidget* createSettingsPage();
@@ -32,7 +32,7 @@ class AppImageUpdateUi final : public QObject {
     AppImageUpdater& m_updater;
     QWindow& m_window;
     std::function<bool()> const m_mediaEmpty;
-    QSettings m_settings;
+    SettingsStore& m_settings;
     std::optional<bool> m_checkOnStartup;
     QPointer<QDialog> m_prompt;
     bool m_started = false;

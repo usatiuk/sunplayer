@@ -46,7 +46,8 @@ search, account switching, or background sync.
   hold server/user/device metadata and a remember flag. Failed save leaves a
   usable session-only login. Sign-out disables restoration before deletion;
   storage/settings errors are reported. No password is persisted.
-* `JellyfinBrowser` owns the item model, navigation, current request identity,
+* `JellyfinBrowser` borrows the application-owned SettingsStore for its metadata,
+  with no backend/path/format reconstruction. It owns the item model, navigation, current request identity,
   loading/errors, remembered-session metadata, and commands. Browser history
   retains visited typed paths plus a cursor; toolbar Up follows ancestors, while
   mouse/keyboard Back/Forward reload visited locations; new
@@ -181,12 +182,13 @@ file through About → Open logs. This instrumentation does not claim the
 underlying metadata write failure is fixed.
 
 
-Installed diagnostics confirmed PasswordVault write success but the first
-QSettings registry write failed with AccessError. The user confirmed ordinary
-settings persist in the same unpackaged binaries. Packaged Windows now shares
-one QSettings INI file in ApplicationData.Current.LocalFolder for preferences
-and Jellyfin metadata. Tokens remain in PasswordVault. Production credential
-identity/restoration follows explicit temporary-store intent, not QSettings
-format; test/smoke stores keep unique token entries and skip restoration.
-Installed persistence and restart/restore remain user acceptance; see the
-[LocalFolder plan](../../plans/cross-cutting/2026-10-18-windows-settings-localfolder.md).
+Installed diagnostics and a Process Monitor trace established successful
+PasswordVault writes but failed registry/INI persistence. The unsuccessful
+LocalFolder INI implementation is removed. Preferences, Jellyfin metadata and
+AppImage consent now share one application-owned SettingsStore. Packaged
+Windows uses SDK LocalSettings; QSettings retains other platforms/unpackaged
+Windows and isolated tests. Production credential identity/restoration follows
+explicit temporary-store intent; temporary browsers skip restore and receive
+unique test token keys. Tokens remain separate in PasswordVault/QtKeychain.
+Installed preference and remembered-login restart acceptance remain required;
+see the [settings-store plan](../../plans/cross-cutting/2026-10-18-settings-store.md).

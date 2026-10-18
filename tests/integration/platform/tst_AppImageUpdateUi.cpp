@@ -44,6 +44,7 @@ class AppImageUpdateUiTest final : public QObject {
     void cleanup() {
         m_ui.reset();
         m_updater.reset();
+        m_settings.reset();
         m_directory.reset();
         for (auto const* name : {"APPIMAGE", "APPDIR", "SUNPLAYER_APPIMAGE_UPDATES", "TEST_UPDATE_CHECK_LOG"}) {
             if (m_environment.contains(QLatin1String(name))) {
@@ -164,8 +165,8 @@ class AppImageUpdateUiTest final : public QObject {
   private:
     QString settingsFile() const { return m_directory->filePath(QStringLiteral("settings.ini")); }
     void createUi() {
-        m_ui =
-            std::make_unique<AppImageUpdateUi>(*m_updater, m_window, [this] { return m_mediaEmpty; }, settingsFile());
+        m_settings = createTemporarySettingsStore(settingsFile());
+        m_ui = std::make_unique<AppImageUpdateUi>(*m_updater, m_window, [this] { return m_mediaEmpty; }, *m_settings);
     }
     static QDialog* consentDialog() {
         for (auto* widget : QApplication::topLevelWidgets()) {
@@ -180,6 +181,7 @@ class AppImageUpdateUiTest final : public QObject {
     bool m_mediaEmpty = true;
     std::unique_ptr<QTemporaryDir> m_directory;
     std::unique_ptr<AppImageUpdater> m_updater;
+    std::unique_ptr<SettingsStore> m_settings;
     std::unique_ptr<AppImageUpdateUi> m_ui;
 };
 

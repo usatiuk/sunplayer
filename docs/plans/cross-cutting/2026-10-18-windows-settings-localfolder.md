@@ -66,3 +66,20 @@ simplicity/platform scope, and tests/docs/build wiring. Fixed the SDK include
 order finding (qt_windows.h before appmodel.h); no other blockers remained.
 No Windows/macOS build or execution occurred locally. Hosted CI and produced
 MSIX installed preference/remembered-login acceptance remain pending.
+
+
+## Hosted and installed follow-up
+
+Commit `457c921` passed Windows, Linux and AppImage in
+[CI run 39148285092](https://github.com/usatiuk/sunplayer/actions/runs/39148285092).
+Installed acceptance failed: the user-provided Process Monitor trace shows
+successful directory access, lock/temp creation, writes and flushes, followed
+by ACCESS DENIED on four atomic rename attempts to settings.ini. LocalFolder
+resolution alone is insufficient. See the
+[trace investigation](../../research/2026-10-18-appsilo-settings-rename.md).
+This is an unresolved installed-persistence blocker, not completed acceptance.
+
+
+Superseded: the user requested removal of this unsuccessful implementation.
+The [shared SettingsStore plan](2026-10-18-settings-store.md) replaces it with
+SDK LocalSettings for packaged Windows while retaining QSettings elsewhere.

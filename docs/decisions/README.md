@@ -55,3 +55,5 @@ with a new decision when the accepted choice changes materially.
 * [0036: Keep Jellyfin outside the shared Direct Play pipeline](0036-jellyfin-direct-play.md)
 
 * [0037: Use package-local Windows settings](0037-use-package-local-windows-settings.md)
+
+* [0038: Share one settings store with native packaged Windows persistence](0038-share-settings-store-with-native-windows.md)

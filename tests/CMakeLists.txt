@@ -15,12 +15,6 @@ qt_add_executable(sunplayer_application_settings_tests
         ../src/app/ApplicationSettings.h
 )
 
-if (WIN32)
-    target_sources(sunplayer_application_settings_tests PRIVATE
-            ../src/platform/windows/WindowsApplicationSettings.cpp)
-    target_link_libraries(sunplayer_application_settings_tests PRIVATE RuntimeObject WindowsApp)
-endif ()
-
 qt_add_executable(sunplayer_subtitle_settings_tests
         unit/subtitles/tst_SubtitleSettings.cpp
         ../src/subtitles/SubtitleSettings.cpp
@@ -406,6 +400,7 @@ target_link_libraries(sunplayer_application_log_tests
 
 target_link_libraries(sunplayer_application_settings_tests
         PRIVATE
+        sunplayer_settings
         Qt6::Gui
         Qt6::Test
         sunplayer_diagnostics
@@ -1231,7 +1226,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
             ../src/platform/linux/AppImageUpdater.cpp
             ../src/platform/linux/AppImageUpdater.h)
     target_include_directories(sunplayer_appimage_update_ui_tests PRIVATE ../src)
-    target_link_libraries(sunplayer_appimage_update_ui_tests PRIVATE Qt6::Widgets Qt6::Test)
+    target_link_libraries(sunplayer_appimage_update_ui_tests PRIVATE Qt6::Widgets Qt6::Test sunplayer_settings)
     add_test(NAME appimage-update-ui COMMAND sunplayer_appimage_update_ui_tests)
     set_tests_properties(appimage-update-ui PROPERTIES LABELS "platform;ui;integration;linux"
             ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 30)

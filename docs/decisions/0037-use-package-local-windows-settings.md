@@ -1,6 +1,6 @@
 # 0037: Use package-local Windows settings
 
-Status: accepted
+Status: superseded by [0038](0038-share-settings-store-with-native-windows.md)
 
 Installed AppSilo reports QSettings registry AccessError even for the first
 boolean write. Ordinary settings persist with the same unpackaged binaries;
@@ -23,3 +23,9 @@ restoration. Installed restart persistence remains the acceptance gate.
 
 See the [delivery plan](../plans/cross-cutting/2026-10-18-windows-settings-localfolder.md)
 for evidence, sources, and review.
+
+
+Installed acceptance rejected this approach: temp/lock creation, writes and
+flush succeeded, but the atomic rename to settings.ini returned ACCESS DENIED.
+The LocalFolder INI implementation is removed by 0038. Keep this record as the
+historical decision and its evidence, not current storage policy.

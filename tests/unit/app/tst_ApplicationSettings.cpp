@@ -64,6 +64,7 @@ class ApplicationSettingsTest final : public QObject {
 
   private slots:
     void defaultsAndRoundTrip();
+    void sharedStoreContract();
     void rejectsInvalidValues();
     void hdrReferenceWhitePersistence();
     void absolutePqPersistence();
@@ -75,6 +76,42 @@ class ApplicationSettingsTest final : public QObject {
     void reportsAccessFailureOnce();
 };
 
+void ApplicationSettingsTest::sharedStoreContract() {
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QString const path = settingsPath(directory);
+    {
+        ApplicationSettings settings(path);
+        auto& store = settings.store();
+        QVERIFY(!store.contains(u"missing"));
+        QCOMPARE(store.value(u"missing", 17).toInt(), 17);
+        QCOMPARE(store.status(), SettingsStore::Status::NoError);
+        settings.setVolume(0.35);
+        store.setValue(u"jellyfin/server", QStringLiteral("https://example.invalid"));
+        store.setValue(u"jellyfin/remember", false);
+        store.setValue(u"subtitles/appearance", QStringLiteral("obsolete"));
+        store.setValue(u"subtitles/appearance/textColor", QStringLiteral("#FFFFFF"));
+        store.setValue(u"subtitles/appearance2/textColor", QStringLiteral("preserve"));
+        store.setValue(u"count", 7);
+        settings.removeSubtitleAppearance();
+        QVERIFY(!store.contains(u"subtitles/appearance"));
+        QVERIFY(!store.contains(u"subtitles/appearance/textColor"));
+        QCOMPARE(store.value(u"subtitles/appearance2/textColor").toString(), QStringLiteral("preserve"));
+        store.remove(u"absent");
+        settings.sync();
+        QCOMPARE(store.status(), SettingsStore::Status::NoError);
+    }
+    ApplicationSettings restored(path);
+    QCOMPARE(restored.load().volume, std::optional<qreal>(0.35));
+    auto& store = restored.store();
+    QCOMPARE(store.value(u"jellyfin/server").toString(), QStringLiteral("https://example.invalid"));
+    QVERIFY(store.contains(u"jellyfin/remember"));
+    QVERIFY(!store.value(u"jellyfin/remember").toBool());
+    QCOMPARE(store.value(u"count").toInt(), 7);
+    QCOMPARE(store.value(u"subtitles/appearance2/textColor").toString(), QStringLiteral("preserve"));
+    QCOMPARE(store.status(), SettingsStore::Status::NoError);
+}
+
 void ApplicationSettingsTest::defaultsAndRoundTrip() {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
@@ -84,7 +121,6 @@ void ApplicationSettingsTest::defaultsAndRoundTrip() {
     {
         ApplicationSettings settings(path);
         QVERIFY(settings.isTemporaryStore());
-        QCOMPARE(settings.format(), QSettings::IniFormat);
         ApplicationSettings::Values const defaults = settings.load();
         QVERIFY(!defaults.volume);
         QVERIFY(!defaults.preferHdr10Plus);

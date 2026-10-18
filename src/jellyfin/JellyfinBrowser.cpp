@@ -1,29 +1,24 @@
 #include "jellyfin/JellyfinBrowser.h"
 #include "diagnostics/LogCategories.h"
 
-#include <QCryptographicHash>
 #include <QTimer>
 #include <QUrlQuery>
 #include <QUuid>
 #include <algorithm>
 
 namespace {
-void logSettings(QSettings const& settings, char const* stage) {
-    qCInfo(sunplayerLogApplication, "event=jellyfin.settings stage=%s status=%d format=%d", stage,
-           int(settings.status()), int(settings.format()));
+void logSettings(SettingsStore const& settings, char const* stage) {
+    qCInfo(sunplayerLogApplication, "event=jellyfin.settings stage=%s status=%d backend=%s", stage,
+           int(settings.status()), settings.backendName());
 }
 } // namespace
 
-JellyfinBrowser::JellyfinBrowser(QString const& settingsPath, QSettings::Format format, bool persistentCredentials,
-                                 QObject* parent)
+JellyfinBrowser::JellyfinBrowser(SettingsStore& settings, bool persistentCredentials, QObject* parent)
     : QAbstractListModel(parent),
       m_tokens(persistentCredentials
                    ? QStringLiteral("jellyfin-token")
-                   : QStringLiteral("jellyfin-test-") +
-                         QString::fromLatin1(
-                             QCryptographicHash::hash(settingsPath.toUtf8(), QCryptographicHash::Sha256).toHex())),
-      m_settings(settingsPath, format) {
-    m_settings.setFallbacksEnabled(false);
+                   : QStringLiteral("jellyfin-test-") + QUuid::createUuid().toString(QUuid::WithoutBraces)),
+      m_settings(settings) {
     logSettings(m_settings, "constructed");
     connect(&m_client, &JellyfinClient::authenticationLost, this, [this] {
         ++m_request;
@@ -234,7 +229,7 @@ void JellyfinBrowser::login(QString address, QString username, QString password,
             logSettings(m_settings, "remember_write");
             m_settings.sync();
             logSettings(m_settings, "login_sync");
-            if (m_settings.status() != QSettings::NoError) {
+            if (m_settings.status() != SettingsStore::Status::NoError) {
                 auto const settingsError = tr("Login settings could not be saved. This login may not be remembered.");
                 error = error.isEmpty() ? settingsError : error + u'\n' + settingsError;
             }
@@ -254,7 +249,7 @@ void JellyfinBrowser::logout() {
     // restores a session after a restart.
     m_settings.setValue(QStringLiteral("jellyfin/remember"), false);
     m_settings.sync();
-    if (m_settings.status() != QSettings::NoError) {
+    if (m_settings.status() != SettingsStore::Status::NoError) {
         m_message = tr("Automatic login could not be disabled in settings. Secure token deletion is still required.");
     }
     emit changed();

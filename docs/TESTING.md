@@ -405,11 +405,16 @@ portable boolean representations, malformed/non-finite/out-of-range values,
 corrupt input, deterministic access failure, warning deduplication, unknown-key
 preservation, and independent per-key writes. It deliberately does not assert
 Qt-owned registry, preferences, or XDG paths. It also verifies explicit-path
-stores are temporary independently of INI format. Packaged Windows uses the
-SDK LocalFolder path, which hosted unpackaged tests cannot exercise. Installed
+stores are temporary independently of backend. The public SettingsStore contract
+regression verifies shared metadata/preference writes, missing/default behavior,
+scalar persistence and exact/group removal preserving prefix siblings. Jellyfin
+metadata is restored through a recreated real store without touching credentials.
+AppImage consent uses the same injected store and retains its existing integration
+coverage. Packaged Windows uses SDK LocalSettings, which hosted unpackaged tests
+cannot exercise. Installed
 acceptance must change a preference and restart, sign in with Remember me and
 restart twice, then sign out and restart to verify restoration stays disabled.
-Tokens must remain in PasswordVault, with only metadata in the INI file.
+Tokens must remain in PasswordVault, with only metadata in LocalSettings.
 
 Fullscreen smoke pre-seeds that isolated store before constructing the real
 window. It verifies restored volume and capability-gated blanking, changes the

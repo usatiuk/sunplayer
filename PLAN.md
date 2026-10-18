@@ -115,8 +115,8 @@ playback:
   target.
 * A narrow application settings boundary restores and records playback volume,
   the supported fullscreen display-blanking preference, and validated subtitle
-  appearance preferences through QSettings (package-local INI on packaged Windows, native per-user
-  storage elsewhere). Runtime owners
+  appearance preferences through one shared SettingsStore (Windows LocalSettings
+  in packaged builds, QSettings native storage elsewhere). Runtime owners
   remain canonical, application smoke modes use isolated temporary stores, and
   mute and playback-session state remain unpersisted.
 * Both diagnostic producers render the same grayscale, color-spectrum, and
@@ -401,9 +401,11 @@ Windows networking and secure-store acceptance remain pending.
 The [Windows token-store plan](docs/plans/cross-cutting/2026-10-18-windows-token-store.md)
 replaces Generic Credential APIs with SDK PasswordVault behind TokenStore;
 Linux/macOS retain QtKeychain, with no new dependency or permission.
-Packaged Windows settings now use QSettings INI in the SDK LocalFolder after
-installed registry AccessError; unpackaged and other OS storage are unchanged.
-See the [LocalFolder plan](docs/plans/cross-cutting/2026-10-18-windows-settings-localfolder.md)
+Preferences, Jellyfin metadata and AppImage consent share one injected
+SettingsStore. Packaged Windows uses SDK LocalSettings after the LocalFolder
+INI experiment failed at atomic rename; unpackaged Windows and other OS
+storage remain QSettings. See the
+[settings-store plan](docs/plans/cross-cutting/2026-10-18-settings-store.md)
 for validation and installed acceptance.
 
 ### 3. FFmpeg media integration

@@ -473,6 +473,17 @@ elseif (APPLE)
     )
 endif ()
 
+add_library(sunplayer_settings STATIC
+        src/settings/SettingsStore.h
+        src/settings/QSettingsStore.cpp
+        src/settings/QSettingsStore.h)
+target_include_directories(sunplayer_settings PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_link_libraries(sunplayer_settings PUBLIC Qt6::Core PRIVATE sunplayer_diagnostics)
+if (WIN32)
+    target_sources(sunplayer_settings PRIVATE src/platform/windows/WindowsSettingsStore.cpp)
+    target_link_libraries(sunplayer_settings PRIVATE RuntimeObject WindowsApp)
+endif ()
+
 find_package(Qt6 REQUIRED COMPONENTS Network)
 
 add_library(sunplayer_jellyfin STATIC
@@ -481,7 +492,7 @@ add_library(sunplayer_jellyfin STATIC
         src/jellyfin/TokenStore.h
 )
 target_include_directories(sunplayer_jellyfin PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_link_libraries(sunplayer_jellyfin PUBLIC Qt6::Network PRIVATE sunplayer_diagnostics)
+target_link_libraries(sunplayer_jellyfin PUBLIC Qt6::Network sunplayer_settings PRIVATE sunplayer_diagnostics)
 if (WIN32)
     target_sources(sunplayer_jellyfin PRIVATE src/jellyfin/TokenStoreWindows.cpp)
     target_link_libraries(sunplayer_jellyfin PRIVATE RuntimeObject WindowsApp)
@@ -569,7 +580,6 @@ if (WIN32)
     )
     target_sources(sunplayer PRIVATE
             packaging/windows/SunPlayer.rc
-            src/platform/windows/WindowsApplicationSettings.cpp
             src/platform/windows/WindowsDesktopIntegration.cpp
             src/platform/windows/WindowsDesktopIntegration.h
             src/platform/windows/WindowsDisplayStateProvider.cpp

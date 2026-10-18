@@ -6,7 +6,6 @@
 #include <QDialogButtonBox>
 #include <QLabel>
 #include <QPushButton>
-#include <QSettings>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
 #include <QWindow>
@@ -18,10 +17,8 @@ constexpr auto checkOnStartupKey = "linux/appimage/checkOnStartup";
 }
 
 AppImageUpdateUi::AppImageUpdateUi(AppImageUpdater& updater, QWindow& window, std::function<bool()> mediaEmpty,
-                                   QString const& settingsFile)
-    : m_updater(updater), m_window(window), m_mediaEmpty(std::move(mediaEmpty)),
-      m_settings(settingsFile, QSettings::IniFormat) {
-    m_settings.setFallbacksEnabled(false);
+                                   SettingsStore& settings)
+    : m_updater(updater), m_window(window), m_mediaEmpty(std::move(mediaEmpty)), m_settings(settings) {
     if (m_settings.contains(QLatin1String(checkOnStartupKey))) {
         QString const value = m_settings.value(QLatin1String(checkOnStartupKey)).toString();
         if (value == QStringLiteral("true") || value == QStringLiteral("false")) {
@@ -41,7 +38,7 @@ void AppImageUpdateUi::setCheckOnStartup(bool enabled) {
     m_checkOnStartup = enabled;
     m_settings.setValue(QLatin1String(checkOnStartupKey), enabled);
     m_settings.sync();
-    if (m_settings.status() != QSettings::NoError) {
+    if (m_settings.status() != SettingsStore::Status::NoError) {
         qWarning() << "Could not save AppImage startup-check preference";
     }
     emit preferenceChanged();

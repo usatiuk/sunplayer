@@ -1,8 +1,8 @@
 #include "diagnostics/LogCategories.h"
 #include "jellyfin/TokenStore.h"
 
+#include "platform/windows/WindowsRuntimeApartment.h"
 #include <qt_windows.h>
-#include <roapi.h>
 #include <winrt/Windows.Security.Credentials.h>
 
 using winrt::Windows::Security::Credentials::PasswordCredential;
@@ -11,32 +11,11 @@ using winrt::Windows::Security::Credentials::PasswordVault;
 namespace {
 constexpr auto resource = L"SunPlayer";
 
-class RuntimeApartment final {
-  public:
-    RuntimeApartment() {
-        HRESULT const result = RoInitialize(RO_INIT_SINGLETHREADED);
-        if (FAILED(result) && result != RPC_E_CHANGED_MODE) {
-            winrt::check_hresult(result);
-        }
-        m_initialized = SUCCEEDED(result);
-    }
-    ~RuntimeApartment() {
-        if (m_initialized) {
-            RoUninitialize();
-        }
-    }
-    RuntimeApartment(RuntimeApartment const&) = delete;
-    RuntimeApartment& operator=(RuntimeApartment const&) = delete;
-
-  private:
-    bool m_initialized = false;
-};
-
 template <typename Operation> QString withVault(char const* action, QString const& failure, Operation operation) {
     try {
         // Native objects must die before this apartment, independently of any
         // initialization owned by the player or its native media controls.
-        RuntimeApartment apartment;
+        WindowsRuntimeApartment apartment;
         operation(PasswordVault{});
         qCInfo(sunplayerLogApplication, "event=jellyfin.token_store backend=password_vault operation=%s result=ok",
                action);

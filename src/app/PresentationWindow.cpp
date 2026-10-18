@@ -152,8 +152,8 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
     m_settings = std::make_unique<PresentationSettings>(nullptr);
     m_diagnosticVideoSource = std::make_unique<DiagnosticVideoSource>(VideoTargetReadback::Disabled);
     m_mediaSession = std::make_unique<MediaSession>(VideoTargetReadback::Disabled);
-    m_jellyfin = std::make_unique<JellyfinBrowser>(m_applicationSettings.filePath(), m_applicationSettings.format(),
-                                                   !m_applicationSettings.isTemporaryStore());
+    m_jellyfin =
+        std::make_unique<JellyfinBrowser>(m_applicationSettings.store(), !m_applicationSettings.isTemporaryStore());
     m_jellyfinPlayback = std::make_unique<JellyfinPlaybackAdapter>(*m_jellyfin, *m_mediaSession);
     connect(m_jellyfinPlayback.get(), &JellyfinPlaybackAdapter::mediaOpened, this,
             &PresentationWindow::mediaOpenRequested);
@@ -165,7 +165,7 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
     if (m_appImageUpdater) {
         m_appImageUpdateUi = std::make_unique<AppImageUpdateUi>(
             *m_appImageUpdater, *this, [this] { return m_mediaSession->state() == MediaSession::State::Empty; },
-            m_applicationSettings.filePath());
+            m_applicationSettings.store());
         QTimer::singleShot(0, m_appImageUpdateUi.get(), &AppImageUpdateUi::reconcile);
     }
     connect(m_mediaSession.get(), &MediaSession::sessionChanged, this, [this] {
