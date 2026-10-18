@@ -5,6 +5,7 @@ import QtQuick.Layouts
 
 Item {
     id: root
+    objectName: "jellyfinDetailHeader"
     required property var item
     readonly property bool illustrated: item.kind === "Movie" || item.kind === "Series" || item.kind === "Season"
     readonly property bool compact: width < 720
@@ -14,7 +15,6 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: 10
         color: root.illustrated ? "#181c24" : "transparent"
     }
     Image {

@@ -11,41 +11,76 @@ VideoPage {
 
     Rectangle {
         anchors.fill: parent
-        color: "#101216"
+        objectName: "jellyfinBackground"
+        color: "#000000"
     }
     Control {
         anchors.fill: parent
         padding: 24
-        palette.windowText: "#f1f3f7"
-        palette.text: "#f1f3f7"
-        palette.buttonText: "#f1f3f7"
-        palette.button: "#2a303b"
-        palette.base: "#1c212a"
-        palette.highlight: "#25b2dd"
-        palette.highlightedText: "#071e29"
         contentItem: ColumnLayout {
             spacing: 18
             RowLayout {
                 Layout.fillWidth: true
-                Button {
+                ToolButton {
                     objectName: "jellyfinBackButton"
-                    text: qsTr("← Back")
-                    enabled: !root.browser.busy || !root.browser.canGoBack
-                    onClicked: {
-                        if (root.browser.canGoBack)
-                            root.browser.back();
-                        else
-                            root.backRequested();
-                    }
+                    text: "←"
+                    font.pixelSize: 22
+                    implicitWidth: 40
+                    implicitHeight: 40
+                    Accessible.name: qsTr("Up one level")
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("Up one level")
+                    enabled: !root.browser.busy || !root.browser.canGoUp
+                    onClicked: root.backRequested()
                 }
                 Label {
+                    objectName: "jellyfinTitle"
+                    Layout.leftMargin: 12
+                    Layout.rightMargin: 12
                     text: "Jellyfin"
                     color: "#f1f3f7"
                     font.pixelSize: 23
                     font.weight: Font.DemiBold
                 }
+                Flickable {
+                    objectName: "jellyfinTabs"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    visible: root.browser.authenticated
+                    Layout.preferredHeight: tabs.implicitHeight
+                    contentWidth: tabs.implicitWidth
+                    contentHeight: height
+                    flickableDirection: Flickable.HorizontalFlick
+                    clip: true
+                    Row {
+                        id: tabs
+                        spacing: 8
+                        Button {
+                            text: qsTr("Home")
+                            checkable: true
+                            checked: root.browser.isHome
+                            highlighted: checked
+                            enabled: !root.browser.busy
+                            onClicked: root.browser.home()
+                        }
+                        Repeater {
+                            model: root.browser.libraries
+                            delegate: Button {
+                                required property var modelData
+                                required property int index
+                                text: modelData.name
+                                checkable: true
+                                checked: root.browser.activeLibraryId === modelData.itemId
+                                highlighted: checked
+                                enabled: !root.browser.busy
+                                onClicked: root.browser.selectLibrary(index)
+                            }
+                        }
+                    }
+                }
                 Item {
                     Layout.fillWidth: true
+                    visible: !root.browser.authenticated
                 }
                 BusyIndicator {
                     running: root.browser.busy
@@ -143,51 +178,15 @@ VideoPage {
                     Layout.fillHeight: true
                 }
             }
-            ColumnLayout {
+            Loader {
+                id: contentLoader
+                Layout.leftMargin: -24
+                Layout.rightMargin: -24
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 visible: root.browser.authenticated
-                spacing: 20
-                Flickable {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: tabs.implicitHeight
-                    contentWidth: tabs.implicitWidth
-                    contentHeight: height
-                    flickableDirection: Flickable.HorizontalFlick
-                    clip: true
-                    Row {
-                        id: tabs
-                        spacing: 8
-                        Button {
-                            text: qsTr("Home")
-                            checkable: true
-                            checked: root.browser.isHome
-                            highlighted: checked
-                            enabled: !root.browser.busy
-                            onClicked: root.browser.home()
-                        }
-                        Repeater {
-                            model: root.browser.libraries
-                            delegate: Button {
-                                required property var modelData
-                                required property int index
-                                text: modelData.name
-                                checkable: true
-                                checked: root.browser.activeLibraryId === modelData.itemId
-                                highlighted: checked
-                                enabled: !root.browser.busy
-                                onClicked: root.browser.selectLibrary(index)
-                            }
-                        }
-                    }
-                }
-                Loader {
-                    id: contentLoader
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    active: root.browser.authenticated
-                    sourceComponent: root.browser.isHome ? homeView : catalogView
-                }
+                active: root.browser.authenticated
+                sourceComponent: root.browser.isHome ? homeView : catalogView
             }
         }
     }
@@ -202,7 +201,8 @@ VideoPage {
             ScrollBar.vertical: ScrollBar {}
             ColumnLayout {
                 id: homeContent
-                width: homeScroll.width
+                x: 24
+                width: homeScroll.width - 48
                 spacing: 28
                 Label {
                     text: qsTr("My media")
@@ -286,28 +286,40 @@ VideoPage {
                     objectName: "jellyfinItems"
                     clip: true
                     model: root.browser
-                    readonly property int columns: Math.max(1, Math.floor(width / 170))
-                    cellWidth: width / columns
+                    readonly property int columns: Math.max(1, Math.floor((width - 48) / 170))
+                    // Keep 24 px outer insets and 20 px card gaps under the full-width header.
+                    cellWidth: (width - 48 + 20) / columns
                     cellHeight: (cellWidth - 20) * 1.5 + 76
                     ScrollBar.vertical: ScrollBar {}
-                    header: JellyfinDetail {
+                    header: Item {
                         width: posters.width
-                        item: root.browser.currentItem
-                        enabled: !root.browser.busy
-                        onPlayRequested: function (fromStart) {
-                            root.browser.playCurrent(fromStart);
-                        }
-                        onWatchedRequested: function (watched) {
-                            root.browser.setCurrentWatched(watched);
+                        height: galleryDetail.implicitHeight + (galleryDetail.illustrated ? 20 : 0)
+                        JellyfinDetail {
+                            id: galleryDetail
+                            width: parent.width
+                            item: root.browser.currentItem
+                            enabled: !root.browser.busy
+                            onPlayRequested: function (fromStart) {
+                                root.browser.playCurrent(fromStart);
+                            }
+                            onWatchedRequested: function (watched) {
+                                root.browser.setCurrentWatched(watched);
+                            }
                         }
                     }
-                    delegate: JellyfinPoster {
+                    delegate: Item {
+                        id: posterCell
                         required property var itemData
                         required property int index
-                        item: itemData
-                        width: posters.cellWidth - 20
-                        enabled: !root.browser.busy
-                        onClicked: root.browser.enter(index)
+                        width: posters.cellWidth
+                        height: posters.cellHeight
+                        JellyfinPoster {
+                            x: 24
+                            item: posterCell.itemData
+                            width: parent.width - 20
+                            enabled: !root.browser.busy
+                            onClicked: root.browser.enter(posterCell.index)
+                        }
                     }
                     footer: moreFooter
                 }
@@ -325,17 +337,24 @@ VideoPage {
                         width: episodeList.width
                         item: root.browser.currentItem
                     }
-                    delegate: JellyfinEpisode {
+                    delegate: Item {
+                        id: episodeCell
                         required property var itemData
                         required property int index
-                        item: itemData
                         width: episodeList.width
-                        enabled: !root.browser.busy
-                        onPlayRequested: function (fromStart) {
-                            root.browser.play(index, fromStart);
-                        }
-                        onWatchedRequested: function (watched) {
-                            root.browser.setWatched(index, watched);
+                        height: episodeCard.implicitHeight
+                        JellyfinEpisode {
+                            id: episodeCard
+                            x: 24
+                            item: episodeCell.itemData
+                            width: parent.width - 48
+                            enabled: !root.browser.busy
+                            onPlayRequested: function (fromStart) {
+                                root.browser.play(episodeCell.index, fromStart);
+                            }
+                            onWatchedRequested: function (watched) {
+                                root.browser.setWatched(episodeCell.index, watched);
+                            }
                         }
                     }
                     footer: moreFooter

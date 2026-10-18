@@ -7,6 +7,16 @@ import QtQuick.Layouts
 Item {
     id: root
 
+    SystemPalette { id: appColors }
+    palette.windowText: appColors.windowText
+    palette.text: appColors.text
+    palette.button: appColors.button
+    palette.buttonText: appColors.buttonText
+    palette.base: appColors.base
+    palette.highlight: appColors.highlight
+    palette.highlightedText: appColors.highlightedText
+    palette.placeholderText: appColors.placeholderText
+
     required property real renderDevicePixelRatio
     required property string applicationDisplayName
     required property WindowCommands windowCommands
@@ -21,6 +31,54 @@ Item {
     property JellyfinBrowser jellyfin: null
     property int currentPage: 0
     property int playbackReturnPage: 0
+    property bool jellyfinVisited: false
+
+    function openJellyfin() {
+        jellyfinVisited = true
+        currentPage = 2
+    }
+    function goUp() {
+        if (currentPage === 2 && jellyfin.canGoUp)
+            jellyfin.up()
+        else if (currentPage === 2) {
+            mediaSession.cancel()
+            currentPage = 0
+        }
+    }
+    function goBack() {
+        if (currentPage === 2) {
+            if (jellyfin.canGoBack)
+                jellyfin.back()
+            else {
+                mediaSession.cancel()
+                currentPage = 0
+            }
+        } else if (currentPage === 1) {
+            currentPage = 0
+        } else if (mediaSession.state !== MediaSession.Empty) {
+            mediaSession.cancel()
+            currentPage = playbackReturnPage
+        }
+    }
+    function goForward() {
+        if (currentPage === 2)
+            jellyfin.forward()
+        else if (currentPage === 0 && mediaSession.state === MediaSession.Empty && jellyfinVisited)
+            currentPage = 2
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        z: 50
+        acceptedButtons: Qt.BackButton | Qt.ForwardButton
+        scrollGestureEnabled: false
+        onClicked: function(mouse) {
+            if (mouse.button === Qt.BackButton)
+                root.goBack()
+            else
+                root.goForward()
+        }
+    }
     readonly property real chromeTop: windowChrome.available ? windowChrome.titleBarHeight : 0
     readonly property VideoPage activePage:
         currentPage === 0 ? playerPage : currentPage === 1 ? hdrLabPage : (browserLoader.item as VideoPage)
@@ -57,6 +115,8 @@ Item {
     Connections {
         target: root.windowCommands
 
+        function onNavigationBackRequested() { root.goBack() }
+        function onNavigationForwardRequested() { root.goForward() }
         function onMediaOpenRequested() {
             root.playbackReturnPage = root.currentPage
             root.currentPage = 0
@@ -105,7 +165,7 @@ Item {
             supportController: root.supportController
             topContentInset: root.chromeTop - pageStack.y
             jellyfinAvailable: root.jellyfin !== null
-            onJellyfinRequested: root.currentPage = 2
+            onJellyfinRequested: root.openJellyfin()
         }
 
         HdrLabPage {
@@ -123,10 +183,7 @@ Item {
             sourceComponent: JellyfinPage {
                 id: jellyfinPage
                 browser: root.jellyfin
-                onBackRequested: {
-                    root.mediaSession.cancel()
-                    root.currentPage = 0
-                }
+                onBackRequested: root.goUp()
             }
         }
 
@@ -142,10 +199,7 @@ Item {
         visible: root.currentPage === 0 && root.mediaSession.state !== MediaSession.Empty
             && (!playerPage.sessionActive || playerPage.controlsShouldShow)
         text: qsTr("← Back")
-        onClicked: {
-            root.mediaSession.cancel()
-            root.currentPage = root.playbackReturnPage
-        }
+        onClicked: root.goBack()
     }
 
     ClientSideWindowChrome {

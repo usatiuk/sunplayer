@@ -132,6 +132,19 @@ QNetworkRequest JellyfinClient::authorizedRequest(QUrl const& url) const {
 }
 QNetworkReply* JellyfinClient::request(QByteArray method, QString const& path, QUrlQuery const& query,
                                        QJsonObject const& body, Completion done, QObject* context) {
+    return requestDocument(
+        std::move(method), path, query, body,
+        [done = std::move(done)](QJsonDocument document, QString error) {
+            if (error.isEmpty() && !document.isNull() && !document.isObject()) {
+                error = tr("The server returned an invalid response.");
+            }
+            done(document.object(), error);
+        },
+        context);
+}
+QNetworkReply* JellyfinClient::requestDocument(QByteArray method, QString const& path, QUrlQuery const& query,
+                                               QJsonObject const& body,
+                                               std::function<void(QJsonDocument, QString)> done, QObject* context) {
     auto* reply =
         m_network.sendCustomRequest(authorizedRequest(endpoint(path, query)), method,
                                     body.isEmpty() ? QByteArray{} : QJsonDocument(body).toJson(QJsonDocument::Compact));
@@ -161,11 +174,11 @@ QNetworkReply* JellyfinClient::request(QByteArray method, QString const& path, Q
         }
         QJsonParseError error;
         auto document = QJsonDocument::fromJson(bytes, &error);
-        if (error.error != QJsonParseError::NoError || !document.isObject()) {
+        if (error.error != QJsonParseError::NoError) {
             done({}, tr("The server returned an invalid response."));
             return;
         }
-        done(document.object(), {});
+        done(document, {});
     });
     return reply;
 }
@@ -252,6 +265,28 @@ void JellyfinClient::recent(bool shows, std::function<void(QList<JellyfinItem>, 
                 {QStringLiteral("SortBy"), QStringLiteral("DateCreated")},
                 {QStringLiteral("SortOrder"), QStringLiteral("Descending")}},
                std::move(done));
+}
+void JellyfinClient::ancestors(QString const& id, std::function<void(QList<JellyfinItem>, QString)> done) {
+    Q_ASSERT(validId(id));
+    requestDocument("GET", QStringLiteral("Items/%1/Ancestors").arg(id), {{QStringLiteral("UserId"), m_userId}}, {},
+                    [done = std::move(done)](QJsonDocument document, QString error) {
+                        QList<JellyfinItem> items;
+                        if (error.isEmpty()) {
+                            if (!document.isArray()) {
+                                error = tr("The server returned an invalid parent list.");
+                            } else {
+                                for (auto value : document.array()) {
+                                    auto item = parseItem(value.toObject());
+                                    if (!item) {
+                                        error = tr("The server returned an invalid parent list.");
+                                        break;
+                                    }
+                                    items.prepend(std::move(*item));
+                                }
+                            }
+                        }
+                        done(std::move(items), error);
+                    });
 }
 void JellyfinClient::item(QString const& id, std::function<void(JellyfinItem, QString)> done) {
     Q_ASSERT(validId(id));

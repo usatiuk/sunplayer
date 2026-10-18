@@ -414,9 +414,10 @@ are unchanged. Edits use the existing paused-frame update path.
 
 Absolute PQ is off by default and available only on supported Windows HDR
 output. Enabling it disables the source reference-white controls. On other
-outputs its checkbox is greyed out, its saved preference is retained, and
+Windows outputs its checkbox is greyed out, its saved preference is retained, and
 adaptive rendering and reference-white controls remain active. Output changes
-refresh these controls while Settings is open. HLG remains unchanged.
+refresh these controls while Settings is open. Non-Windows platforms hide the
+Windows-only checkbox and status row entirely. HLG remains unchanged.
 
 Video details identify both Dolby Vision and HDR10+ on dual-format frames. Output
 details refresh after successful presentation, including paused settings edits.
@@ -443,8 +444,9 @@ playback, an upper-left Back action closes media and returns to the page that
 opened it (Jellyfin retains its library/season view; local opening returns to
 Open video). Direct launches without UI history default to Open video. This is
 one QML return-page value, not a navigation stack or media-source abstraction.
-The browser's Back navigates to its parent, then returns from home to Open video
-and cancels a pending playback resolve. Home has library tiles/tabs, Continue
+The browser's Back/Forward follow visited browse history; Back at its beginning
+returns to Open video and cancels a pending playback resolve. Forward from Open
+video can return to the retained browser, without replaying closed media. Home has library tiles/tabs, Continue
 Watching, and Recently Added shelves. Shared poster, shelf, detail-header and
 episode-row components show artwork, descriptions and watched/progress state.
 The password form clears its password after submit.
@@ -463,3 +465,16 @@ inertia and bounds behavior with standard attached scrollbars, including a
 horizontal scrollbar for home shelves. Do not add custom wheel/velocity logic
 or override those defaults without a demonstrated requirement. Descriptions
 wrap fully within their scrollable page; no expansion state is maintained.
+
+
+The Jellyfin title has horizontal breathing room beside an icon-only Back
+control, and Home/library tabs share that header. The page uses the
+same application palette and black background as Open video; illustrated
+headers span the window width with square edges, while text/cards retain
+24 px horizontal insets and 20 px before gallery cards. The toolbar arrow moves
+one logical level up (episode list → seasons → TV library → Open video),
+independently of same-level Home/library switches. Thumb buttons and platform
+standard keys follow visit history. Home selections resolve the server-provided
+ancestors so Up and playback return retain the actual media hierarchy.
+Browser Backspace remains an editing key. See the
+[header/navigation plan](../../plans/ui/2026-10-18-jellyfin-header-navigation.md).

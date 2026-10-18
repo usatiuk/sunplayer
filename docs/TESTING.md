@@ -958,3 +958,19 @@ the unmodified executable then passed on a disposable private D-Bus daemon
 with test-only AppArmor integration disabled. No host policy was changed.
 The final AppImage build/dependency/QML/A/V smoke passed. Exact commands and
 capability skips are in the delivery plan; this is not native hardware evidence.
+
+
+The Jellyfin header/navigation follow-up adds public browser-history scenarios
+(Back/Forward, divergent visit, Home and auth reset), actual QQuickWindow thumb
+button clicks, and Open/Jellyfin return checks. Compact header and illustrated
+header-gap geometry are checked alongside Basic/Fusion populated screenshots.
+The shell harness reuses the application palette. Native PresentationWindow
+standard-key matching and browser Backspace editing remain manual acceptance;
+emitting its command signals covers downstream routing only. See the
+[delivery plan](plans/ui/2026-10-18-jellyfin-header-navigation.md).
+
+Jellyfin logical-Up coverage distinguishes ancestor navigation from same-level
+visit history. Home selections exercise real ancestor-array responses, grouped
+views whose IDs differ from physical libraries, and a delayed ancestor reply
+after media cancellation. Settings-dialog coverage asserts that Windows PQ rows
+remain hidden on non-Windows platforms.

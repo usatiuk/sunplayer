@@ -92,6 +92,10 @@ SettingsDialog::SettingsDialog(SubtitleSettings& subtitleSettings) : m_subtitleS
     m_absolutePqStatus->setWordWrap(true);
     m_absolutePqStatus->hide();
     playbackLayout->addRow(QString(), m_absolutePqStatus);
+#ifndef Q_OS_WIN
+    playbackLayout->setRowVisible(m_absolutePq, false);
+    playbackLayout->setRowVisible(m_absolutePqStatus, false);
+#endif
 
     auto* const referenceWhiteRow =
         sliderRow(m_sourceHdrReferenceWhiteSlider, m_sourceHdrReferenceWhiteSpin, playbackPage);
@@ -412,7 +416,9 @@ void SettingsDialog::setPlaybackState(PlaybackState const& state) {
     m_sourceHdrReferenceWhiteSlider->setEnabled(adaptiveActive);
     m_sourceHdrReferenceWhiteSpin->setEnabled(adaptiveActive);
     m_sourceHdrReferenceWhitePresets->setEnabled(adaptiveActive);
+#ifdef Q_OS_WIN
     m_absolutePqStatus->setVisible(state.absolutePqEnabled && !state.absolutePqAvailable);
+#endif
     int const volumePercent = qRound(qBound(0.0, state.volume, 1.0) * 100.0);
     m_volumeSlider->setValue(volumePercent);
     m_volumeSpin->setValue(volumePercent);

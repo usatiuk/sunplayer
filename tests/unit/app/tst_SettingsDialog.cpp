@@ -133,7 +133,12 @@ void SettingsDialogTest::absolutePqAvailabilityPreservesPreference() {
             dialog.setPlaybackState(state);
             QCOMPARE(absolute->isChecked(), selected);
             QCOMPARE(absolute->isEnabled(), available);
+#ifdef Q_OS_WIN
             QCOMPARE(status->isHidden(), !(selected && !available));
+#else
+            QVERIFY(absolute->isHidden());
+            QVERIFY(status->isHidden());
+#endif
             bool const adaptive = !(selected && available);
             QCOMPARE(slider->isEnabled(), adaptive);
             QCOMPARE(spin->isEnabled(), adaptive);

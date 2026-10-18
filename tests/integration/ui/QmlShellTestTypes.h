@@ -259,6 +259,8 @@ class ShellTestWindowCommands final : public QWindow {
     void blankOtherDisplaysInFullscreenChanged();
     void relativeSeekRequested(qlonglong milliseconds);
     void mediaOpenRequested();
+    void navigationBackRequested();
+    void navigationForwardRequested();
     void mediaPickerRequested();
 
   private:

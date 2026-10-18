@@ -67,6 +67,8 @@ class PresentationWindow : public QWindow {
     void blankOtherDisplaysInFullscreenChanged();
     void relativeSeekRequested(qlonglong milliseconds);
     void mediaOpenRequested();
+    void navigationBackRequested();
+    void navigationForwardRequested();
     void mediaPickerRequested();
 
   protected:

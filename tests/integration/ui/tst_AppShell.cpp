@@ -14,6 +14,7 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QSignalSpy>
+#include <QStyleHints>
 #include <QTemporaryDir>
 #include <QTemporaryFile>
 #include <QTest>
@@ -21,6 +22,7 @@
 #include <QVariant>
 
 #include "QmlShellTestTypes.h"
+#include "app/ApplicationPalette.h"
 #include "app/VideoViewportState.h"
 
 #ifdef Q_OS_WIN
@@ -42,6 +44,10 @@ class AppShellTest final : public QObject {
     Q_OBJECT
 
   private slots:
+    void initTestCase() {
+        QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark);
+        QGuiApplication::setPalette(applicationPalette());
+    }
     void publishesActiveViewport();
     void transportButtonShowsKeyboardFocus();
 
@@ -1064,6 +1070,14 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(QMetaObject::invokeMethod(browserBack, "clicked", Qt::DirectConnection));
     QTRY_COMPARE(rootItem->property("currentPage").toInt(), 0);
     QTRY_VERIFY(openMediaButton->property("visible").toBool());
+    QTest::mouseClick(&quickWindow, Qt::ForwardButton, Qt::NoModifier, QPoint(500, 300));
+    QTRY_COMPARE(rootItem->property("currentPage").toInt(), 2);
+    QTest::mouseClick(&quickWindow, Qt::BackButton, Qt::NoModifier, QPoint(500, 300));
+    QTRY_COMPARE(rootItem->property("currentPage").toInt(), 0);
+    emit windowCommands.navigationForwardRequested();
+    QTRY_COMPARE(rootItem->property("currentPage").toInt(), 2);
+    emit windowCommands.navigationBackRequested();
+    QTRY_COMPARE(rootItem->property("currentPage").toInt(), 0);
     emit windowCommands.mediaOpenRequested();
     mediaSession.setState(ShellTestMediaSession::State::Ready, true);
     QVERIFY(QMetaObject::invokeMethod(playerBack, "clicked", Qt::DirectConnection));
@@ -1113,12 +1127,22 @@ void AppShellTest::publishesActiveViewport() {
         return !image.isNull() &&
                image.save(QStringLiteral(SUNPLAYER_UI_SNAPSHOT_DIR "/%1-%2.png").arg(name, QQuickStyle::name()));
     };
-    for (int width : {1280, 800}) {
+    auto* tabs = rootItem->findChild<QQuickItem*>(QStringLiteral("jellyfinTabs"));
+    auto* title = rootItem->findChild<QQuickItem*>(QStringLiteral("jellyfinTitle"));
+    auto* browserBackground = rootItem->findChild<QQuickItem*>(QStringLiteral("jellyfinBackground"));
+    QVERIFY(tabs && title && browserBackground);
+    QCOMPARE(browserBackground->property("color").value<QColor>(), QColor(Qt::black));
+    for (int width : {1280, 800, 760}) {
         rootItem->setSize({qreal(width), 900});
         quickWindow.resize(width, 900);
         QTRY_VERIFY(imagesReady());
+        QTRY_VERIFY(tabs->width() > 0);
+        QTRY_VERIFY(std::abs(tabs->mapToScene(QPointF(0, tabs->height() / 2)).y() -
+                             title->mapToScene(QPointF(0, title->height() / 2)).y()) < 1);
         QVERIFY(snapshot(QStringLiteral("jellyfin-home-%1").arg(width)));
     }
+    rootItem->setSize({800, 900});
+    quickWindow.resize(800, 900);
     jellyfin.selectLibrary(0);
     QTRY_VERIFY(!jellyfin.busy());
     QTRY_VERIFY(rootItem->findChild<QQuickItem*>(QStringLiteral("jellyfinItems")));
@@ -1131,6 +1155,22 @@ void AppShellTest::publishesActiveViewport() {
     jellyfin.enter(0);
     QTRY_VERIFY(!jellyfin.busy());
     QTRY_VERIFY(imagesReady());
+    QTest::mouseClick(&quickWindow, Qt::BackButton, Qt::NoModifier, QPoint(700, 180));
+    QTRY_VERIFY(!jellyfin.busy());
+    QCOMPARE(jellyfin.currentItem().value(QStringLiteral("kind")).toString(), QStringLiteral("CollectionFolder"));
+    QTest::mouseClick(&quickWindow, Qt::ForwardButton, Qt::NoModifier, QPoint(700, 180));
+    QTRY_VERIFY(!jellyfin.busy());
+    QCOMPARE(jellyfin.currentItem().value(QStringLiteral("kind")).toString(), QStringLiteral("Series"));
+    QTRY_VERIFY(imagesReady());
+    auto* gallery = rootItem->findChild<QQuickItem*>(QStringLiteral("jellyfinItems"));
+    QVERIFY(gallery);
+    auto* header = gallery->property("headerItem").value<QQuickItem*>();
+    QVERIFY(header);
+    auto* detail = header->findChild<QQuickItem*>(QStringLiteral("jellyfinDetailHeader"));
+    QVERIFY(detail);
+    QTRY_COMPARE(detail->mapToScene(QPointF()).x(), 0.0);
+    QTRY_COMPARE(detail->width(), rootItem->width());
+    QTRY_VERIFY(header->height() - detail->height() >= 20);
     QVERIFY(snapshot(QStringLiteral("jellyfin-show-800")));
     jellyfin.enter(0);
     QTRY_VERIFY(!jellyfin.busy());

@@ -8,6 +8,7 @@
 #include <QDropEvent>
 #include <QGuiApplication>
 #include <QKeyEvent>
+#include <QKeySequence>
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
@@ -538,6 +539,19 @@ void PresentationWindow::wheelEvent(QWheelEvent* event) {
 }
 
 void PresentationWindow::keyPressEvent(QKeyEvent* event) {
+    // Standard Back may include Backspace. Preserve it while editing browser fields.
+    if (!(event->key() == Qt::Key_Backspace && m_windowShortcutsBlocked) &&
+        (event->matches(QKeySequence::Back) || event->matches(QKeySequence::Forward))) {
+        if (!event->isAutoRepeat()) {
+            if (event->matches(QKeySequence::Back)) {
+                emit navigationBackRequested();
+            } else {
+                emit navigationForwardRequested();
+            }
+        }
+        event->accept();
+        return;
+    }
     if (event->key() == Qt::Key_F11) {
         if (!event->isAutoRepeat()) {
             toggleFullscreen();

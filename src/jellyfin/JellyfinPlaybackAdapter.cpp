@@ -7,6 +7,7 @@ JellyfinPlaybackAdapter::JellyfinPlaybackAdapter(JellyfinBrowser& browser, Media
     connect(&browser.client(), &JellyfinClient::authenticationLost, this, &JellyfinPlaybackAdapter::close);
     connect(&browser, &JellyfinBrowser::playRequested, this, &JellyfinPlaybackAdapter::play);
     connect(&player, &MediaSession::mediaClosing, this, [this](qulonglong id, qlonglong position) {
+        m_browser.cancelHomeOpening();
         ++m_resolution;
         if (!pending()) {
             m_browser.setSyncPending(false);

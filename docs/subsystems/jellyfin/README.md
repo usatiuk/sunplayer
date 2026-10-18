@@ -45,7 +45,10 @@ search, account switching, or background sync.
   usable session-only login. Sign-out disables restoration before deletion;
   storage/settings errors are reported. No password is persisted.
 * `JellyfinBrowser` owns the item model, navigation, current request identity,
-  loading/errors, remembered-session metadata, and commands. The existing paged
+  loading/errors, remembered-session metadata, and commands. Browser history
+  retains visited typed paths plus a cursor; toolbar Up follows ancestors, while
+  mouse/keyboard Back/Forward reload visited locations; new
+  visits discard the forward tail, and auth loss/sign-out clear it. The existing paged
   model owns catalog items only; three bounded home shelves and library tabs use
   value snapshots through the same item mapping. Home requests fetch at most
   12 items per shelf, with resumable Movies/Episodes and newest Movies/Series.
@@ -141,3 +144,13 @@ CTests in the full run and the remaining media-controls test on an isolated
 private bus (its default sandbox run could not query AppArmor policy). The
 unsigned AppImage passed dependency and packaged QML/A/V smoke checks plus its
 checksum. See the delivery plan for exact commands, skips and evidence limits.
+
+Home-shelf selections resolve `Items/{id}/Ancestors` before opening. Server roots
+above the user library are omitted. Grouped UserView IDs may differ from physical
+library ancestors; those selections retain the returned media hierarchy without
+guessing a matching tab. Cancelling/replacing media invalidates a pending Home
+selection as well as playback resolution.
+
+Windows QtKeychain links statically to avoid windeployqt treating its Qt-prefixed
+DLL as a Qt SDK module; the Qt SDK and CRT remain dynamically linked. Hosted CI
+verifies Windows packaging; no Windows/macOS builds run on the Linux host.

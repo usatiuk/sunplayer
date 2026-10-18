@@ -4,6 +4,7 @@
 #include <QTimer>
 #include <QUrlQuery>
 #include <QUuid>
+#include <algorithm>
 
 JellyfinBrowser::JellyfinBrowser(QString const& settingsPath, QSettings::Format format, bool shouldRestore,
                                  QObject* parent)
@@ -110,13 +111,15 @@ QVariantList JellyfinBrowser::itemMaps(QList<JellyfinItem> const& items) {
     }
     return result;
 }
-QVariantMap JellyfinBrowser::currentItem() const { return itemMap(isHome() ? JellyfinItem{} : m_navigation.back()); }
+QVariantMap JellyfinBrowser::currentItem() const { return itemMap(isHome() ? JellyfinItem{} : navigation().back()); }
 QVariantList JellyfinBrowser::libraries() const { return itemMaps(m_libraries); }
 QVariantList JellyfinBrowser::continueWatching() const { return itemMaps(m_homeItems[ContinueWatching]); }
 QVariantList JellyfinBrowser::recentMovies() const { return itemMaps(m_homeItems[RecentMovies]); }
 QVariantList JellyfinBrowser::recentShows() const { return itemMaps(m_homeItems[RecentShows]); }
 void JellyfinBrowser::clearLibrary() {
-    m_navigation.clear();
+    m_openingHome = false;
+    m_history = {QList<JellyfinItem>{}};
+    m_historyIndex = 0;
     m_libraries.clear();
     for (auto& items : m_homeItems) {
         items.clear();
@@ -258,17 +261,17 @@ void JellyfinBrowser::load(bool append) {
         loadHome();
         return;
     }
-    if (!m_navigation.back().folder) {
+    if (!navigation().back().folder) {
         m_busy = true;
         emit changed();
         quint64 const request = ++m_request;
-        m_client.item(m_navigation.back().id, [this, request](JellyfinItem item, QString error) {
+        m_client.item(navigation().back().id, [this, request](JellyfinItem item, QString error) {
             if (request != m_request) {
                 return;
             }
             m_busy = false;
             if (error.isEmpty()) {
-                m_navigation.back() = std::move(item);
+                navigation().back() = std::move(item);
             } else {
                 m_message = error;
             }
@@ -296,7 +299,7 @@ void JellyfinBrowser::load(bool append) {
         }
         emit changed();
     };
-    m_client.items(m_navigation.back().id, append ? m_items.size() : 0, std::move(done));
+    m_client.items(navigation().back().id, append ? m_items.size() : 0, std::move(done));
 }
 void JellyfinBrowser::loadHome() {
     m_busy = true;
@@ -344,42 +347,98 @@ void JellyfinBrowser::openItem(JellyfinItem item) {
         emit playRequested(item, false);
         return;
     }
-    m_navigation.push_back(item);
+    auto path = navigation();
+    path.push_back(std::move(item));
+    visit(std::move(path));
+}
+void JellyfinBrowser::loadLocation() {
     m_message.clear();
     setItems({}, false);
     m_total = 0;
     load();
 }
-void JellyfinBrowser::home() {
-    if (busy()) {
+void JellyfinBrowser::visit(QList<JellyfinItem> path) {
+    if ((path.isEmpty() && isHome()) || (!path.isEmpty() && !isHome() && path.back().id == navigation().back().id)) {
         return;
     }
-    m_navigation.clear();
-    m_message.clear();
-    setItems({}, false);
-    load();
+    m_history.resize(m_historyIndex + 1);
+    m_history.push_back(std::move(path));
+    ++m_historyIndex;
+    loadLocation();
+}
+void JellyfinBrowser::home() {
+    if (!busy()) {
+        visit({});
+    }
 }
 void JellyfinBrowser::selectLibrary(int row) {
-    if (busy() || row < 0 || row >= m_libraries.size()) {
-        return;
+    if (!busy() && row >= 0 && row < m_libraries.size()) {
+        visit({m_libraries[row]});
     }
-    m_navigation.clear();
-    openItem(m_libraries[row]);
 }
 void JellyfinBrowser::openHomeItem(int section, int row) {
     if (busy() || section < 0 || section >= int(m_homeItems.size()) || row < 0 || row >= m_homeItems[section].size()) {
         return;
     }
-    openItem(m_homeItems[section][row]);
+    auto const item = m_homeItems[section][row];
+    m_openingHome = true;
+    m_busy = true;
+    m_message.clear();
+    auto const request = ++m_request;
+    emit changed();
+    m_client.ancestors(item.id, [this, request, item](QList<JellyfinItem> ancestors, QString error) {
+        if (request != m_request) {
+            return;
+        }
+        m_openingHome = false;
+        m_busy = false;
+        if (!error.isEmpty()) {
+            showMessage(error);
+            return;
+        }
+        // Ignore server root folders above the user's actual library.
+        auto library = std::find_if(ancestors.cbegin(), ancestors.cend(), [this](JellyfinItem const& parent) {
+            return std::any_of(m_libraries.cbegin(), m_libraries.cend(),
+                               [&parent](JellyfinItem const& value) { return value.id == parent.id; });
+        });
+        QList<JellyfinItem> path;
+        if (library != ancestors.cend()) {
+            path = QList<JellyfinItem>(library, ancestors.cend());
+        } else {
+            // Grouped UserViews can have different IDs from physical library
+            // ancestors. Keep the server's media hierarchy without guessing a tab.
+            for (auto const& parent : ancestors) {
+                if (parent.type == QStringLiteral("CollectionFolder") || parent.type == QStringLiteral("Series") ||
+                    parent.type == QStringLiteral("Season")) {
+                    path.push_back(parent);
+                }
+            }
+        }
+        if (item.folder || item.type == QStringLiteral("Movie")) {
+            path.push_back(item);
+            visit(std::move(path));
+        } else {
+            visit(std::move(path));
+            emit playRequested(item, false);
+        }
+    });
+}
+void JellyfinBrowser::cancelHomeOpening() {
+    if (m_openingHome) {
+        ++m_request;
+        m_openingHome = false;
+        m_busy = false;
+        emit changed();
+    }
 }
 void JellyfinBrowser::playCurrent(bool fromStart) {
-    if (!busy() && !isHome() && !m_navigation.back().folder) {
-        emit playRequested(m_navigation.back(), fromStart);
+    if (!busy() && !isHome() && !navigation().back().folder) {
+        emit playRequested(navigation().back(), fromStart);
     }
 }
 void JellyfinBrowser::setCurrentWatched(bool watched) {
-    if (!busy() && !isHome() && !m_navigation.back().folder) {
-        emit watchedRequested(m_navigation.back().id, watched);
+    if (!busy() && !isHome() && !navigation().back().folder) {
+        emit watchedRequested(navigation().back().id, watched);
     }
 }
 
@@ -389,14 +448,24 @@ void JellyfinBrowser::enter(int row) {
     }
     openItem(m_items[row]);
 }
-void JellyfinBrowser::back() {
-    if (busy() || m_navigation.isEmpty()) {
-        return;
+void JellyfinBrowser::up() {
+    if (!busy() && canGoUp()) {
+        auto path = navigation();
+        path.pop_back();
+        visit(std::move(path));
     }
-    m_navigation.pop_back();
-    m_message.clear();
-    setItems({}, false);
-    load();
+}
+void JellyfinBrowser::back() {
+    if (!busy() && canGoBack()) {
+        --m_historyIndex;
+        loadLocation();
+    }
+}
+void JellyfinBrowser::forward() {
+    if (!busy() && canGoForward()) {
+        ++m_historyIndex;
+        loadLocation();
+    }
 }
 void JellyfinBrowser::loadMore() {
     if (!busy() && hasMore()) {

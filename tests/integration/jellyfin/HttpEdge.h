@@ -28,6 +28,9 @@ class HttpEdge final : public QTcpServer {
     bool galleryFixtures = false;
     bool failResume = false;
     bool delayFeeds = false;
+    bool groupedViews = false;
+    bool delayAncestors = false;
+    QList<std::pair<QPointer<QTcpSocket>, QByteArray>> delayedAncestors;
     QList<std::pair<QPointer<QTcpSocket>, QJsonObject>> delayedFeeds;
     bool stall = false;
     bool delayStop = false;
@@ -173,7 +176,7 @@ class HttpEdge final : public QTcpServer {
                     }
                     if (galleryFixtures &&
                         (path.endsWith(QStringLiteral("/Views")) || path.endsWith(QStringLiteral("/Items")) ||
-                         path.endsWith(QStringLiteral("/Resume")) ||
+                         path.endsWith(QStringLiteral("/Resume")) || path.endsWith(QStringLiteral("/Ancestors")) ||
                          path.contains(QStringLiteral("/Users/abc123/Items/")))) {
                         auto makeItem = [](QString id, QString name, QString type, bool folder) {
                             return QJsonObject{
@@ -205,6 +208,28 @@ class HttpEdge final : public QTcpServer {
                         episode[QStringLiteral("SeriesName")] = QStringLiteral("Beyond the Ordinary");
                         episode[QStringLiteral("ParentIndexNumber")] = 1;
                         episode[QStringLiteral("IndexNumber")] = 1;
+                        if (path.endsWith(QStringLiteral("/Ancestors"))) {
+                            QJsonArray parents;
+                            auto const id = path.section(u'/', -2, -2);
+                            if (id == QStringLiteral("episodeHome")) {
+                                parents = {season, show};
+                            } else if (id == QStringLiteral("seasonHome")) {
+                                parents = {show};
+                            }
+                            parents.push_back(
+                                makeItem(id == QStringLiteral("movieHome") ? QStringLiteral("moviesLibrary")
+                                                                           : QStringLiteral("showsLibrary"),
+                                         QStringLiteral("Library"), QStringLiteral("CollectionFolder"), true));
+                            parents.push_back(makeItem(QStringLiteral("serverRoot"), QStringLiteral("Root"),
+                                                       QStringLiteral("Folder"), true));
+                            if (delayAncestors) {
+                                delayedAncestors.push_back({socket, QJsonDocument(parents).toJson()});
+                            } else {
+                                respond(socket, QJsonDocument(parents).toJson(), 200,
+                                        "Content-Type: application/json\r\n");
+                            }
+                            return;
+                        }
                         QJsonArray values;
                         bool feed = false;
                         auto query = QUrlQuery(request.url);
@@ -216,10 +241,11 @@ class HttpEdge final : public QTcpServer {
                             values = {episode};
                             feed = true;
                         } else if (path.endsWith(QStringLiteral("/Views"))) {
-                            values = {makeItem(QStringLiteral("moviesLibrary"), QStringLiteral("Movies"),
-                                               QStringLiteral("CollectionFolder"), true),
-                                      makeItem(QStringLiteral("showsLibrary"), QStringLiteral("Shows"),
-                                               QStringLiteral("CollectionFolder"), true)};
+                            values = {
+                                makeItem(QStringLiteral("moviesLibrary"), QStringLiteral("Movies"),
+                                         QStringLiteral("CollectionFolder"), true),
+                                makeItem(groupedViews ? QStringLiteral("groupedShows") : QStringLiteral("showsLibrary"),
+                                         QStringLiteral("Shows"), QStringLiteral("CollectionFolder"), true)};
                         } else if (path.contains(QStringLiteral("/Users/abc123/Items/"))) {
                             respondJson(socket, movie);
                             return;
@@ -305,6 +331,13 @@ class HttpEdge final : public QTcpServer {
             if (socket) {
                 socket->write(body);
                 socket->disconnectFromHost();
+            }
+        }
+    }
+    void releaseAncestors() {
+        for (auto const& [socket, body] : std::exchange(delayedAncestors, {})) {
+            if (socket) {
+                respond(socket, body, 200, "Content-Type: application/json\r\n");
             }
         }
     }

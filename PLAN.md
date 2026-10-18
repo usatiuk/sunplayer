@@ -391,6 +391,8 @@ player restarts. Linux and AppImage validation is recorded in the
 [delivery plan](docs/plans/cross-cutting/2026-10-18-jellyfin-client.md);
 user real-server and native Windows/macOS acceptance remain pending.
 Documentation: [Jellyfin subsystem](docs/subsystems/jellyfin/README.md).
+The compact consistent header and conventional Back/Forward follow-up is tracked
+in the [navigation plan](docs/plans/ui/2026-10-18-jellyfin-header-navigation.md).
 
 ### 3. FFmpeg media integration
 

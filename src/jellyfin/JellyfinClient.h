@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -56,6 +57,7 @@ class JellyfinClient final : public QObject {
     void items(QString const& parent, int start, std::function<void(QList<JellyfinItem>, int, QString)> done);
     void resume(std::function<void(QList<JellyfinItem>, QString)> done);
     void recent(bool shows, std::function<void(QList<JellyfinItem>, QString)> done);
+    void ancestors(QString const& id, std::function<void(QList<JellyfinItem>, QString)> done);
     void item(QString const& id, std::function<void(JellyfinItem, QString)> done);
     void resolve(JellyfinItem const& item, bool fromStart, std::function<void(JellyfinPlayback, QString)> done,
                  QObject* context);
@@ -69,6 +71,9 @@ class JellyfinClient final : public QObject {
     void authenticationLost();
 
   private:
+    QNetworkReply* requestDocument(QByteArray method, QString const& path, QUrlQuery const& query,
+                                   QJsonObject const& body, std::function<void(QJsonDocument, QString)> done,
+                                   QObject* context = nullptr);
     void queryItems(QString const& path, QUrlQuery query, std::function<void(QList<JellyfinItem>, QString)> done);
     QUrl endpoint(QString const& path, QUrlQuery const& query = {}) const;
     QNetworkRequest authorizedRequest(QUrl const& url) const;

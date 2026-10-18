@@ -51,6 +51,8 @@ class JellyfinTest final : public QObject {
   private slots:
     void authenticatedApiAndDirectPlay();
     void homeShelvesAndDetails();
+    void navigationHistory();
+    void homeOpeningCancellationAndGroupedViews();
     void serverAddressDefaultsToHttps();
     void httpDecodeAndInitialResume();
     void stalledHttpCancels();
@@ -141,10 +143,22 @@ void JellyfinTest::homeShelvesAndDetails() {
     }
     QSignalSpy play(&browser, &JellyfinBrowser::playRequested);
     browser.openHomeItem(JellyfinBrowser::ContinueWatching, 0);
-    QCOMPARE(play.size(), 1);
+    QTRY_COMPARE(play.size(), 1);
     QCOMPARE(qvariant_cast<JellyfinItem>(play.back()[0]).id, QStringLiteral("episodeHome"));
+    QTRY_VERIFY(!browser.busy());
+    QCOMPARE(browser.currentItem().value(QStringLiteral("kind")).toString(), QStringLiteral("Season"));
+    browser.up();
+    QTRY_VERIFY(!browser.busy());
+    QCOMPARE(browser.currentItem().value(QStringLiteral("kind")).toString(), QStringLiteral("Series"));
+    browser.up();
+    QTRY_VERIFY(!browser.busy());
+    QCOMPARE(browser.activeLibraryId(), QStringLiteral("showsLibrary"));
+    QVERIFY(!browser.canGoUp());
     browser.openHomeItem(JellyfinBrowser::RecentMovies, 0);
+    QTRY_VERIFY(!browser.busy());
     QCOMPARE(browser.currentItem().value(QStringLiteral("itemId")).toString(), QStringLiteral("movieHome"));
+    QCOMPARE(browser.activeLibraryId(), QStringLiteral("moviesLibrary"));
+    QVERIFY(browser.canGoUp());
     QVERIFY(!browser.hasMore());
     QTRY_VERIFY(!browser.busy());
     QVERIFY(edge.requests.back().url.path().endsWith(QStringLiteral("/Items/movieHome")));
@@ -185,6 +199,103 @@ void JellyfinTest::homeShelvesAndDetails() {
     QVERIFY(browser.continueWatching().isEmpty());
     QVERIFY(browser.recentMovies().isEmpty());
     QCOMPARE(browser.rowCount(), 0);
+}
+
+void JellyfinTest::navigationHistory() {
+    HttpEdge edge;
+    edge.galleryFixtures = true;
+    QTemporaryDir directory;
+    JellyfinBrowser browser(directory.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat, false);
+    browser.login(edge.base().toString(), QStringLiteral("user"), QStringLiteral("password"), false);
+    QTRY_VERIFY(browser.authenticated() && !browser.busy());
+    QVERIFY(!browser.canGoBack());
+    QVERIFY(!browser.canGoForward());
+    browser.selectLibrary(1);
+    QTRY_VERIFY(!browser.busy());
+    browser.enter(0);
+    QTRY_VERIFY(!browser.busy());
+    browser.enter(0);
+    QTRY_VERIFY(!browser.busy());
+    QCOMPARE(browser.currentItem().value(QStringLiteral("kind")).toString(), QStringLiteral("Season"));
+    browser.back();
+    QTRY_VERIFY(!browser.busy());
+    QCOMPARE(browser.currentItem().value(QStringLiteral("kind")).toString(), QStringLiteral("Series"));
+    QVERIFY(browser.canGoForward());
+    browser.forward();
+    QTRY_VERIFY(!browser.busy());
+    QCOMPARE(browser.currentItem().value(QStringLiteral("kind")).toString(), QStringLiteral("Season"));
+    QVERIFY(!browser.canGoForward());
+    browser.back();
+    QTRY_VERIFY(!browser.busy());
+    browser.selectLibrary(0);
+    QTRY_VERIFY(!browser.busy());
+    QVERIFY(!browser.canGoForward());
+    browser.back();
+    QTRY_VERIFY(!browser.busy());
+    QCOMPARE(browser.currentItem().value(QStringLiteral("kind")).toString(), QStringLiteral("Series"));
+    browser.home();
+    QTRY_VERIFY(!browser.busy());
+    QVERIFY(browser.isHome());
+    browser.back();
+    QTRY_VERIFY(!browser.busy());
+    QVERIFY(!browser.isHome());
+    browser.selectLibrary(0);
+    QTRY_VERIFY(!browser.busy());
+    browser.selectLibrary(1);
+    QTRY_VERIFY(!browser.busy());
+    QVERIFY(!browser.canGoUp());
+    browser.back();
+    QTRY_VERIFY(!browser.busy());
+    QCOMPARE(browser.activeLibraryId(), QStringLiteral("moviesLibrary"));
+    browser.selectLibrary(1);
+    QTRY_VERIFY(!browser.busy());
+    browser.enter(0);
+    QTRY_VERIFY(!browser.busy());
+    browser.up();
+    QTRY_VERIFY(!browser.busy());
+    QCOMPARE(browser.activeLibraryId(), QStringLiteral("showsLibrary"));
+    QCOMPARE(browser.currentItem().value(QStringLiteral("kind")).toString(), QStringLiteral("CollectionFolder"));
+    bool lost = false;
+    browser.client().request("GET", QStringLiteral("force401"), {}, {}, [&](QJsonObject, QString) { lost = true; });
+    QTRY_VERIFY(lost && !browser.authenticated());
+    QVERIFY(browser.isHome());
+    QVERIFY(!browser.canGoBack());
+    QVERIFY(!browser.canGoForward());
+}
+
+void JellyfinTest::homeOpeningCancellationAndGroupedViews() {
+    HttpEdge edge;
+    edge.galleryFixtures = true;
+    edge.groupedViews = true;
+    QTemporaryDir directory;
+    JellyfinBrowser browser(directory.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat, false);
+    browser.login(edge.base().toString(), QStringLiteral("user"), QStringLiteral("password"), false);
+    QTRY_VERIFY(browser.authenticated() && !browser.busy());
+    browser.openHomeItem(JellyfinBrowser::RecentShows, 0);
+    QTRY_VERIFY(!browser.busy());
+    QCOMPARE(browser.currentItem().value(QStringLiteral("kind")).toString(), QStringLiteral("Series"));
+    browser.up();
+    QTRY_VERIFY(!browser.busy());
+    QCOMPARE(browser.currentItem().value(QStringLiteral("itemId")).toString(), QStringLiteral("showsLibrary"));
+    browser.home();
+    QTRY_VERIFY(!browser.busy());
+    MediaSession player(VideoTargetReadback::Disabled,
+                        [](FfmpegVideoDecodeRequest const& request, FfmpegVideoFrameSink const& sink,
+                           std::stop_token token) { return decodeVideoFrames(request, sink, token); });
+    JellyfinPlaybackAdapter adapter(browser, player);
+    QSignalSpy play(&browser, &JellyfinBrowser::playRequested);
+    edge.delayAncestors = true;
+    browser.openHomeItem(JellyfinBrowser::ContinueWatching, 0);
+    QTRY_COMPARE(edge.delayedAncestors.size(), 1);
+    player.cancel();
+    QVERIFY(!browser.busy());
+    edge.releaseAncestors();
+    bool barrier = false;
+    browser.client().request("GET", QStringLiteral("settled"), {}, {}, [&](QJsonObject, QString) { barrier = true; });
+    QTRY_VERIFY(barrier);
+    QCOMPARE(play.size(), 0);
+    QVERIFY(browser.isHome());
+    QCOMPARE(player.state(), MediaSession::State::Empty);
 }
 
 void JellyfinTest::serverAddressDefaultsToHttps() {
