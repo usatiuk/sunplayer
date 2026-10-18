@@ -40,6 +40,14 @@ HDR output path.
   Playing on macOS.
 * Loading, buffering, and error states.
 
+### Jellyfin
+
+* Sign in to your server, with optional secure storage for remembered login.
+* Browse movies, shows, seasons, and episodes with artwork and descriptions,
+  Continue Watching, and Recently Added.
+* Stream original files, resume playback, sync watch progress, and mark items
+  watched or unwatched. Transcoding is not supported.
+
 ### Diagnostics
 
 * In-app view of the active decode, rendering, and display paths, including
