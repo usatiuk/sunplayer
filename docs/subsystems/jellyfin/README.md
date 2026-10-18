@@ -172,3 +172,10 @@ user acceptance; the hosted integration test is an ordinary desktop process.
 Secure-storage and metadata-settings failures are both preserved when they
 coincide. No extra credential capability is assumed or added. See the
 [Windows token-store delivery plan](../../plans/cross-cutting/2026-10-18-windows-token-store.md).
+
+Installed Windows acceptance still reported metadata settings failure after
+the PasswordVault switch. The two errors remain separate. Info-level settings
+stages and PasswordVault result/HRESULT records now identify the earliest
+failure without credentials or account/server values; retrieve the session
+file through About → Open logs. This instrumentation does not claim the
+underlying metadata write failure is fixed.

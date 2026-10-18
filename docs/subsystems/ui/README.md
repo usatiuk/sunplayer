@@ -485,3 +485,8 @@ Only text directly on the custom dark canvas is explicitly light, including
 descriptive labels and the Remember me checkbox label. Jellyfin toolbar actions
 use standard buttons with native state colors. Ordinary buttons and text fields
 keep their native foreground/background pair.
+
+About → Open logs opens the current session log's folder, rather than guessing
+a host temp path for sandboxed processes. When session file initialization
+failed or --no-log-file was supplied, this action is disabled with an
+unavailable tooltip. Native folder-launch failure remains visible in About.

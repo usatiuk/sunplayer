@@ -75,3 +75,32 @@ round trip; combined failures now remain visible for installed acceptance.
 Use this artifact for the user's installed AppSilo sign-in with Remember me,
 restart/restore, and sign-out/deletion check. Hosted desktop success does not
 replace that package acceptance. No local Windows/macOS execution occurred.
+
+## Installed acceptance follow-up: persistence diagnostics
+
+The user tested the implementation artifact and still saw the exact login
+settings-save error. The backend switch is not claimed to resolve that failure.
+Both storage and settings errors are already preserved; stage logging now
+separates PasswordVault operation/HRESULT from the sticky QSettings status.
+Settings records cover construction, pre-write, device metadata, server/user
+metadata, remember flag and final sync. Status 0 means NoError, 1 AccessError,
+2 FormatError. Neither record family includes tokens, passwords, usernames,
+server addresses or settings contents. Info-level records work without CLI
+flags if the existing session file initialized successfully.
+
+About → Open logs opens the parent of the actual session file, including a
+custom --log-file destination. It is disabled when no file initialized. Windows
+uses SDK GetFolderFromPathAsync/LaunchFolderAsync on the UI apartment; other
+platforms use QDesktopServices. No new capability or storage fallback is added.
+Installed AppSilo file logging/folder launching remains user acceptance; no
+local Windows build or untested sandbox guarantee is claimed.
+
+The user requests one commit/push, CI completion, the Windows artifact link,
+then stop. Do not add another delivery-evidence-only push or CI follow-up.
+
+Follow-up validation: Linux Debug build and all_qmllint passed; six affected
+suites passed 6/6 in 44.95 s. Three independent implementation reviews covered
+folder launch/lifetime, diagnostic privacy/status semantics, and simplicity.
+Fixed the reviewed Windows native-separator requirement before push. Actual
+About folder opening remains manual host acceptance; no synthetic launcher or
+OS file-manager test harness was introduced for this small UI action.

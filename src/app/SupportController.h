@@ -22,7 +22,7 @@ class SupportController final : public QObject {
     Q_PROPERTY(bool windowsAppIsolationWarningVisible READ windowsAppIsolationWarningVisible CONSTANT)
 
   public:
-    explicit SupportController(bool debugLoggingEnabled, QObject* parent = nullptr);
+    explicit SupportController(bool debugLoggingEnabled, QString logFilePath, QObject* parent = nullptr);
     ~SupportController() override;
 
     bool windowsAppIsolationWarningVisible() const;
@@ -45,6 +45,7 @@ class SupportController final : public QObject {
     QString diagnosticInformation() const;
     void copyDiagnosticInformation();
     void openSourceCode();
+    void openLogs();
     void updateMediaSnapshot();
     SupportSnapshot snapshot() const;
     void setActionStatus(QString status);
@@ -52,6 +53,7 @@ class SupportController final : public QObject {
     void finishOpenUrl(bool opened, QString const& successMessage, QString const& failureMessage);
 
     bool const m_debugLoggingEnabled;
+    QString const m_logFilePath;
     QPointer<QWindow> m_parentWindow;
     QPointer<QDialog> m_aboutDialog;
     QPointer<MediaSession> m_mediaSession;

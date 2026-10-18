@@ -481,7 +481,7 @@ add_library(sunplayer_jellyfin STATIC
         src/jellyfin/TokenStore.h
 )
 target_include_directories(sunplayer_jellyfin PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_link_libraries(sunplayer_jellyfin PUBLIC Qt6::Network)
+target_link_libraries(sunplayer_jellyfin PUBLIC Qt6::Network PRIVATE sunplayer_diagnostics)
 if (WIN32)
     target_sources(sunplayer_jellyfin PRIVATE src/jellyfin/TokenStoreWindows.cpp)
     target_link_libraries(sunplayer_jellyfin PRIVATE RuntimeObject WindowsApp)

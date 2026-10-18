@@ -708,7 +708,8 @@ int main(int argc, char* argv[]) {
 
     GraphicsBackendFactory::configureQtQuick();
 
-    SupportController supportController(applicationLog && applicationLog->debugEnabled());
+    SupportController supportController(applicationLog && applicationLog->debugEnabled(),
+                                        applicationLog ? applicationLog->filePath() : QString{});
 
 #ifdef Q_OS_LINUX
     std::unique_ptr<LinuxWaylandWindowContext> windowContext;

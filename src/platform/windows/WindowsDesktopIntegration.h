@@ -3,6 +3,7 @@
 #include <functional>
 #include <optional>
 
+#include <QString>
 #include <QUrl>
 
 class QObject;
@@ -17,6 +18,7 @@ struct IsolationState {
 
 std::optional<QUrl> pickSingleMediaFile(QWindow& parentWindow);
 void openExternalUrl(QObject& callbackContext, QUrl const& url, std::function<void(bool)> completion);
+void openFolder(QObject& callbackContext, QString const& path, std::function<void(bool)> completion);
 IsolationState isolationState();
 
 } // namespace WindowsDesktopIntegration

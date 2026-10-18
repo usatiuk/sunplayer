@@ -8,6 +8,7 @@
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QFont>
 #include <QGuiApplication>
 #include <QLabel>
@@ -64,8 +65,8 @@ void parentNativeDialog(QWidget& dialog, QWindow* parentWindow) {
 }
 } // namespace
 
-SupportController::SupportController(bool debugLoggingEnabled, QObject* parent)
-    : QObject(parent), m_debugLoggingEnabled(debugLoggingEnabled),
+SupportController::SupportController(bool debugLoggingEnabled, QString logFilePath, QObject* parent)
+    : QObject(parent), m_debugLoggingEnabled(debugLoggingEnabled), m_logFilePath(std::move(logFilePath)),
       m_privacyPolicy(loadPackagedText(QStringLiteral("PRIVACY.md"))),
       m_thirdPartyNotices(loadPackagedText(QStringLiteral("ThirdPartyNotices.txt"))) {
     if (m_privacyPolicy.isEmpty()) {
@@ -103,9 +104,7 @@ void SupportController::attach(MediaSession& mediaSession, PresentationOutputSta
 
 void SupportController::setParentWindow(QWindow* parentWindow) { m_parentWindow = parentWindow; }
 
-void SupportController::setApplicationError(std::optional<ApplicationError> error) {
-    m_error = std::move(error);
-}
+void SupportController::setApplicationError(std::optional<ApplicationError> error) { m_error = std::move(error); }
 
 QString SupportController::version() const { return QString::fromLatin1(SUNPLAYER_VERSION); }
 QString SupportController::buildId() const { return QString::fromLatin1(SUNPLAYER_BUILD_ID); }
@@ -185,6 +184,10 @@ void SupportController::showAbout() {
     connect(this, &SupportController::actionStatusChanged, dialog, refreshStatus);
 
     auto* const buttons = new QDialogButtonBox(QDialogButtonBox::Close, dialog);
+    auto* const logsButton = buttons->addButton(tr("Open logs"), QDialogButtonBox::ActionRole);
+    logsButton->setEnabled(!m_logFilePath.isEmpty());
+    logsButton->setToolTip(m_logFilePath.isEmpty() ? tr("Session file logging is unavailable.") : QString{});
+    connect(logsButton, &QPushButton::clicked, this, &SupportController::openLogs);
     auto* const sourceButton = buttons->addButton(tr("Source code"), QDialogButtonBox::ActionRole);
     auto* const hdrLabButton = buttons->addButton(tr("Open HDR Lab"), QDialogButtonBox::ActionRole);
     auto* const copyButton = buttons->addButton(tr("Copy diagnostic information"), QDialogButtonBox::ActionRole);
@@ -201,8 +204,23 @@ void SupportController::showAbout() {
     dialog->open();
 }
 
+void SupportController::openLogs() {
+    Q_ASSERT(!m_logFilePath.isEmpty());
+    QString const directory = QFileInfo(m_logFilePath).absolutePath();
+    auto finished = [this, directory](bool opened) {
+        setActionStatus(opened ? tr("The log folder was requested from your system file manager.")
+                               : tr("Could not open the log folder: %1").arg(directory));
+    };
+#ifdef Q_OS_WIN
+    WindowsDesktopIntegration::openFolder(*this, directory, std::move(finished));
+#else
+    finished(QDesktopServices::openUrl(QUrl::fromLocalFile(directory)));
+#endif
+}
+
 void SupportController::openSourceCode() {
-    openUrl(QUrl(QStringLiteral(SUNPLAYER_SOURCE_URL)), tr("The source-code page was requested from your system browser."),
+    openUrl(QUrl(QStringLiteral(SUNPLAYER_SOURCE_URL)),
+            tr("The source-code page was requested from your system browser."),
             tr("The source-code page could not be opened in the system browser."));
 }
 QString SupportController::loadPackagedText(QString const& fileName) {

@@ -1,10 +1,18 @@
 #include "jellyfin/JellyfinBrowser.h"
+#include "diagnostics/LogCategories.h"
 
 #include <QCryptographicHash>
 #include <QTimer>
 #include <QUrlQuery>
 #include <QUuid>
 #include <algorithm>
+
+namespace {
+void logSettings(QSettings const& settings, char const* stage) {
+    qCInfo(sunplayerLogApplication, "event=jellyfin.settings stage=%s status=%d format=%d", stage,
+           int(settings.status()), int(settings.format()));
+}
+} // namespace
 
 JellyfinBrowser::JellyfinBrowser(QString const& settingsPath, QSettings::Format format, bool shouldRestore,
                                  QObject* parent)
@@ -16,6 +24,7 @@ JellyfinBrowser::JellyfinBrowser(QString const& settingsPath, QSettings::Format 
                              QCryptographicHash::hash(settingsPath.toUtf8(), QCryptographicHash::Sha256).toHex())),
       m_settings(settingsPath, format) {
     m_settings.setFallbacksEnabled(false);
+    logSettings(m_settings, "constructed");
     connect(&m_client, &JellyfinClient::authenticationLost, this, [this] {
         ++m_request;
         m_busy = false;
@@ -128,9 +137,11 @@ void JellyfinBrowser::clearLibrary() {
 }
 QString JellyfinBrowser::deviceId() {
     QString id = m_settings.value(QStringLiteral("jellyfin/device")).toString();
+    logSettings(m_settings, "device_read");
     if (QUuid(id).isNull()) {
         id = QUuid::createUuid().toString(QUuid::WithoutBraces);
         m_settings.setValue(QStringLiteral("jellyfin/device"), id);
+        logSettings(m_settings, "device_write");
     }
     return QUuid(id).toString(QUuid::WithoutBraces);
 }
@@ -193,7 +204,9 @@ void JellyfinBrowser::login(QString address, QString username, QString password,
     m_message.clear();
     emit changed();
     quint64 const request = ++m_request;
+    logSettings(m_settings, "login_before_write");
     m_settings.setValue(QStringLiteral("jellyfin/remember"), false);
+    logSettings(m_settings, "disable_restore");
     m_client.login(server, username, password, deviceId(), [this, request, remember](QString error) {
         if (request != m_request) {
             return;
@@ -204,7 +217,9 @@ void JellyfinBrowser::login(QString address, QString username, QString password,
             return;
         }
         m_settings.setValue(QStringLiteral("jellyfin/server"), m_client.server().toString());
+        logSettings(m_settings, "server_write");
         m_settings.setValue(QStringLiteral("jellyfin/user"), m_client.userId());
+        logSettings(m_settings, "user_write");
         if (!remember) {
             m_busy = false;
             load();
@@ -214,8 +229,11 @@ void JellyfinBrowser::login(QString address, QString username, QString password,
             if (request != m_request) {
                 return;
             }
+            logSettings(m_settings, "token_callback");
             m_settings.setValue(QStringLiteral("jellyfin/remember"), error.isEmpty());
+            logSettings(m_settings, "remember_write");
             m_settings.sync();
+            logSettings(m_settings, "login_sync");
             if (m_settings.status() != QSettings::NoError) {
                 auto const settingsError = tr("Login settings could not be saved. This login may not be remembered.");
                 error = error.isEmpty() ? settingsError : error + u'\n' + settingsError;

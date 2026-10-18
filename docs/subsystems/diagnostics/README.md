@@ -183,3 +183,16 @@ Scenario tests may capture logs to improve failure reports. A regression test
 that requires a particular event should usually also have a typed observation
 or invariant so renaming a diagnostic field does not change application
 behavior.
+
+About includes **Open logs**, opening the folder containing this process's
+actual session file (including --log-file overrides) through the system file
+manager. The action is disabled when file logging did not initialize. Windows
+uses the existing SDK folder launcher for isolation-compatible dispatch; actual
+installed AppSilo launch remains a host acceptance check.
+
+Jellyfin persistence emits info-level `jellyfin.settings` records containing
+only a stage, QSettings status (0 NoError, 1 AccessError, 2 FormatError), and
+format. Windows `jellyfin.token_store` records contain operation/result or a
+failed HRESULT. They distinguish credential persistence from metadata failures
+without recording credentials, account names, addresses or settings values.
+QSettings status is sticky; use the earliest failing stage.
