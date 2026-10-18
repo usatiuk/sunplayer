@@ -67,3 +67,17 @@ are flaky or change behavior without an assertion. Add standard QtTest JUnit XML
 files alongside console output and print those reports on Windows CTest failure.
 Linux Basic/Fusion tests pass with both loggers. An isolated Linux probe with the
 palette bindings active also passes; this does not establish Windows behavior.
+
+
+## Windows binding-loop correction
+
+Run 39169338699 reports exact QML Binding loops at AppScrollBar mid/dark values;
+the no-QML-warnings regression fails as intended. The Windows-active bindings
+read their own target palette, causing feedback in hosted Qt 6.11.1 even though
+the isolated Linux 6.10.2 probe passed. The condition is not the broken API.
+
+Replace those self-references with muted #888888 normal / #aaaaaa pressed
+colors on Windows only. The user rejected a near-white text-color thumb. Keep
+stock 0.75 active opacity, fade, geometry and input. Update Windows assertions;
+non-Windows still compares to the unmodified stock palette. No global palette,
+new theme object, settings or runtime fallback is needed.

@@ -1290,8 +1290,8 @@ void AppShellTest::appScrollbarPreservesPlatformPalette() {
         return QQmlProperty(control, QString::fromLatin1(role)).read().value<QColor>();
     };
 #ifdef Q_OS_WIN
-    QCOMPARE(color(scrollbar.get(), "palette.mid"), color(scrollbar.get(), "palette.text"));
-    QCOMPARE(color(scrollbar.get(), "palette.dark"), color(scrollbar.get(), "palette.text"));
+    QCOMPARE(color(scrollbar.get(), "palette.mid"), QColor(QStringLiteral("#888888")));
+    QCOMPARE(color(scrollbar.get(), "palette.dark"), QColor(QStringLiteral("#aaaaaa")));
 #else
     QQmlComponent stockComponent(&engine);
     stockComponent.setData("import QtQuick.Controls; ScrollBar {}", QUrl());

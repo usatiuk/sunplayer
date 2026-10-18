@@ -516,7 +516,7 @@ their top-left origin. Full-shell coverage checks hover entry, press/leave,
 release and re-entry with CSD enabled, plus existing inactivity behavior.
 
 All six explicitly attached QML scrollbars use AppScrollBar, a stock ScrollBar with only
-Windows palette.mid/dark bound to its theme text color (QTBUG-138957). Bindings
+Windows palette.mid/dark set to muted #888888/#aaaaaa (QTBUG-138957). Bindings
 are inactive elsewhere, preserving non-Windows palettes. Thumb layout, opacity,
 fade and input remain Qt defaults; no global palette or custom scrollbar renderer
 is introduced. Hosted Windows checks the palette; installed appearance remains

@@ -1007,6 +1007,6 @@ individual save → restart → restore → logout cases are not separately reco
 The shell's browser fixture also exercises card hover entry, press/leave/release
 and re-entry with CSD enabled. This catches a full-window chrome observer hiding
 hover from lower siblings. The shared app scrollbar test checks Windows
-mid/dark against readable theme text and compares non-Windows roles with an
+mid/dark against the approved muted scrollbar colors and compares non-Windows roles with an
 unmodified stock ScrollBar. Hosted Fluent coverage exercises the actual shipped
 style; installed Windows scrollbar appearance remains a manual check.
