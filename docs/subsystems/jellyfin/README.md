@@ -154,3 +154,10 @@ selection as well as playback resolution.
 Windows QtKeychain links statically to avoid windeployqt treating its Qt-prefixed
 DLL as a Qt SDK module; the Qt SDK and CRT remain dynamically linked. Hosted CI
 verifies Windows packaging; no Windows/macOS builds run on the Linux host.
+
+Windows packages require the standard public-client and private-network
+capabilities for remote Jellyfin access. Network failures without an HTTP
+response show the Qt network-error category rather than HTTP 0; diagnostics
+do not embed raw error strings that might contain addresses or credentials.
+QtKeychain's Windows Credential Manager backend needs separate AppSilo
+acceptance testing; no extra credential capability is assumed or added.

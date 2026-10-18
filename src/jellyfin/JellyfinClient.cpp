@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QMetaEnum>
 #include <QNetworkRequest>
 #include <QSysInfo>
 #include <QTimer>
@@ -159,6 +160,12 @@ QNetworkReply* JellyfinClient::requestDocument(QByteArray method, QString const&
         if (status == 401 && !m_token.isEmpty()) {
             m_token.clear();
             emit authenticationLost();
+        }
+        if (status == 0) {
+            auto const errors = QMetaEnum::fromType<QNetworkReply::NetworkError>();
+            done({}, tr("The server connection failed (%1). Check the connection and server address.")
+                         .arg(QString::fromLatin1(errors.valueToKey(reply->error()))));
+            return;
         }
         if (reply->error() != QNetworkReply::NoError || status < 200 || status >= 300) {
             done({},

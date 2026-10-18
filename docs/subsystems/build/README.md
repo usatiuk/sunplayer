@@ -619,3 +619,11 @@ runtime-loaded libsecret dependencies. Smoke checks bundle resolution and Qt
 TLS plugin presence. Host Secret Service/KWallet remains required for saved
 login. See [AppImage](../../../packaging/appimage/README.md) and
 [Jellyfin](../jellyfin/README.md).
+
+The Windows AppContainer manifest declares `internetClient` and
+`privateNetworkClientServer` for public and LAN Jellyfin servers respectively.
+Both are general-use Store capabilities. The package remains isolated; no
+public-server or enterprise authentication permission is requested. Native
+Windows-style shell tests run on hosted Windows alongside Basic/Fusion;
+unpackaged HTTP tests do not validate installed AppContainer networking or
+credential-store access.

@@ -393,6 +393,10 @@ user real-server and native Windows/macOS acceptance remain pending.
 Documentation: [Jellyfin subsystem](docs/subsystems/jellyfin/README.md).
 The compact consistent header and conventional Back/Forward follow-up is tracked
 in the [navigation plan](docs/plans/ui/2026-10-18-jellyfin-header-navigation.md).
+Windows acceptance exposed global palette overrides and missing package network
+capabilities; local corrections restore system control colors, declare only
+public/LAN network access, and add native-style hosted coverage. Installed
+Windows networking and secure-store acceptance remain pending.
 
 ### 3. FFmpeg media integration
 

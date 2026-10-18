@@ -19,12 +19,10 @@
 #include <QLibraryInfo>
 #include <QMessageBox>
 #include <QMimeData>
-#include "app/ApplicationPalette.h"
 #include <QProcess>
 #include <QPushButton>
 #include <QQmlComponent>
 #include <QQmlEngine>
-#include <QStyleHints>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QUrl>
@@ -526,7 +524,6 @@ int main(int argc, char* argv[]) {
     prepareLinuxWaylandPlatform();
 #endif
     QApplication app(argc, argv);
-    app.styleHints()->setColorScheme(Qt::ColorScheme::Dark);
     QCoreApplication::setOrganizationName(QStringLiteral("usatiuk"));
     QCoreApplication::setApplicationName(QStringLiteral("SunPlayer"));
     QGuiApplication::setApplicationDisplayName(QStringLiteral(SUNPLAYER_DISPLAY_NAME));
@@ -651,8 +648,6 @@ int main(int argc, char* argv[]) {
                                                        << "path=" + applicationLog->filePath();
         }
     }
-
-    app.setPalette(applicationPalette());
 
     if (parser.isSet(verifyQmlOption)) {
 #ifdef Q_OS_WIN

@@ -14,7 +14,6 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QSignalSpy>
-#include <QStyleHints>
 #include <QTemporaryDir>
 #include <QTemporaryFile>
 #include <QTest>
@@ -22,7 +21,6 @@
 #include <QVariant>
 
 #include "QmlShellTestTypes.h"
-#include "app/ApplicationPalette.h"
 #include "app/VideoViewportState.h"
 
 #ifdef Q_OS_WIN
@@ -44,10 +42,6 @@ class AppShellTest final : public QObject {
     Q_OBJECT
 
   private slots:
-    void initTestCase() {
-        QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark);
-        QGuiApplication::setPalette(applicationPalette());
-    }
     void publishesActiveViewport();
     void transportButtonShowsKeyboardFocus();
 
@@ -128,12 +122,32 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY2(object, qPrintable(componentErrorText(component)));
     QQuickItem* const rootItem = qobject_cast<QQuickItem*>(object.get());
     QVERIFY(rootItem);
+    // Native backgrounds and text must retain the style's matching colors.
+    // Compare with an unparented control so a shell-wide palette override is caught.
+    QQmlComponent stockButtonComponent(&engine);
+    stockButtonComponent.setData("import QtQuick.Controls; Button { text: \"Reference\" }", QUrl());
+    std::unique_ptr<QObject> stockButton(stockButtonComponent.create());
+    QVERIFY2(stockButton, qPrintable(componentErrorText(stockButtonComponent)));
+    auto matchesSystemButton = [&](QObject* button) {
+        if (!button) {
+            return false;
+        }
+        stockButton->setProperty("enabled", button->property("enabled"));
+        return QQmlProperty(button, QStringLiteral("palette.buttonText")).read() ==
+                   QQmlProperty(stockButton.get(), QStringLiteral("palette.buttonText")).read() &&
+               QQmlProperty(button, QStringLiteral("palette.button")).read() ==
+                   QQmlProperty(stockButton.get(), QStringLiteral("palette.button")).read();
+    };
+    QVERIFY(matchesSystemButton(rootItem->findChild<QObject*>(QStringLiteral("openMediaButton"))));
+    QVERIFY(matchesSystemButton(rootItem->findChild<QObject*>(QStringLiteral("openJellyfinButton"))));
     rootItem->setProperty("currentPage", 2);
     QTRY_VERIFY(rootItem->findChild<QObject*>(QStringLiteral("jellyfinServer")));
     QVERIFY(!rootItem->property("activeVideoViewportVisible").toBool());
     QVERIFY(rootItem->findChild<QObject*>(QStringLiteral("jellyfinPassword")));
+    QVERIFY(matchesSystemButton(rootItem->findChild<QObject*>(QStringLiteral("jellyfinSignIn"))));
     auto* remember = rootItem->findChild<QObject*>(QStringLiteral("jellyfinRemember"));
     QVERIFY(remember);
+    QCOMPARE(remember->property("text").toString(), QStringLiteral("Remember me"));
     auto* rememberText = remember->property("contentItem").value<QQuickItem*>();
     QVERIFY(rememberText);
     QVERIFY(rememberText->property("color").value<QColor>().lightnessF() > 0.8);

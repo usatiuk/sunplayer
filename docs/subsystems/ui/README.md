@@ -469,7 +469,7 @@ wrap fully within their scrollable page; no expansion state is maintained.
 
 The Jellyfin title has horizontal breathing room beside an icon-only Back
 control, and Home/library tabs share that header. The page uses the
-same application palette and black background as Open video; illustrated
+same black background as Open video; illustrated
 headers span the window width with square edges, while text/cards retain
 24 px horizontal insets and 20 px before gallery cards. The toolbar arrow moves
 one logical level up (episode list → seasons → TV library → Open video),
@@ -478,3 +478,10 @@ standard keys follow visit history. Home selections resolve the server-provided
 ancestors so Up and playback return retain the actual media hierarchy.
 Browser Backspace remains an editing key. See the
 [header/navigation plan](../../plans/ui/2026-10-18-jellyfin-header-navigation.md).
+
+Native controls retain the system/style palette and color scheme. Do not force
+application or shell-wide foreground colors onto native button backgrounds.
+Only text directly on the custom dark canvas is explicitly light, including
+descriptive labels and the Remember me checkbox label. Jellyfin toolbar actions
+use standard buttons with native state colors. Ordinary buttons and text fields
+keep their native foreground/background pair.

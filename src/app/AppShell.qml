@@ -7,16 +7,6 @@ import QtQuick.Layouts
 Item {
     id: root
 
-    SystemPalette { id: appColors }
-    palette.windowText: appColors.windowText
-    palette.text: appColors.text
-    palette.button: appColors.button
-    palette.buttonText: appColors.buttonText
-    palette.base: appColors.base
-    palette.highlight: appColors.highlight
-    palette.highlightedText: appColors.highlightedText
-    palette.placeholderText: appColors.placeholderText
-
     required property real renderDevicePixelRatio
     required property string applicationDisplayName
     required property WindowCommands windowCommands

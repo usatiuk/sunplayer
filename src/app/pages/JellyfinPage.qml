@@ -21,7 +21,7 @@ VideoPage {
             spacing: 18
             RowLayout {
                 Layout.fillWidth: true
-                ToolButton {
+                Button {
                     objectName: "jellyfinBackButton"
                     text: "←"
                     font.pixelSize: 22
@@ -88,13 +88,13 @@ VideoPage {
                     implicitWidth: 28
                     implicitHeight: 28
                 }
-                ToolButton {
+                Button {
                     text: qsTr("Refresh")
                     visible: root.browser.authenticated
                     enabled: !root.browser.busy
                     onClicked: root.browser.retry()
                 }
-                ToolButton {
+                Button {
                     text: qsTr("Sign out")
                     visible: root.browser.authenticated
                     enabled: !root.browser.busy
@@ -159,7 +159,8 @@ VideoPage {
                 CheckBox {
                     id: remember
                     objectName: "jellyfinRemember"
-                    text: qsTr("Remember this login securely")
+                    palette.windowText: "#f2f4f8"
+                    text: qsTr("Remember me")
                     checked: true
                     enabled: !root.browser.busy
                 }

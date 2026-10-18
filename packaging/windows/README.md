@@ -209,7 +209,13 @@ Clear-Variable password, securePassword
 ## Maintained scope
 
 The checked-in manifest is an x64 appSilo desktop application using
-`Isolated.App` with `appContainer` trust. It declares no capabilities.
+`Isolated.App` with `appContainer` trust. It declares `internetClient` for
+outbound public-server access and `privateNetworkClientServer` for LAN Jellyfin
+servers. These are general-use Store capabilities; Windows offers no LAN
+client-only capability. No public-listener capability or FullTrust entry point
+is added. QtKeychain uses Windows Credential Manager; remembered-login behavior
+inside AppSilo remains a native packaged acceptance check, not a consequence of
+network permission.
 It declares one common-video-container file-type association for `.avi`,
 `.flv`, `.m2ts`, `.m4v`, `.mkv`, `.mov`, `.mp4`, `.mpeg`, `.mpg`, `.mts`,
 `.ts`, `.webm`, and `.wmv`, with

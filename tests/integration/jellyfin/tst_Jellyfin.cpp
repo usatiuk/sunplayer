@@ -50,6 +50,7 @@ class JellyfinTest final : public QObject {
     Q_OBJECT
   private slots:
     void authenticatedApiAndDirectPlay();
+    void connectionFailureReportsNetworkError();
     void homeShelvesAndDetails();
     void navigationHistory();
     void homeOpeningCancellationAndGroupedViews();
@@ -63,6 +64,25 @@ class JellyfinTest final : public QObject {
     void untrustedTlsIsRejected();
     void failedOpenRedactsCredentials();
 };
+
+void JellyfinTest::connectionFailureReportsNetworkError() {
+    QTcpServer unusedPort;
+    QVERIFY(unusedPort.listen(QHostAddress::LocalHost));
+    auto const port = unusedPort.serverPort();
+    unusedPort.close();
+    JellyfinClient client;
+    bool done = false;
+    QString failure;
+    client.login(QUrl(QStringLiteral("http://127.0.0.1:%1").arg(port)), QStringLiteral("user"),
+                 QStringLiteral("secret-password"), QStringLiteral("device123"), [&](QString error) {
+                     failure = error;
+                     done = true;
+                 });
+    QTRY_VERIFY(done);
+    QVERIFY2(failure.contains(QStringLiteral("ConnectionRefusedError")), qPrintable(failure));
+    QVERIFY(!failure.contains(QStringLiteral("HTTP 0")));
+    QVERIFY(!failure.contains(QStringLiteral("secret-password")));
+}
 
 void JellyfinTest::authenticatedApiAndDirectPlay() {
     HttpEdge edge;

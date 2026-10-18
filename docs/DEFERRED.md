@@ -501,3 +501,12 @@ QTBUG-149567 fixes a rounded-pixel touchpad stutter trigger present in the trace
 it does not implement release inertia. Track that through normal dependency
 maintenance, not application workarounds. See the
 [Jellyfin research follow-up](research/2026-10-18-jellyfin-client.md).
+
+### Open/Jellyfin mouse-history transitions
+
+The 2026-10-18 scope audit found that reopening Jellyfin after leaving via
+logical Up retains prior browse history; mouse Back then traverses old browse
+locations rather than immediately returning to Open video. Open transitions
+currently use a retained-visit boolean, not entries in browser history. Keep
+logical Up separate; fix/test this history edge separately from the Windows
+palette/network regression.

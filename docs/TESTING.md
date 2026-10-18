@@ -974,3 +974,10 @@ visit history. Home selections exercise real ancestor-array responses, grouped
 views whose IDs differ from physical libraries, and a delayed ancestor reply
 after media cancellation. Settings-dialog coverage asserts that Windows PQ rows
 remain hidden on non-Windows platforms.
+
+Shell tests compare main Open video/Jellyfin and Sign in button palettes to an
+unparented stock control, catching unwanted inherited foreground overrides.
+Hosted Windows additionally runs the Windows style. Linux Basic/Fusion results
+do not establish native Windows rendering. Jellyfin connection-refused coverage
+checks a real failed TCP connection produces the Qt error category, not HTTP 0.
+Installed Windows package network/credential access remains manual acceptance.

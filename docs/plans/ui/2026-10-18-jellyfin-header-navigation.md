@@ -110,3 +110,35 @@ AppImage and checksum are in `out/appimage/`; the Docker rebuild, isolated
 packaging/QML checks and playback smoke passed (position 1523 ms, Pulse audio,
 73142 presented frames), and the checksum verified. Artifacts remain ignored.
 Windows CI for 30404b1 passed alongside Linux and AppImage.
+
+## Windows regression correction
+
+Actual Windows acceptance exposed white text on native light buttons. The
+shell-wide SystemPalette propagation in 1198f56 forced native button text but
+could not recolor Windows' native-painted backgrounds. Remove this propagation
+and the global QApplication palette/forced dark scheme; ordinary controls use
+system colors. Preserve explicit light text only on custom dark surfaces and
+checkbox labels. Toolbar actions use ordinary compact native buttons to keep
+foreground/background pairs correct in every interaction state.
+Rename the checkbox to Remember me. The extracted ApplicationPalette helper
+is no longer needed. Stock-control palette comparisons cover main/login
+buttons, and hosted Windows runs the Windows style alongside Basic/Fusion.
+
+The same acceptance reported HTTP 0. The isolated MSIX manifest had no network
+capabilities; add only general-use internetClient/privateNetworkClientServer
+for public/LAN Jellyfin. Do not disable isolation or add speculative credential
+permissions. HTTP 0 now exposes a safe symbolic Qt network-error category.
+Linux tests cannot validate the installed Windows AppContainer or its
+Credential Manager access; both remain actual packaged acceptance checks.
+
+The multi-track audit found no unrelated feature scope creep. It identified
+the global palette override and missing native-style coverage, plus an
+Open/Jellyfin history edge recorded in DEFERRED rather than expanding this fix.
+
+Correction validation: Linux Debug rebuild and all_qmllint passed. The five
+affected suites (settings-dialog, Basic/Fusion qml-shell, packaged-qml-module,
+jellyfin) passed 5/5 in 44.95 s. Enabled/disabled stock-button comparisons and
+real refused TCP connection behavior pass. Linux screenshots retain readable
+canvas labels and stock button color pairs. Independent palette/network/scope
+reviews found no remaining blocker after replacing toolbar ToolButtons with
+standard Buttons. No Windows/macOS build or package execution ran locally.
