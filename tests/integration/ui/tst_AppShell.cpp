@@ -46,7 +46,7 @@ class AppShellTest final : public QObject {
     void initTestCase() { QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark); }
     void publishesActiveViewport();
     void transportButtonShowsKeyboardFocus();
-    void browserScrollbarPreservesPlatformPalette();
+    void appScrollbarPreservesPlatformPalette();
 
   public:
     static void initMain() {
@@ -1279,11 +1279,11 @@ void AppShellTest::transportButtonShowsKeyboardFocus() {
     QCOMPARE(background->property("color").value<QColor>().alpha(), 0);
 }
 
-void AppShellTest::browserScrollbarPreservesPlatformPalette() {
+void AppShellTest::appScrollbarPreservesPlatformPalette() {
     QQmlEngine engine;
     engine.addImportPath(QStringLiteral(SUNPLAYER_QT_QML_IMPORT_PATH));
     QQmlComponent component(&engine);
-    component.loadFromModule(QStringLiteral("SunPlayerShellTest"), QStringLiteral("JellyfinScrollBar"));
+    component.loadFromModule(QStringLiteral("SunPlayerShellTest"), QStringLiteral("AppScrollBar"));
     std::unique_ptr<QObject> scrollbar(component.create());
     QVERIFY2(scrollbar, qPrintable(componentErrorText(component)));
     auto color = [](QObject* control, char const* role) {

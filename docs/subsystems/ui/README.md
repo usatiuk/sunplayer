@@ -515,7 +515,7 @@ Existing scene coordinates remain valid because the title bar and chrome share
 their top-left origin. Full-shell coverage checks hover entry, press/leave,
 release and re-entry with CSD enabled, plus existing inactivity behavior.
 
-Four browser scrollbars use JellyfinScrollBar, a stock ScrollBar with only
+All six explicitly attached QML scrollbars use AppScrollBar, a stock ScrollBar with only
 Windows palette.mid/dark bound to its theme text color (QTBUG-138957). Bindings
 are inactive elsewhere, preserving non-Windows palettes. Thumb layout, opacity,
 fade and input remain Qt defaults; no global palette or custom scrollbar renderer

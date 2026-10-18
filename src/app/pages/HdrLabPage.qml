@@ -127,7 +127,7 @@ VideoPage {
                 boundsBehavior: Flickable.StopAtBounds
                 clip: true
 
-                ScrollBar.vertical: ScrollBar {
+                ScrollBar.vertical: AppScrollBar {
                     id: diagnosticScrollBar
                 }
 

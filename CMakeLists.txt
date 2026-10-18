@@ -597,6 +597,9 @@ endif ()
 set_source_files_properties(src/app/Main.qml PROPERTIES
         QT_RESOURCE_ALIAS Main.qml
 )
+set_source_files_properties(src/app/AppScrollBar.qml PROPERTIES
+        QT_RESOURCE_ALIAS AppScrollBar.qml
+)
 set_source_files_properties(src/app/AppShell.qml PROPERTIES
         QT_RESOURCE_ALIAS AppShell.qml
 )
@@ -655,7 +658,7 @@ set_source_files_properties(src/app/icons/lucide/LICENSE PROPERTIES
 )
 
 set_source_files_properties(src/app/pages/JellyfinPage.qml PROPERTIES QT_RESOURCE_ALIAS JellyfinPage.qml)
-foreach(_jellyfin_component JellyfinPoster JellyfinShelf JellyfinDetail JellyfinEpisode JellyfinScrollBar)
+foreach(_jellyfin_component JellyfinPoster JellyfinShelf JellyfinDetail JellyfinEpisode)
     set_source_files_properties(src/app/pages/${_jellyfin_component}.qml PROPERTIES QT_RESOURCE_ALIAS ${_jellyfin_component}.qml)
 endforeach()
 qt_add_qml_module(sunplayer
@@ -669,7 +672,7 @@ qt_add_qml_module(sunplayer
         src/app/pages/PlayerPage.qml
         src/app/pages/JellyfinPage.qml
         src/app/pages/JellyfinPoster.qml
-        src/app/pages/JellyfinScrollBar.qml
+        src/app/AppScrollBar.qml
         src/app/pages/JellyfinShelf.qml
         src/app/pages/JellyfinDetail.qml
         src/app/pages/JellyfinEpisode.qml

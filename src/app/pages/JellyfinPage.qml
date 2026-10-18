@@ -199,7 +199,7 @@ VideoPage {
             contentWidth: width
             contentHeight: homeContent.implicitHeight
             clip: true
-            ScrollBar.vertical: JellyfinScrollBar {}
+            ScrollBar.vertical: AppScrollBar {}
             ColumnLayout {
                 id: homeContent
                 x: 24
@@ -291,7 +291,7 @@ VideoPage {
                     // Keep 24 px outer insets and 20 px card gaps under the full-width header.
                     cellWidth: (width - 48 + 20) / columns
                     cellHeight: (cellWidth - 20) * 1.5 + 76
-                    ScrollBar.vertical: JellyfinScrollBar {}
+                    ScrollBar.vertical: AppScrollBar {}
                     header: Item {
                         width: posters.width
                         height: galleryDetail.implicitHeight + (galleryDetail.illustrated ? 20 : 0)
@@ -333,7 +333,7 @@ VideoPage {
                     clip: true
                     spacing: 16
                     model: root.browser
-                    ScrollBar.vertical: JellyfinScrollBar {}
+                    ScrollBar.vertical: AppScrollBar {}
                     header: JellyfinDetail {
                         width: episodeList.width
                         item: root.browser.currentItem

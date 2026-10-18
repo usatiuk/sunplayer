@@ -42,3 +42,19 @@ manual acceptance check. Temporary standalone investigation probes were removed.
 The Qt issue index includes QTBUG-149927 and the verified mixed-DPI fix now in
 dev/6.12 maintenance, separately from unverified released inclusion and the
 independent hybrid-GPU variant. Portal appearance remains deferred.
+
+
+## Shared control naming and coverage correction
+
+The user requested application-wide ownership of the scrollbar policy. Rename
+JellyfinScrollBar to AppScrollBar at the shared app root and use it at all six
+explicit QML scrollbar attachment sites, including player details and HDR Lab.
+The two Windows-only palette bindings are unchanged; QWidget scrollbars and
+other platforms retain their stock behavior. Rename the existing palette test
+and update production/test QML registration. No new API or rendering logic.
+
+For this naming/coverage follow-up, Linux debug rebuild, Basic/Fusion shell
+coverage, packaged-QML validation and qmllint all passed. Self-review confirmed
+all six attachment sites use the shared component and its production/test QML
+aliases match. No color or input behavior changed beyond the two additional
+Windows scrollbar consumers.
