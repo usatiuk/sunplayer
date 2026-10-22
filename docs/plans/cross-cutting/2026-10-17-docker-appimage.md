@@ -209,3 +209,24 @@ The new AppImage and checksum verify; the normal local artifacts are refreshed
 by atomic file replacement. This proves software-hosted packaging and execution,
 not new physical GPU/HDR evidence. Release conditions were inspected and left
 unchanged. The conversation's CI heartbeat was disabled at the user's request.
+
+## Runtime checksum refresh (2026-10-22)
+
+[CI run 39830257741](https://github.com/usatiuk/sunplayer/actions/runs/39830257741)
+failed before source compilation because upstream replaced the continuous
+`runtime-x86_64` asset on October 19. Update only its `tools.sha256` entry to
+`617aa77314d57c8b8e4fae9c3f0b35af7b30d5529cb69e98f64f92510ed98a46`.
+The fresh download matches GitHub's published release-asset digest. The release
+points to [fedfad51](https://github.com/AppImage/type2-runtime/commit/fedfad51acc2860b2916a1eef32ba4a500ff31ef),
+which removes temporary build paths from dependency debug information to make
+runtime builds reproducible. Existing checksum enforcement and mutable-URL
+update policy remain unchanged.
+
+All six fresh tool downloads pass the updated manifest. Rebuilding with the
+verified runtime mounted into the cached builder passes; no dependency install
+or Docker image rebuild is needed for this local validation. The embedded
+runtime matches the download except its expected populated `.digest_md5`
+section. The separate runtime container passes dependency/icon/QML and A/V
+playback smoke (1520 ms, Pulse, 73004 presented audio frames), and the finished
+AppImage checksum verifies. This validates the new unsigned runtime/package;
+signed release verification remains the existing release job's responsibility.
