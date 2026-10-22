@@ -132,6 +132,13 @@ Mutter's preferred HDR description can expose the PQ/BT.2020 encoding envelope,
 not a measured physical panel peak/gamut. Neither the new selector nor the
 shared black-coordinate correction proves physical output accuracy.
 
+The [SDR/VirtualBox brightness investigation](research/2026-10-22-linux-sdr-virtualbox-brightness.md)
+identified an sRGB-pixels/gamma-2.2-interpretation mismatch in the VM reference
+and reproduced it with temporary XWayland builds. Those experiments were
+discarded. Whether the compositor's reported SDR minimum is suitable for
+tone mapping remains unresolved, as does the separate HDR-versus-SDR
+brightness comparison; the VM appearance is not a clean color reference.
+
 On macOS 15+, `CALayer.toneMapMode` offers an explicit `never` setting for
 already mapped content. Qt 6.11.1 does not set it. Nil CAEDRMetadata alone should
 not be described as controlling all modern tone-mapping mechanisms; this is
