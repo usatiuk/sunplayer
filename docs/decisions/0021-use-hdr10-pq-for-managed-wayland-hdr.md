@@ -1,6 +1,7 @@
 # 0021: Use a stable HDR10/PQ content surface on managed Wayland
 
 * Status: Accepted
+* Stable PQ on SDR is superseded by [ADR 0039](0039-unify-color-mapping-and-native-encoding.md).
 * Date: 2026-08-03
 * Amends the Linux choice in:
   [0002: Prefer extended-linear sRGB presentation with explicit SDR-white mapping](0002-extended-linear-srgb-presentation.md)

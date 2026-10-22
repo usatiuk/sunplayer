@@ -11,6 +11,43 @@ does not gate playback on a format-specific implementation. Color-correctness
 claims remain scoped to representative fixtures and target models that have
 actually been validated.
 
+## Shared color-pipeline simplification: implementation complete, validation ongoing
+
+The [consolidated plan](../../plans/video-rendering/2026-10-21-color-pipeline-simplification.md)
+implements one `VideoColorTarget`, a generic BT.2446A-at-H=1/spline-above-one
+operator, affine black/white normalization before composition, and build-generated
+libplacebo output transfers in the existing QRhi pass. Supported HDR10+ authored
+curves and source preferences remain. See
+[ADR 0039](../../decisions/0039-unify-color-mapping-and-native-encoding.md).
+The shared encoding contract is separate from private Wayland state. Linux
+retains WCG SDR and now selects SDR on SDR displays and PQ on HDR displays,
+using existing queued transitions. Windows/macOS keep their current Qt output
+paths; WCG SDR enablement and Qt delegation remain separate work.
+Native capability/declaration limitations are recorded in
+[DEFERRED.md](../../DEFERRED.md#native-wcg-sdr-eligibility-and-macos-sdr-declaration).
+
+The [native-contract research](../../research/2026-10-22-native-color-presentation-contracts.md)
+records the app-owned tone/gamut-mapping goal. The former stable-PQ-on-SDR path
+adds a compositor tone map on inspected Mutter; matching SDR avoids that branch.
+Mutter HDR feedback can still describe an encoding
+envelope rather than physical panel capability, and modern macOS provides an
+explicit tone-map ownership control not currently set by Qt. These findings
+limit end-to-end preservation claims and do not expand Windows/macOS WCG scope.
+
+* [x] Replace overlapping target fields and `VideoRenderingMode` with one target.
+* [x] Normalize mapped light with `(L-B)/(C-B)` and consistently infer unknown black.
+* [x] Generate libplacebo final transfers without adding a render pass.
+* [x] Keep native modes private and reconcile latest SDR/WCG/HDR output selection.
+* [x] Pass the Linux Debug 41/41 CTests, Release player build and QML lint;
+  final-encoding captures include complete SDR and positive-minimum Absolute oracles.
+* [x] Exercise native description readiness/assignment, pending replacement,
+  primary changes and injected rejection using synthetic display/generation
+  inputs on the host v2 compositor with a hidden window.
+* [ ] Validate engine buffer/declaration pairing during paused SDR/PQ movement,
+  primaries-only updates without swapchain recreation and surface recreation.
+* [ ] Execute the changed path on Windows/macOS; earlier captures are historical
+  evidence rather than validation of this refactor.
+
 ## Product invariants
 
 * Playback expresses every format in the active-reference-white surface.
@@ -88,10 +125,8 @@ surface.
 
 * [x] Use pinned-representable HDR10+ OOTFs through ST 2094-40 on SDR
   and HDR with the selected source reference-white destination R*H.
-  Use libplacebo's generalized BT.2446A EETF for other coherent PQ-to-SDR
-  dynamic/static ranges, and retain spline for ordinary HDR. Use an explicit,
-  diagnosed 1,000-nit maximum with the same SDR/adaptive mapper when ordinary
-  base PQ has no usable maximum.
+  Otherwise use BT.2446A at H=1 and spline at H>1 for every source family.
+  Keep the diagnosed 1,000-nit fallback when ordinary base PQ has no usable maximum.
 * [x] Keep perceptual gamut mapping, inverse tone mapping off, peak detection
   off, and dithering off for the RGBA16F target. Report the exact operator,
   metadata provenance, unsupported guidance, and fallback in diagnostics.
@@ -107,14 +142,13 @@ surface.
   Consider enabling it only if representative missing or unreliable source
   metadata demonstrates a visible benefit and its cost and seek/scene behavior
   pass the same production-boundary tests.
-* [x] Map decoded PQ/Dolby to `R * targetPeakHeadroom` and normalize by `203 / R`,
-  with source reference white R=100–203 nits, default 100. Relative SDR/HLG and
-  HDR Lab retain their prior conventions. Do not cancel the platform's live
-  reference-white scale. See [the implementation plan](../../plans/video-rendering/2026-09-20-hdr-reference-white.md).
-* [x] Preserve unknown SDR target-black semantics at the libplacebo boundary.
-  Pass numeric zero only for unknown SDR compatibility so the pinned library
-  infers 1000:1 contrast; retain the effectively-zero sentinel for known zero
-  and conservatively for unknown extended-linear HDR/EDR.
+* [x] Map decoded PQ/Dolby to `R * targetPeakHeadroom`, with R=100–203 nits,
+  default 100, then establish working black/white with `(L-B)/(C-B)` and C=R.
+  Relative SDR/HLG and HDR Lab use C=203; supported Absolute PQ uses C=W.
+  Do not cancel the platform's live reference-white scale.
+* [x] Preserve unknown, known-zero and positive target minima. Pass zero for
+  every unknown minimum and infer LINEAR target contrast once; reserve the
+  effectively-zero sentinel for known zero. Remove the managed-SDR zero rewrite.
 * [x] Render a controlled HLG fixture through the current adapter at two
   reference-white/headroom targets. The captured OOTF response changes with
   the virtual target as pinned libplacebo source predicts. V1 accepts that
@@ -158,9 +192,9 @@ surface.
 Immediate milestone outcome:
 
 * All representative formats enter the same retained-frame/import/render path.
-* SDR retains its validated numerical model; PQ uses the accepted
-  metadata-first source policy, nominal-100 SDR, reference-white-adaptive HDR,
-  and diagnosed missing-metadata fallback.
+* All formats use the shared headroom-selected operator and common working
+  coordinates; PQ retains source-reference preferences, coherent metadata and
+  diagnosed missing-metadata fallback.
 * HLG's observed target response is accepted for display-relative V1 playback;
   absolute-reference monitoring remains outside the claim rather than being
   approximated by a second SunPlayer color pipeline.
@@ -331,16 +365,17 @@ Windows V1 color release gate:
   piecewise sRGB for Windows and Wayland unmanaged fallbacks, gamma 2.2 for
   managed Wayland SDR, extended linear for Windows/macOS HDR, and BT.2020/PQ
   for managed Wayland HDR. Keep one compositor. The
-  shared shader branches and selection tests exist; backend-neutral pixel
-  readback for the Linux gamma-2.2 branch remains pending.
+  shared generated transfers and backend-neutral GPU captures cover the Linux
+  gamma-2.2 branch and the other implemented encodings.
 * [x] Treat managed gamma-2.2 Wayland SDR as `SystemManaged` and its startup
   fallback as `UnmanagedSrgb` with one-times SDR headroom and HDR unavailable.
   SunPlayer owns the managed declaration while Qt remains the toplevel owner and
   Vulkan pass-through prevents a competing WSI declaration.
-* [x] Observe preferred-output target state without using it as a content-
-  encoding command. Keep a capable window BT.2020/PQ across HDR/SDR outputs;
-  after genuine HDR presentation failure, atomically return to the complete
-  managed gamma-2.2 SDR tuple for that graphics generation.
+* [x] Select matching gamma-2.2 SDR on SDR/WCG outputs and BT.2020/PQ on HDR
+  outputs from the latest preferred-target state and supported capabilities.
+  Reuse queued format changes and independently bound PQ/display-primary SDR
+  rejection to the graphics generation. Presented buffer transitions remain
+  a native acceptance check.
 
 X11 and XWayland are unsupported and do not receive a presentation backend,
 fallback path, packaging claim, or validation matrix.

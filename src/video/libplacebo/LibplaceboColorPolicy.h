@@ -16,6 +16,10 @@ enum class LibplaceboToneMappingFunction {
     St2094_40,
 };
 
+inline LibplaceboToneMappingFunction libplaceboToneMapping(float headroom) {
+    return headroom == 1.0f ? LibplaceboToneMappingFunction::Bt2446a : LibplaceboToneMappingFunction::Spline;
+}
+
 enum class LibplaceboSourceMetadataProvenance {
     None,
     ExistingSelection,

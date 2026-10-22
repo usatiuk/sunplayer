@@ -119,12 +119,11 @@ VideoOperationResult LibplaceboDecodedVideoProducer::render(QRhiCommandBuffer& c
         renderedColorPolicyDescription = colorPolicy.description();
         auto const& source = m_mapping->frame();
         if (source.color.transfer == PL_COLOR_TRC_PQ || source.repr.sys == PL_COLOR_SYSTEM_DOLBYVISION) {
-            bool const absolutePqActive = m_source.absolutePqEnabled() &&
-                                          requestedState.description.absolutePqAvailable &&
-                                          requestedState.description.renderingMode == VideoRenderingMode::AdaptiveHdr;
+            bool const absolutePqActive =
+                m_source.absolutePqEnabled() && requestedState.description.color.absolutePqAvailable;
             if (absolutePqActive) {
                 renderedColorPolicyDescription += QStringLiteral(" · Absolute PQ · physical reference white %1 nits")
-                                                      .arg(requestedState.description.referenceWhiteNits);
+                                                      .arg(requestedState.description.color.referenceWhiteNits);
             } else {
                 renderedColorPolicyDescription +=
                     QStringLiteral(" · source HDR reference white %1 nits").arg(sourceReferenceWhite);
@@ -200,8 +199,8 @@ std::uint64_t LibplaceboDecodedVideoProducer::compositionTextureRevision() const
 RenderedVideoProducerDiagnostics LibplaceboDecodedVideoProducer::diagnostics() const {
     RenderedVideoProducerDiagnostics result;
     result.producerName = QStringLiteral("FFmpeg decoded frame via libplacebo");
-    result.colorPolicy = m_colorPolicyDescription.isEmpty() ? LibplaceboRenderContext::policyDescription(true)
-                                                            : m_colorPolicyDescription;
+    result.colorPolicy =
+        m_colorPolicyDescription.isEmpty() ? QStringLiteral("Awaiting video color mapping") : m_colorPolicyDescription;
 
     if (m_importer && m_importer->lastDiagnostics().isValid()) {
         VideoFrameImportDiagnostics const& input = m_importer->lastDiagnostics();

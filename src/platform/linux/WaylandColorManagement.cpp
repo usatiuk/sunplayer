@@ -74,7 +74,8 @@ bool WaylandPreferredDescription::isCompleteAndValid() const {
            maximumLuminanceNits > minimumLuminanceNits && std::isfinite(referenceWhiteNits) &&
            referenceWhiteNits > minimumLuminanceNits && targetLuminanceKnown &&
            std::isfinite(targetMinimumLuminanceNits) && targetMinimumLuminanceNits >= 0.0f &&
-           std::isfinite(targetMaximumLuminanceNits) && targetMaximumLuminanceNits > targetMinimumLuminanceNits &&
+           targetMinimumLuminanceNits < referenceWhiteNits && std::isfinite(targetMaximumLuminanceNits) &&
+           targetMaximumLuminanceNits > targetMinimumLuminanceNits &&
            (!targetPrimariesKnown || targetPrimaries.isValid());
 }
 
@@ -108,32 +109,13 @@ std::optional<DisplayState> displayStateFromWaylandDescription(WaylandPreferredD
     return state;
 }
 
-PresentationSurfaceContract WaylandSurfaceSelection::presentationContract() const {
-    switch (mode) {
-    case WaylandSdrSurfaceMode::UnmanagedSrgb:
-        return {
-            .mode = PresentationSurfaceMode::UnmanagedSrgb,
-        };
-    case WaylandSdrSurfaceMode::ManagedGamma22:
-        return {
-            .mode = managedHdr10        ? PresentationSurfaceMode::ManagedHdr10Pq
-                    : managedDisplaySdr ? PresentationSurfaceMode::ManagedDisplaySdr
-                                        : PresentationSurfaceMode::ManagedGamma22Sdr,
-        };
-    }
-    Q_UNREACHABLE_RETURN(PresentationSurfaceContract{});
-}
-
 WaylandSurfaceSelection selectWaylandSurface(WaylandColorManagementCapabilities const& capabilities) {
     if (capabilities.supportsManagedSdr()) {
         bool const managedHdr10 = capabilities.supportsManagedHdr10();
         return {
             .mode = WaylandSdrSurfaceMode::ManagedGamma22,
-            .managedHdr10 = managedHdr10,
-            .managedDisplaySdr = capabilities.supportsManagedDisplaySdr(),
             .diagnostic =
-                managedHdr10
-                    ? QStringLiteral("SunPlayer-owned color-management-v1 · BT.2020 PQ · managed sRGB fallback")
+                managedHdr10 ? QStringLiteral("SunPlayer-owned color-management-v1 · display-adaptive SDR / BT.2020 PQ")
                 : capabilities.supportsManagedDisplaySdr()
                     ? QStringLiteral("SunPlayer-owned color-management-v1 v2 · display primaries · gamma 2.2 SDR")
                     : QStringLiteral("SunPlayer-owned color-management-v1 · sRGB primaries · gamma 2.2"),
@@ -168,21 +150,22 @@ WaylandSurfaceSelection selectWaylandSurface(WaylandColorManagementCapabilities 
     };
 }
 
-PresentationSurfaceMode selectWaylandPresentationMode(WaylandSdrSurfaceMode startupMode,
+WaylandPresentationMode selectWaylandPresentationMode(WaylandSdrSurfaceMode startupMode,
                                                       WaylandColorManagementCapabilities const& capabilities,
+                                                      DisplayState const& display,
                                                       std::uint64_t graphicsDeviceGeneration,
-                                                      std::optional<WaylandSurfaceRejection> const& rejection) {
+                                                      WaylandSurfaceRejection const& rejection) {
     if (startupMode == WaylandSdrSurfaceMode::UnmanagedSrgb) {
-        return PresentationSurfaceMode::UnmanagedSrgb;
+        return WaylandPresentationMode::UnmanagedSrgb;
     }
-
-    bool const rejected = rejection && rejection->graphicsDeviceGeneration == graphicsDeviceGeneration;
-    if (capabilities.supportsManagedHdr10() && !rejected) {
-        return PresentationSurfaceMode::ManagedHdr10Pq;
+    bool const rejected = rejection.graphicsDeviceGeneration == graphicsDeviceGeneration;
+    if (display.valid && display.colorMode == DisplayColorMode::HighDynamicRange &&
+        capabilities.supportsManagedHdr10() && !(rejected && rejection.hdr10)) {
+        return WaylandPresentationMode::ManagedHdr10Pq;
     }
-    if (capabilities.supportsManagedDisplaySdr() &&
-        (!rejected || rejection->mode == PresentationSurfaceMode::ManagedHdr10Pq)) {
-        return PresentationSurfaceMode::ManagedDisplaySdr;
+    if (display.valid && display.targetPrimariesKnown && capabilities.supportsManagedDisplaySdr() &&
+        !(rejected && rejection.displaySdr)) {
+        return WaylandPresentationMode::ManagedDisplaySdr;
     }
-    return PresentationSurfaceMode::ManagedGamma22Sdr;
+    return WaylandPresentationMode::ManagedGamma22Sdr;
 }

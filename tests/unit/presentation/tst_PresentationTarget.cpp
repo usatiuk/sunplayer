@@ -32,7 +32,6 @@ class PresentationTargetTest final : public QObject {
     void managedSdrUsesGamutWithoutHdrHeadroom();
     void calculation_data();
     void calculation();
-    void renderingIntentIsIndependentOfHeadroom();
     void absolutePqCapability_data();
     void absolutePqCapability();
 };
@@ -115,19 +114,8 @@ void PresentationTargetTest::absolutePqCapability() {
     QFETCH(PresentationBackendState, backend);
     QFETCH(bool, available);
     QVERIFY(!PresentationBackendState{}.absoluteLuminanceSupported);
-    QVERIFY(!PresentationTarget{}.absolutePqAvailable);
-    QCOMPARE(calculatePresentationTarget(display, backend).absolutePqAvailable, available);
-}
-
-void PresentationTargetTest::renderingIntentIsIndependentOfHeadroom() {
-    PresentationSurfaceContract native;
-    QVERIFY(native.usesAdaptiveHdrMapping(true, true, false));   // macOS EDR, including current H=1
-    QVERIFY(native.usesAdaptiveHdrMapping(true, true, true));    // Windows HDR
-    QVERIFY(native.usesAdaptiveHdrMapping(true, false, true));   // HDR backend fallback
-    QVERIFY(!native.usesAdaptiveHdrMapping(true, false, false)); // Windows WCG
-    QVERIFY(!native.usesAdaptiveHdrMapping(false, true, true));  // actual SDR presentation fallback
-    PresentationSurfaceContract wayland{PresentationSurfaceMode::ManagedHdr10Pq};
-    QVERIFY(wayland.usesAdaptiveHdrMapping(true, false, false)); // stable PQ on an SDR output
+    QVERIFY(!PresentationTarget{}.color.absolutePqAvailable);
+    QCOMPARE(calculatePresentationTarget(display, backend).color.absolutePqAvailable, available);
 }
 
 void PresentationTargetTest::managedSdrUsesGamutWithoutHdrHeadroom() {
@@ -145,15 +133,16 @@ void PresentationTargetTest::managedSdrUsesGamutWithoutHdrHeadroom() {
     display.potentialHeadroom = 10.0f;
     PresentationBackendState backend;
     backend.managedSdrPresentationActive = true;
+    backend.sdrOutputPrimaries = displayP3Primaries();
     auto target = calculatePresentationTarget(display, backend);
     QVERIFY(!target.hdrPresentationActive);
-    QVERIFY(!target.absolutePqAvailable);
-    QVERIFY(target.targetPrimariesKnown);
-    QCOMPARE(target.targetPrimaries, display.targetPrimaries);
-    QCOMPARE(target.sdrWhiteNits, 120.0f);
-    QCOMPARE(target.minLuminanceNits, 0.0f); // Physical floor belongs to compositor.
+    QVERIFY(!target.color.absolutePqAvailable);
+    QVERIFY(target.color.targetPrimariesKnown);
+    QCOMPARE(target.color.targetPrimaries, display.targetPrimaries);
+    QCOMPARE(target.color.referenceWhiteNits, 120.0f);
+    QCOMPARE(target.color.targetMinimumLuminanceNits, 0.3f);
     QCOMPARE(target.maxLuminanceNits, 120.0f);
-    QCOMPARE(target.effectiveTargetHeadroom, 1.0f);
+    QCOMPARE(target.color.targetPeakHeadroom, 1.0f);
     QCOMPARE(target.currentHeadroom, 1.0f);
     QCOMPARE(target.potentialHeadroom, 1.0f);
     QCOMPARE(target.sdrScale, 1.0f);
@@ -161,12 +150,14 @@ void PresentationTargetTest::managedSdrUsesGamutWithoutHdrHeadroom() {
     QCOMPARE(calculatePresentationTarget(display, backend), target);
     display.valid = false;
     target = calculatePresentationTarget(display, backend);
-    QVERIFY(!target.targetPrimariesKnown);
-    QCOMPARE(target.minLuminanceNits, 0.0f);
-    QCOMPARE(target.effectiveTargetHeadroom, 1.0f);
+    QVERIFY(target.color.targetPrimariesKnown);
+    QCOMPARE(target.color.targetPrimaries, displayP3Primaries());
+    QVERIFY(!target.color.targetMinimumLuminanceKnown);
+    QCOMPARE(target.color.targetMinimumLuminanceNits, 0.0f);
+    QCOMPARE(target.color.targetPeakHeadroom, 1.0f);
     backend.managedSdrPresentationActive = false;
     display.valid = true;
-    QVERIFY(!calculatePresentationTarget(display, backend).targetPrimariesKnown);
+    QVERIFY(!calculatePresentationTarget(display, backend).color.targetPrimariesKnown);
 }
 
 void PresentationTargetTest::calculation_data() {
@@ -227,13 +218,13 @@ void PresentationTargetTest::calculation_data() {
         expected.hdrPresentationActive = true;
         expected.sceneReferred = true;
         expected.sdrWhiteKnown = true;
-        expected.luminanceKnown = true;
-        expected.sdrWhiteNits = 200.0f;
-        expected.minLuminanceNits = 0.01f;
+        expected.color.targetMinimumLuminanceKnown = true;
+        expected.color.referenceWhiteNits = 200.0f;
+        expected.color.targetMinimumLuminanceNits = 0.01f;
         expected.maxLuminanceNits = 1000.0f;
         expected.currentHeadroom = 12.5f;
         expected.potentialHeadroom = 12.5f;
-        expected.effectiveTargetHeadroom = 5.0f;
+        expected.color.targetPeakHeadroom = 5.0f;
         expected.sdrScale = 2.5f;
 
         QTest::newRow("scene-referred-backend-luminance") << DisplayState{} << backend << expected;
@@ -266,16 +257,16 @@ void PresentationTargetTest::calculation_data() {
         PresentationTarget expected;
         expected.hdrPresentationActive = true;
         expected.sceneReferred = true;
-        expected.targetPrimariesKnown = true;
-        expected.targetPrimaries = displayP3Primaries();
+        expected.color.targetPrimariesKnown = true;
+        expected.color.targetPrimaries = displayP3Primaries();
         expected.sdrWhiteKnown = true;
-        expected.luminanceKnown = true;
-        expected.sdrWhiteNits = 200.0f;
-        expected.minLuminanceNits = 0.02f;
+        expected.color.targetMinimumLuminanceKnown = true;
+        expected.color.referenceWhiteNits = 200.0f;
+        expected.color.targetMinimumLuminanceNits = 0.02f;
         expected.maxLuminanceNits = 1200.0f;
         expected.currentHeadroom = 15.0f;
         expected.potentialHeadroom = 18.0f;
-        expected.effectiveTargetHeadroom = 6.0f;
+        expected.color.targetPeakHeadroom = 6.0f;
         expected.sdrScale = 2.5f;
 
         QTest::newRow("active-windows-hdr-takes-precedence") << display << backend << expected;
@@ -305,13 +296,13 @@ void PresentationTargetTest::calculation_data() {
         PresentationTarget expected;
         expected.hdrPresentationActive = true;
         expected.sdrWhiteKnown = true;
-        expected.luminanceKnown = true;
-        expected.sdrWhiteNits = 120.0f;
-        expected.minLuminanceNits = 0.05f;
+        expected.color.targetMinimumLuminanceKnown = true;
+        expected.color.referenceWhiteNits = 120.0f;
+        expected.color.targetMinimumLuminanceNits = 0.05f;
         expected.maxLuminanceNits = 400.0f;
         expected.currentHeadroom = 5.0f;
         expected.potentialHeadroom = 6.0f;
-        expected.effectiveTargetHeadroom = 5.0f;
+        expected.color.targetPeakHeadroom = 5.0f;
 
         QTest::newRow("inactive-windows-hdr-uses-backend") << display << backend << expected;
     }
@@ -337,11 +328,11 @@ void PresentationTargetTest::calculation_data() {
 
         PresentationTarget expected;
         expected.hdrPresentationActive = true;
-        expected.targetPrimariesKnown = true;
-        expected.targetPrimaries = displayP3Primaries();
+        expected.color.targetPrimariesKnown = true;
+        expected.color.targetPrimaries = displayP3Primaries();
         expected.currentHeadroom = 1.0f;
         expected.potentialHeadroom = 1.0f;
-        expected.effectiveTargetHeadroom = 1.0f;
+        expected.color.targetPeakHeadroom = 1.0f;
         expected.sdrScale = 1.0f;
 
         QTest::newRow("windows-wide-gamut-is-display-referred") << display << backend << expected;
@@ -378,7 +369,7 @@ void PresentationTargetTest::calculation_data() {
         expected.sceneReferred = true;
         expected.currentHeadroom = 4.0f;
         expected.potentialHeadroom = 8.0f;
-        expected.effectiveTargetHeadroom = 4.0f;
+        expected.color.targetPeakHeadroom = 4.0f;
 
         QTest::newRow("unknown-luminance-uses-component-headroom") << DisplayState{} << backend << expected;
     }
@@ -404,13 +395,13 @@ void PresentationTargetTest::calculation_data() {
         expected.hdrPresentationActive = true;
         expected.sceneReferred = true;
         expected.sdrWhiteKnown = true;
-        expected.luminanceKnown = true;
-        expected.sdrWhiteNits = 160.0f;
-        expected.minLuminanceNits = 0.03f;
+        expected.color.targetMinimumLuminanceKnown = true;
+        expected.color.referenceWhiteNits = 160.0f;
+        expected.color.targetMinimumLuminanceNits = 0.03f;
         expected.maxLuminanceNits = 640.0f;
         expected.currentHeadroom = 8.0f;
         expected.potentialHeadroom = 9.0f;
-        expected.effectiveTargetHeadroom = 4.0f;
+        expected.color.targetPeakHeadroom = 4.0f;
         expected.sdrScale = 2.0f;
 
         QTest::newRow("display-white-and-backend-luminance-combine") << display << backend << expected;
@@ -446,11 +437,11 @@ void PresentationTargetTest::calculation_data() {
 
         PresentationTarget expected;
         expected.hdrPresentationActive = true;
-        expected.targetPrimariesKnown = true;
-        expected.targetPrimaries = displayP3Primaries();
+        expected.color.targetPrimariesKnown = true;
+        expected.color.targetPrimaries = displayP3Primaries();
         expected.currentHeadroom = 3.5f;
         expected.potentialHeadroom = 5.0f;
-        expected.effectiveTargetHeadroom = 3.5f;
+        expected.color.targetPeakHeadroom = 3.5f;
 
         QTest::newRow("display-referred-edr-with-unknown-sdr-white") << display << backend << expected;
     }
@@ -475,49 +466,16 @@ void PresentationTargetTest::calculation_data() {
         PresentationTarget expected;
         expected.hdrPresentationActive = true;
         expected.sdrWhiteKnown = true;
-        expected.luminanceKnown = true;
-        expected.sdrWhiteNits = 200.0f;
-        expected.minLuminanceNits = 0.001f;
+        expected.color.targetMinimumLuminanceKnown = true;
+        expected.color.referenceWhiteNits = 200.0f;
+        expected.color.targetMinimumLuminanceNits = 0.001f;
         expected.maxLuminanceNits = 1000.0f;
         expected.currentHeadroom = 5.0f;
         expected.potentialHeadroom = 5.0f;
-        expected.effectiveTargetHeadroom = 5.0f;
+        expected.color.targetPeakHeadroom = 5.0f;
         expected.sdrScale = 1.0f;
 
         QTest::newRow("display-referred-reference-white-needs-no-scale") << display << backend << expected;
-    }
-
-    {
-        DisplayState display;
-        display.valid = true;
-        display.colorMode = DisplayColorMode::StandardDynamicRange;
-        display.luminanceBehavior = DisplayLuminanceBehavior::DisplayReferred;
-        display.sdrWhiteKnown = true;
-        display.luminanceKnown = true;
-        display.sdrWhiteNits = 162.0f;
-        display.minLuminanceNits = 0.2f;
-        display.maxLuminanceNits = 162.0f;
-        display.currentHeadroom = 1.0f;
-        display.potentialHeadroom = 1.0f;
-
-        PresentationBackendState backend;
-        backend.hdrPresentationActive = true;
-        backend.sceneReferred = false;
-        backend.useSdrDisplayTargetForHdrPresentation = true;
-
-        PresentationTarget expected;
-        expected.hdrPresentationActive = true;
-        expected.sdrWhiteKnown = true;
-        expected.luminanceKnown = true;
-        expected.sdrWhiteNits = 162.0f;
-        expected.minLuminanceNits = 0.2f;
-        expected.maxLuminanceNits = 162.0f;
-        expected.currentHeadroom = 1.0f;
-        expected.potentialHeadroom = 1.0f;
-        expected.effectiveTargetHeadroom = 1.0f;
-        expected.sdrScale = 1.0f;
-
-        QTest::newRow("stable-hdr-surface-on-sdr-output") << display << backend << expected;
     }
 }
 
@@ -529,18 +487,18 @@ void PresentationTargetTest::calculation() {
     PresentationTarget const actual = calculatePresentationTarget(display, backend);
 
     QCOMPARE(actual.hdrPresentationActive, expected.hdrPresentationActive);
-    QCOMPARE(actual.absolutePqAvailable, expected.absolutePqAvailable);
+    QCOMPARE(actual.color.absolutePqAvailable, expected.color.absolutePqAvailable);
     QCOMPARE(actual.sceneReferred, expected.sceneReferred);
-    QCOMPARE(actual.targetPrimariesKnown, expected.targetPrimariesKnown);
-    QVERIFY(actual.targetPrimaries == expected.targetPrimaries);
+    QCOMPARE(actual.color.targetPrimariesKnown, expected.color.targetPrimariesKnown);
+    QVERIFY(actual.color.targetPrimaries == expected.color.targetPrimaries);
     QCOMPARE(actual.sdrWhiteKnown, expected.sdrWhiteKnown);
-    QCOMPARE(actual.luminanceKnown, expected.luminanceKnown);
-    QCOMPARE(actual.sdrWhiteNits, expected.sdrWhiteNits);
-    QCOMPARE(actual.minLuminanceNits, expected.minLuminanceNits);
+    QCOMPARE(actual.color.targetMinimumLuminanceKnown, expected.color.targetMinimumLuminanceKnown);
+    QCOMPARE(actual.color.referenceWhiteNits, expected.color.referenceWhiteNits);
+    QCOMPARE(actual.color.targetMinimumLuminanceNits, expected.color.targetMinimumLuminanceNits);
     QCOMPARE(actual.maxLuminanceNits, expected.maxLuminanceNits);
     QCOMPARE(actual.currentHeadroom, expected.currentHeadroom);
     QCOMPARE(actual.potentialHeadroom, expected.potentialHeadroom);
-    QCOMPARE(actual.effectiveTargetHeadroom, expected.effectiveTargetHeadroom);
+    QCOMPARE(actual.color.targetPeakHeadroom, expected.color.targetPeakHeadroom);
     QCOMPARE(actual.sdrScale, expected.sdrScale);
 }
 

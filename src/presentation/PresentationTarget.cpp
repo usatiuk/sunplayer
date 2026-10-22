@@ -16,9 +16,7 @@ PresentationTarget calculatePresentationTarget(DisplayState const& display, Pres
     target.hdrPresentationActive = backend.hdrPresentationActive;
 
     bool const colorTargetActive = display.colorMode != DisplayColorMode::StandardDynamicRange;
-    bool const displayTargetUsable =
-        display.valid &&
-        (colorTargetActive || backend.useSdrDisplayTargetForHdrPresentation || backend.managedSdrPresentationActive);
+    bool const displayTargetUsable = display.valid && (colorTargetActive || backend.managedSdrPresentationActive);
     bool const displayLuminanceAuthority =
         displayTargetUsable && display.luminanceBehavior != DisplayLuminanceBehavior::Unknown;
     target.sceneReferred = displayLuminanceAuthority
@@ -29,27 +27,39 @@ PresentationTarget calculatePresentationTarget(DisplayState const& display, Pres
     bool const displayLuminanceKnown = displayTargetUsable && display.luminanceKnown && display.maxLuminanceNits > 0.0f;
     bool const displayHeadroomKnown = displayTargetUsable && display.currentHeadroom > 0.0f;
 
-    target.targetPrimariesKnown =
+    target.color.targetPrimariesKnown =
         displayTargetUsable && display.targetPrimariesKnown && display.targetPrimaries.isValid();
-    if (target.targetPrimariesKnown) {
-        target.targetPrimaries = display.targetPrimaries;
+    if (target.color.targetPrimariesKnown) {
+        target.color.targetPrimaries = display.targetPrimaries;
     }
 
     target.sdrWhiteKnown = displayWhiteKnown || (backendLuminanceCompatible && backend.sdrWhiteKnown);
     if (target.sdrWhiteKnown) {
-        target.sdrWhiteNits =
+        target.color.referenceWhiteNits =
             displayWhiteKnown ? display.sdrWhiteNits : (backend.sdrWhiteKnown ? backend.sdrWhiteNits : 0.0f);
     }
 
-    target.luminanceKnown = displayLuminanceKnown || (backendLuminanceCompatible && backend.luminanceKnown);
-    if (target.luminanceKnown) {
-        target.minLuminanceNits = displayLuminanceKnown ? display.minLuminanceNits
-                                                        : (backend.luminanceKnown ? backend.minLuminanceNits : 0.0f);
+    target.color.targetMinimumLuminanceKnown =
+        displayLuminanceKnown || (backendLuminanceCompatible && backend.luminanceKnown);
+    if (target.color.targetMinimumLuminanceKnown) {
+        target.color.targetMinimumLuminanceNits = displayLuminanceKnown
+                                                      ? display.minLuminanceNits
+                                                      : (backend.luminanceKnown ? backend.minLuminanceNits : 0.0f);
         target.maxLuminanceNits = displayLuminanceKnown ? display.maxLuminanceNits
                                                         : (backend.luminanceKnown ? backend.maxLuminanceNits : 0.0f);
     }
 
-    float const effectiveSdrWhiteNits = target.sdrWhiteNits > 0.0f ? target.sdrWhiteNits : scRgbReferenceWhiteNits;
+    // Reject an incoherent observed black/reference-white pair once, before
+    // any consumer constructs the common black-relative working coordinates.
+    if (target.color.targetMinimumLuminanceKnown &&
+        (!isValidDisplayLuminanceRange(target.color.targetMinimumLuminanceNits, target.maxLuminanceNits) ||
+         target.color.targetMinimumLuminanceNits >= target.color.referenceWhiteNits)) {
+        target.color.targetMinimumLuminanceKnown = false;
+        target.color.targetMinimumLuminanceNits = 0.0f;
+        target.maxLuminanceNits = 0.0f;
+    }
+
+    float const effectiveSdrWhiteNits = target.color.referenceWhiteNits;
     target.sdrScale = target.sceneReferred ? effectiveSdrWhiteNits / scRgbReferenceWhiteNits : 1.0f;
     Q_ASSERT(std::isfinite(target.sdrScale) && target.sdrScale > 0.0f);
 
@@ -63,22 +73,21 @@ PresentationTarget calculatePresentationTarget(DisplayState const& display, Pres
     target.potentialHeadroom = std::max(target.currentHeadroom, displayTargetUsable && display.potentialHeadroom > 0.0f
                                                                     ? display.potentialHeadroom
                                                                     : backendPotentialHeadroom);
-    target.effectiveTargetHeadroom = std::max(1.0f, target.currentHeadroom / target.sdrScale);
+    target.color.targetPeakHeadroom = std::max(1.0f, target.currentHeadroom / target.sdrScale);
     if (backend.managedSdrPresentationActive) {
-        // This surface is relative, zero-black SDR. The compositor owns the
-        // physical display floor/white conversion; do not bake its black twice.
+        target.color.targetPrimariesKnown = true;
+        target.color.targetPrimaries = backend.sdrOutputPrimaries;
         target.sceneReferred = false;
         target.sdrScale = 1.0f;
-        target.luminanceKnown = true;
-        target.minLuminanceNits = 0.0f;
-        target.maxLuminanceNits = target.sdrWhiteKnown ? target.sdrWhiteNits : scRgbReferenceWhiteNits;
-        target.currentHeadroom = target.potentialHeadroom = target.effectiveTargetHeadroom = 1.0f;
+        target.maxLuminanceNits = target.sdrWhiteKnown ? target.color.referenceWhiteNits : scRgbReferenceWhiteNits;
+        target.currentHeadroom = target.potentialHeadroom = target.color.targetPeakHeadroom = 1.0f;
     }
-    target.absolutePqAvailable = backend.absoluteLuminanceSupported && target.hdrPresentationActive &&
-                                 (!display.valid || display.colorMode == DisplayColorMode::HighDynamicRange) &&
-                                 target.sceneReferred && target.sdrWhiteKnown && std::isfinite(target.sdrWhiteNits) &&
-                                 target.sdrWhiteNits > 0.0f && target.luminanceKnown &&
-                                 isValidDisplayLuminanceRange(target.minLuminanceNits, target.maxLuminanceNits) &&
-                                 target.maxLuminanceNits >= target.sdrWhiteNits;
+    target.color.absolutePqAvailable =
+        backend.absoluteLuminanceSupported && target.hdrPresentationActive &&
+        (!display.valid || display.colorMode == DisplayColorMode::HighDynamicRange) && target.sceneReferred &&
+        target.sdrWhiteKnown && std::isfinite(target.color.referenceWhiteNits) &&
+        target.color.referenceWhiteNits > 0.0f && target.color.targetMinimumLuminanceKnown &&
+        isValidDisplayLuminanceRange(target.color.targetMinimumLuminanceNits, target.maxLuminanceNits) &&
+        target.maxLuminanceNits >= target.color.referenceWhiteNits;
     return target;
 }

@@ -704,6 +704,34 @@ else ()
             "spirv-opt was not found; skipping optional SPIR-V optimization")
 endif ()
 
+add_executable(sunplayer_shader_generator cmake/GenerateCompositorShader.cpp)
+set_target_properties(sunplayer_shader_generator PROPERTIES AUTOMOC OFF)
+target_link_libraries(sunplayer_shader_generator PRIVATE libplacebo::libplacebo)
+if (WIN32)
+    sunplayer_stage_windows_runtime(sunplayer_shader_generator)
+endif ()
+set(sunplayer_compositor_shader "${CMAKE_CURRENT_BINARY_DIR}/generated/shaders/compositor.frag")
+add_custom_command(
+        OUTPUT "${sunplayer_compositor_shader}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/generated/shaders"
+        COMMAND $<TARGET_FILE:sunplayer_shader_generator>
+                "${CMAKE_CURRENT_SOURCE_DIR}/src/presentation/shaders/compositor.frag"
+                "${sunplayer_compositor_shader}"
+        DEPENDS sunplayer_shader_generator src/presentation/shaders/compositor.frag
+        VERBATIM
+)
+add_custom_target(sunplayer_compositor_shader_source DEPENDS "${sunplayer_compositor_shader}")
+function(sunplayer_add_compositor_shader target)
+    add_dependencies(${target} sunplayer_compositor_shader_source)
+    qt_add_shaders(${target} "${target}_compositor_shader"
+            ${sunplayer_shader_options}
+            PREFIX /shaders
+            FILES "${sunplayer_compositor_shader}"
+            OUTPUTS compositor.frag.qsb
+    )
+endfunction()
+sunplayer_add_compositor_shader(sunplayer)
+
 qt_add_shaders(sunplayer "sunplayer_shaders"
         ${sunplayer_shader_options}
         PREFIX
@@ -713,7 +741,6 @@ qt_add_shaders(sunplayer "sunplayer_shaders"
         FILES
         src/presentation/shaders/fullscreen.vert
         src/presentation/shaders/diagnostic_video.frag
-        src/presentation/shaders/compositor.frag
 )
 unset(sunplayer_spirv_opt CACHE)
 

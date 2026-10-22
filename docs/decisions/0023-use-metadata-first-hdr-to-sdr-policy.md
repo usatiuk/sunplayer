@@ -1,6 +1,8 @@
 # 0023: Use a metadata-first HDR-to-SDR policy
 
 * Status: Accepted
+* Operator selection is superseded by [ADR 0039](0039-unify-color-mapping-and-native-encoding.md);
+  coherent source-metadata ownership remains.
 * Date: 2026-08-21
 * Implementation status: Implemented for PQ input targeting SDR/WCG and HDR
 * Amends:

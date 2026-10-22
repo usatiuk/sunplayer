@@ -30,45 +30,7 @@ vec3 srgbToLinear(vec3 value)
     return mix(powerPart, linearPart, low);
 }
 
-vec3 linearToSrgb(vec3 value)
-{
-    bvec3 low = lessThanEqual(value, vec3(0.0031308));
-    vec3 linearPart = value * 12.92;
-    vec3 powerPart = 1.055 * pow(value, vec3(1.0 / 2.4)) - 0.055;
-    return mix(powerPart, linearPart, low);
-}
-
-vec3 linearToGamma22(vec3 value)
-{
-    return pow(value, vec3(1.0 / 2.2));
-}
-
-vec3 linearSrgbToBt2020(vec3 value)
-{
-    return vec3(
-        dot(value, vec3(0.627404, 0.329283, 0.043313)),
-        dot(value, vec3(0.069097, 0.919540, 0.011362)),
-        dot(value, vec3(0.016391, 0.088013, 0.895595)));
-}
-
-vec3 linearToPq(vec3 value)
-{
-    const float m1 = 2610.0 / 16384.0;
-    const float m2 = 2523.0 / 32.0;
-    const float c1 = 3424.0 / 4096.0;
-    const float c2 = 2413.0 / 128.0;
-    const float c3 = 2392.0 / 128.0;
-    const float referenceWhiteNits = 203.0;
-    const float pqPeakNits = 10000.0;
-
-    vec3 normalized = clamp(
-        value * (referenceWhiteNits / pqPeakNits), 0.0, 1.0);
-    vec3 powered = pow(normalized, vec3(m1));
-    return pow(
-        (vec3(c1) + c2 * powered)
-            / (vec3(1.0) + c3 * powered),
-        vec3(m2));
-}
+// @LIBPLACEBO_TRANSFER_FUNCTIONS@
 
 vec3 compositeSrgbPremultiplied(
     vec3 background, vec4 layer, float brightness, float layerOpacity)
@@ -100,24 +62,17 @@ void main()
     color = compositeSrgbPremultiplied(
         color, texture(uiTexture, displayUv), 1.0, 1.0);
     color *= sdrScale;
-    vec3 encodedColor = clamp(color, 0.0, 1.0);
+    // Preserve signed wide colors until conversion into the declared basis.
+    color = vec3(dot(outputRow0.xyz, color), dot(outputRow1.xyz, color), dot(outputRow2.xyz, color));
     vec3 outputColor;
-    if (outputEncoding > 3.5) {
-        // Extended working RGB may be negative or above one. Clamp only in
-        // the declared display-primary basis, after white-point adaptation.
-        vec3 displayRgb = vec3(dot(outputRow0.xyz, color),
-                               dot(outputRow1.xyz, color),
-                               dot(outputRow2.xyz, color));
-        outputColor = linearToGamma22(clamp(displayRgb, 0.0, 1.0));
-    } else if (outputEncoding > 2.5) {
-        outputColor = linearToPq(
-            max(linearSrgbToBt2020(color), vec3(0.0)));
+    if (outputEncoding > 2.5) {
+        outputColor = linearToPq(clamp(color, 0.0, 10000.0 / 203.0));
     } else if (outputEncoding > 1.5) {
         outputColor = color;
     } else if (outputEncoding > 0.5) {
-        outputColor = linearToGamma22(encodedColor);
+        outputColor = linearToGamma22(clamp(color, 0.0, 1.0));
     } else {
-        outputColor = linearToSrgb(encodedColor);
+        outputColor = linearToSrgb(clamp(color, 0.0, 1.0));
     }
     fragColor = vec4(outputColor, 1.0);
 }

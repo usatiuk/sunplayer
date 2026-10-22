@@ -1,6 +1,8 @@
 # 0027: Separate rendering intent from available headroom
 
 * Status: Accepted
+* The rendering-mode and black/normalization clauses are superseded by
+  [ADR 0039](0039-unify-color-mapping-and-native-encoding.md).
 * Date: 2026-09-20
 * Amends ADRs 0021, 0023, 0025, and 0026.
 * Amended by [ADR 0029](0029-configure-hdr-source-reference-white.md) for decoded

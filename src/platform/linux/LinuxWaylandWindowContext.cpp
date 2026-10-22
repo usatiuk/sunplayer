@@ -42,17 +42,15 @@ std::uint64_t imageDescriptionIdentity(std::uint32_t high, std::uint32_t low) {
     return (static_cast<std::uint64_t>(high) << 32U) | low;
 }
 
-QString presentationModeName(PresentationSurfaceMode mode) {
+QString presentationModeName(WaylandPresentationMode mode) {
     switch (mode) {
-    case PresentationSurfaceMode::AdaptiveExtendedLinear:
-        return QStringLiteral("adaptive-extended-linear");
-    case PresentationSurfaceMode::UnmanagedSrgb:
+    case WaylandPresentationMode::UnmanagedSrgb:
         return QStringLiteral("unmanaged-srgb");
-    case PresentationSurfaceMode::ManagedGamma22Sdr:
+    case WaylandPresentationMode::ManagedGamma22Sdr:
         return QStringLiteral("managed-gamma22-sdr");
-    case PresentationSurfaceMode::ManagedDisplaySdr:
+    case WaylandPresentationMode::ManagedDisplaySdr:
         return QStringLiteral("managed-display-gamma22-sdr");
-    case PresentationSurfaceMode::ManagedHdr10Pq:
+    case WaylandPresentationMode::ManagedHdr10Pq:
         return QStringLiteral("managed-hdr10-pq");
     }
     Q_UNREACHABLE_RETURN(QString{});
@@ -447,7 +445,7 @@ class SurfaceFeedback final : public QtWayland::wp_color_management_surface_feed
 namespace {
 struct SurfaceDescriptionKey {
     bool operator==(SurfaceDescriptionKey const&) const = default;
-    PresentationSurfaceMode mode;
+    WaylandPresentationMode mode;
     std::optional<WaylandCompositionVolume> volume;
 };
 } // namespace
@@ -662,9 +660,9 @@ struct LinuxWaylandWindowContext::NativeState final {
 
     void detachManagedSurface() { managedSurface.reset(); }
 
-    void setDeclaredMode(PresentationSurfaceMode mode) {
-        Q_ASSERT(mode == PresentationSurfaceMode::ManagedGamma22Sdr ||
-                 mode == PresentationSurfaceMode::ManagedDisplaySdr || mode == PresentationSurfaceMode::ManagedHdr10Pq);
+    void setDeclaredMode(WaylandPresentationMode mode) {
+        Q_ASSERT(mode == WaylandPresentationMode::ManagedGamma22Sdr ||
+                 mode == WaylandPresentationMode::ManagedDisplaySdr || mode == WaylandPresentationMode::ManagedHdr10Pq);
         declaredMode = mode;
         if (managedSurface) {
             applyDeclaredMode();
@@ -693,12 +691,12 @@ struct LinuxWaylandWindowContext::NativeState final {
 
     void applyDeclaredMode() {
         Q_ASSERT(managedSurface);
-        if (declaredMode == PresentationSurfaceMode::ManagedHdr10Pq ||
-            declaredMode == PresentationSurfaceMode::ManagedDisplaySdr) {
+        if (declaredMode == WaylandPresentationMode::ManagedHdr10Pq ||
+            declaredMode == WaylandPresentationMode::ManagedDisplaySdr) {
             Q_ASSERT(targetDescription);
             managedSurface->apply(*targetDescription);
         } else {
-            Q_ASSERT(declaredMode == PresentationSurfaceMode::ManagedGamma22Sdr);
+            Q_ASSERT(declaredMode == WaylandPresentationMode::ManagedGamma22Sdr);
             Q_ASSERT(sdrDescription);
             managedSurface->apply(*sdrDescription);
         }
@@ -715,7 +713,7 @@ struct LinuxWaylandWindowContext::NativeState final {
     std::optional<SurfaceDescriptionKey> descriptionKey;
     std::optional<SurfaceDescriptionKey> pendingDescriptionKey;
     std::unique_ptr<ManagedSurface> managedSurface;
-    PresentationSurfaceMode declaredMode = PresentationSurfaceMode::ManagedGamma22Sdr;
+    WaylandPresentationMode declaredMode = WaylandPresentationMode::ManagedGamma22Sdr;
     bool displayProviderTaken = false;
     std::unique_ptr<WaylandWindowShadow> shadow;
 };
@@ -752,7 +750,9 @@ LinuxWaylandWindowContext::LinuxWaylandWindowContext(QGuiApplication& applicatio
     qCInfo(sunplayerLogPlatform).noquote()
         << "event=wayland.surface_contract"
         << "protocolVersion=" + QString::number(m_colorCapabilities.protocolVersion)
-        << "mode=" + presentationModeName(m_surfaceSelection.presentationContract().mode)
+        << "mode=" + presentationModeName(m_surfaceSelection.mode == WaylandSdrSurfaceMode::UnmanagedSrgb
+                                              ? WaylandPresentationMode::UnmanagedSrgb
+                                              : WaylandPresentationMode::ManagedGamma22Sdr)
         << "managedHdrDeclarationAvailable=" +
                QString(m_colorCapabilities.supportsManagedHdr10() ? QStringLiteral("true") : QStringLiteral("false"))
         << "windowChrome=" + QString(m_requiresClientSideDecorations ? QStringLiteral("application")
@@ -805,8 +805,6 @@ std::unique_ptr<DisplayStateProvider> LinuxWaylandWindowContext::takeDisplayStat
     return std::make_unique<NativeState::Provider>(*m_nativeState, parent);
 }
 
-WaylandSurfaceSelection const& LinuxWaylandWindowContext::surfaceSelection() const { return m_surfaceSelection; }
-
 bool LinuxWaylandWindowContext::requiresClientSideDecorations() const { return m_requiresClientSideDecorations; }
 
 QVulkanInstance& LinuxWaylandWindowContext::vulkanInstance() {
@@ -814,28 +812,40 @@ QVulkanInstance& LinuxWaylandWindowContext::vulkanInstance() {
     return m_vulkanInstance;
 }
 
-PresentationSurfaceMode LinuxWaylandWindowContext::desiredMode(std::uint64_t graphicsDeviceGeneration) {
-    return selectWaylandPresentationMode(m_surfaceSelection.mode, m_colorCapabilities, graphicsDeviceGeneration,
-                                         m_surfaceRejection);
+PresentationSurfaceContract LinuxWaylandWindowContext::desiredContract(DisplayState const& display,
+                                                                       std::uint64_t graphicsDeviceGeneration) {
+    m_selectedMode = selectWaylandPresentationMode(m_surfaceSelection.mode, m_colorCapabilities, display,
+                                                   graphicsDeviceGeneration, m_surfaceRejection);
+    switch (m_selectedMode) {
+    case WaylandPresentationMode::UnmanagedSrgb:
+        return {};
+    case WaylandPresentationMode::ManagedHdr10Pq:
+        return {.encoding = PresentationOutputEncoding::Bt2020Pq};
+    case WaylandPresentationMode::ManagedDisplaySdr:
+        return {.encoding = PresentationOutputEncoding::Gamma22, .sdrPrimaries = display.targetPrimaries};
+    case WaylandPresentationMode::ManagedGamma22Sdr:
+        return {.encoding = PresentationOutputEncoding::Gamma22};
+    }
+    Q_UNREACHABLE_RETURN(PresentationSurfaceContract{});
 }
 
 PresentationSurfaceController::Preparation
-LinuxWaylandWindowContext::prepareFrame(QWindow& window, PresentationSurfaceMode mode, float headroom,
+LinuxWaylandWindowContext::prepareFrame(QWindow& window, PresentationSurfaceContract const& contract, float headroom,
                                         ColorPrimaries const& videoPrimaries) {
     Q_ASSERT(m_window == &window);
     auto& state = *m_nativeState;
-    if (mode != PresentationSurfaceMode::ManagedHdr10Pq && mode != PresentationSurfaceMode::ManagedDisplaySdr) {
+    auto const mode = m_selectedMode;
+    if (mode != WaylandPresentationMode::ManagedHdr10Pq && mode != WaylandPresentationMode::ManagedDisplaySdr) {
         state.pendingTargetDescription.reset();
         state.pendingDescriptionKey.reset();
         return Preparation::Ready;
     }
-    ColorPrimaries const srgb{{0.64f, 0.33f}, {0.30f, 0.60f}, {0.15f, 0.06f}, {0.3127f, 0.3290f}};
-    bool const displaySdr = mode == PresentationSurfaceMode::ManagedDisplaySdr;
+    bool const displaySdr = mode == WaylandPresentationMode::ManagedDisplaySdr;
     Q_ASSERT(displaySdr ? m_colorCapabilities.supportsManagedDisplaySdr() : m_colorCapabilities.supportsManagedHdr10());
     SurfaceDescriptionKey const key{
         .mode = mode,
-        .volume = displaySdr ? std::optional{WaylandCompositionVolume{
-                                   .primaries = videoPrimaries.isValid() ? videoPrimaries : srgb, .maximumNits = 80}}
+        .volume = displaySdr
+                      ? std::optional{WaylandCompositionVolume{.primaries = contract.sdrPrimaries, .maximumNits = 80}}
                   : m_colorCapabilities.masteringDisplayPrimaries
                       ? std::optional{waylandCompositionVolume(headroom, videoPrimaries)}
                       : std::nullopt,
@@ -874,11 +884,15 @@ LinuxWaylandWindowContext::prepareFrame(QWindow& window, PresentationSurfaceMode
     return Preparation::Ready;
 }
 
-void LinuxWaylandWindowContext::applyMode(QWindow& window, PresentationSurfaceMode mode) {
+void LinuxWaylandWindowContext::applyPrepared(QWindow& window) {
     Q_ASSERT(m_window == &window);
+    auto const mode = m_selectedMode;
+    if (mode == WaylandPresentationMode::UnmanagedSrgb) {
+        return;
+    }
     Q_ASSERT(m_surfaceSelection.mode == WaylandSdrSurfaceMode::ManagedGamma22);
-    Q_ASSERT(mode == PresentationSurfaceMode::ManagedGamma22Sdr || mode == PresentationSurfaceMode::ManagedDisplaySdr ||
-             mode == PresentationSurfaceMode::ManagedHdr10Pq);
+    Q_ASSERT(mode == WaylandPresentationMode::ManagedGamma22Sdr || mode == WaylandPresentationMode::ManagedDisplaySdr ||
+             mode == WaylandPresentationMode::ManagedHdr10Pq);
     bool const modeChanged = m_nativeState->declaredMode != mode;
     m_nativeState->setDeclaredMode(mode);
     if (!modeChanged) {
@@ -889,13 +903,20 @@ void LinuxWaylandWindowContext::applyMode(QWindow& window, PresentationSurfaceMo
                                            << "mode=" + presentationModeName(mode) << "nativeSurface=preserved";
 }
 
-void LinuxWaylandWindowContext::rejectManagedTarget(std::uint64_t graphicsDeviceGeneration,
-                                                    PresentationSurfaceMode mode, char const* reason) {
+void LinuxWaylandWindowContext::rejectTarget(std::uint64_t graphicsDeviceGeneration,
+                                             PresentationSurfaceContract const& contract, char const* reason) {
     Q_ASSERT(graphicsDeviceGeneration != 0);
-    m_surfaceRejection = WaylandSurfaceRejection{
-        .graphicsDeviceGeneration = graphicsDeviceGeneration,
-        .mode = mode,
-    };
+    if (m_surfaceRejection.graphicsDeviceGeneration != graphicsDeviceGeneration) {
+        m_surfaceRejection = {.graphicsDeviceGeneration = graphicsDeviceGeneration};
+    }
+    if (contract.hdr10Required()) {
+        m_surfaceRejection.hdr10 = true;
+    } else {
+        Q_ASSERT(m_selectedMode == WaylandPresentationMode::ManagedDisplaySdr);
+        m_surfaceRejection.displaySdr = true;
+    }
+    m_nativeState->pendingTargetDescription.reset();
+    m_nativeState->pendingDescriptionKey.reset();
     qCWarning(sunplayerLogPlatform).noquote()
         << "event=wayland.managed_surface_rejected"
         << "deviceGeneration=" + QString::number(graphicsDeviceGeneration) << "reason=" + QString::fromUtf8(reason);

@@ -83,6 +83,7 @@ class PresentationOutputState final : public QObject {
     float effectiveTargetHeadroom() const;
     float sdrScale() const;
     PresentationTarget presentationTarget() const;
+    DisplayState const& displayState() const { return m_state; }
 
     Q_INVOKABLE void reprobePresentation();
     void setBackendState(PresentationBackendState const& state);

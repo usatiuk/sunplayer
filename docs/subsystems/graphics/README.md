@@ -31,7 +31,7 @@ cross-platform target:
 | --- | --- |
 | Operating system | Windows, Apple-Silicon macOS, and native-Wayland Linux |
 | Graphics domain | Factory-selected D3D11, Metal/MoltenVK, or Vulkan implementation owning QRhi, libplacebo state, execution synchronization, diagnostics, and device generation |
-| Presentation | Windows extended-linear sRGB/scRGB or SDR; macOS extended-linear sRGB EDR or ColorSync-managed sRGB SDR; Linux unmanaged piecewise-sRGB SDR, managed gamma-2.2 SDR, or managed 10-bit BT.2020/PQ HDR |
+| Presentation | Windows extended-linear sRGB/scRGB or SDR; macOS extended-linear sRGB EDR or assumed-sRGB SDR; Linux unmanaged piecewise-sRGB SDR, managed gamma-2.2 SDR, or managed 10-bit BT.2020/PQ HDR |
 | Qt Quick | Redirected into an application-owned full-window RGBA16F texture with matching depth/stencil |
 | Video | Shared QRhi diagnostic, analytic libplacebo, or FFmpeg-frame libplacebo producer → direct target → display-targeted RGBA16F surface |
 | Display telemetry | Shared Qt/QRhi state plus Windows Advanced Color, macOS AppKit relative EDR headroom, and Wayland version-2 preferred surface descriptions |
@@ -46,7 +46,9 @@ tracked in [PLAN.md](PLAN.md). Known limitations are also collected in
 Managed PQ requires explicit luminances and declares its primary encoding as
 BT.2020/PQ with `(0,10000,203)` luminances. Optional
 `set_mastering_display_primaries` support additionally describes the
-already-mapped composition's gamut and zero-to-ceil(203H) luminance range.
+already-mapped composition's gamut and zero-to-ceil(203 * working peak)
+luminance range. The working peak includes the mapper's black normalization
+(ADR 0039), rather than assuming it is exactly the nominal headroom H.
 Without mastering support, omit both mastering requests and retain the full
 primary volume; HDR remains supported.
 Include sRGB UI/subtitles and black letterboxing. P3 and other same-D65 gamut
@@ -56,7 +58,9 @@ One latest asynchronous description is prepared before visible frame submission
 and applied immediately before its matching buffer. No render-loop roundtrip or
 new swapchain is needed for volume changes. Rejection uses existing bounded SDR
 fallback. See [ADR 0027](../../decisions/0027-separate-rendering-intent-from-headroom.md)
-and its [optional-mastering amendment](../../decisions/0033-keep-wayland-hdr-mastering-optional.md).
+and its [optional-mastering amendment](../../decisions/0033-keep-wayland-hdr-mastering-optional.md),
+with current target selection and normalization in
+[ADR 0039](../../decisions/0039-unify-color-mapping-and-native-encoding.md).
 
 ## Responsibilities
 
@@ -324,8 +328,10 @@ The native surface and graphics device have different lifetimes:
 * A normal resize calls `createOrResize()` only when the surface pixel size
   changed, except when QRhi explicitly reports an out-of-date swapchain.
 * A platform contract change recreates the swapchain when its required format
-  changes. Managed Wayland output movement does not change the HDR10 content
-  contract; only genuine HDR presentation failure selects its SDR fallback.
+  changes. Managed Wayland selects SDR/WCG or HDR from the latest display
+  observations and supported native encodings. Primaries-only changes preserve
+  the swapchain; SDR/HDR format changes preserve the window, native surface
+  and graphics device.
   On macOS, an actual screen change also re-runs QRhi Metal
   `createOrResize()` on the existing compatible swapchain because Qt's Cocoa
   backing-property propagation can replace the `CAMetalLayer` color-space
@@ -432,7 +438,9 @@ otherwise it selects SDR. EDR is display-referred extended-linear sRGB:
 component value `1.0` is current SDR white, values above it request available
 EDR headroom, and ColorSync owns the final display-profile conversion. SunPlayer
 does not infer an absolute SDR-white luminance from the relative AppKit values
-and does not add a second display ICC transform.
+and does not add a second display ICC transform. The existing SDR path assumes
+sRGB; its native layer/profile declaration remains a
+[deferred limitation](../../DEFERRED.md).
 
 Linux leaves Qt's requested Wayland color space unset. With the complete
 version-2 parametric/perceptual/sRGB/gamma-2.2 capability set, SunPlayer owns one
@@ -443,8 +451,9 @@ failure or an X11 fallback.
 
 Explicit primaries and luminances additionally enable display-primary gamma-2.2
 SDR independently of HDR support. Preferred target gamut drives the existing
-libplacebo mapper with headroom one and zero content black. The final compositor
-converts signed linear BT.709/D65 into the declared display basis using
+libplacebo mapper with headroom one and the observed known/unknown target
+minimum. The producer normalizes mapped black before composition. The final
+compositor converts signed linear BT.709/D65 into the declared display basis using
 libplacebo relative colorimetry (CAT16), then clamps and gamma encodes. UI and
 subtitles share this final conversion. The declaration uses luminances
 `(0, 80, 80)`; physical black, white and calibration remain compositor-owned.
@@ -454,17 +463,19 @@ canonical managed-sRGB description for that graphics generation. Qt selects
 the SDR format; native baseline output is XRGB8888, not a claimed 10-bit mode.
 See [ADR 0032](../../decisions/0032-support-display-primary-wayland-sdr.md).
 
-Named BT.2020, PQ and explicit luminances additionally select a stable managed
-HDR content surface. Mastering support is optional: advertise the tighter
-composed target volume when available, otherwise use the full primary volume.
+Named BT.2020, PQ and explicit luminances additionally permit managed HDR
+when the latest preferred display description reports usable HDR headroom.
+Mastering support is optional: advertise the tighter composed target volume
+when available, otherwise use the full primary volume.
 PQ primary luminances are explicitly `(0,10000,203)` to include zero black.
 SunPlayer applies a ready BT.2020/PQ description to the existing `wl_surface`,
 requires QRhi's `HDR10` plus raw Vulkan RGB10A2/HDR10 and RGB10A2/pass-through
-pairs, and emits the matching final encoding. The surface stays HDR10 while
-moving across HDR and SDR outputs; preferred feedback updates target rendering
-and diagnostics but never changes the content encoding or recreates the
-window. The composition target volume changes with the rendered target; the
-compositor maps that description to each output.
+pairs, and emits the matching final encoding. Moving to an SDR output selects
+display-primary gamma-2.2 SDR when supported, otherwise the canonical managed
+sRGB description. Moving to HDR can select PQ again. The existing queued
+render-safe transition changes the declaration and buffer format while
+preserving the window, native surface and graphics device. The composition
+target volume follows the resolved rendering target.
 
 If HDR format validation, render-pass creation, swapchain creation, or later
 resize fails without device loss, the queued render-safe path changes pending
@@ -473,8 +484,9 @@ when supported, otherwise the canonical managed-sRGB SDR tuple.
 It prepares the SDR frame first and sends the description immediately before
 present, so the first SDR buffer commit applies matching pixels and description
 together without an intervening Qt event-loop turn.
-The rejection is bounded to the graphics-device generation; a new generation
-may retry HDR once, while output movement cannot. Exceptional Qt native-
+PQ and explicit-primary SDR rejections are tracked independently for the
+graphics-device generation. A new generation may retry each rejected path;
+output movement alone does not retry a rejected path. Exceptional Qt native-
 surface recreation reattaches the current declaration without changing the
 logical policy. Ordinary SDR swapchain failures retry eight times on the
 presentation timer. Present-incompatible domain recovery retains its attempt
@@ -541,8 +553,8 @@ On managed Wayland, preferred reference and target luminance are compositor-
 declared target values. Mutter currently publishes the PQ envelope maximum;
 another compositor may publish a more output-specific maximum. SunPlayer trusts
 the reported value without compositor-name policy. These target changes can
-rerender video but do not change the stable BT.2020/PQ surface encoding. Because
-this presentation contract is display-referred, its values do not authorize
+rerender video and can change the selected SDR/HDR encoding. Because this
+presentation contract is display-referred, its values do not authorize
 absolute physical HDR tone mapping.
 
 ### Rendered-video surface
@@ -572,31 +584,32 @@ recorded in
 
 Platform display adapters observe native facts such as HDR enablement,
 luminance capabilities, system SDR white, and a usable target gamut. Shared
-presentation policy turns those facts into one surface description. Every
-normal HDR target, plus relative SDR and HLG, expresses headroom in
-libplacebo's fixed 203-nit coordinate system. Decoded PQ and mapped Dolby use a
-nominal 100-nit target only in SDR compatibility mode, followed by a fixed `203 / 100`
-output-coordinate conversion. At HDR headroom there is no producer factor
-involving live reference white. The compositor does not know about
-libplacebo's coordinate system.
+presentation policy resolves one `VideoColorTarget`, reused by the rendered
+surface. Native encoding is separate from video mapping. Generic mapping uses
+BT.2446A at headroom H=1 and spline at H>1, retaining the supported source-authored
+ST 2094-40 override and HDR Lab's explicit Clip control.
+
+After mapping, the existing PRE_OUTPUT hook converts libplacebo's LINEAR output
+x into working coordinates `q = (203*x - B)/(C - B)`. B is inferred target
+black; C is the decoded PQ/Dolby reference preference R, supported Absolute PQ's
+physical platform white W, or 203 for relative SDR/HLG and HDR Lab. The producer
+validates B<C. Working black is zero and ordinary white is one; nominal peak
+P=C*H becomes `(P-B)/(C-B)`. The final compositor does not repeat this
+normalization.
+
+The target preserves whether minimum luminance is known. A positive physical
+minimum is converted by the same ratio as the target maximum. Numeric zero
+requests libplacebo's nominal LINEAR 1000:1 contrast for an unknown minimum;
+`PL_COLOR_HDR_BLACK` represents a known physical zero. This rule is shared by
+SDR and HDR targets.
 
 The analytic PQ diagnostic remains one fixed mastered signal. Analytic and
-decoded inputs now share the render context's target-coordinate rule; decoded
-playback additionally supplies its metadata-family and representation policy.
-The virtual destination is not assumed to be a universal HLG construction:
-libplacebo 7.360.1 uses the virtual destination maximum in HLG inference.
-Adaptive HLG explicitly extends that model to headroom one without a second
-transform. This relative playback model does not claim physical-reference
-HLG accuracy.
-
-The surface preserves whether the target minimum is known. The backend converts
-a positive physical minimum by the same ratio as the selected target maximum.
-Libplacebo treats
-numeric zero as unknown and otherwise infers a linear-target contrast ratio, so
-the adapter passes numeric zero for an unknown SDR-compatibility minimum and uses
-`PL_COLOR_HDR_BLACK` for a known physical zero. Unknown extended-linear HDR/EDR
-retains the sentinel conservatively to avoid inferring `targetPeak / 1000`
-through the linear target transfer.
+decoded inputs share the render context's coordinate rule; decoded playback
+additionally supplies its source metadata policy. HLG retains the library's
+virtual-target OOTF model, including at headroom one; physical-reference HLG
+accuracy remains a validation limit. The full mapping contract and acceptance
+limits are in [ADR 0039](../../decisions/0039-unify-color-mapping-and-native-encoding.md)
+and [the video-rendering subsystem](../video-rendering/README.md).
 
 The texture's BT.709 primaries define its extended-linear RGB coordinate basis,
 not necessarily the usable target gamut. Windows Advanced Color supplies
@@ -617,7 +630,10 @@ setting, source transfer function, or HDR metadata. It places the video layer,
 blends the UI in linear SDR-white-relative space, applies `sdrScale` once, and
 encodes extended-linear or SDR output. For managed Wayland HDR10 it converts
 the complete linear-sRGB composition to linear BT.2020 and applies ST 2084
-once; this is fixed presentation encoding rather than tone mapping.
+once; this is fixed presentation encoding rather than tone mapping. Primary
+conversion uses libplacebo matrices. Transfer functions are generated from
+libplacebo at build time and baked into the existing QRhi pass; there is no
+additional render pass or runtime shader compiler.
 
 An invisible or empty active viewport disables video production and
 composition for that frame. The compositor retains a valid internal texture

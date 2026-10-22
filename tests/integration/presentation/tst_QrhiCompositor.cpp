@@ -73,15 +73,10 @@ ColorPrimaries displayP3Primaries() {
 RenderedVideoSurfaceState surfaceState() {
     RenderedVideoSurfaceState state;
     state.description.pixelSize = videoSize;
-    state.description.pixelFormat = RenderedVideoPixelFormat::Rgba16Float;
-    state.description.colorSpace = RenderedVideoColorSpace::LinearSrgb;
-    state.description.luminance = RenderedVideoLuminance::DisplayTargetedSdrWhiteRelative;
-    state.description.alphaMode = RenderedVideoAlphaMode::Opaque;
-    state.description.referenceWhiteNits = 80.0f;
-    state.description.targetMinimumLuminanceKnown = true;
-    state.description.targetMinimumLuminanceNits = 0.005f;
-    state.description.targetPeakHeadroom = sourcePeak;
-    state.description.renderingMode = VideoRenderingMode::AdaptiveHdr;
+    state.description.color.referenceWhiteNits = 80.0f;
+    state.description.color.targetMinimumLuminanceKnown = true;
+    state.description.color.targetMinimumLuminanceNits = 0.005f;
+    state.description.color.targetPeakHeadroom = sourcePeak;
     state.graphicsDeviceGeneration = 1;
     state.contentRevision = 1;
     return state;
@@ -426,6 +421,7 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
     QCOMPARE(producer->prepareForComposition(*commandBuffer), VideoOperationResult::Ready);
     HdrCompositorParameters pqParameters = compositorParameters;
     pqParameters.outputEncoding = 3.0f;
+    pqParameters.setOutputPrimaries(bt2020ColorPrimaries);
     linearOutputCompositor.render(*commandBuffer, *linearOutputTarget, outputSize, pqParameters);
 
     bool pqReadbackCompleted = false;
@@ -622,6 +618,7 @@ void QrhiCompositorTest::realD3d11ProducerAndCompositionReadback() {
             auto parameters = compositorParameters;
             parameters.subtitleBrightness = brightness;
             parameters.outputEncoding = encoding;
+            parameters.setOutputPrimaries(encoding == 3.0f ? bt2020ColorPrimaries : srgbColorPrimaries);
             parameters.sdrScale = encoding == 2.0f ? 1.5f : 1.0f;
             linearOutputCompositor.render(*commandBuffer, *linearOutputTarget, outputSize, parameters);
             QRhiReadbackResult captured;
@@ -849,8 +846,8 @@ void QrhiCompositorTest::libplaceboD3d11SurfaceAndCompositionReadback() {
         PL_COLOR_SDR_WHITE,
     };
     for (float const referenceWhite : referenceWhites) {
-        sdrState.description.referenceWhiteNits = referenceWhite;
-        sdrState.description.targetPeakHeadroom = 4.0f;
+        sdrState.description.color.referenceWhiteNits = referenceWhite;
+        sdrState.description.color.targetPeakHeadroom = 4.0f;
 
         QRhiReadbackResult sdrReadback;
         QString const captureError = captureProducerSurface(sdrState, sdrReadback);
@@ -908,15 +905,15 @@ void QrhiCompositorTest::libplaceboD3d11SurfaceAndCompositionReadback() {
 
     // With a 7x pattern peak, the first nonzero step is exactly 1.0 in
     // libplacebo's PQ normalization: one 203-nit HDR reference-white patch.
-    // Leave target minimum unknown here to isolate the white anchor from
-    // black-point adaptation, which the surrounding captures cover.
+    // Use known zero to isolate the white anchor from black adaptation.
+    // Unknown/positive minima have separate decoded-frame oracle coverage.
     source.setSourcePeakHeadroom(exactReferenceWhitePatternPeak);
     source.setToneMappingEnabled(true);
     RenderedVideoSurfaceState referenceWhiteState = sdrState;
-    referenceWhiteState.description.referenceWhiteNits = 100.0f;
-    referenceWhiteState.description.targetMinimumLuminanceKnown = false;
-    referenceWhiteState.description.targetMinimumLuminanceNits = 0.0f;
-    referenceWhiteState.description.targetPeakHeadroom = 10.0f;
+    referenceWhiteState.description.color.referenceWhiteNits = 100.0f;
+    referenceWhiteState.description.color.targetMinimumLuminanceKnown = true;
+    referenceWhiteState.description.color.targetMinimumLuminanceNits = 0.0f;
+    referenceWhiteState.description.color.targetPeakHeadroom = 10.0f;
     referenceWhiteState.contentRevision = source.contentRevision();
     QRhiReadbackResult referenceWhiteReadback;
     QString const referenceWhiteCaptureError = captureProducerSurface(referenceWhiteState, referenceWhiteReadback);
@@ -934,8 +931,9 @@ void QrhiCompositorTest::libplaceboD3d11SurfaceAndCompositionReadback() {
     // reference white. A 600-nit display has 6x headroom at 100-nit white, so
     // the source fits without highlight compression.
     RenderedVideoSurfaceState hdr100State = sdrState;
-    hdr100State.description.referenceWhiteNits = 100.0f;
-    hdr100State.description.targetPeakHeadroom = physicalTargetPeakNits / hdr100State.description.referenceWhiteNits;
+    hdr100State.description.color.referenceWhiteNits = 100.0f;
+    hdr100State.description.color.targetPeakHeadroom =
+        physicalTargetPeakNits / hdr100State.description.color.referenceWhiteNits;
     hdr100State.contentRevision = source.contentRevision();
     QRhiReadbackResult hdr100Readback;
     QString const hdr100CaptureError = captureProducerSurface(hdr100State, hdr100Readback);
@@ -951,8 +949,9 @@ void QrhiCompositorTest::libplaceboD3d11SurfaceAndCompositionReadback() {
     // surface remains reference-white-relative, so its samples stay stable;
     // platform presentation changes their physical luminance later.
     RenderedVideoSurfaceState hdr80State = hdr100State;
-    hdr80State.description.referenceWhiteNits = 80.0f;
-    hdr80State.description.targetPeakHeadroom = physicalTargetPeakNits / hdr80State.description.referenceWhiteNits;
+    hdr80State.description.color.referenceWhiteNits = 80.0f;
+    hdr80State.description.color.targetPeakHeadroom =
+        physicalTargetPeakNits / hdr80State.description.color.referenceWhiteNits;
     QRhiReadbackResult hdr80Readback;
     QString const hdr80CaptureError = captureProducerSurface(hdr80State, hdr80Readback);
     QVERIFY2(hdr80CaptureError.isEmpty(), qPrintable(hdr80CaptureError));
@@ -966,8 +965,9 @@ void QrhiCompositorTest::libplaceboD3d11SurfaceAndCompositionReadback() {
     // to less than 3x headroom. The 1000-nit source no longer fits, so
     // libplacebo must compress highlights into the declared target.
     RenderedVideoSurfaceState hdrState = hdr80State;
-    hdrState.description.referenceWhiteNits = PL_COLOR_SDR_WHITE;
-    hdrState.description.targetPeakHeadroom = physicalTargetPeakNits / hdrState.description.referenceWhiteNits;
+    hdrState.description.color.referenceWhiteNits = PL_COLOR_SDR_WHITE;
+    hdrState.description.color.targetPeakHeadroom =
+        physicalTargetPeakNits / hdrState.description.color.referenceWhiteNits;
     QCOMPARE(producer->ensureSurface(hdrState), VideoOperationResult::Ready);
     QVERIFY(producer->needsRender(hdrState));
 
@@ -989,7 +989,7 @@ void QrhiCompositorTest::libplaceboD3d11SurfaceAndCompositionReadback() {
     };
     parameters.videoOrigin = {0.0f, 0.0f};
     parameters.videoSize = parameters.viewportSize;
-    parameters.sdrScale = hdrState.description.referenceWhiteNits / 80.0f;
+    parameters.sdrScale = hdrState.description.color.referenceWhiteNits / 80.0f;
     parameters.ndcYUp = rhi.isYUpInNDC() ? 1.0f : 0.0f;
     parameters.outputEncoding = 2.0f;
     compositor.render(*commandBuffer, *outputTarget, videoSize, parameters);
@@ -1026,7 +1026,7 @@ void QrhiCompositorTest::libplaceboD3d11SurfaceAndCompositionReadback() {
     QVERIFY(std::isfinite(hdrRight.r));
     QVERIFY(hdrRight.r > hdrLeft.r);
     QVERIFY(hdrRight.r > 1.0f);
-    QVERIFY(hdrRight.r <= hdrState.description.targetPeakHeadroom + 0.03f);
+    QVERIFY(hdrRight.r <= hdrState.description.color.targetPeakHeadroom + 0.03f);
     QVERIFY(hdrRight.r < hdr100Right.r - 0.05f);
     compareNear(hdrRight.r, hdrRight.g, 0.02f);
     compareNear(hdrRight.g, hdrRight.b, 0.02f);
@@ -1142,10 +1142,10 @@ void QrhiCompositorTest::libplaceboTargetGamutBoundary() {
 
     RenderedVideoSurfaceDescription description = surfaceState().description;
     description.pixelSize = {2, 1};
-    description.referenceWhiteNits = PL_COLOR_SDR_WHITE;
-    description.targetMinimumLuminanceKnown = false;
-    description.targetMinimumLuminanceNits = 0.0f;
-    description.targetPeakHeadroom = 1.0f;
+    description.color.referenceWhiteNits = PL_COLOR_SDR_WHITE;
+    description.color.targetMinimumLuminanceKnown = false;
+    description.color.targetMinimumLuminanceNits = 0.0f;
+    description.color.targetPeakHeadroom = 1.0f;
 
     pl_fmt const sourceFormat = pl_find_named_fmt(graphics.gpu, "rgba32f");
     QVERIFY(sourceFormat);
@@ -1160,8 +1160,7 @@ void QrhiCompositorTest::libplaceboTargetGamutBoundary() {
     auto const releaseSource = qScopeGuard([&] { pl_tex_destroy(graphics.gpu, &sourceTexture); });
 
     std::array<float, 8> sourcePixels{
-        1.0f, 0.0f, 0.0f, 1.0f,
-        1.0f, 1.0f, 1.0f, 1.0f,
+        1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
     };
     pl_frame source{};
     source.num_planes = 1;
@@ -1187,8 +1186,8 @@ void QrhiCompositorTest::libplaceboTargetGamutBoundary() {
         FloatPixel white;
     };
     auto const capture = [&](std::optional<ColorPrimaries> targetPrimaries, Capture& result) -> QString {
-        description.targetPrimariesKnown = targetPrimaries.has_value();
-        description.targetPrimaries = targetPrimaries.value_or(ColorPrimaries{});
+        description.color.targetPrimariesKnown = targetPrimaries.has_value();
+        description.color.targetPrimaries = targetPrimaries.value_or(ColorPrimaries{});
         VideoTargetUpdate const targetUpdate = target->ensureTarget(description);
         if (targetUpdate == VideoTargetUpdate::Unavailable || targetUpdate == VideoTargetUpdate::DeviceLost) {
             return QStringLiteral("Could not provision the libplacebo gamut target");
@@ -1209,9 +1208,9 @@ void QrhiCompositorTest::libplaceboTargetGamutBoundary() {
         upload.row_pitch = 2 * 4 * sizeof(float);
         upload.ptr = sourcePixels.data();
         QString renderError;
-        bool const rendered = pl_tex_upload(graphics.gpu, &upload) &&
-                              renderContext.render(source, target->libplaceboRenderTarget(), description, false,
-                                                   &renderError);
+        bool const rendered =
+            pl_tex_upload(graphics.gpu, &upload) &&
+            renderContext.render(source, target->libplaceboRenderTarget(), description, false, &renderError);
         VideoOperationResult const endResult = target->endProducerAccess(*commandBuffer);
         if (!rendered || endResult != VideoOperationResult::Ready ||
             target->prepareForComposition(*commandBuffer) != VideoOperationResult::Ready) {
@@ -1294,10 +1293,10 @@ void QrhiCompositorTest::libplaceboAnimatedDiagnosticThroughput() {
 
     RenderedVideoSurfaceState state = surfaceState();
     state.description.pixelSize = targetSize;
-    state.description.referenceWhiteNits = 203.0f;
-    state.description.targetMinimumLuminanceKnown = true;
-    state.description.targetMinimumLuminanceNits = 0.005f;
-    state.description.targetPeakHeadroom = 4.0f;
+    state.description.color.referenceWhiteNits = 203.0f;
+    state.description.color.targetMinimumLuminanceKnown = true;
+    state.description.color.targetMinimumLuminanceNits = 0.005f;
+    state.description.color.targetPeakHeadroom = 4.0f;
     state.graphicsDeviceGeneration = graphicsDevice->generation();
     state.contentRevision = source.contentRevision();
 

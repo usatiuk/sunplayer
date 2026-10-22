@@ -13,14 +13,10 @@ namespace {
 RenderedVideoSurfaceDescription canonicalDescription() {
     RenderedVideoSurfaceDescription description;
     description.pixelSize = {1920, 1080};
-    description.pixelFormat = RenderedVideoPixelFormat::Rgba16Float;
-    description.colorSpace = RenderedVideoColorSpace::LinearSrgb;
-    description.luminance = RenderedVideoLuminance::DisplayTargetedSdrWhiteRelative;
-    description.alphaMode = RenderedVideoAlphaMode::Opaque;
-    description.referenceWhiteNits = 203.0f;
-    description.targetMinimumLuminanceKnown = true;
-    description.targetMinimumLuminanceNits = 0.005f;
-    description.targetPeakHeadroom = 5.0f;
+    description.color.referenceWhiteNits = 203.0f;
+    description.color.targetMinimumLuminanceKnown = true;
+    description.color.targetMinimumLuminanceNits = 0.005f;
+    description.color.targetPeakHeadroom = 5.0f;
     return description;
 }
 
@@ -57,7 +53,7 @@ class RenderedVideoSurfaceTest final : public QObject {
     void descriptionRequiresCompleteSemantics();
     void descriptionRequiresFiniteLuminance();
     void descriptionRequiresValidTargetPrimaries();
-    void absolutePqRequiresHdrAndInvalidatesReuse();
+    void absolutePqCapabilityInvalidatesReuse();
     void stateRequiresNonzeroIdentities();
     void equalSemanticStateIsReusableAcrossNativeChanges();
     void lifecycleAndContentChangesInvalidate();
@@ -72,15 +68,13 @@ void RenderedVideoSurfaceTest::canonicalDescriptionIsValid() {
     QVERIFY(canonicalState().isValid());
 }
 
-void RenderedVideoSurfaceTest::absolutePqRequiresHdrAndInvalidatesReuse() {
+void RenderedVideoSurfaceTest::absolutePqCapabilityInvalidatesReuse() {
     auto completed = canonicalState();
-    QVERIFY(!completed.description.absolutePqAvailable);
-    completed.description.absolutePqAvailable = true;
-    QVERIFY(!completed.isValid());
-    completed.description.renderingMode = VideoRenderingMode::AdaptiveHdr;
+    QVERIFY(!completed.description.color.absolutePqAvailable);
+    completed.description.color.absolutePqAvailable = true;
     QVERIFY(completed.isValid());
     auto requested = completed;
-    requested.description.absolutePqAvailable = false;
+    requested.description.color.absolutePqAvailable = false;
     QVERIFY(requested.isValid());
     QVERIFY(!completed.isReusableFor(requested));
     QVERIFY(!requested.isReusableFor(completed));
@@ -97,26 +91,6 @@ void RenderedVideoSurfaceTest::descriptionRequiresCompleteSemantics() {
         description.pixelSize = {-1, 1080};
         QVERIFY(!description.isValid());
     }
-    {
-        auto description = canonicalDescription();
-        description.pixelFormat = RenderedVideoPixelFormat::Unknown;
-        QVERIFY(!description.isValid());
-    }
-    {
-        auto description = canonicalDescription();
-        description.colorSpace = RenderedVideoColorSpace::Unknown;
-        QVERIFY(!description.isValid());
-    }
-    {
-        auto description = canonicalDescription();
-        description.luminance = RenderedVideoLuminance::Unknown;
-        QVERIFY(!description.isValid());
-    }
-    {
-        auto description = canonicalDescription();
-        description.alphaMode = RenderedVideoAlphaMode::Unknown;
-        QVERIFY(!description.isValid());
-    }
 }
 
 void RenderedVideoSurfaceTest::descriptionRequiresFiniteLuminance() {
@@ -127,7 +101,7 @@ void RenderedVideoSurfaceTest::descriptionRequiresFiniteLuminance() {
              std::numeric_limits<float>::quiet_NaN(),
          }) {
         auto description = canonicalDescription();
-        description.referenceWhiteNits = invalid;
+        description.color.referenceWhiteNits = invalid;
         QVERIFY(!description.isValid());
     }
 
@@ -137,28 +111,29 @@ void RenderedVideoSurfaceTest::descriptionRequiresFiniteLuminance() {
              std::numeric_limits<float>::quiet_NaN(),
          }) {
         auto description = canonicalDescription();
-        description.targetMinimumLuminanceNits = invalid;
+        description.color.targetMinimumLuminanceNits = invalid;
         QVERIFY(!description.isValid());
     }
     {
         auto description = canonicalDescription();
-        description.targetMinimumLuminanceKnown = false;
-        description.targetMinimumLuminanceNits = 0.0f;
+        description.color.targetMinimumLuminanceKnown = false;
+        description.color.targetMinimumLuminanceNits = 0.0f;
         QVERIFY(description.isValid());
     }
     {
         auto description = canonicalDescription();
-        description.targetMinimumLuminanceNits = 0.0f;
+        description.color.targetMinimumLuminanceNits = 0.0f;
         QVERIFY(description.isValid());
     }
     {
         auto description = canonicalDescription();
-        description.targetMinimumLuminanceKnown = false;
+        description.color.targetMinimumLuminanceKnown = false;
         QVERIFY(!description.isValid());
     }
     {
         auto description = canonicalDescription();
-        description.targetMinimumLuminanceNits = description.referenceWhiteNits * description.targetPeakHeadroom + 1.0f;
+        description.color.targetMinimumLuminanceNits =
+            description.color.referenceWhiteNits * description.color.targetPeakHeadroom + 1.0f;
         QVERIFY(!description.isValid());
     }
 
@@ -170,7 +145,7 @@ void RenderedVideoSurfaceTest::descriptionRequiresFiniteLuminance() {
              std::numeric_limits<float>::quiet_NaN(),
          }) {
         auto description = canonicalDescription();
-        description.targetPeakHeadroom = invalid;
+        description.color.targetPeakHeadroom = invalid;
         QVERIFY(!description.isValid());
     }
 }
@@ -178,25 +153,25 @@ void RenderedVideoSurfaceTest::descriptionRequiresFiniteLuminance() {
 void RenderedVideoSurfaceTest::descriptionRequiresValidTargetPrimaries() {
     {
         auto description = canonicalDescription();
-        description.targetPrimariesKnown = true;
+        description.color.targetPrimariesKnown = true;
         QVERIFY(!description.isValid());
     }
     {
         auto description = canonicalDescription();
-        description.targetPrimariesKnown = true;
-        description.targetPrimaries = displayP3Primaries();
+        description.color.targetPrimariesKnown = true;
+        description.color.targetPrimaries = displayP3Primaries();
         QVERIFY(description.isValid());
     }
     {
         auto description = canonicalDescription();
-        description.targetPrimaries = displayP3Primaries();
+        description.color.targetPrimaries = displayP3Primaries();
         QVERIFY(!description.isValid());
     }
     {
         auto description = canonicalDescription();
-        description.targetPrimariesKnown = true;
-        description.targetPrimaries = displayP3Primaries();
-        description.targetPrimaries.white = {0.9f, 0.05f};
+        description.color.targetPrimariesKnown = true;
+        description.color.targetPrimaries = displayP3Primaries();
+        description.color.targetPrimaries.white = {0.9f, 0.05f};
         QVERIFY(!description.isValid());
     }
 }
@@ -248,37 +223,32 @@ void RenderedVideoSurfaceTest::semanticChangesInvalidate() {
     }
     {
         auto requested = canonicalState();
-        requested.description.referenceWhiteNits = 100.0f;
+        requested.description.color.referenceWhiteNits = 100.0f;
         QVERIFY(!completed.isReusableFor(requested));
     }
     {
         auto completedAtKnownZero = canonicalState();
-        completedAtKnownZero.description.targetMinimumLuminanceNits = 0.0f;
+        completedAtKnownZero.description.color.targetMinimumLuminanceNits = 0.0f;
         auto requested = completedAtKnownZero;
-        requested.description.targetMinimumLuminanceKnown = false;
+        requested.description.color.targetMinimumLuminanceKnown = false;
         QVERIFY(completedAtKnownZero.isValid());
         QVERIFY(requested.isValid());
         QVERIFY(!completedAtKnownZero.isReusableFor(requested));
     }
     {
         auto requested = canonicalState();
-        requested.description.targetMinimumLuminanceNits = 0.01f;
+        requested.description.color.targetMinimumLuminanceNits = 0.01f;
         QVERIFY(!completed.isReusableFor(requested));
     }
     {
         auto requested = canonicalState();
-        requested.description.targetPeakHeadroom = 3.0f;
+        requested.description.color.targetPeakHeadroom = 3.0f;
         QVERIFY(!completed.isReusableFor(requested));
     }
     {
         auto requested = canonicalState();
-        requested.description.renderingMode = VideoRenderingMode::AdaptiveHdr;
-        QVERIFY(!completed.isReusableFor(requested));
-    }
-    {
-        auto requested = canonicalState();
-        requested.description.targetPrimariesKnown = true;
-        requested.description.targetPrimaries = displayP3Primaries();
+        requested.description.color.targetPrimariesKnown = true;
+        requested.description.color.targetPrimaries = displayP3Primaries();
         QVERIFY(requested.isValid());
         QVERIFY(!completed.isReusableFor(requested));
     }

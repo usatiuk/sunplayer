@@ -90,7 +90,7 @@ VideoOperationResult DiagnosticVideoProducer::render(QRhiCommandBuffer& commandB
 
     DiagnosticVideoParameters const parameters{
         .sourcePeak = m_source.sourcePeakHeadroom(),
-        .targetPeak = requestedState.description.targetPeakHeadroom,
+        .targetPeak = requestedState.description.color.targetPeakHeadroom,
         .phase = m_source.phase(),
         .toneMappingEnabled = m_source.toneMappingEnabled() ? 1.0f : 0.0f,
         .canonicalYFlip = m_rhi.isYUpInNDC() != m_rhi.isYUpInFramebuffer() ? 1.0f : 0.0f,

@@ -19,6 +19,13 @@ This document defines SunPlayer's testing direction. It is an architectural
 guide, not a requirement to build every layer before the corresponding player
 feature exists.
 
+The October 22 color-pipeline refactor has current acceptance work tracked in
+[its delivery plan](plans/video-rendering/2026-10-21-color-pipeline-simplification.md)
+and the [render-output section](#render-output-tests) below. Earlier platform
+run counts and captures in this document remain historical checkpoints.
+They do not establish execution of this change on Windows/macOS or acceptance
+of the new native Wayland SDR/PQ transitions.
+
 SunPlayer integrates timing, concurrency, color metadata, native GPU resources,
 operating-system display state, and physical output. A large suite of tests
 against mocked collaborators could be fast while proving little about those
@@ -580,7 +587,7 @@ Sources:
 
 ## Render-output tests
 
-The planned renderer provides two useful capture boundaries:
+The renderer provides two useful capture boundaries:
 
 ```text
 FFmpeg → libplacebo → [display-targeted video capture]
@@ -598,7 +605,7 @@ adds geometry, letterboxing, subtitle/UI placement and luminance, alpha
 composition, and application-owned output conversion.
 
 Reference-white regressions must hold target headroom, primaries, source frame,
-and target minimum fixed while varying only reference white. The same decoded
+and normalized target black fixed while varying only reference white. The same decoded
 production surfaces must cross the final compositor: Windows expects the
 `W / 80` ratio, while macOS and managed Wayland use final scale one. Changing
 headroom at the same time is a compression test, not a valid white-scaling
@@ -608,14 +615,16 @@ Source HDR reference white is a separate preference from platform white.
 Retained-frame GPU tests vary 203/150/100 nits with fixed platform white and
 headroom, check a round trip to 203, preserved import count, bounded highlights,
 and the uncompressed PQ ratio. SDR and HLG captures remain byte-identical.
-Adaptive headroom-one sweeps and final composition exercise both 100 and 203.
+Headroom-one sweeps and final composition exercise both 100 and 203.
 Persistence and Settings tests cover bounds, invalid values, presets, and
 slider/numeric-field synchronization without refresh-triggered edits.
 
 Absolute PQ GPU coverage keeps physical peak fixed while changing platform
 white and compares the real final compositor output for PQ, HDR10+, and Dolby
-Vision. An uncompressed 50-nit PQ patch independently checks the scRGB value
-50/80. Source-reference changes are ignored only in effective Absolute mode;
+Vision. An uncompressed 50-nit PQ patch checks the scRGB value near 50/80 with
+an explicit minimum and tolerance; positive black must use the affine
+`(L-B)/(W-B) * W/80` oracle rather than exact scale-only equality.
+Source-reference changes are ignored only in effective Absolute mode;
 unavailable output returns to adaptive pixels. Retained-frame tests toggle
 preference and capability without reimporting the frame. HLG and SDR input
 remain unchanged. Unit tests cover known SDR overriding a stale HDR backend,
@@ -628,6 +637,46 @@ zero. Coverage includes pinned libplacebo nominal-luminance inference, numeric
 BT.2446A samples below 1 nit, and an in-memory high-bit-depth PQ ramp through
 the production decoded producer with diagnostics asserting the selected
 mapper. Bright-patch monotonicity alone is not a near-black oracle.
+
+The shared-color refactor reuses these producer and final-compositor boundaries.
+Its acceptance matrix includes H=1, the next representable H>1 and meaningful
+HDR headroom such as H=4; SDR, PQ/Dolby, HLG, HDR10+ and libplacebo HDR Lab;
+known-zero, positive and unknown minimum; R=100/203 and supported Absolute PQ;
+signed WCG; and UI/subtitle blending. At H=1 compare nonnegative in-gamut SDR
+against libplacebo's complete gamma/sRGB output. Above one, use
+`(L-B)/(C-B)` and peak `(C*H-B)/(C-B)`; do not assert that affine-normalized peak
+is exactly H. The target's unknown-black inference is consistent across source,
+operator and transport. Authored ST 2094-40 and explicit Lab Clip remain separate
+policy cases. Check all generated final transfers and native white scaling
+without repeating physical-black normalization after blending.
+
+The rebuilt Linux Debug suite passes 41/41 CTests using real Intel
+`/dev/dri/renderD128` in private Weston GL, isolated XDG directories under `/tmp`
+and the host Pulse socket. The Release player build and QML lint pass. Nine
+`finalColorEncoding` rows cover every implemented encoding, signed/bright wide
+colors, native white scaling and mixed layers.
+`unknownSdrBlackPreservesPqNearBlack` separately compares near-black samples
+against the complete libplacebo SDR output and a positive-minimum Absolute PQ
+library oracle.
+
+The private Weston lacks managed color, so its native-controller case skips
+there. A separate required host run of `nativeColorDeclarationTransitions` with
+`SUNPLAYER_REQUIRE_MANAGED_WAYLAND=1 WAYLAND_DEBUG=client` passes 3/3 results
+(one scenario plus initialization/cleanup) against color-management-v1 v2.
+Its hidden `QWindow` is never shown; display states, rejection requests and
+generation numbers are supplied by the test. It covers pending PQ superseded
+by WCG then PQ, primary changes, same-contract explicit-SDR rejection fallback,
+independent PQ/WCG rejection and retry after changing the generation input. The protocol
+trace confirms readiness before `set_image_description`.
+
+That scenario submits no swapchain buffers and does not exercise the engine's
+format recreation, actual device recreation or physical display movement.
+Those acceptance checks remain:
+paused SDR→PQ→SDR presentation, primary-only changes without swapchain recreation,
+surface recreation, and matching declaration/buffer commits with retained
+window/device/media lifetime. Execution of this change on Windows/macOS and
+physical-output verification also remain pending. Detailed evidence is in the
+[delivery plan](plans/video-rendering/2026-10-21-color-pipeline-simplification.md).
 
 QRhi supports asynchronous raw texture readback through
 `QRhiResourceUpdateBatch::readBackTexture()`. Capture textures must be created
@@ -833,13 +882,15 @@ These are review heuristics, not automatic rejection rules. A narrow fake or
 smoke assertion can still be useful when its claim and limitations are stated
 accurately.
 
-## Continuous HDR target adaptation
+## Headroom-selected mapping and retained-frame adaptation
 
-The decoded HDR fixture acceptance checks adaptive headrooms 1, 1.0001, 1.001,
-1.01, and 1.1 with known-zero/unknown black through the real producer and final
-compositor. Its timeout is 120 seconds to cover the extra GPU captures. Explicit
-SDR remains separate. Policy tests compare generic curves with identical inputs;
-Wayland tests cover capability gating and whole-composition encoded volume.
+The decoded HDR fixtures exercise headroom changes through the real producer
+and final compositor with known-zero/unknown black. H=1 selects BT.2446A and
+H>1 selects spline regardless of surface encoding; pixel continuity across
+that intentional operator change is not required. Compare curves with matched
+metadata and target inputs, and include meaningful HDR headroom alongside
+near-one cases. Wayland tests cover capability gating and whole-composition
+encoded volume, including the affine working peak.
 These checks do not measure native display luminance or prove compositor
 pass-through; managed compositor transitions remain native acceptance work.
 
@@ -870,15 +921,17 @@ colored subtitles retain independent opacity and layer ordering.
 
 ### Optional Wayland HDR mastering regression
 
-Both mastering-present and mastering-absent capabilities select HDR with PQ,
-BT.2020 and explicit luminances; missing required encoding capabilities still
-select SDR. Bounded HDR → WCG SDR → managed-sRGB rejection remains covered.
-The native regression run passes `presentation-target`,
+Both mastering-present and mastering-absent capabilities select HDR on a current
+HDR display with PQ, BT.2020 and explicit luminances; SDR display state or missing
+required encoding capabilities selects SDR. Independent PQ/display-primary
+rejection is bounded to the graphics-device generation.
+The prior optional-mastering native regression run passed `presentation-target`,
 `wayland-color-management` and `ffmpeg-first-frame` with VAAPI required.
 The accepted native PQ description uses `(0,10000,203)`, omits unsupported
 mastering requests and precedes XR30 buffer commits. The user confirms HDR
-appearance. The run has no automated playback-smoke completion marker; this
-is transport/decode acceptance, not complete smoke or physical calibration.
+appearance at that checkpoint. The run has no automated playback-smoke completion marker; this
+is transport/decode acceptance, not complete smoke, physical calibration or
+validation of the later SDR/PQ display transitions.
 See [the delivery plan](plans/graphics/2026-10-17-wayland-hdr-optional-mastering.md).
 
 

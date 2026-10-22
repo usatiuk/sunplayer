@@ -26,10 +26,6 @@ bool finiteInRange(double value, double minimum, double maximum) {
 
 bool validMaximum(float value) { return finiteInRange(value, std::numeric_limits<float>::min(), maximumPqNits); }
 
-bool sdrLikeTarget(RenderedVideoSurfaceDescription const& description) {
-    return description.renderingMode == VideoRenderingMode::SdrCompatibility;
-}
-
 bool validMappedOotf(pl_hdr_bezier const& ootf, std::uint8_t maximumAnchors) {
     if (!validMaximum(ootf.target_luma) || !finiteInRange(ootf.knee_x, 0.0, 1.0) ||
         !finiteInRange(ootf.knee_y, 0.0, 1.0) || ootf.num_anchors == 0 || ootf.num_anchors > maximumAnchors) {
@@ -192,7 +188,7 @@ LibplaceboColorPolicyDecision genericDecision(LibplaceboToneMappingFunction tone
                                               QString qualification = {}) {
     return {
         .toneMapping = toneMapping,
-        .metadata = toneMapping == LibplaceboToneMappingFunction::Clip ? PL_HDR_METADATA_NONE : PL_HDR_METADATA_ANY,
+        .metadata = PL_HDR_METADATA_ANY,
         .provenance = provenance,
         .qualification = std::move(qualification),
     };
@@ -280,17 +276,13 @@ LibplaceboColorPolicy::resolve(DecodedVideoFrame const& frame, pl_frame const& m
     Q_ASSERT(targetDescription.isValid());
     AVFrame const& source = frame.ffmpegFrame();
     bool const mappedDolbyVision = mappedFrame.repr.sys == PL_COLOR_SYSTEM_DOLBYVISION && mappedFrame.repr.dovi;
+    LibplaceboToneMappingFunction const toneMapping = libplaceboToneMapping(targetDescription.color.targetPeakHeadroom);
     if (frame.dynamicRange() == VideoDynamicRange::Sdr) {
-        return genericDecision(LibplaceboToneMappingFunction::Clip, LibplaceboSourceMetadataProvenance::None);
+        return genericDecision(toneMapping, LibplaceboSourceMetadataProvenance::None);
     }
     if (!mappedDolbyVision && source.color_trc != AVCOL_TRC_SMPTE2084) {
-        return genericDecision(LibplaceboToneMappingFunction::Spline,
-                               LibplaceboSourceMetadataProvenance::ExistingSelection);
+        return genericDecision(toneMapping, LibplaceboSourceMetadataProvenance::ExistingSelection);
     }
-
-    bool const sdrTarget = sdrLikeTarget(targetDescription);
-    LibplaceboToneMappingFunction const toneMapping =
-        sdrTarget ? LibplaceboToneMappingFunction::Bt2446a : LibplaceboToneMappingFunction::Spline;
     Hdr10PlusEvidence const dynamic = hdr10PlusEvidence(frame, mappedFrame);
     std::optional<float> const dynamicMaximum = hdr10PlusMaximumNits(mappedFrame.color.hdr);
 

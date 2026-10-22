@@ -12,8 +12,7 @@ struct ColorChromaticity {
     float y = 0.0f;
 
     bool isValid() const {
-        return std::isfinite(x) && std::isfinite(y) && x >= 0.0f && y > 0.0f && x <= 1.0f && y <= 1.0f &&
-               x + y <= 1.0f;
+        return std::isfinite(x) && std::isfinite(y) && x >= 0.0f && y > 0.0f && x <= 1.0f && y <= 1.0f && x + y <= 1.0f;
     }
 };
 
@@ -32,8 +31,7 @@ struct ColorPrimaries {
 
         auto const signedDistance = [](ColorChromaticity const& point, ColorChromaticity const& first,
                                        ColorChromaticity const& second) {
-            return (point.x - second.x) * (first.y - second.y) -
-                   (first.x - second.x) * (point.y - second.y);
+            return (point.x - second.x) * (first.y - second.y) - (first.x - second.x) * (point.y - second.y);
         };
         float const area = signedDistance(red, green, blue);
         if (std::abs(area) <= 1.0e-6f) {
@@ -48,3 +46,7 @@ struct ColorPrimaries {
         return !(hasNegative && hasPositive);
     }
 };
+
+inline constexpr ColorPrimaries srgbColorPrimaries{{0.64f, 0.33f}, {0.30f, 0.60f}, {0.15f, 0.06f}, {0.3127f, 0.3290f}};
+inline constexpr ColorPrimaries bt2020ColorPrimaries{
+    {0.708f, 0.292f}, {0.170f, 0.797f}, {0.131f, 0.046f}, {0.3127f, 0.3290f}};

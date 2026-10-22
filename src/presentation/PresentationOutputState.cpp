@@ -61,10 +61,10 @@ QString PresentationOutputState::displayColorMode() const {
 }
 QString PresentationOutputState::targetGamut() const {
     PresentationTarget const target = presentationTarget();
-    if (!target.targetPrimariesKnown) {
+    if (!target.color.targetPrimariesKnown) {
         return tr("BT.709 / sRGB target");
     }
-    ColorPrimaries const& primaries = target.targetPrimaries;
+    ColorPrimaries const& primaries = target.color.targetPrimaries;
     return tr("Target gamut xy · R %1,%2 · G %3,%4 · B %5,%6 · W %7,%8")
         .arg(primaries.red.x, 0, 'f', 4)
         .arg(primaries.red.y, 0, 'f', 4)
@@ -81,13 +81,18 @@ bool PresentationOutputState::displayHdrEnabled() const {
 bool PresentationOutputState::hdrPresentationActive() const { return presentationTarget().hdrPresentationActive; }
 bool PresentationOutputState::sceneReferred() const { return presentationTarget().sceneReferred; }
 bool PresentationOutputState::sdrWhiteKnown() const { return presentationTarget().sdrWhiteKnown; }
-bool PresentationOutputState::luminanceKnown() const { return presentationTarget().luminanceKnown; }
-float PresentationOutputState::sdrWhiteNits() const { return presentationTarget().sdrWhiteNits; }
-float PresentationOutputState::minLuminanceNits() const { return presentationTarget().minLuminanceNits; }
+bool PresentationOutputState::luminanceKnown() const { return presentationTarget().color.targetMinimumLuminanceKnown; }
+float PresentationOutputState::sdrWhiteNits() const {
+    auto const target = presentationTarget();
+    return target.sdrWhiteKnown ? target.color.referenceWhiteNits : 0.0f;
+}
+float PresentationOutputState::minLuminanceNits() const {
+    return presentationTarget().color.targetMinimumLuminanceNits;
+}
 float PresentationOutputState::maxLuminanceNits() const { return presentationTarget().maxLuminanceNits; }
 float PresentationOutputState::currentHeadroom() const { return presentationTarget().currentHeadroom; }
 float PresentationOutputState::potentialHeadroom() const { return presentationTarget().potentialHeadroom; }
-float PresentationOutputState::effectiveTargetHeadroom() const { return presentationTarget().effectiveTargetHeadroom; }
+float PresentationOutputState::effectiveTargetHeadroom() const { return presentationTarget().color.targetPeakHeadroom; }
 float PresentationOutputState::sdrScale() const { return presentationTarget().sdrScale; }
 
 PresentationTarget PresentationOutputState::presentationTarget() const {

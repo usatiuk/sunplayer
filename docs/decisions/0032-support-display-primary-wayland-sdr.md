@@ -2,6 +2,9 @@
 
 Status: Accepted
 
+The unconditional PQ preference and forced-zero mapping-target black are
+superseded by [ADR 0039](0039-unify-color-mapping-and-native-encoding.md).
+
 ## Context
 
 The supported native compositor exposes preferred display primaries and

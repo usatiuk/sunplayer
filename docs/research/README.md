@@ -19,6 +19,9 @@ the newer note or decision rather than silently rewriting the investigation.
 
 ## Index
 
+* [2026-10-22: Color terminology, native SDR/WCG/HDR contracts and mapping ownership](2026-10-22-native-color-presentation-contracts.md)
+* [2026-10-22: Shared color-pipeline simplification evidence](2026-10-22-color-pipeline-simplification-evidence.md)
+
 * [2026-10-18: Jellyfin login, browsing, streaming, and credentials](2026-10-18-jellyfin-client.md)
 * [2026-10-17: Native desktop media controls across platforms](2026-10-17-native-media-controls.md)
 * [2026-10-17: Qt control contrast across styles](2026-10-17-qt-control-contrast.md)

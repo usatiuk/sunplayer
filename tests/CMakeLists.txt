@@ -1067,6 +1067,7 @@ if (WIN32)
             sunplayer_video_pipeline
     )
 
+    sunplayer_add_compositor_shader(sunplayer_qrhi_compositor_tests)
     qt_add_shaders(
             sunplayer_qrhi_compositor_tests
             "sunplayer_qrhi_compositor_test_shaders"
@@ -1078,7 +1079,6 @@ if (WIN32)
             FILES
             ../src/presentation/shaders/fullscreen.vert
             ../src/presentation/shaders/diagnostic_video.frag
-            ../src/presentation/shaders/compositor.frag
     )
 
     sunplayer_stage_windows_runtime(
@@ -1158,6 +1158,7 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
             Qt6::Test
             sunplayer_video_pipeline
     )
+    sunplayer_add_compositor_shader(sunplayer_ffmpeg_first_frame_tests)
     qt_add_shaders(
             sunplayer_ffmpeg_first_frame_tests
             "sunplayer_ffmpeg_first_frame_test_shaders"
@@ -1168,7 +1169,6 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
             ../src/presentation/shaders
             FILES
             ../src/presentation/shaders/fullscreen.vert
-            ../src/presentation/shaders/compositor.frag
     )
     if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_sources(sunplayer_ffmpeg_first_frame_tests PRIVATE ../src/platform/DisplayStateProvider.h)

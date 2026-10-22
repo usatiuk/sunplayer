@@ -17,6 +17,7 @@
 #include <QtTest>
 
 #ifdef Q_OS_LINUX
+#include "platform/DisplayStateProvider.h"
 #include "platform/linux/LinuxWaylandWindowContext.h"
 #include <QGuiApplication>
 #include <QWindow>
@@ -31,6 +32,8 @@ extern "C" {
 #include <libavutil/hdr_dynamic_metadata.h>
 #include <libavutil/mastering_display_metadata.h>
 #include <libplacebo/colorspace.h>
+#include <libplacebo/renderer.h>
+#include <libplacebo/tone_mapping.h>
 }
 
 #include <rhi/qrhi.h>
@@ -157,23 +160,20 @@ RenderedVideoSurfaceState surfaceState(GraphicsDeviceDomain& graphics, std::uint
         .description =
             {
                 .pixelSize = pixelSize,
-                .pixelFormat = RenderedVideoPixelFormat::Rgba16Float,
-                .colorSpace = RenderedVideoColorSpace::LinearSrgb,
-                .luminance = RenderedVideoLuminance::DisplayTargetedSdrWhiteRelative,
-                .alphaMode = RenderedVideoAlphaMode::Opaque,
-                .referenceWhiteNits = referenceWhiteNits,
-                .targetMinimumLuminanceKnown = targetMinimumLuminanceKnown,
-                .targetMinimumLuminanceNits = targetMinimumLuminanceNits,
-                .targetPeakHeadroom = targetPeakHeadroom,
-                .renderingMode =
-                    targetPeakHeadroom > 1.0f ? VideoRenderingMode::AdaptiveHdr : VideoRenderingMode::SdrCompatibility,
+                .color =
+                    {
+                        .referenceWhiteNits = referenceWhiteNits,
+                        .targetMinimumLuminanceKnown = targetMinimumLuminanceKnown,
+                        .targetMinimumLuminanceNits = targetMinimumLuminanceNits,
+                        .targetPeakHeadroom = targetPeakHeadroom,
+                    },
             },
         .graphicsDeviceGeneration = graphics.generation(),
         .contentRevision = contentRevision,
     };
     if (targetPrimaries) {
-        state.description.targetPrimariesKnown = true;
-        state.description.targetPrimaries = *targetPrimaries;
+        state.description.color.targetPrimariesKnown = true;
+        state.description.color.targetPrimaries = *targetPrimaries;
     }
     return state;
 }
@@ -196,7 +196,6 @@ DecodedFrameCapture captureDecodedFrame(GraphicsDeviceDomain& graphics, std::sha
                                         float targetMinimumLuminanceNits = 0.0f,
                                         std::optional<float> compositionSdrScale = std::nullopt,
                                         QSize targetPixelSize = {}, bool targetMinimumLuminanceKnown = true,
-                                        std::optional<VideoRenderingMode> renderingMode = std::nullopt,
                                         bool preferHdr10Plus = false,
                                         std::optional<int> sourceHdrReferenceWhiteNits = std::nullopt,
                                         bool absolutePqEnabled = false, bool absolutePqAvailable = false) {
@@ -213,14 +212,10 @@ DecodedFrameCapture captureDecodedFrame(GraphicsDeviceDomain& graphics, std::sha
     RenderedVideoSurfaceState state =
         surfaceState(graphics, source.contentRevision(), referenceWhiteNits, targetPixelSize, targetPeakHeadroom,
                      targetPrimaries, targetMinimumLuminanceNits, targetMinimumLuminanceKnown);
-    if (renderingMode) {
-        state.description.renderingMode = *renderingMode;
-    }
-    state.description.absolutePqAvailable = absolutePqAvailable;
+    state.description.color.absolutePqAvailable = absolutePqAvailable;
     // Keep the established endpoint oracles explicit. The adjustable-reference
     // test below exercises the new default and both presets on retained frames.
-    source.setSourceHdrReferenceWhiteNits(sourceHdrReferenceWhiteNits.value_or(
-        state.description.renderingMode == VideoRenderingMode::SdrCompatibility ? 100 : 203));
+    source.setSourceHdrReferenceWhiteNits(sourceHdrReferenceWhiteNits.value_or(203));
     state.contentRevision = source.contentRevision();
     if (producer.ensureSurface(state) != VideoOperationResult::Ready) {
         result.error = producer.diagnostics().target.fallbackReason;
@@ -406,9 +401,10 @@ class FfmpegFirstFrameTest final : public QObject {
         m_windowContext.reset();
 #endif
     }
+    void nativeColorDeclarationTransitions();
     void continuousVaapiDecodeAndImport();
-    void wcgSdrFinalComposition_data();
-    void wcgSdrFinalComposition();
+    void finalColorEncoding_data();
+    void finalColorEncoding();
     void wcgSdrRetainedFrameTargetChanges();
     void retainsStreamHdr10PlusAtTheDecodeBoundary();
     void hdrInputAcceptance_data();
@@ -435,6 +431,87 @@ class FfmpegFirstFrameTest final : public QObject {
     void d3d11HardwareDecodeSafeImport();
     void d3d11P010HardwareDecodeSafeImport();
 };
+
+void FfmpegFirstFrameTest::nativeColorDeclarationTransitions() {
+#ifndef Q_OS_LINUX
+    QSKIP("The explicit native declaration controller is Wayland-specific");
+#else
+    DisplayState display;
+    display.valid = true;
+    display.colorMode = DisplayColorMode::HighDynamicRange;
+    display.targetPrimariesKnown = true;
+    display.targetPrimaries = {{.68f, .32f}, {.265f, .69f}, {.15f, .06f}, {.3127f, .329f}};
+    auto contract = m_windowContext->desiredContract(display, 100);
+    if (!contract.hdr10Required()) {
+        QVERIFY2(!qEnvironmentVariableIsSet("SUNPLAYER_REQUIRE_MANAGED_WAYLAND"), "Managed PQ is unavailable");
+        QSKIP("The test compositor does not support the managed PQ contract");
+    }
+    display.colorMode = DisplayColorMode::WideColorGamut;
+    if (m_windowContext->desiredContract(display, 100).sdrPrimaries != display.targetPrimaries) {
+        QVERIFY2(!qEnvironmentVariableIsSet("SUNPLAYER_REQUIRE_MANAGED_WAYLAND"),
+                 "Managed display-primary SDR is unavailable");
+        QSKIP("This combined lifecycle scenario requires explicit SDR primaries");
+    }
+    display.colorMode = DisplayColorMode::HighDynamicRange;
+    contract = m_windowContext->desiredContract(display, 100);
+    auto provider = m_windowContext->takeDisplayStateProvider(nullptr);
+    provider->attach(m_window);
+    auto detach = qScopeGuard([&] { provider->detach(); });
+    auto* const handle = m_window.handle();
+    auto const finish = [&] {
+        PresentationSurfaceController::Preparation result;
+        QTRY_VERIFY_WITH_TIMEOUT((result = m_windowContext->prepareFrame(
+                                      m_window, contract, contract.hdr10Required() ? 4 : 1, display.targetPrimaries)) !=
+                                     PresentationSurfaceController::Preparation::Pending,
+                                 5000);
+        QCOMPARE(result, PresentationSurfaceController::Preparation::Ready);
+        m_windowContext->applyPrepared(m_window);
+        QCOMPARE(m_window.handle(), handle);
+        QVERIFY(!m_window.isVisible());
+    };
+    // Supersede an asynchronous PQ request with SDR, then return to PQ.
+    QCOMPARE(m_windowContext->prepareFrame(m_window, contract, 4, display.targetPrimaries),
+             PresentationSurfaceController::Preparation::Pending);
+    display.colorMode = DisplayColorMode::WideColorGamut;
+    contract = m_windowContext->desiredContract(display, 100);
+    QCOMPARE(contract.encoding, PresentationOutputEncoding::Gamma22);
+    QCOMPARE(contract.sdrPrimaries, display.targetPrimaries);
+    finish();
+    display.colorMode = DisplayColorMode::HighDynamicRange;
+    contract = m_windowContext->desiredContract(display, 100);
+    QVERIFY(contract.hdr10Required());
+    finish();
+    display.colorMode = DisplayColorMode::StandardDynamicRange;
+    display.targetPrimaries = srgbColorPrimaries;
+    contract = m_windowContext->desiredContract(display, 100);
+    finish();
+    // Explicit-primary sRGB and canonical sRGB have equal shared contracts.
+    // Rejection must clear the failed request even without a contract change.
+    m_windowContext->rejectTarget(100, contract, "test explicit SDR rejection");
+    auto const rejected = contract;
+    contract = m_windowContext->desiredContract(display, 100);
+    QCOMPARE(contract, rejected);
+    finish();
+    display.colorMode = DisplayColorMode::HighDynamicRange;
+    contract = m_windowContext->desiredContract(display, 100);
+    QVERIFY(contract.hdr10Required());
+    finish();
+    m_windowContext->rejectTarget(100, contract, "test PQ rejection");
+    contract = m_windowContext->desiredContract(display, 100);
+    QCOMPARE(contract.encoding, PresentationOutputEncoding::Gamma22);
+    finish();
+    contract = m_windowContext->desiredContract(display, 101);
+    QVERIFY(contract.hdr10Required());
+    finish();
+    // A separate failed PQ attempt still permits explicit WCG SDR.
+    m_windowContext->rejectTarget(101, contract, "test independent PQ rejection");
+    display.colorMode = DisplayColorMode::WideColorGamut;
+    display.targetPrimaries = {{.68f, .32f}, {.265f, .69f}, {.15f, .06f}, {.3127f, .329f}};
+    contract = m_windowContext->desiredContract(display, 101);
+    QCOMPARE(contract.sdrPrimaries, display.targetPrimaries);
+    finish();
+#endif
+}
 
 void FfmpegFirstFrameTest::retainsStreamHdr10PlusAtTheDecodeBoundary() {
     AVCodec const* decoder = avcodec_find_decoder(AV_CODEC_ID_RAWVIDEO);
@@ -673,69 +750,62 @@ void FfmpegFirstFrameTest::hdrReferenceWhiteRerendersRetainedFrame() {
         return completed;
     };
 
-    for (auto mode : {VideoRenderingMode::SdrCompatibility, VideoRenderingMode::AdaptiveHdr}) {
-        for (float headroom : {1.0f, 4.0f, 20.0f}) {
-            if (mode == VideoRenderingMode::SdrCompatibility && headroom != 1.0f) {
-                continue;
-            }
-            QRhiReadbackResult previous;
-            QByteArray originalPixels;
-            float originalMidtone = 0.0f;
-            source.setSourceHdrReferenceWhiteNits(100);
-            for (int reference : {203, 150, 100, 203}) {
-                auto const revision = source.contentRevision();
-                auto const updateCount = updates.count();
-                source.setSourceHdrReferenceWhiteNits(reference);
-                QCOMPARE(updates.count(), updateCount + 1);
-                QVERIFY(source.contentRevision() != revision);
-                QCOMPARE(source.producerConfigurationRevision(), configurationRevision);
-                auto state = surfaceState(*graphics, source.contentRevision(), 100.0f,
-                                          decoded.frame->geometry().visibleSize, headroom);
-                state.description.renderingMode = mode;
-                QVERIFY(producer.needsRender(state));
-                QRhiReadbackResult readback;
-                QVERIFY2(capture(producer, state, readback), qPrintable(producer.diagnostics().target.fallbackReason));
-                QVERIFY(!producer.needsRender(state));
-                QCOMPARE(producer.inputImportCount(), 1U);
-                QCOMPARE(source.currentFrame(), decoded.frame);
-                if (affected) {
-                    auto const patches = neutralPatchPixels(readback);
-                    verifyNeutralPatchProperties(patches, headroom, 0.025f * headroom);
-                    if (previous.data.isEmpty()) {
-                        originalMidtone = patches[0].red;
-                        originalPixels = readback.data;
-                    } else if (reference == 203) {
-                        QCOMPARE(readback.data, originalPixels);
-                    } else if (!fixtureFile.startsWith(QStringLiteral("hdr10plus"))) {
-                        QVERIFY2(patches[0].red > neutralPatchPixels(previous)[0].red,
-                                 qPrintable(QStringLiteral("Reference %1, H=%2, mode=%3: low patch %4 -> %5")
-                                                .arg(reference)
-                                                .arg(headroom)
-                                                .arg(static_cast<int>(mode))
-                                                .arg(neutralPatchPixels(previous)[0].red)
-                                                .arg(patches[0].red)));
-                    }
-                    if (reference == 100 && headroom == 20.0f && fixtureFile.startsWith(QStringLiteral("hdr10-pq"))) {
-                        compareNear(patches[0].red / originalMidtone, 2.03f, 0.03f);
-                    }
-                    if (fixtureFile.startsWith(QStringLiteral("hdr10plus"))) {
-                        // Authored curves can respond non-monotonically to a
-                        // target change. Compare a fresh renderer to prove this
-                        // is library mapping, not stale state from the slider.
-                        LibplaceboDecodedVideoProducer fresh(*graphics, source, VideoTargetReadback::Enabled);
-                        QRhiReadbackResult freshReadback;
-                        QVERIFY(capture(fresh, state, freshReadback));
-                        QCOMPARE(readback.data, freshReadback.data);
-                        QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("ST 2094-40")));
-                    }
-                } else if (!previous.data.isEmpty()) {
-                    QCOMPARE(readback.data, previous.data);
+    for (float headroom : {1.0f, 4.0f, 20.0f}) {
+        QRhiReadbackResult previous;
+        QByteArray originalPixels;
+        float originalMidtone = 0.0f;
+        source.setSourceHdrReferenceWhiteNits(100);
+        for (int reference : {203, 150, 100, 203}) {
+            auto const revision = source.contentRevision();
+            auto const updateCount = updates.count();
+            source.setSourceHdrReferenceWhiteNits(reference);
+            QCOMPARE(updates.count(), updateCount + 1);
+            QVERIFY(source.contentRevision() != revision);
+            QCOMPARE(source.producerConfigurationRevision(), configurationRevision);
+            auto state = surfaceState(*graphics, source.contentRevision(), 100.0f,
+                                      decoded.frame->geometry().visibleSize, headroom);
+            QVERIFY(producer.needsRender(state));
+            QRhiReadbackResult readback;
+            QVERIFY2(capture(producer, state, readback), qPrintable(producer.diagnostics().target.fallbackReason));
+            QVERIFY(!producer.needsRender(state));
+            QCOMPARE(producer.inputImportCount(), 1U);
+            QCOMPARE(source.currentFrame(), decoded.frame);
+            if (affected) {
+                auto const patches = neutralPatchPixels(readback);
+                verifyNeutralPatchProperties(patches, headroom, 0.025f * headroom);
+                if (previous.data.isEmpty()) {
+                    originalMidtone = patches[0].red;
+                    originalPixels = readback.data;
+                } else if (reference == 203) {
+                    QCOMPARE(readback.data, originalPixels);
+                } else if (!fixtureFile.startsWith(QStringLiteral("hdr10plus"))) {
+                    QVERIFY2(patches[0].red > neutralPatchPixels(previous)[0].red,
+                             qPrintable(QStringLiteral("Reference %1, H=%2: low patch %3 -> %4")
+                                            .arg(reference)
+                                            .arg(headroom)
+                                            .arg(neutralPatchPixels(previous)[0].red)
+                                            .arg(patches[0].red)));
                 }
-                previous = std::move(readback);
-                source.setSourceHdrReferenceWhiteNits(reference);
-                QCOMPARE(updates.count(), updateCount + 1);
-                QVERIFY(!producer.needsRender(state));
+                if (reference == 100 && headroom == 20.0f && fixtureFile.startsWith(QStringLiteral("hdr10-pq"))) {
+                    compareNear(patches[0].red / originalMidtone, 2.03f, 0.03f);
+                }
+                if (fixtureFile.startsWith(QStringLiteral("hdr10plus"))) {
+                    // Authored curves can respond non-monotonically to a
+                    // target change. Compare a fresh renderer to prove this
+                    // is library mapping, not stale state from the slider.
+                    LibplaceboDecodedVideoProducer fresh(*graphics, source, VideoTargetReadback::Enabled);
+                    QRhiReadbackResult freshReadback;
+                    QVERIFY(capture(fresh, state, freshReadback));
+                    QCOMPARE(readback.data, freshReadback.data);
+                    QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("ST 2094-40")));
+                }
+            } else if (!previous.data.isEmpty()) {
+                QCOMPARE(readback.data, previous.data);
             }
+            previous = std::move(readback);
+            source.setSourceHdrReferenceWhiteNits(reference);
+            QCOMPARE(updates.count(), updateCount + 1);
+            QVERIFY(!producer.needsRender(state));
         }
     }
 
@@ -743,7 +813,7 @@ void FfmpegFirstFrameTest::hdrReferenceWhiteRerendersRetainedFrame() {
     // capability change. Both must invalidate pixels without another import.
     source.setSourceHdrReferenceWhiteNits(100);
     auto state = surfaceState(*graphics, source.contentRevision(), 160.0f, decoded.frame->geometry().visibleSize, 5.0f);
-    state.description.absolutePqAvailable = true;
+    state.description.color.absolutePqAvailable = true;
     QRhiReadbackResult adaptive;
     QVERIFY(capture(producer, state, adaptive));
     auto const adaptiveRevision = source.contentRevision();
@@ -768,7 +838,7 @@ void FfmpegFirstFrameTest::hdrReferenceWhiteRerendersRetainedFrame() {
     QVERIFY(!producer.needsRender(state));
 
     for (bool available : {false, true}) {
-        state.description.absolutePqAvailable = available;
+        state.description.color.absolutePqAvailable = available;
         QVERIFY(producer.needsRender(state));
         QRhiReadbackResult changedCapability;
         QVERIFY(capture(producer, state, changedCapability));
@@ -805,8 +875,7 @@ void FfmpegFirstFrameTest::absolutePqPhysicalOutput() {
         // Exercise the Windows absolute scRGB contract on any GPU backend:
         // the real compositor converts SDR-white-relative pixels by W / 80.
         return captureDecodedFrame(*graphics, decoded.frame, white, physicalPeakNits / white, std::nullopt, 0.0f,
-                                   white / 80.0f, {}, true, VideoRenderingMode::AdaptiveHdr, false, sourceReference,
-                                   enabled, available);
+                                   white / 80.0f, {}, true, false, sourceReference, enabled, available);
     };
     auto const adaptive = capture(160.0f, 100, false, true);
     QVERIFY2(adaptive.isSuccess(), qPrintable(adaptive.error));
@@ -830,9 +899,8 @@ void FfmpegFirstFrameTest::absolutePqPhysicalOutput() {
     if (fixtureFile == QStringLiteral("hdr10-pq-hevc.hevc")) {
         // With the source fitting the destination, check absolute units
         // independently of the reference-white invariance comparison.
-        auto const uncompressed =
-            captureDecodedFrame(*graphics, decoded.frame, 200.0f, 20.0f, std::nullopt, 0.0f, 200.0f / 80.0f, {}, true,
-                                VideoRenderingMode::AdaptiveHdr, false, 100, true, true);
+        auto const uncompressed = captureDecodedFrame(*graphics, decoded.frame, 200.0f, 20.0f, std::nullopt, 0.0f,
+                                                      200.0f / 80.0f, {}, true, false, 100, true, true);
         QVERIFY2(uncompressed.isSuccess(), qPrintable(uncompressed.error));
         auto const patch = neutralPatchPixels(uncompressed.compositionReadback)[0];
         compareNear(patch.red, 50.0f / 80.0f, 0.02f);
@@ -950,7 +1018,8 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
     std::array<FloatPixel, 4> const patches = neutralPatchPixels(capture.readback);
     verifyNeutralPatchProperties(patches, targetPeakHeadroom, kind == HdrFixtureKind::DolbyVision ? 0.12f : 0.025f);
 
-    DecodedFrameCapture const sdrCapture = captureDecodedFrame(*graphics, frames.front(), 203.0f, 1.0f);
+    DecodedFrameCapture const sdrCapture = captureDecodedFrame(*graphics, frames.front(), 203.0f, 1.0f, std::nullopt,
+                                                               0.0f, std::nullopt, {}, true, false, 100);
     QVERIFY2(sdrCapture.isSuccess(), qPrintable(sdrCapture.error));
     std::array<FloatPixel, 4> const sdrPatches = neutralPatchPixels(sdrCapture.readback);
     verifyNeutralPatchProperties(sdrPatches, 1.0f, kind == HdrFixtureKind::DolbyVision ? 0.12f : 0.025f);
@@ -962,12 +1031,11 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
     for (int sourceReference : {100, 203}) {
         for (bool knownBlack : {false, true}) {
             std::optional<DecodedFrameCapture> previous;
-            for (float headroom : {1.0f, 1.0001f, 1.001f, 1.01f, 1.1f}) {
-                auto capture =
-                    captureDecodedFrame(*graphics, frames.front(), 203.0f, headroom, std::nullopt, 0.0f, 1.0f, {},
-                                        knownBlack, VideoRenderingMode::AdaptiveHdr, false, sourceReference);
+            for (float headroom : {1.0f, std::nextafter(1.0f, 2.0f), 1.0001f, 1.001f, 1.01f, 1.1f, 4.0f}) {
+                auto capture = captureDecodedFrame(*graphics, frames.front(), 203.0f, headroom, std::nullopt, 0.0f,
+                                                   1.0f, {}, knownBlack, false, sourceReference);
                 QVERIFY2(capture.isSuccess(), qPrintable(capture.error));
-                if (previous) {
+                if (previous && headroom > 1.0001f && headroom < 4.0f) {
                     QCOMPARE(capture.producer.colorPolicy, previous->producer.colorPolicy);
                     QCOMPARE(capture.input.metadataPath, previous->input.metadataPath);
                     float const tolerance = headroom <= 1.001f ? 0.006f : (headroom <= 1.01f ? 0.025f : 0.18f);
@@ -1062,7 +1130,8 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
         av_frame_free(&metadataLessSource);
         QVERIFY2(metadataLessFrame, qPrintable(metadataLessError));
 
-        DecodedFrameCapture const metadataLessCapture = captureDecodedFrame(*graphics, metadataLessFrame, 203.0f, 1.0f);
+        DecodedFrameCapture const metadataLessCapture = captureDecodedFrame(
+            *graphics, metadataLessFrame, 203.0f, 1.0f, std::nullopt, 0.0f, std::nullopt, {}, true, false, 100);
         QVERIFY2(metadataLessCapture.isSuccess(), qPrintable(metadataLessCapture.error));
         QVERIFY(metadataLessCapture.producer.colorPolicy.contains(QStringLiteral("BT.2446A")));
         QVERIFY(metadataLessCapture.producer.colorPolicy.contains(
@@ -1087,9 +1156,7 @@ void FfmpegFirstFrameTest::hdrInputAcceptance() {
         }
 
     } else if (kind == HdrFixtureKind::Hlg) {
-        QCOMPARE(sdrCapture.producer.colorPolicy,
-                 QStringLiteral("Spline tone map · perceptual gamut map · "
-                                "inverse mapping off · peak detection off · dither off"));
+        QVERIFY(sdrCapture.producer.colorPolicy.contains(QStringLiteral("BT.2446A EETF")));
         for (auto const& frame : frames) {
             QVERIFY(!sideData(*frame, AV_FRAME_DATA_DYNAMIC_HDR_PLUS));
             QVERIFY(!sideData(*frame, AV_FRAME_DATA_DOVI_METADATA));
@@ -1226,7 +1293,8 @@ void FfmpegFirstFrameTest::nominalSdrTargetPreservesWcg() {
     };
     std::unique_ptr<GraphicsDeviceDomain> graphics = createDeviceDomain();
     QVERIFY2(graphics, "Could not create the graphics domain");
-    DecodedFrameCapture const capture = captureDecodedFrame(*graphics, frame, PL_COLOR_SDR_WHITE, 1.0f, displayP3);
+    DecodedFrameCapture const capture = captureDecodedFrame(*graphics, frame, PL_COLOR_SDR_WHITE, 1.0f, displayP3, 0.0f,
+                                                            std::nullopt, {}, true, false, 100);
     QVERIFY2(capture.isSuccess(), qPrintable(capture.error));
 
     pl_raw_primaries const p3{
@@ -1259,25 +1327,34 @@ void FfmpegFirstFrameTest::nominalSdrTargetPreservesWcg() {
 #endif
 }
 
-void FfmpegFirstFrameTest::wcgSdrFinalComposition_data() {
+void FfmpegFirstFrameTest::finalColorEncoding_data() {
     QTest::addColumn<bool>("d50White");
     QTest::addColumn<bool>("unorm8");
-    QTest::newRow("P3-D65-fp16") << false << false;
-    QTest::newRow("P3-D50-CAT16-fp16") << true << false;
-    QTest::newRow("P3-D65-unorm8") << false << true;
-    QTest::newRow("P3-D50-CAT16-unorm8") << true << true;
+    QTest::addColumn<int>("encoding");
+    QTest::addColumn<float>("scale");
+    QTest::newRow("P3-D65-fp16") << false << false << 1 << 1.0f;
+    QTest::newRow("P3-D50-CAT16-fp16") << true << false << 1 << 1.0f;
+    QTest::newRow("P3-D65-unorm8") << false << true << 1 << 1.0f;
+    QTest::newRow("P3-D50-CAT16-unorm8") << true << true << 1 << 1.0f;
+    QTest::newRow("sRGB-fp16") << false << false << 0 << 1.0f;
+    QTest::newRow("sRGB-unorm8") << false << true << 0 << 1.0f;
+    QTest::newRow("extended-linear") << false << false << 2 << 1.0f;
+    QTest::newRow("scRGB-white-scale") << false << false << 2 << 2.5f;
+    QTest::newRow("BT2020-PQ") << false << false << 3 << 1.0f;
 }
 
-void FfmpegFirstFrameTest::wcgSdrFinalComposition() {
+void FfmpegFirstFrameTest::finalColorEncoding() {
     QFETCH(bool, d50White);
     QFETCH(bool, unorm8);
+    QFETCH(int, encoding);
+    QFETCH(float, scale);
     auto graphics = createDeviceDomain();
     QVERIFY(graphics);
     auto execution = graphics->acquireExecutionScope();
     QRhi& rhi = graphics->rhi();
-    QSize const size{8, 1};
+    QSize const size{9, 1};
     // P3 red genuinely requires signed, extended BT.709 coordinates.
-    std::array<FloatPixel, 8> const pixels{{
+    std::array<FloatPixel, 9> const pixels{{
         {0, 0, 0, 1},
         {1, 1, 1, 1},
         {.18f, .18f, .18f, 1},
@@ -1286,16 +1363,17 @@ void FfmpegFirstFrameTest::wcgSdrFinalComposition() {
         {.18f, .18f, .18f, 1},
         {.18f, .18f, .18f, 1},
         {.18f, .18f, .18f, 1},
+        {4.899760704f, -.168227820f, -.078550220f, 1},
     }};
-    std::array<qfloat16, 32> videoData;
+    std::array<qfloat16, 36> videoData;
     for (std::size_t i = 0; i < pixels.size(); ++i) {
         videoData[4 * i] = qfloat16(pixels[i].red);
         videoData[4 * i + 1] = qfloat16(pixels[i].green);
         videoData[4 * i + 2] = qfloat16(pixels[i].blue);
         videoData[4 * i + 3] = qfloat16(1.0f);
     }
-    QByteArray uiData(32, '\0');
-    QByteArray subtitleData(32, '\0');
+    QByteArray uiData(36, '\0');
+    QByteArray subtitleData(36, '\0');
     auto const write = [](QByteArray& data, int x, std::array<int, 4> rgba) {
         for (int c = 0; c < 4; ++c) {
             data[4 * x + c] = static_cast<char>(rgba[c]);
@@ -1323,12 +1401,13 @@ void FfmpegFirstFrameTest::wcgSdrFinalComposition() {
                                    {.15f, .06f},
                                    d50White ? ColorChromaticity{.3457f, .3585f} : ColorChromaticity{.3127f, .329f}};
     HdrCompositorParameters params;
-    params.viewportSize = {8, 1};
-    params.videoSize = {8, 1};
-    params.outputEncoding = static_cast<float>(PresentationOutputEncoding::Gamma22Display);
+    params.viewportSize = {9, 1};
+    params.videoSize = {9, 1};
+    params.outputEncoding = static_cast<float>(encoding);
+    params.sdrScale = scale;
     params.ndcYUp = rhi.isYUpInNDC() ? 1.0f : 0.0f;
     params.subtitleBrightness = 1.0f;
-    params.setOutputPrimaries(primaries);
+    params.setOutputPrimaries(encoding == 1 ? primaries : encoding == 3 ? bt2020ColorPrimaries : srgbColorPrimaries);
     QRhiCommandBuffer* commands = nullptr;
     QCOMPARE(rhi.beginOffscreenFrame(&commands), QRhi::FrameOpSuccess);
     auto* uploads = rhi.nextResourceUpdateBatch();
@@ -1357,7 +1436,25 @@ void FfmpegFirstFrameTest::wcgSdrFinalComposition() {
     std::array<std::array<float, 3>, 3> const d50{{{.749887293f, .233530372f, .016582334f},
                                                    {.024704439f, .954449747f, .020845815f},
                                                    {.014613920f, .052655350f, .932730730f}}};
-    auto const& matrix = d50White ? d50 : d65;
+    std::array<std::array<float, 3>, 3> const bt2020{{{.627403896f, .329283038f, .043313066f},
+                                                      {.069097289f, .919540395f, .011362316f},
+                                                      {.016391439f, .088013308f, .895595253f}}};
+    std::array<std::array<float, 3>, 3> const identity{{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}};
+    auto const& matrix = encoding == 1 ? (d50White ? d50 : d65) : encoding == 3 ? bt2020 : identity;
+    auto const encode = [encoding](float v) {
+        if (encoding == 2) {
+            return v;
+        }
+        if (encoding == 3) {
+            double const p = std::pow(std::clamp(double(v) * 203 / 10000, 0.0, 1.0), 2610.0 / 16384);
+            return float(std::pow((3424.0 / 4096 + 2413.0 / 128 * p) / (1 + 2392.0 / 128 * p), 2523.0 / 32));
+        }
+        v = std::clamp(v, 0.0f, 1.0f);
+        if (encoding == 1) {
+            return std::pow(v, 1.0f / 2.2f);
+        }
+        return v <= .0031308f ? 12.92f * v : 1.055f * std::pow(v, 1.0f / 2.4f) - .055f;
+    };
     auto const decodeSrgb = [](float encoded) {
         return encoded <= .04045f ? encoded / 12.92f : std::pow((encoded + .055f) / 1.055f, 2.4f);
     };
@@ -1369,7 +1466,7 @@ void FfmpegFirstFrameTest::wcgSdrFinalComposition() {
         return FloatPixel{rgba[0] / 255.0f, rgba[1] / 255.0f, rgba[2] / 255.0f, rgba[3] / 255.0f};
     };
     float const tolerance = unorm8 ? 2.0f / 255 : .003f;
-    for (int x = 0; x < 8; ++x) {
+    for (int x = 0; x < 9; ++x) {
         std::array<float, 3> linear{pixels[x].red, pixels[x].green, pixels[x].blue};
         if (x == 5) {
             linear.fill(decodeSrgb(128.0f / 255.0f));
@@ -1388,11 +1485,11 @@ void FfmpegFirstFrameTest::wcgSdrFinalComposition() {
             for (int j = 0; j < 3; ++j) {
                 sum += matrix[c][j] * linear[j];
             }
-            compareNear(channels[c], std::pow(std::clamp(sum, 0.0f, 1.0f), 1.0f / 2.2f), tolerance);
+            compareNear(channels[c], encode(sum * scale), std::max(tolerance, std::abs(sum * scale) * .001f));
         }
         compareNear(actual.alpha, 1.0f, .001f);
     }
-    if (!d50White) {
+    if (!d50White && encoding == 1) {
         compareNear(captured(3).red, 1.0f, .002f);
         compareNear(captured(3).green, 0.0f, .003f);
     }
@@ -1426,11 +1523,11 @@ void FfmpegFirstFrameTest::wcgSdrRetainedFrameTargetChanges() {
     DecodedVideoSource source(frame, VideoTargetReadback::Enabled);
     LibplaceboDecodedVideoProducer producer(*graphics, source, VideoTargetReadback::Enabled);
     auto state = surfaceState(*graphics, source.contentRevision(), 80, {4, 4});
-    state.description.targetMinimumLuminanceNits = 0;
+    state.description.color.targetMinimumLuminanceNits = 0;
     ColorPrimaries const p3{{.68f, .32f}, {.265f, .69f}, {.15f, .06f}, {.3127f, .329f}};
     auto const capture = [&](bool wide, QRhiReadbackResult& result) {
-        state.description.targetPrimariesKnown = wide;
-        state.description.targetPrimaries = wide ? p3 : ColorPrimaries{};
+        state.description.color.targetPrimariesKnown = wide;
+        state.description.color.targetPrimaries = wide ? p3 : ColorPrimaries{};
         QVERIFY(producer.needsRender(state));
         QCOMPARE(producer.ensureSurface(state), VideoOperationResult::Ready);
         QRhiCommandBuffer* commands = nullptr;
@@ -1469,7 +1566,7 @@ void FfmpegFirstFrameTest::unknownSdrBlackPreservesPqNearBlack() {
 #if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS) && !defined(Q_OS_LINUX)
     QSKIP("This test requires a supported graphics domain");
 #else
-    constexpr std::array inputNits{0.01f, 0.05f, 0.1f, 0.5f, 1.0f, 5.0f};
+    constexpr std::array inputNits{0.0f, 0.01f, 0.05f, 0.1f, 0.5f, 1.0f, 5.0f};
     auto const freeFrame = [](AVFrame* frame) { av_frame_free(&frame); };
     std::unique_ptr<AVFrame, decltype(freeFrame)> source(av_frame_alloc(), freeFrame);
     QVERIFY(source);
@@ -1516,22 +1613,23 @@ void FfmpegFirstFrameTest::unknownSdrBlackPreservesPqNearBlack() {
 
     std::unique_ptr<GraphicsDeviceDomain> graphics = createDeviceDomain();
     QVERIFY2(graphics, "Could not create the graphics domain");
-    DecodedFrameCapture const knownZero = captureDecodedFrame(*graphics, frame);
-    DecodedFrameCapture const unknown =
-        captureDecodedFrame(*graphics, frame, PL_COLOR_SDR_WHITE, 1.0f, std::nullopt, 0.0f, std::nullopt, {}, false);
+    DecodedFrameCapture const knownZero = captureDecodedFrame(*graphics, frame, PL_COLOR_SDR_WHITE, 1.0f, std::nullopt,
+                                                              0.0f, std::nullopt, {}, true, false, 100);
+    DecodedFrameCapture const unknown = captureDecodedFrame(*graphics, frame, PL_COLOR_SDR_WHITE, 1.0f, std::nullopt,
+                                                            0.0f, std::nullopt, {}, false, false, 100);
     QVERIFY2(knownZero.isSuccess(), qPrintable(knownZero.error));
     QVERIFY2(unknown.isSuccess(), qPrintable(unknown.error));
     QVERIFY(knownZero.producer.colorPolicy.contains(QStringLiteral("BT.2446A EETF")));
     QVERIFY(unknown.producer.colorPolicy.contains(QStringLiteral("BT.2446A EETF")));
     QVERIFY(unknown.producer.colorPolicy.contains(QStringLiteral("MaxCLL 1000 nits")));
 
-    constexpr std::array knownZeroExpected{0.00480f, 0.02253f, 0.04383f, 0.20252f, 0.38763f, 1.69323f};
-    constexpr std::array unknownExpected{0.17368f, 0.26449f, 0.33837f, 0.70709f, 1.03957f, 2.88958f};
+    constexpr std::array knownZeroExpected{0.0f, 0.00480f, 0.02253f, 0.04383f, 0.20252f, 0.38763f, 1.69323f};
+    constexpr std::array unknownExpected{0.1f, 0.17368f, 0.26449f, 0.33837f, 0.70709f, 1.03957f, 2.88958f};
     for (std::size_t index = 0; index < inputNits.size(); ++index) {
         FloatPixel const knownZeroPixel = pixel(knownZero.readback, static_cast<int>(index), 0);
         FloatPixel const unknownPixel = pixel(unknown.readback, static_cast<int>(index), 0);
         float const knownZeroSurface = knownZeroExpected[index] / 100.0f;
-        float const unknownSurface = unknownExpected[index] / 100.0f;
+        float const unknownSurface = (unknownExpected[index] - 0.1f) / 99.9f;
         compareNear(knownZeroPixel.red, knownZeroSurface, std::max(0.00005f, knownZeroSurface * 0.06f));
         compareNear(unknownPixel.red, unknownSurface, std::max(0.00015f, unknownSurface * 0.06f));
         compareNear(knownZeroPixel.green, knownZeroPixel.red, 0.0001f);
@@ -1539,10 +1637,127 @@ void FfmpegFirstFrameTest::unknownSdrBlackPreservesPqNearBlack() {
         compareNear(unknownPixel.green, unknownPixel.red, 0.0001f);
         compareNear(unknownPixel.blue, unknownPixel.red, 0.0001f);
         QVERIFY2(
-            unknownPixel.red > knownZeroPixel.red,
+            index == 0 || unknownPixel.red > knownZeroPixel.red,
             qPrintable(
                 QStringLiteral("Unknown SDR black did not lift %1-nit PQ above known zero").arg(inputNits[index])));
     }
+    // Source zero is content black for every target, regardless of a real or
+    // inferred physical floor. Brightening that floor in the video texture was
+    // the gray-bars regression; changing the tone operator alone did not fix it.
+    for (float headroom : {1.0f, std::nextafter(1.0f, 2.0f), 4.0f}) {
+        for (std::optional<float> minimum :
+             {std::optional<float>{}, std::optional<float>{0}, std::optional<float>{.2f}}) {
+            for (int sourceWhite : {100, 203}) {
+                auto const capture =
+                    captureDecodedFrame(*graphics, frame, 80, headroom, std::nullopt, minimum.value_or(0), std::nullopt,
+                                        {}, minimum.has_value(), false, sourceWhite);
+                QVERIFY2(capture.isSuccess(), qPrintable(capture.error));
+                auto const black = pixel(capture.readback, 0, 0);
+                compareNear(black.red, 0, .00001f);
+                compareNear(black.green, 0, .00001f);
+                compareNear(black.blue, 0, .00001f);
+                QVERIFY(pixel(capture.readback, 1, 0).red > black.red);
+            }
+        }
+    }
+
+    // Independent boundary oracle: libplacebo's complete sRGB output, with no
+    // application normalization hook. Inverting its transfer must reproduce
+    // the production linear working texture at the SDR endpoint.
+    auto execution = graphics->acquireExecutionScope();
+    auto const& context = graphics->libplaceboContext();
+    pl_fmt const format =
+        pl_find_fmt(context.gpu, PL_FMT_FLOAT, 4, 32, 32,
+                    static_cast<pl_fmt_caps>(PL_FMT_CAP_SAMPLEABLE | PL_FMT_CAP_RENDERABLE | PL_FMT_CAP_HOST_READABLE));
+    QVERIFY(format);
+    std::array<std::array<float, 4>, inputNits.size() * 2> input{};
+    for (std::size_t i = 0; i < input.size(); ++i) {
+        float const encoded = pqCode(inputNits[i % inputNits.size()]) / 65535.0f;
+        input[i] = {encoded, encoded, encoded, 1};
+    }
+    pl_tex_params inputParameters{};
+    inputParameters.w = source->width;
+    inputParameters.h = source->height;
+    inputParameters.format = format;
+    inputParameters.sampleable = true;
+    inputParameters.initial_data = input.data();
+    pl_tex inputTexture = pl_tex_create(context.gpu, &inputParameters);
+    QVERIFY(inputTexture);
+    auto inputCleanup = qScopeGuard([&] { pl_tex_destroy(context.gpu, &inputTexture); });
+    pl_tex_params outputParameters = inputParameters;
+    outputParameters.initial_data = nullptr;
+    outputParameters.renderable = outputParameters.host_readable = true;
+    pl_tex outputTexture = pl_tex_create(context.gpu, &outputParameters);
+    QVERIFY(outputTexture);
+    auto outputCleanup = qScopeGuard([&] { pl_tex_destroy(context.gpu, &outputTexture); });
+    pl_renderer renderer = pl_renderer_create(context.log, context.gpu);
+    QVERIFY(renderer);
+    auto rendererCleanup = qScopeGuard([&] { pl_renderer_destroy(&renderer); });
+    pl_frame inputFrame{};
+    inputFrame.num_planes = 1;
+    inputFrame.planes[0].texture = inputTexture;
+    inputFrame.planes[0].components = 4;
+    for (int i = 0; i < 4; ++i) {
+        inputFrame.planes[0].component_mapping[i] = i;
+    }
+    inputFrame.repr = pl_color_repr_rgb;
+    inputFrame.color.primaries = PL_COLOR_PRIM_BT_2020;
+    inputFrame.color.transfer = PL_COLOR_TRC_PQ;
+    inputFrame.color.hdr.max_luma = inputFrame.color.hdr.max_cll = 1000;
+    pl_color_space_infer(&inputFrame.color);
+    pl_frame outputFrame = inputFrame;
+    outputFrame.planes[0].texture = outputTexture;
+    outputFrame.color = pl_color_space_srgb;
+    outputFrame.color.hdr.prim = *pl_raw_primaries_get(PL_COLOR_PRIM_BT_709);
+    outputFrame.color.hdr.max_luma = 203;
+    pl_color_map_params map = pl_color_map_default_params;
+    map.tone_mapping_function = &pl_tone_map_bt2446a;
+    map.inverse_tone_mapping = false;
+    pl_render_params render = pl_render_default_params;
+    render.color_map_params = &map;
+    render.dither_params = nullptr;
+    render.peak_detect_params = nullptr;
+    for (std::optional<float> minimum : {std::optional<float>{}, std::optional<float>{0}, std::optional<float>{.2f}}) {
+        outputFrame.color.hdr.min_luma = minimum ? std::max(*minimum, PL_COLOR_HDR_BLACK) : .203f;
+        QVERIFY(pl_render_image(renderer, &inputFrame, &outputFrame, &render));
+        std::array<std::array<float, 4>, inputNits.size() * 2> result{};
+        pl_tex_transfer_params download{};
+        download.tex = outputTexture;
+        download.ptr = result.data();
+        QVERIFY(pl_tex_download(context.gpu, &download));
+        auto const capture = captureDecodedFrame(*graphics, frame, 203, 1, std::nullopt, minimum.value_or(0),
+                                                 std::nullopt, {}, minimum.has_value(), false, 203);
+        QVERIFY2(capture.isSuccess(), qPrintable(capture.error));
+        for (std::size_t x = 0; x < inputNits.size(); ++x) {
+            float const encoded = result[x][0];
+            float const expected = encoded <= .04045f ? encoded / 12.92f : std::pow((encoded + .055f) / 1.055f, 2.4f);
+            compareNear(pixel(capture.readback, int(x), 0).red, expected, .00008f);
+        }
+    }
+    outputFrame.color.transfer = PL_COLOR_TRC_LINEAR;
+    outputFrame.color.hdr.max_luma = 1000;
+    outputFrame.color.hdr.min_luma = .2f;
+    map.tone_mapping_function = &pl_tone_map_spline;
+    QVERIFY(pl_render_image(renderer, &inputFrame, &outputFrame, &render));
+    std::array<std::array<float, 4>, inputNits.size() * 2> absoluteOracle{};
+    pl_tex_transfer_params absoluteDownload{};
+    absoluteDownload.tex = outputTexture;
+    absoluteDownload.ptr = absoluteOracle.data();
+    QVERIFY(pl_tex_download(context.gpu, &absoluteDownload));
+    // Absolute PQ retains physical target selection, then uses the same
+    // black-relative coordinates before composition.
+    for (int reference : {100, 203}) {
+        auto const absolute = captureDecodedFrame(*graphics, frame, 250, 4, std::nullopt, .2f, 250.0f / 80, {}, true,
+                                                  false, reference, true, true);
+        QVERIFY2(absolute.isSuccess(), qPrintable(absolute.error));
+        compareNear(pixel(absolute.readback, 0, 0).red, 0, .00001f);
+        compareNear(pixel(absolute.compositionReadback, 0, 0).red, 0, .00001f);
+        for (std::size_t x = 0; x < inputNits.size(); ++x) {
+            float const expected = (203 * absoluteOracle[x][0] - .2f) / (250 - .2f);
+            compareNear(pixel(absolute.readback, int(x), 0).red, expected, .00008f);
+        }
+    }
+
 #endif
 }
 
@@ -1599,7 +1814,7 @@ void FfmpegFirstFrameTest::dualFormatPreferenceRemapsPausedFrame() {
     if (zeroAverage) {
         for (float headroom : {1.0f, 6.0f}) {
             auto const captured = captureDecodedFrame(*graphics, dualFrame, 203.0f, headroom, std::nullopt, 0.0f,
-                                                      std::nullopt, {}, true, std::nullopt, true);
+                                                      std::nullopt, {}, true, true);
             QVERIFY2(captured.isSuccess(), qPrintable(captured.error));
             QVERIFY(captured.producer.colorPolicy.contains(QStringLiteral("ST 2094-40 EETF")));
             verifyNeutralPatchProperties(neutralPatchPixels(captured.readback), headroom, 0.12f);
@@ -1612,10 +1827,9 @@ void FfmpegFirstFrameTest::dualFormatPreferenceRemapsPausedFrame() {
     LibplaceboDecodedVideoProducer producer(*graphics, source, VideoTargetReadback::Disabled);
     QRhi& rhi = graphics->rhi();
 
-    auto const render = [&](float headroom, VideoRenderingMode mode) {
+    auto const render = [&](float headroom) {
         RenderedVideoSurfaceState state =
             surfaceState(*graphics, source.contentRevision(), 203.0f, dualFrame->geometry().visibleSize, headroom);
-        state.description.renderingMode = mode;
         if (producer.ensureSurface(state) != VideoOperationResult::Ready) {
             return false;
         }
@@ -1640,15 +1854,15 @@ void FfmpegFirstFrameTest::dualFormatPreferenceRemapsPausedFrame() {
         return true;
     };
 
-    QVERIFY(render(1.0f, VideoRenderingMode::SdrCompatibility));
+    QVERIFY(render(1.0f));
     QCOMPARE(producer.inputImportCount(), 1U);
     QVERIFY(producer.frameImportDiagnostics().metadataPath.contains(QStringLiteral("base-layer representation")));
     QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("ST 2094-40 EETF")));
 
-    QVERIFY(render(6.0f, VideoRenderingMode::AdaptiveHdr));
+    QVERIFY(render(6.0f));
     QCOMPARE(producer.inputImportCount(), 1U);
     for (float headroom : {1.1f, 1.01f, 1.001f, 1.0001f, 1.0f}) {
-        QVERIFY(render(headroom, VideoRenderingMode::AdaptiveHdr));
+        QVERIFY(render(headroom));
         QCOMPARE(producer.inputImportCount(), 1U);
         QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("ST 2094-40 EETF")));
     }
@@ -1660,23 +1874,22 @@ void FfmpegFirstFrameTest::dualFormatPreferenceRemapsPausedFrame() {
     QVERIFY(source.contentRevision() != revision);
     QCOMPARE(updates.count(), 1);
     auto state = surfaceState(*graphics, source.contentRevision(), 203.0f, dualFrame->geometry().visibleSize, 1.0f);
-    state.description.renderingMode = VideoRenderingMode::AdaptiveHdr;
     QVERIFY(producer.needsRender(state));
-    QVERIFY(render(1.0f, VideoRenderingMode::AdaptiveHdr));
+    QVERIFY(render(1.0f));
     QVERIFY(!producer.needsRender(state));
     QCOMPARE(producer.inputImportCount(), 2U);
     QVERIFY(producer.frameImportDiagnostics().metadataPath.contains(QStringLiteral("Dolby Vision reshape mapped")));
-    QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("Spline tone map")));
+    QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("BT.2446A EETF")));
     source.setPreferHdr10Plus(false);
     QCOMPARE(updates.count(), 1);
     QVERIFY(!producer.needsRender(state));
 
     source.setPreferHdr10Plus(true);
-    QVERIFY(render(1.0f, VideoRenderingMode::AdaptiveHdr));
+    QVERIFY(render(1.0f));
     QCOMPARE(producer.inputImportCount(), 3U);
     QVERIFY(producer.frameImportDiagnostics().metadataPath.contains(QStringLiteral("base-layer representation")));
     QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("ST 2094-40 EETF")));
-    QVERIFY(render(1.0f, VideoRenderingMode::SdrCompatibility));
+    QVERIFY(render(1.0f));
     QCOMPARE(producer.inputImportCount(), 3U);
 
 #endif
@@ -1838,7 +2051,7 @@ void FfmpegFirstFrameTest::realDemuxDecodeImportAndComposition() {
     QCOMPARE(diagnostics.target.knownOutputCpuTransfersPerRender, 0U);
 
     RenderedVideoSurfaceState changedTarget = state;
-    changedTarget.description.referenceWhiteNits = 100.0f;
+    changedTarget.description.color.referenceWhiteNits = 100.0f;
     QCOMPARE(producer.ensureSurface(changedTarget), VideoOperationResult::Ready);
     QVERIFY(producer.needsRender(changedTarget));
     QRhiReadbackResult changedSurface;

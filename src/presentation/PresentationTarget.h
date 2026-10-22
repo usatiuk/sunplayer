@@ -4,6 +4,7 @@
 #include <QString>
 
 #include "platform/DisplayState.h"
+#include "video/RenderedVideoSurface.h"
 
 struct PresentationBackendState {
     bool operator==(PresentationBackendState const&) const = default;
@@ -22,12 +23,10 @@ struct PresentationBackendState {
     bool hdrPresentationActive = false;
     // Managed SDR can use native primaries without HDR brightness headroom.
     bool managedSdrPresentationActive = false;
+    ColorPrimaries sdrOutputPrimaries = srgbColorPrimaries;
     // The active output encoding has a defined absolute luminance scale.
     bool absoluteLuminanceSupported = false;
     bool sceneReferred = false;
-    // A stable HDR content surface may remain active on an SDR output, whose
-    // valid 1x preferred target still describes the compositor conversion.
-    bool useSdrDisplayTargetForHdrPresentation = false;
     bool sdrWhiteKnown = false;
     bool luminanceKnown = false;
     float sdrWhiteNits = 80.0f;
@@ -40,19 +39,13 @@ struct PresentationBackendState {
 struct PresentationTarget {
     bool operator==(PresentationTarget const&) const = default;
 
+    VideoColorTarget color;
     bool hdrPresentationActive = false;
-    bool absolutePqAvailable = false;
     bool sceneReferred = false;
-    bool targetPrimariesKnown = false;
-    ColorPrimaries targetPrimaries;
     bool sdrWhiteKnown = false;
-    bool luminanceKnown = false;
-    float sdrWhiteNits = 0.0f;
-    float minLuminanceNits = 0.0f;
     float maxLuminanceNits = 0.0f;
     float currentHeadroom = 1.0f;
     float potentialHeadroom = 1.0f;
-    float effectiveTargetHeadroom = 1.0f;
     float sdrScale = 1.0f;
 };
 

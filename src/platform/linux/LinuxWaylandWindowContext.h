@@ -36,16 +36,16 @@ class LinuxWaylandWindowContext final : public PresentationSurfaceController {
     void releaseWindow(QWindow& window);
     std::unique_ptr<DisplayStateProvider> takeDisplayStateProvider(QObject* parent);
 
-    WaylandSurfaceSelection const& surfaceSelection() const;
     bool requiresClientSideDecorations() const;
     QVulkanInstance& vulkanInstance();
 
-    PresentationSurfaceMode desiredMode(std::uint64_t graphicsDeviceGeneration) override;
-    Preparation prepareFrame(QWindow& window, PresentationSurfaceMode mode, float headroom,
+    PresentationSurfaceContract desiredContract(DisplayState const& display,
+                                                std::uint64_t graphicsDeviceGeneration) override;
+    Preparation prepareFrame(QWindow& window, PresentationSurfaceContract const& contract, float headroom,
                              ColorPrimaries const& videoPrimaries) override;
-    void applyMode(QWindow& window, PresentationSurfaceMode mode) override;
-    void rejectManagedTarget(std::uint64_t graphicsDeviceGeneration, PresentationSurfaceMode mode,
-                             char const* reason) override;
+    void applyPrepared(QWindow& window) override;
+    void rejectTarget(std::uint64_t graphicsDeviceGeneration, PresentationSurfaceContract const& contract,
+                      char const* reason) override;
 
   private:
     struct NativeState;
@@ -53,7 +53,8 @@ class LinuxWaylandWindowContext final : public PresentationSurfaceController {
     std::unique_ptr<NativeState> m_nativeState;
     WaylandColorManagementCapabilities m_colorCapabilities;
     WaylandSurfaceSelection m_surfaceSelection;
-    std::optional<WaylandSurfaceRejection> m_surfaceRejection;
+    WaylandSurfaceRejection m_surfaceRejection;
+    WaylandPresentationMode m_selectedMode = WaylandPresentationMode::UnmanagedSrgb;
     bool m_requiresClientSideDecorations = false;
     QVulkanInstance m_vulkanInstance;
     QWindow* m_window = nullptr;

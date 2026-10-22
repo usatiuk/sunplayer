@@ -69,6 +69,17 @@ Linux-only consent/settings UI. Release-only environment secrets sign the
 image with appimagetool and publish `.zsync`; development packages stay unsigned
 and do not enable self-update. See the [updater delivery plan](../../plans/cross-cutting/2026-10-17-appimage-updates.md).
 
+## Compositor shader generation
+
+`src/presentation/shaders/compositor.frag` is a source template. The small
+`sunplayer_shader_generator` build tool obtains resource-free sRGB, gamma-2.2
+and PQ encoding functions from the linked libplacebo and writes
+`generated/shaders/compositor.frag` in the build tree. Qt qsb bakes that shader
+for the player and GPU tests. Generation fails if libplacebo introduces runtime
+resources or changes the required shader signature. There is no runtime shader
+compiler or extra libplacebo GPU pass. Windows stages the generator's dependent
+DLLs through the same runtime helper as the other executables.
+
 ## Dependency management
 
 The Docker-based x86-64 AppImage recipe, runtime ownership contract and local

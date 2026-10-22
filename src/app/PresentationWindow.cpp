@@ -128,8 +128,7 @@ PresentationWindow::PresentationWindow(ApplicationSettings& applicationSettings,
                                        LinuxWaylandWindowContext& windowContext)
     : m_applicationSettings(applicationSettings), m_supportController(supportController),
       m_windowChrome(*this, windowContext.requiresClientSideDecorations()), m_windowContext(windowContext) {
-    initialize(windowContext.surfaceSelection().presentationContract(), windowContext.takeDisplayStateProvider(nullptr),
-               &windowContext);
+    initialize({}, windowContext.takeDisplayStateProvider(nullptr), &windowContext);
 #else
 PresentationWindow::PresentationWindow(ApplicationSettings& applicationSettings, SupportController& supportController)
     : m_applicationSettings(applicationSettings), m_supportController(supportController), m_windowChrome(*this, false) {
@@ -387,7 +386,7 @@ void PresentationWindow::showSettings(int page) {
             .preferHdr10Plus = m_mediaSession->videoSource().preferHdr10Plus(),
             .sourceHdrReferenceWhiteNits = m_mediaSession->videoSource().sourceHdrReferenceWhiteNits(),
             .absolutePqEnabled = m_mediaSession->videoSource().absolutePqEnabled(),
-            .absolutePqAvailable = m_outputState->presentationTarget().absolutePqAvailable,
+            .absolutePqAvailable = m_outputState->presentationTarget().color.absolutePqAvailable,
         });
     };
     connect(dialog, &SettingsDialog::absolutePqEnabledEdited, &m_mediaSession->videoSource(),

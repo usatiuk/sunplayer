@@ -1,92 +1,58 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
-
-#include <QtGlobal>
 
 #include "platform/ColorPrimaries.h"
 
 class QWindow;
+struct DisplayState;
 
 enum class PresentationOutputEncoding {
     Srgb = 0,
-    Gamma22Srgb = 1,
+    Gamma22 = 1,
     LinearSrgb = 2,
     Bt2020Pq = 3,
-    Gamma22Display = 4,
 };
 
-enum class PresentationSurfaceMode {
-    // Existing Windows/macOS policy: choose extended linear when the native
-    // platform and active display allow it, otherwise emit piecewise sRGB.
-    AdaptiveExtendedLinear,
-    UnmanagedSrgb,
-    ManagedGamma22Sdr,
-    ManagedDisplaySdr,
-    ManagedHdr10Pq,
-};
-
+// Pixel interpretation, independent of native declaration APIs and video mapping.
 struct PresentationSurfaceContract {
     static constexpr float pqReferenceWhiteNits = 203.0f;
     static constexpr float pqPeakNits = 10'000.0f;
     static constexpr float pqMaximumHeadroom = pqPeakNits / pqReferenceWhiteNits;
 
-    PresentationSurfaceMode mode = PresentationSurfaceMode::AdaptiveExtendedLinear;
+    bool operator==(PresentationSurfaceContract const&) const = default;
+    PresentationOutputEncoding encoding = PresentationOutputEncoding::Srgb;
+    // Only Gamma22 has a variable basis. All other encodings define theirs.
+    ColorPrimaries sdrPrimaries = srgbColorPrimaries;
 
-    PresentationOutputEncoding outputEncoding(bool extendedLinearActive) const {
-        switch (mode) {
-        case PresentationSurfaceMode::AdaptiveExtendedLinear:
-            return extendedLinearActive ? PresentationOutputEncoding::LinearSrgb : PresentationOutputEncoding::Srgb;
-        case PresentationSurfaceMode::UnmanagedSrgb:
-            return PresentationOutputEncoding::Srgb;
-        case PresentationSurfaceMode::ManagedGamma22Sdr:
-            return PresentationOutputEncoding::Gamma22Srgb;
-        case PresentationSurfaceMode::ManagedDisplaySdr:
-            return PresentationOutputEncoding::Gamma22Display;
-        case PresentationSurfaceMode::ManagedHdr10Pq:
-            return PresentationOutputEncoding::Bt2020Pq;
-        }
-        Q_UNREACHABLE_RETURN(PresentationOutputEncoding::Srgb);
+    ColorPrimaries primaries() const {
+        return encoding == PresentationOutputEncoding::Bt2020Pq  ? bt2020ColorPrimaries
+               : encoding == PresentationOutputEncoding::Gamma22 ? sdrPrimaries
+                                                                 : srgbColorPrimaries;
     }
-
-    bool hdr10Required() const { return mode == PresentationSurfaceMode::ManagedHdr10Pq; }
-
-    bool usesAdaptiveHdrMapping(bool hdrPresentationActive, bool hdrDisplay, bool sceneReferred) const {
-        // An extended-linear WCG surface still wants SDR conversion. EDR at
-        // current headroom one and stable Wayland PQ retain adaptive mapping.
-        return hdrPresentationActive &&
-               (sceneReferred || hdrDisplay || mode == PresentationSurfaceMode::ManagedHdr10Pq);
-    }
-
-    float constrainTargetHeadroom(float requestedHeadroom) const {
-        switch (mode) {
-        case PresentationSurfaceMode::AdaptiveExtendedLinear:
-            return requestedHeadroom;
-        case PresentationSurfaceMode::UnmanagedSrgb:
-        case PresentationSurfaceMode::ManagedGamma22Sdr:
-        case PresentationSurfaceMode::ManagedDisplaySdr:
-            return 1.0f;
-        case PresentationSurfaceMode::ManagedHdr10Pq:
-            return requestedHeadroom > pqMaximumHeadroom ? pqMaximumHeadroom : requestedHeadroom;
-        }
-        Q_UNREACHABLE_RETURN(1.0f);
+    bool hdr10Required() const { return encoding == PresentationOutputEncoding::Bt2020Pq; }
+    float constrainTargetHeadroom(float headroom) const {
+        return encoding == PresentationOutputEncoding::LinearSrgb ? headroom
+               : hdr10Required()                                  ? std::min(headroom, pqMaximumHeadroom)
+                                                                  : 1.0f;
     }
 };
 
-// Optional platform boundary for presentation modes with a mutable native
-// color declaration. The engine owns rendering-resource reconciliation; the
-// controller owns only platform selection and declaration changes.
+// Optional native declaration owner. Qt owns the ordinary Windows/macOS path;
+// the presentation engine always owns rendering resources and reconciliation.
 class PresentationSurfaceController {
   public:
     enum class Preparation { Ready, Pending, Rejected };
     virtual ~PresentationSurfaceController() = default;
 
-    virtual PresentationSurfaceMode desiredMode(std::uint64_t graphicsDeviceGeneration) = 0;
-    // Pending completion requests a window update; never dispatch native events
-    // inside rendering. A ready declaration is applied with its matching buffer.
-    virtual Preparation prepareFrame(QWindow& window, PresentationSurfaceMode mode, float headroom,
+    virtual PresentationSurfaceContract desiredContract(DisplayState const& display,
+                                                        std::uint64_t graphicsDeviceGeneration) = 0;
+    // Pending completion requests a window update. A ready declaration is
+    // applied with matching pixels without dispatching native events in between.
+    virtual Preparation prepareFrame(QWindow& window, PresentationSurfaceContract const& contract, float headroom,
                                      ColorPrimaries const& videoPrimaries) = 0;
-    virtual void applyMode(QWindow& window, PresentationSurfaceMode mode) = 0;
-    virtual void rejectManagedTarget(std::uint64_t graphicsDeviceGeneration, PresentationSurfaceMode mode,
-                                     char const* reason) = 0;
+    virtual void applyPrepared(QWindow& window) = 0;
+    virtual void rejectTarget(std::uint64_t graphicsDeviceGeneration, PresentationSurfaceContract const& contract,
+                              char const* reason) = 0;
 };

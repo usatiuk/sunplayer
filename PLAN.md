@@ -79,11 +79,23 @@ Optional Absolute PQ uses physical luminance on supported Windows HDR output,
 with adaptive playback remaining the default. SDR and HLG are unchanged; see
 [the Absolute PQ plan](docs/plans/video-rendering/2026-09-20-absolute-pq.md).
 
-The September 2026 color-policy update separates SDR compatibility from adaptive
-HDR headroom, unifies generic PQ metadata/fallback mapper selection, and adds
-capability-aware composed Wayland target-volume declarations. The bounded work
-and validation are tracked in
-[the adaptation plan](docs/plans/video-rendering/2026-09-20-continuous-adaptation.md).
+The [shared color-pipeline simplification plan](docs/plans/video-rendering/2026-10-21-color-pipeline-simplification.md)
+is implemented and locally validated: one `VideoColorTarget`, BT.2446A at H=1
+and spline above one, common black/white coordinates for signed FP16 composition,
+and build-generated libplacebo transfers in the existing QRhi pass. Linux keeps
+WCG SDR and selects matching SDR on SDR displays and PQ on HDR displays through
+the existing native controller. Windows/macOS retain their Qt output paths;
+WCG SDR enablement and Qt delegation remain separate work. Linux Debug passes
+41/41 CTests, Release and QML lint pass, and a hidden-window native controller
+test covers pending/rejected declarations. Actual swapchain-buffer transition
+acceptance and execution of this change on Windows/macOS are still pending.
+See [ADR 0039](docs/decisions/0039-unify-color-mapping-and-native-encoding.md).
+
+The accompanying [native color-contract research](docs/research/2026-10-22-native-color-presentation-contracts.md)
+records the native limits on app-owned mapping, including Mutter's extra
+PQ-to-SDR branch avoided by matching SDR and its nominal HDR target feedback.
+Shared arithmetic does not establish physical display capability or universal
+compositor pass-through.
 
 
 As of 2026-08-16, the repository contains Windows D3D11, Apple-Silicon macOS
@@ -144,7 +156,7 @@ playback:
   disables inverse mapping, peak detection, and dithering; the exact decision
   is visible in diagnostics. Decoded PQ/Dolby uses a source reference-white
   setting R (100–203 nits, default 100), destination `R * targetPeakHeadroom`,
-  and `203 / R` coordinate conversion. No producer scale cancels live platform
+  and affine `(L-B)/(R-B)` working-coordinate conversion. No producer scale cancels live platform
   white, so Windows applies `referenceWhite / 80` exactly once to the complete
   composition; macOS and managed Wayland retain final scale one. SDR and HLG
   remain relative; HLG does not claim absolute-reference monitoring. Broader
@@ -200,10 +212,11 @@ playback:
   capabilities, creates a Vulkan 1.3 QRhi-owned device imported by libplacebo,
   and presents software-decoded video through the shared direct RGBA16F target
   and redirected QML compositor. Missing managed-color capability selects
-  unmanaged assumed-sRGB. A complete version-2 managed-HDR set selects a
-  SunPlayer-declared BT.2020/PQ surface with RGB10A2 HDR10 presentation, stable
-  across HDR and SDR output movement; genuine presentation failure rolls the
-  complete tuple back to managed gamma-2.2 SDR for that graphics generation.
+  unmanaged assumed-sRGB. The complete version-2 managed-HDR set permits a
+  SunPlayer-declared BT.2020/PQ surface with RGB10A2 HDR10 presentation on HDR
+  displays. SDR/WCG displays select matching gamma-2.2 SDR; presentation failures
+  retain generation-bounded managed-SDR fallback. Queued format changes preserve
+  the native window and device; movement acceptance remains pending.
   One bounded WSLg run completes the unmanaged llvmpipe production
   path, fullscreen/restoration, Vulkan synchronization validation, and
   application teardown. Two other runs timed out waiting for cursor-state
@@ -214,7 +227,7 @@ playback:
   audio-first application playback advance through the production cubeb clock.
   User-confirmed real-file playback is also audible through WSLg.
   Native PulseAudio/PipeWire-Pulse route-change and recovery evidence,
-  preferred-target rerendering, stable HDR-output movement, managed-SDR
+  preferred-target rerendering, HDR/SDR output movement, managed-SDR
   rollback, AMD VAAPI/DRM PRIME execution, broader native GPU/display validation,
   and packaging remain pending. The Linux VAAPI implementation now matches
   Vulkan's DRM render identity, opens FFmpeg on that exact node, and uses
@@ -457,8 +470,10 @@ Documentation: `docs/subsystems/playback/`
 * [x] Managed Wayland display-primary WCG SDR independently of HDR, with matching
   final composition encoding and async native declarations (ADR 0032).
 * [x] Wayland Linux Vulkan SDR presentation foundation
-* [x] Wayland Linux version-2 managed HDR10/PQ presentation, stable across
-  HDR/SDR output movement with complete managed-SDR presentation fallback
+* [x] Wayland Linux version-2 managed HDR10/PQ and matching SDR/WCG presentation,
+  with capability/rejection fallback and queued format changes (ADR 0039)
+* [x] Native hidden-window coverage of pending/rejected Wayland declarations
+* [ ] Engine buffer/declaration pairing and paused SDR/PQ movement acceptance
 * [x] Shared presentation and display-state model
 * [x] Initial Windows window-movement and Advanced Color observation
 * [x] Initial Windows dynamic Advanced Color notification
@@ -469,7 +484,7 @@ Documentation: `docs/subsystems/playback/`
 * [x] Initial macOS AppKit EDR-headroom and display-change adapter
 * [x] Initial Wayland startup capability, v2 surface-declaration, and
   unmanaged/managed-SDR fallback adapter
-* [x] Wayland preferred-target observation and stable managed-HDR adapter
+* [x] Wayland preferred-target observation and native-private SDR/HDR selection
 * [x] Graphics-device loss and recreation
 
 Documentation: `docs/subsystems/graphics/`
@@ -497,8 +512,11 @@ Documentation: `docs/subsystems/graphics/`
 * [x] Offscreen HDR render-target contract and temporary QRhi producer
 * [x] Display-target and SDR-white updates
 * [x] Prior analytic reference-white-adaptive SDR/static-PQ mapping checkpoint
-* [x] Nominal-100 PQ/Dolby mapping at headroom one, with fixed output-unit
-  normalization; reference-white-adaptive normal HDR at higher headroom
+* [x] One mapping target and headroom-selected operator across source formats,
+  with affine black/white normalization and preserved reference-white preferences
+* [x] Libplacebo-generated output transfers in the existing QRhi compositor
+* [x] Linux refactor GPU acceptance, complete Debug suite, Release build and QML lint
+* [ ] Complete engine native-transition and Windows/macOS acceptance
 * [x] Real FFmpeg-decoded static-PQ fixture and retained-metadata validation
 * [x] Bounded display-gamut propagation from Windows Advanced Color, AppKit
   P3/sRGB representability, and managed-Wayland preferred target primaries

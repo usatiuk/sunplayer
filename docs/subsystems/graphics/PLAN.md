@@ -142,12 +142,12 @@ Replace the temporary producer with a persistent libplacebo renderer.
 * [x] Render known sRGB and BT.2020/PQ software-backed images into the video
   surface.
 * [x] Express active reference white and target headroom for relative SDR and
-  analytic static PQ through libplacebo's 203-nit target coordinate, remove
-  the cancelling pre-output normalization, and capture one fixed PQ signal at
-  80, 100, and 203 nits.
+  analytic static PQ through libplacebo's 203-nit coordinate; normalize mapped
+  light with the shared affine PRE_OUTPUT conversion (ADR 0039).
 * [x] Reuse the renderer across size, source, and display changes.
-* [ ] Explicitly pin the current spline/perceptual, inverse-mapping-off,
-  peak-detection-off, and RGBA16F-dithering-off renderer policy; reset
+* [ ] Explicitly pin the shared headroom-selected operator/perceptual,
+  inverse-mapping-off, peak-detection-off, and RGBA16F-dithering-off renderer
+  policy; reset
   source-temporal state at playback discontinuities without recreating the
   renderer.
 * [x] Expose backend, render target, zero-copy, synchronization, and failure
@@ -176,9 +176,9 @@ realization of non-direct target paths if supported hardware requires them.
 The shared reference-white-relative target is accepted for normal PQ and
 mapped-Dolby playback. HLG remains functional but its coupling to libplacebo's
 physical OOTF peak is tracked as a validation limit in
-[the video-rendering plan](../video-rendering/PLAN.md). HDR10+ uses its source
-OOTF only for the nominal-SDR target; normal HDR retains its scene guidance
-with spline.
+[the video-rendering plan](../video-rendering/PLAN.md). Supported source-authored
+HDR10+ OOTFs select ST 2094-40 at both SDR and HDR targets. Otherwise generic
+mapping selects BT.2446A at H=1 and spline at H>1 (ADR 0039).
 
 ## Milestone 4: first decoded video frame
 
@@ -273,9 +273,9 @@ responsibilities.
   switching still require suitable native hardware.
 * [x] Implement native Wayland Linux Vulkan presentation, unmanaged piecewise-
   sRGB fallback, SunPlayer-owned version-2 managed descriptions, preferred-
-  target observation, stable BT.2020/PQ HDR10 across output movement, and
-  complete gamma-2.2 SDR rollback after presentation failure. X11 and XWayland
-  are unsupported.
+  target observation, gamma-2.2 SDR/WCG on SDR outputs and BT.2020/PQ on HDR
+  outputs, with queued declaration/buffer-format changes and independent
+  bounded native fallback. X11 and XWayland are unsupported.
 * [x] Add exact-render-node VAAPI negotiation and libplacebo DRM PRIME import,
   with bounded native-frame retirement and shared software fallback. Native
   Intel NV12/P010 and turnover/seek pass; AMD execution and device-loss
@@ -296,8 +296,8 @@ For each implemented milestone, validate at least:
 | Unmanaged SDR output | Exact piecewise-sRGB encoding and no HDR headroom claims |
 | Managed SDR output | Exact `encoded = linear^(1/2.2)` encoding matching the `gamma22` surface declaration |
 | HDR output | Extended-linear presentation on Windows/macOS or BT.2020/PQ on managed Wayland, with correct reference-white placement |
-| HDR disabled on capable Wayland output | Stable PQ content is compositor-mapped to the SDR output without client format churn |
-| Move between unlike Wayland displays | Targeted content rerenders while the window, surface, and HDR10 tuple remain stable |
+| HDR disabled on capable Wayland output | SDR/WCG encoding and a headroom-one mapping target |
+| Move between unlike Wayland displays | Targeted content rerenders; only a format change recreates the swapchain, preserving the window, native surface and device |
 | DPI or window resize | UI and video geometry remain aligned |
 | Animation disabled | No continuous presentation loop |
 | Swapchain out of date | Resize/retry without stale render-pass resources |
@@ -319,3 +319,17 @@ See the [delivery plan](../../plans/graphics/2026-10-17-wayland-wcg-sdr.md).
   explicit zero-black PQ luminances, keep tighter metadata where supported
   (ADR 0033). Native PQ/XR30 presentation is accepted and user-observed HDR;
   both capability variants are regression-tested.
+
+## October 2026: unified color mapping and native encoding
+
+[ADR 0039](../../decisions/0039-unify-color-mapping-and-native-encoding.md)
+supersedes the earlier stable-PQ-on-SDR and scale-only normalization policies.
+One shared target drives mapping; signed linear composition precedes the final
+native encoding. Linux retains WCG SDR, while Windows/macOS keep existing Qt
+output eligibility.
+
+The [delivery plan](../../plans/video-rendering/2026-10-21-color-pipeline-simplification.md)
+records the Linux build, 41 passing CTests, offscreen GPU oracles, hidden native
+declaration tests, AppImage smoke and the user's observation that black levels
+appear fixed. Complete engine buffer/declaration transitions, physical monitor
+movement, Windows/macOS execution and physical calibration remain unverified.

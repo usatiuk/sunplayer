@@ -11,23 +11,27 @@ struct LibplaceboGraphicsContext;
 struct LibplaceboTargetLuminance {
     float coordinateWhiteNits = 0.0f;
     float maximumNits = 0.0f;
-    float outputNormalizationScale = 1.0f;
+    float minimumNits = 0.0f;
+
+    float workingPeak() const { return (maximumNits - minimumNits) / (coordinateWhiteNits - minimumNits); }
 };
 
 // The source color must already be inferred. PQ/Dolby uses the selected source
 // reference white as its virtual target coordinate, or physical display white
 // when Absolute PQ is requested and supported by the HDR target.
 // Relative sources retain libplacebo's 203-nit coordinate.
-LibplaceboTargetLuminance calculateLibplaceboTargetLuminance(pl_frame const& source,
-                                                             RenderedVideoSurfaceDescription const& target,
+LibplaceboTargetLuminance calculateLibplaceboTargetLuminance(pl_frame const& source, VideoColorTarget const& target,
                                                              float sourceHdrReferenceWhiteNits,
                                                              bool absolutePqEnabled = false);
 
 // Translates the surface's known/value pair into libplacebo target metadata.
 // Numeric zero means unknown to libplacebo; PL_COLOR_HDR_BLACK means known
-// effectively-zero black, and conservatively preserves legacy behavior for an
-// unknown extended-linear HDR/EDR target (ADR 0026).
-float calculateLibplaceboTargetMinimumNits(RenderedVideoSurfaceDescription const& description, float targetMaximumNits);
+// effectively-zero black. The library infers an unknown minimum once when the
+// linear target is constructed, independently of the tone operator.
+float calculateLibplaceboTargetMinimumNits(VideoColorTarget const& target, float targetMaximumNits);
+
+// Conservative composition bound in the same normalized units as the renderer.
+float libplaceboWorkingPeak(VideoColorTarget const& target);
 
 // Shared libplacebo renderer boundary for analytic and decoded inputs. It owns
 // target color construction and applies the caller's tone-mapping selection.
@@ -39,8 +43,6 @@ class LibplaceboRenderContext final {
 
     LibplaceboRenderContext(LibplaceboRenderContext const&) = delete;
     LibplaceboRenderContext& operator=(LibplaceboRenderContext const&) = delete;
-
-    static QString policyDescription(bool toneMappingEnabled);
 
     bool isValid() const;
     bool render(pl_frame const& source, pl_tex targetTexture, RenderedVideoSurfaceDescription const& targetDescription,

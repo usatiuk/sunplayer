@@ -79,23 +79,28 @@ enum class WaylandSdrSurfaceMode {
 
 struct WaylandSurfaceSelection {
     WaylandSdrSurfaceMode mode = WaylandSdrSurfaceMode::UnmanagedSrgb;
-    bool managedHdr10 = false;
-    bool managedDisplaySdr = false;
     QString diagnostic;
-
-    PresentationSurfaceContract presentationContract() const;
 };
 
 WaylandSurfaceSelection selectWaylandSurface(WaylandColorManagementCapabilities const& capabilities);
 
-struct WaylandSurfaceRejection {
-    std::uint64_t graphicsDeviceGeneration = 0;
-    PresentationSurfaceMode mode = PresentationSurfaceMode::ManagedHdr10Pq;
+enum class WaylandPresentationMode {
+    UnmanagedSrgb,
+    ManagedGamma22Sdr,
+    ManagedDisplaySdr,
+    ManagedHdr10Pq,
 };
 
-PresentationSurfaceMode selectWaylandPresentationMode(WaylandSdrSurfaceMode startupMode,
+struct WaylandSurfaceRejection {
+    std::uint64_t graphicsDeviceGeneration = 0;
+    bool hdr10 = false;
+    bool displaySdr = false;
+};
+
+WaylandPresentationMode selectWaylandPresentationMode(WaylandSdrSurfaceMode startupMode,
                                                       WaylandColorManagementCapabilities const& capabilities,
+                                                      DisplayState const& display,
                                                       std::uint64_t graphicsDeviceGeneration,
-                                                      std::optional<WaylandSurfaceRejection> const& rejection);
+                                                      WaylandSurfaceRejection const& rejection);
 
 Q_DECLARE_METATYPE(WaylandColorManagementCapabilities)

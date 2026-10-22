@@ -94,15 +94,86 @@ presentation. Exact macOS profile chromaticities, Wayland compositor/display
 behavior, and physical gamut verification remain deferred, so the project does
 not yet make a measured cross-platform wide-gamut-output claim.
 
-Managed Wayland now declares the post-mapping composition volume using the
-mastering feature and one asynchronous description, with capability/rejection
-fallback. Native compositor acceptance, paused updates, resize during a pending
+Managed Wayland declares the post-mapping composition volume when the optional
+mastering feature is supported, using asynchronous descriptions and capability/
+rejection fallback. Native acceptance of that optional path, paused updates, resize during a pending
 description, multiple-output behavior, and physical double-mapping assessment
 remain unvalidated. Different-white-point targets intentionally retain the full transport volume;
 tighter unions are deferred until demonstrated necessary.
-See ADR 0027 and the September 2026 adaptation plan.
+See ADR 0039 and the color-pipeline delivery plan; the original volume work is
+recorded in ADR 0027 and the September 2026 adaptation plan.
 
 Track under graphics milestone 5 and the active testing plan.
+
+### Native WCG SDR eligibility and macOS SDR declaration
+
+Windows/macOS WCG SDR enablement is explicitly outside the shared color-pipeline
+refactor. Inspected Qt 6.11.1 D3D11 gates FP16 scRGB on active HDR in both its
+support query and creation path. Metal's query requires potential EDR above one,
+as does SunPlayer's selection, although Metal creation does not repeat that gate.
+The current routes therefore do not deliver the intended WCG SDR-only output.
+
+SunPlayer's macOS SDR shader emits sRGB values without explicitly requesting an
+sRGB native declaration. Qt Cocoa inherits `NSWindow.colorSpace` and propagates
+it to the Metal layer; the active inherited profile has not been observed here.
+Do not describe that fallback as explicitly tagged sRGB or proven color-correct.
+Native declaration repair, alternative SDR encodings and Qt gate changes are
+separate work. Existing Linux managed WCG SDR and HDR output remain in scope
+for preservation, without adding new output modes. See the
+[source audit](research/2026-10-22-color-pipeline-simplification-evidence.md#native-output-audit-current-limitations-not-implementation-work)
+and [delivery plan](plans/video-rendering/2026-10-21-color-pipeline-simplification.md).
+
+### Native mapping ownership and target interpretation
+
+The former stable PQ surface receives another HDR-to-SDR mapping on inspected
+Mutter 50.1. The implemented SDR/PQ selector now chooses matching SDR on SDR
+outputs to avoid that branch. Native transition acceptance is still pending.
+Mutter's preferred HDR description can expose the PQ/BT.2020 encoding envelope,
+not a measured physical panel peak/gamut. Neither the new selector nor the
+shared black-coordinate correction proves physical output accuracy.
+
+On macOS 15+, `CALayer.toneMapMode` offers an explicit `never` setting for
+already mapped content. Qt 6.11.1 does not set it. Nil CAEDRMetadata alone should
+not be described as controlling all modern tone-mapping mechanisms; this is
+not a demonstrated current macOS rendering defect. On Windows, QRhi's requested
+format getter does not independently verify native allocation/declaration after
+D3D11 fallback or color-space failure.
+
+See the [native-contract investigation](research/2026-10-22-native-color-presentation-contracts.md)
+and the active [video-rendering plan](subsystems/video-rendering/PLAN.md).
+These limitations constrain complete app-owned-mapping claims. A physical-target
+subsystem, Windows/macOS WCG workaround and broader mapping-ownership controls
+remain separate work.
+
+Replacing the manual Wayland declaration writer with Qt is a separate,
+non-blocking follow-up to shared color simplification. The existing surface
+controller can keep protocol capabilities, pending descriptions and rejection
+handling private while exposing the effective pixel encoding and activation
+outcome. A Qt writer can coexist with our feedback observer, but the checked
+Qt APIs do not yet demonstrate equivalent runtime retagging, rejection recovery,
+explicit luminances or useful output-volume hints. Preserve existing Linux WCG
+behavior until an equivalent path is established; do not create a generic
+metadata framework or Windows/macOS placeholder implementations for this work.
+
+### Color-pipeline refactor acceptance
+
+The shared target, headroom-selected operator, affine working coordinates and
+generated output transfers are implemented (ADR 0039). Linux Debug passes 41/41
+CTests, including final-encoding GPU oracles; Release and QML lint pass. Evidence is tracked in the
+[delivery plan](plans/video-rendering/2026-10-21-color-pipeline-simplification.md).
+This change has not been executed on Windows/macOS here; historical platform
+captures are not a substitute for rerunning the affected paths.
+
+A required hidden-window host test now covers native v2 readiness/assignment,
+pending replacement and primary changes with synthetic display/generation
+inputs and injected rejection, including same-contract SDR fallback. It never
+shows the window, submits swapchain buffers or recreates a graphics device.
+Native engine acceptance still needs paused SDR→PQ→SDR presentation,
+primaries-only changes without swapchain recreation, surface recreation and
+matching declaration/buffer commits with retained window/device/media lifetime.
+Neither the controller test nor offscreen pixels prove that complete boundary.
+Physical display output and compositor-specific HDR mapping remain separate
+limitations.
 
 ### Qt private API compatibility
 
@@ -201,7 +272,7 @@ target model or upstream-supported integration.
 SunPlayer relies on the operating system or compositor for final display-profile
 calibration on managed paths: Windows Advanced Color, implemented macOS
 ColorSync/EDR surface declaration, and the implemented SunPlayer-owned Wayland
-version-2 managed SDR and stable HDR10/PQ declarations.
+version-2 managed SDR and HDR10/PQ declarations selected from current display state.
 Managed Wayland HDR presentation and complete SDR rollback are implemented;
 broader compositor/GPU/display validation and any future version-1
 compatibility remain deferred. Ordinary Windows DirectX SDR

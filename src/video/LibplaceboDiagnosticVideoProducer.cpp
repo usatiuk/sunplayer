@@ -237,7 +237,15 @@ RenderedVideoProducerDiagnostics LibplaceboDiagnosticVideoProducer::diagnostics(
     result.producerName = m_source.sourcePeakHeadroom() > 1.0f
                               ? QStringLiteral("libplacebo fixed-reference BT.2020 / PQ")
                               : QStringLiteral("libplacebo analytic sRGB");
-    result.colorPolicy = LibplaceboRenderContext::policyDescription(m_source.toneMappingEnabled());
+    float const headroom = m_completedState ? m_completedState->description.color.targetPeakHeadroom : 1.0f;
+    result.colorPolicy =
+        LibplaceboColorPolicyDecision{
+            .toneMapping =
+                m_source.toneMappingEnabled() ? libplaceboToneMapping(headroom) : LibplaceboToneMappingFunction::Clip,
+            .provenance = m_source.sourcePeakHeadroom() > 1.0f ? LibplaceboSourceMetadataProvenance::ExistingSelection
+                                                               : LibplaceboSourceMetadataProvenance::None,
+        }
+            .description();
     result.inputPath = m_sourceSize.isEmpty() ? QStringLiteral("Fixed-size CPU RGBA32F diagnostic upload")
                                               : QStringLiteral("Fixed-size CPU RGBA32F upload · %1×%2")
                                                     .arg(m_sourceSize.width())

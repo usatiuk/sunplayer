@@ -30,10 +30,9 @@
 #include "video/RenderedVideoSource.h"
 #include "video/RenderedVideoSurface.h"
 #include "video/VideoTargetInterop.h"
+#include "video/libplacebo/LibplaceboRenderContext.h"
 
 namespace {
-constexpr float scRgbReferenceWhiteNits = 80.0f;
-
 float positiveOrFallback(float value, float fallback, char const* name) {
     if (std::isfinite(value) && value > 0.0f) {
         return value;
@@ -58,14 +57,15 @@ void advanceRevision(std::uint64_t& revision) {
 }
 
 QRhiSwapChain::Format desiredSwapChainFormat(PresentationSurfaceContract const& surfaceContract,
-                                             QRhiSwapChain& swapChain, bool displayHdrAvailable,
+                                             QRhiSwapChain& swapChain, bool nativeDeclaration, bool displayHdrAvailable,
                                              bool hdr10PlatformSupported) {
     if (surfaceContract.hdr10Required()) {
         return hdr10PlatformSupported && swapChain.isFormatSupported(QRhiSwapChain::HDR10) ? QRhiSwapChain::HDR10
                                                                                            : QRhiSwapChain::SDR;
     }
-    if (surfaceContract.mode != PresentationSurfaceMode::AdaptiveExtendedLinear) {
-        return QRhiSwapChain::SDR;
+    if (nativeDeclaration) {
+        return surfaceContract.encoding == PresentationOutputEncoding::LinearSrgb ? QRhiSwapChain::HDRExtendedSrgbLinear
+                                                                                  : QRhiSwapChain::SDR;
     }
 
     bool extendedLinearAllowed = true;
@@ -91,8 +91,6 @@ RhiPresentationEngine::RhiPresentationEngine(QWindow& window, PresentationOutput
       m_diagnosticSource(diagnosticSource), m_mediaSession(mediaSession), m_videoViewport(videoViewport),
       m_subtitleSettings(subtitleSettings), m_supportController(supportController), m_jellyfin(jellyfin),
       m_surfaceContract(surfaceContract), m_surfaceController(surfaceController) {
-    Q_ASSERT((m_surfaceController != nullptr) ==
-             (m_surfaceContract.mode != PresentationSurfaceMode::AdaptiveExtendedLinear));
     m_deviceRecoveryTimer.setSingleShot(true);
     m_swapChainRecoveryTimer.setSingleShot(true);
     connect(&m_subtitleSettings, &SubtitleSettings::settingsChanged, this, &RhiPresentationEngine::requestFrame);
@@ -230,38 +228,14 @@ void RhiPresentationEngine::renderFrame() {
     // live platform target, regardless of retained diagnostic state.
     float const requestedTargetPeak = diagnosticsActive && !m_settings.automaticTargetPeak()
                                           ? m_settings.manualTargetHeadroom()
-                                          : presentationTarget.effectiveTargetHeadroom;
+                                          : presentationTarget.color.targetPeakHeadroom;
     float const targetPeak = m_surfaceContract.constrainTargetHeadroom(requestedTargetPeak);
     if (!videoRect.isEmpty()) {
         Q_ASSERT(std::isfinite(targetPeak) && targetPeak >= 1.0f);
-        float const referenceWhiteNits =
-            presentationTarget.sdrWhiteKnown ? presentationTarget.sdrWhiteNits : scRgbReferenceWhiteNits;
-        Q_ASSERT(std::isfinite(referenceWhiteNits) && referenceWhiteNits > 0.0f);
-        bool const targetMinimumLuminanceKnown = presentationTarget.luminanceKnown;
-        float const targetMinimumLuminanceNits =
-            targetMinimumLuminanceKnown
-                ? std::clamp(presentationTarget.minLuminanceNits, 0.0f, referenceWhiteNits * targetPeak)
-                : 0.0f;
-
         requestedSurface.emplace();
         requestedSurface->description.pixelSize = videoRect.size();
-        requestedSurface->description.pixelFormat = RenderedVideoPixelFormat::Rgba16Float;
-        requestedSurface->description.colorSpace = RenderedVideoColorSpace::LinearSrgb;
-        requestedSurface->description.luminance = RenderedVideoLuminance::DisplayTargetedSdrWhiteRelative;
-        requestedSurface->description.alphaMode = RenderedVideoAlphaMode::Opaque;
-        requestedSurface->description.referenceWhiteNits = referenceWhiteNits;
-        requestedSurface->description.targetMinimumLuminanceKnown = targetMinimumLuminanceKnown;
-        requestedSurface->description.targetMinimumLuminanceNits = targetMinimumLuminanceNits;
-        requestedSurface->description.targetPeakHeadroom = targetPeak;
-        requestedSurface->description.renderingMode =
-            m_surfaceContract.usesAdaptiveHdrMapping(presentationTarget.hdrPresentationActive,
-                                                     m_outputState.displayHdrEnabled(),
-                                                     presentationTarget.sceneReferred)
-                ? VideoRenderingMode::AdaptiveHdr
-                : VideoRenderingMode::SdrCompatibility;
-        requestedSurface->description.absolutePqAvailable = presentationTarget.absolutePqAvailable;
-        requestedSurface->description.targetPrimariesKnown = presentationTarget.targetPrimariesKnown;
-        requestedSurface->description.targetPrimaries = presentationTarget.targetPrimaries;
+        requestedSurface->description.color = presentationTarget.color;
+        requestedSurface->description.color.targetPeakHeadroom = targetPeak;
         requestedSurface->graphicsDeviceGeneration = m_graphicsDevice->generation();
         requestedSurface->contentRevision = m_videoSource.contentRevision();
         Q_ASSERT(requestedSurface->isValid());
@@ -334,13 +308,17 @@ void RhiPresentationEngine::renderFrame() {
         m_boundSubtitleTextureRevision = subtitleTextureRevision;
     }
 
-    if (m_surfaceController && m_surfaceContract.mode != PresentationSurfaceMode::UnmanagedSrgb) {
+    if (m_surfaceController) {
         // Finish texture rebinding before a possible asynchronous wait. HDR Lab
         // can bypass mapping, so its declaration must allow the transport peak.
         auto const prepared = m_surfaceController->prepareFrame(
-            m_window, m_surfaceContract.mode,
-            diagnosticsActive ? PresentationSurfaceContract::pqMaximumHeadroom : targetPeak,
-            presentationTarget.targetPrimariesKnown ? presentationTarget.targetPrimaries : ColorPrimaries{});
+            m_window, m_surfaceContract,
+            diagnosticsActive ? PresentationSurfaceContract::pqMaximumHeadroom
+                              : std::min(PresentationSurfaceContract::pqMaximumHeadroom,
+                                         libplaceboWorkingPeak(requestedSurface ? requestedSurface->description.color
+                                                                                : presentationTarget.color)),
+            presentationTarget.color.targetPrimariesKnown ? presentationTarget.color.targetPrimaries
+                                                          : ColorPrimaries{});
         if (prepared == PresentationSurfaceController::Preparation::Rejected) {
             rejectManagedSurface("compositor rejected the composed target volume");
             return;
@@ -445,23 +423,17 @@ void RhiPresentationEngine::renderFrame() {
     parameters.ndcYUp = m_rhi->isYUpInNDC() ? 1.0f : 0.0f;
     // Final encoding follows the successfully created presentation path, not
     // asynchronous OS HDR metadata that may already describe another output.
-    bool const extendedLinearActive = m_swapChain->format() == QRhiSwapChain::HDRExtendedSrgbLinear;
-    PresentationOutputEncoding const outputEncoding = m_surfaceContract.outputEncoding(extendedLinearActive);
-    parameters.outputEncoding = static_cast<float>(outputEncoding);
-    if (m_surfaceContract.mode == PresentationSurfaceMode::ManagedDisplaySdr &&
-        presentationTarget.targetPrimariesKnown) {
-        parameters.setOutputPrimaries(presentationTarget.targetPrimaries);
-    }
+    parameters.outputEncoding = static_cast<float>(m_surfaceContract.encoding);
+    parameters.setOutputPrimaries(m_surfaceContract.primaries());
 
     Q_ASSERT(m_compositor);
     m_compositor->render(commandBuffer, *m_swapChain->currentFrameRenderTarget(), pixelSize, parameters);
 
-    if (m_surfaceController && m_surfaceContract.mode != PresentationSurfaceMode::UnmanagedSrgb) {
-        Q_ASSERT(m_surfaceController);
+    if (m_surfaceController) {
         // Queue the double-buffered declaration immediately before Vulkan WSI
         // presents the matching buffer. No Qt event processing can insert an
         // unrelated wl_surface commit between these two operations.
-        m_surfaceController->applyMode(m_window, m_surfaceContract.mode);
+        m_surfaceController->applyPrepared(m_window);
     }
     result = finishFrame({}, true);
     if (result == QRhi::FrameOpDeviceLost) {
@@ -651,8 +623,9 @@ bool RhiPresentationEngine::createSwapChain() {
 
     bool const hdr10PlatformSupported =
         !m_surfaceContract.hdr10Required() || m_graphicsDevice->supportsHdr10Presentation(m_window);
-    QRhiSwapChain::Format const desiredFormat = desiredSwapChainFormat(
-        m_surfaceContract, *m_swapChain, m_outputState.displayHdrEnabled(), hdr10PlatformSupported);
+    QRhiSwapChain::Format const desiredFormat =
+        desiredSwapChainFormat(m_surfaceContract, *m_swapChain, m_surfaceController != nullptr,
+                               m_outputState.displayHdrEnabled(), hdr10PlatformSupported);
     if (m_surfaceContract.hdr10Required() && desiredFormat != QRhiSwapChain::HDR10) {
         m_swapChain.reset();
         rejectManagedSurface("the current Wayland Vulkan surface does not expose "
@@ -669,6 +642,11 @@ bool RhiPresentationEngine::createSwapChain() {
     if (!m_swapChain->createOrResize()) {
         handleSwapChainFailure("creating the swapchain", "QRhi could not create the HDR10 swapchain");
         return false;
+    }
+    if (!m_surfaceController) {
+        m_surfaceContract.encoding = m_swapChain->format() == QRhiSwapChain::HDRExtendedSrgbLinear
+                                         ? PresentationOutputEncoding::LinearSrgb
+                                         : PresentationOutputEncoding::Srgb;
     }
     completePresentationRecovery();
     updateBackendState();
@@ -877,8 +855,9 @@ void RhiPresentationEngine::updateBackendState() {
         state.swapChainFormat = QStringLiteral("SDR / sRGB");
         break;
     }
-    if (m_surfaceContract.mode == PresentationSurfaceMode::ManagedDisplaySdr) {
+    if (m_surfaceContract.encoding == PresentationOutputEncoding::Gamma22) {
         state.managedSdrPresentationActive = true;
+        state.sdrOutputPrimaries = m_surfaceContract.primaries();
         state.swapChainFormat = QStringLiteral("SDR / display primaries / gamma 2.2");
     }
     state.videoSurfaceFormat = QStringLiteral("RGBA16F · linear sRGB · SDR-white-relative");
@@ -909,10 +888,7 @@ void RhiPresentationEngine::updateBackendState() {
     // currently establish an absolute luminance contract for this renderer.
     state.absoluteLuminanceSupported = state.hdrPresentationActive && state.sceneReferred &&
                                        m_swapChain->format() == QRhiSwapChain::HDRExtendedSrgbLinear &&
-                                       m_surfaceContract.outputEncoding(true) == PresentationOutputEncoding::LinearSrgb;
-#endif
-#ifdef Q_OS_LINUX
-    state.useSdrDisplayTargetForHdrPresentation = true;
+                                       m_surfaceContract.encoding == PresentationOutputEncoding::LinearSrgb;
 #endif
 #if defined(Q_OS_MACOS) || defined(Q_OS_LINUX)
     // Apple EDR is display-referred. Numeric 1.0 already means the current
@@ -961,6 +937,24 @@ void RhiPresentationEngine::markOutputCharacteristicsDirty() {
 }
 
 bool RhiPresentationEngine::reconcileOutputCharacteristics() {
+    if (m_surfaceController) {
+        Q_ASSERT(m_graphicsDevice);
+        auto const desired =
+            m_surfaceController->desiredContract(m_outputState.displayState(), m_graphicsDevice->generation());
+        if (desired != m_surfaceContract) {
+            bool const formatChanged = desired.encoding != m_surfaceContract.encoding;
+            if (formatChanged) {
+                queueSurfaceTransition();
+                return false;
+            }
+            // Primaries-only changes use the same buffer format; declaration
+            // readiness is reconciled before presenting matching pixels.
+            m_surfaceContract = desired;
+            if (m_swapChain) {
+                updateBackendState();
+            }
+        }
+    }
 #ifdef Q_OS_MACOS
     if (!m_outputCharacteristicsDirty && !m_swapChainSurfaceDirty) {
         return true;
@@ -974,23 +968,15 @@ bool RhiPresentationEngine::reconcileOutputCharacteristics() {
 #endif
     m_outputCharacteristicsDirty = false;
 
-    if (m_surfaceController) {
-        Q_ASSERT(m_graphicsDevice);
-        PresentationSurfaceMode const desiredMode = m_surfaceController->desiredMode(m_graphicsDevice->generation());
-        if (desiredMode != m_surfaceContract.mode) {
-            queueSurfaceTransition();
-            return false;
-        }
-    }
-
     if (!m_swapChain) {
         return true;
     }
 
     bool const hdr10PlatformSupported =
         !m_surfaceContract.hdr10Required() || m_graphicsDevice->supportsHdr10Presentation(m_window);
-    QRhiSwapChain::Format const desiredFormat = desiredSwapChainFormat(
-        m_surfaceContract, *m_swapChain, m_outputState.displayHdrEnabled(), hdr10PlatformSupported);
+    QRhiSwapChain::Format const desiredFormat =
+        desiredSwapChainFormat(m_surfaceContract, *m_swapChain, m_surfaceController != nullptr,
+                               m_outputState.displayHdrEnabled(), hdr10PlatformSupported);
     if (m_swapChain->format() != desiredFormat) {
         releaseSwapChainResources();
         return true;
@@ -1033,10 +1019,8 @@ void RhiPresentationEngine::queueSurfaceTransition() {
                 return;
             }
 
-            PresentationSurfaceMode const latestMode = m_surfaceController->desiredMode(m_graphicsDevice->generation());
-            if (latestMode != m_surfaceContract.mode) {
-                m_surfaceContract.mode = latestMode;
-            }
+            m_surfaceContract =
+                m_surfaceController->desiredContract(m_outputState.displayState(), m_graphicsDevice->generation());
 
             m_surfaceTransitionPending = false;
             m_outputCharacteristicsDirty = true;
@@ -1048,9 +1032,8 @@ void RhiPresentationEngine::queueSurfaceTransition() {
 void RhiPresentationEngine::rejectManagedSurface(char const* reason) {
     Q_ASSERT(m_surfaceController);
     Q_ASSERT(m_graphicsDevice);
-    Q_ASSERT(m_surfaceContract.mode == PresentationSurfaceMode::ManagedHdr10Pq ||
-             m_surfaceContract.mode == PresentationSurfaceMode::ManagedDisplaySdr);
-    m_surfaceController->rejectManagedTarget(m_graphicsDevice->generation(), m_surfaceContract.mode, reason);
+    Q_ASSERT(m_surfaceContract.hdr10Required() || m_surfaceContract.encoding == PresentationOutputEncoding::Gamma22);
+    m_surfaceController->rejectTarget(m_graphicsDevice->generation(), m_surfaceContract, reason);
     m_outputCharacteristicsDirty = true;
     queueSurfaceTransition();
 }
