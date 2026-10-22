@@ -70,6 +70,23 @@ passed. The XWayland launches used isolated preferences/cache/data under
 settings were not changed. An initial black capture was unusable; the user
 explained that the VM goes to sleep, and the retry supplied the evidence above.
 
+## Follow-up: spline for SDR
+
+After the initial cleanup, the user requested a separate temporary build
+using spline instead of BT.2446A at SDR headroom 1. The shared selector was
+changed and the Linux release executable rebuilt; display metadata, native
+Wayland encoding, normalization, and the existing HDR10+ override were left
+unchanged. The user reported **"ngl thats prob it"** after viewing this build.
+This points to the different SDR/HDR tone-mapping curves as a contributor to
+the remaining perceived difference, separate from the demonstrated XWayland
+transfer mismatch. Using spline on both outputs preserves the same operator
+while their available headroom still differs.
+
+This is qualitative evidence in favor of spline for this comparison, not
+proof of an incorrect BT.2446A implementation or a settled production-policy
+change. The temporary spline code remains uncommitted; this follow-up records
+the result only.
+
 ## Still unresolved
 
 The full original screenshot difference was not attributed quantitatively:
