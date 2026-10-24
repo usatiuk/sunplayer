@@ -1246,7 +1246,7 @@ bool FfmpegMediaDecodeResult::isSuccess() const {
            (!audioStreamPresent || (audio && audio->isValid() && audioEndOfStream));
 }
 
-bool FfmpegMediaDecodeResult::isCancelled() const { return cancelled && error.isEmpty() && video.isCancelled(); }
+bool FfmpegMediaDecodeResult::isCancelled() const { return cancelled && error.isEmpty(); }
 
 bool FfmpegMediaDecodeResult::isStopped() const {
     return error.isEmpty() && !cancelled && (video.stopped || audioStopped);
@@ -1663,9 +1663,6 @@ FfmpegMediaDecodeResult decodeMediaFrames(FfmpegMediaDecodeRequest const& reques
     }
     if (stopToken.stop_requested() || result.video.isCancelled() || audioResult.cancelled) {
         result.cancelled = true;
-        result.error.clear();
-        result.video.error.clear();
-        result.video.cancelled = true;
         return result;
     }
     if (!result.video.isSuccess()) {
@@ -1682,7 +1679,7 @@ FfmpegMediaDecodeResult decodeMediaFrames(FfmpegMediaDecodeRequest const& reques
         result.video.diagnostics.durationMicroseconds = observedEnd;
         result.video.diagnostics.durationFinal = true;
         qCInfo(sunplayerLogMediaDecode).noquote() << "event=media.duration_finalized"
-                                                << "durationUs=" + QString::number(*observedEnd);
+                                                  << "durationUs=" + QString::number(*observedEnd);
     } else if (audioStream) {
         result.video.diagnostics.durationMicroseconds = initialVideoDiagnostics.durationMicroseconds;
         result.video.diagnostics.durationFinal = false;

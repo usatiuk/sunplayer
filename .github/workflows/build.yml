@@ -160,11 +160,18 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
-          ctest --test-dir "%RUNNER_TEMP%\sunplayer-windows-debug" --output-on-failure --parallel %NUMBER_OF_PROCESSORS% -LE "device|gpu"
-          if errorlevel 1 (
-            type "%RUNNER_TEMP%\sunplayer-windows-debug\tests\qml-shell*.xml"
-            exit /b 1
-          )
+          ctest --test-dir "%RUNNER_TEMP%\sunplayer-windows-debug" --output-on-failure --output-junit "%RUNNER_TEMP%\sunplayer-windows-debug\test-results.xml" --parallel %NUMBER_OF_PROCESSORS% -LE "device|gpu"
+          if errorlevel 1 exit /b %errorlevel%
+
+      - name: Upload Windows test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-test-reports
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/sunplayer-windows-debug/test-results.xml
+            ${{ runner.temp }}/sunplayer-windows-debug/Testing/Temporary/
 
       - name: Configure distribution bundle
         shell: cmd

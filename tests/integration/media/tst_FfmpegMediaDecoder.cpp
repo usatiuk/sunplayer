@@ -216,6 +216,7 @@ class FfmpegMediaDecoderTest final : public QObject {
     void distinguishesVideoSinkStopFromCancellation();
     void distinguishesAudioSinkStopFromCancellation();
     void cancelsWhileAudioSubmissionIsBackpressured();
+    void cancellationPreservesCompletedVideo();
     void honorsCancellationBeforeOpeningMedia();
 };
 
@@ -937,6 +938,16 @@ void FfmpegMediaDecoderTest::honorsCancellationBeforeOpeningMedia() {
     QVERIFY(!result.isStopped());
     QVERIFY(!result.isSuccess());
     QVERIFY(result.error.isEmpty());
+}
+
+void FfmpegMediaDecoderTest::cancellationPreservesCompletedVideo() {
+    FfmpegMediaDecodeResult result;
+    result.video.endOfStream = true;
+    result.cancelled = true;
+    QVERIFY(result.isCancelled());
+    QVERIFY(!result.isSuccess());
+    QVERIFY(!result.isStopped());
+    QVERIFY(!result.video.isCancelled());
 }
 
 void FfmpegMediaDecoderTest::distinguishesAudioSinkStopFromCancellation() {

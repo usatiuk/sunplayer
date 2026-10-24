@@ -111,6 +111,10 @@ software fallback do not fork. The deterministic synchronized regression uses
 software frames, while production may select hardware decode. Neither path
 opens a second format context for audio.
 
+The shared decode result owns operation cancellation. Individual stream results
+retain their own completion state: video reaching EOF before backpressured audio
+is cancelled does not prevent the overall operation from reporting cancellation.
+
 The shared A/V packet router defaults to 8,192 packets and 512 MiB. This queue
 is after FFmpeg source reads and demuxing: it is bounded encoded-packet
 backpressure, not a byte-level source cache. The deliberately generous reserve

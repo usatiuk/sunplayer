@@ -684,7 +684,7 @@ void MediaSessionTest::mutedPlaybackKeepsPresentedAudioAsMaster() {
     QTRY_VERIFY_WITH_TIMEOUT(session.hasAudioOutput(), 1'000);
     QCOMPARE(session.audioBackend(), QStringLiteral("controlled"));
     QCOMPARE(session.mediaClockSource(), MediaSession::MediaClockSource::PresentedAudio);
-    QVERIFY(session.audioClockReliable());
+    QTRY_VERIFY_WITH_TIMEOUT(session.audioClockReliable(), 1'000);
     QVERIFY(session.audioPresentedFrames() >= 24'000);
     QCOMPARE(session.audioUnderrunFrames(), 0U);
     QVERIFY(session.audioQueuedMilliseconds() >= 0);

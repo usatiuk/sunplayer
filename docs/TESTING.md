@@ -494,6 +494,19 @@ The first pipeline scenarios should grow with implementation milestones:
 9. Audio-first actual-application playback through production FFmpeg, Cubeb,
    QML, QRhi, libplacebo, compositor, and swapchain boundaries.
 
+## Test output and CI reliability
+
+All registered tests set `QT_FORCE_STDERR_LOGGING=1` so Qt Test output is captured
+by CTest even without a Windows console. Linux and Windows CI use CTest's single
+JUnit report for the complete executed suite and upload it with `Testing/Temporary`
+logs on success or failure. `--output-on-failure` prints failed test diagnostics;
+there is no test-name-specific report collection. The three shell styles have a
+60-second suite budget; individual observable-state waits remain unchanged.
+
+The decoder cancellation regression includes an already-completed video stream.
+The original backpressure scenario is also stress-tested under constrained CPU
+scheduling; aggregate cancellation must not depend on video/audio completion order.
+
 ## Media fixture corpus
 
 The corpus should be small, purpose-built, pinned, and expanded alongside

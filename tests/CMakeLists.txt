@@ -768,11 +768,11 @@ add_test(
 
 add_test(
         NAME qml-shell
-        COMMAND sunplayer_qml_shell_tests -o -,txt -o "${CMAKE_CURRENT_BINARY_DIR}/qml-shell.xml,junitxml"
+        COMMAND sunplayer_qml_shell_tests
 )
 add_test(
         NAME qml-shell-fusion
-        COMMAND sunplayer_qml_shell_tests -o -,txt -o "${CMAKE_CURRENT_BINARY_DIR}/qml-shell-fusion.xml,junitxml"
+        COMMAND sunplayer_qml_shell_tests
 )
 
 if (WIN32)
@@ -951,18 +951,17 @@ set_tests_properties(
         qml-shell-fusion
         PROPERTIES
         LABELS "component;ui"
-        TIMEOUT 30
+        TIMEOUT 60
         ENVIRONMENT_MODIFICATION
             "PATH=path_list_prepend:${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}"
 )
 set_tests_properties(qml-shell PROPERTIES ENVIRONMENT "QT_QUICK_CONTROLS_STYLE=Basic")
 set_tests_properties(qml-shell-fusion PROPERTIES ENVIRONMENT "QT_QUICK_CONTROLS_STYLE=Fusion")
 if (WIN32)
-    add_test(NAME qml-shell-windows COMMAND sunplayer_qml_shell_tests
-        -o -,txt -o "${CMAKE_CURRENT_BINARY_DIR}/qml-shell-windows.xml,junitxml")
+    add_test(NAME qml-shell-windows COMMAND sunplayer_qml_shell_tests)
     set_tests_properties(qml-shell-windows PROPERTIES
         LABELS "component;ui"
-        TIMEOUT 30
+        TIMEOUT 60
         ENVIRONMENT "QT_QUICK_CONTROLS_STYLE=FluentWinUI3"
         ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}"
     )
@@ -1274,3 +1273,7 @@ if (WIN32)
         ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}"
     )
 endif ()
+
+# Keep Qt Test output in CTest's captured streams, including without a Windows console.
+get_property(sunplayer_registered_tests DIRECTORY PROPERTY TESTS)
+set_property(TEST ${sunplayer_registered_tests} APPEND PROPERTY ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")

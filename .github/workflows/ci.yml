@@ -241,10 +241,21 @@ jobs:
           ctest \
             --test-dir "$BUILD_DIR" \
             --output-on-failure \
+            --output-junit "$BUILD_DIR/test-results.xml" \
             --parallel "$(nproc)"
 
           kill -0 "$WESTON_PID"
           kill -0 "$PULSE_PID"
+
+      - name: Upload Linux test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-test-reports
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/sunplayer-linux-debug/test-results.xml
+            ${{ runner.temp }}/sunplayer-linux-debug/Testing/Temporary/
 
   packages:
     uses: ./.github/workflows/build.yml
