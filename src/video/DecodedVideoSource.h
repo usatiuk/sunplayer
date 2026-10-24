@@ -5,6 +5,7 @@
 
 #include "video/RenderedVideoSource.h"
 #include "video/VideoTargetInterop.h"
+#include "video/VideoToneMappingSettings.h"
 
 class DecodedVideoFrame;
 
@@ -44,6 +45,8 @@ class DecodedVideoSource final : public RenderedVideoSource {
     void setAbsolutePqEnabled(bool enabled);
     int sourceHdrReferenceWhiteNits() const;
     void setSourceHdrReferenceWhiteNits(int nits);
+    VideoToneMappingSettings const& toneMappingSettings() const;
+    void setToneMappingSettings(VideoToneMappingSettings const& settings);
 
     void prepareForPresentation(std::chrono::steady_clock::time_point now) override;
     std::uint64_t contentRevision() const override;
@@ -58,6 +61,7 @@ class DecodedVideoSource final : public RenderedVideoSource {
     void preferHdr10PlusChanged();
     void absolutePqEnabledChanged();
     void sourceHdrReferenceWhiteNitsChanged();
+    void toneMappingSettingsChanged();
     void presentationFailed(VideoFailure const& failure);
 
   private:
@@ -70,6 +74,7 @@ class DecodedVideoSource final : public RenderedVideoSource {
     bool m_preferHdr10Plus = false;
     bool m_absolutePqEnabled = false;
     int m_sourceHdrReferenceWhiteNits = defaultSourceHdrReferenceWhiteNits;
+    VideoToneMappingSettings m_toneMappingSettings;
     std::uint64_t m_contentRevision = 1;
     std::uint64_t m_producerConfigurationRevision = 1;
 };

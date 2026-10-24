@@ -2,6 +2,7 @@
 #include <QColorDialog>
 #include <QComboBox>
 #include <QLabel>
+#include <QPersistentModelIndex>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QSlider>
@@ -20,6 +21,7 @@ class SettingsDialogTest final : public QObject {
   private slots:
     void selectsRequestedPageAndMirrorsPlayback();
     void editsHdrReferenceWhite();
+    void toneMappingFollowsActiveOutput();
     void absolutePqAvailabilityPreservesPreference();
     void editsSubtitleSettingsLive();
     void previewsAndRollsBackTextColor();
@@ -109,6 +111,51 @@ void SettingsDialogTest::editsHdrReferenceWhite() {
     QCOMPARE(spin->value(), 150);
     QCOMPARE(edits.count(), 0);
     QCOMPARE(settings.brightness(), subtitleBrightness);
+}
+
+void SettingsDialogTest::toneMappingFollowsActiveOutput() {
+    SubtitleSettings settings;
+    SettingsDialog dialog(settings);
+    auto* const curve = dialog.findChild<QComboBox*>(QStringLiteral("settingsToneMapping"));
+    auto* const label = dialog.findChild<QLabel*>(QStringLiteral("settingsToneMappingLabel"));
+    auto* const peak = dialog.findChild<QCheckBox*>(QStringLiteral("settingsPeakDetection"));
+    QVERIFY(curve && label && peak);
+    QSignalSpy edits(&dialog, &SettingsDialog::toneMappingSettingsEdited);
+    SettingsDialog::PlaybackState state;
+    QCOMPARE(curve->count(), 3);
+    QCOMPARE(curve->currentData().value<VideoToneMappingAlgorithm>(), VideoToneMappingAlgorithm::Bt2446a);
+    QVERIFY(peak->isChecked());
+    for (bool hdrOutput : {true, false, true, false}) {
+        state.hdrPresentationActive = hdrOutput;
+        dialog.setPlaybackState(state);
+        QCOMPARE(edits.count(), 0);
+        QCOMPARE(curve->count(), hdrOutput ? 2 : 3);
+        QVERIFY(label->text().contains(hdrOutput ? QStringLiteral("HDR output") : QStringLiteral("SDR output")));
+        QCOMPARE(curve->currentData().value<VideoToneMappingAlgorithm>(),
+                 hdrOutput ? state.toneMapping.hdr : state.toneMapping.sdr);
+        auto const algorithm =
+            curve->currentData().value<VideoToneMappingAlgorithm>() == VideoToneMappingAlgorithm::Bt2390
+                ? VideoToneMappingAlgorithm::Spline
+                : VideoToneMappingAlgorithm::Bt2390;
+        curve->setCurrentIndex(curve->findData(QVariant::fromValue(algorithm)));
+        QCOMPARE(edits.count(), 1);
+        auto const edited = edits.takeFirst().at(0).value<VideoToneMappingSettings>();
+        QCOMPARE(hdrOutput ? edited.hdr : edited.sdr, algorithm);
+        QCOMPARE(hdrOutput ? edited.sdr : edited.hdr, hdrOutput ? state.toneMapping.sdr : state.toneMapping.hdr);
+        QCOMPARE(edited.peakDetectionEnabled, state.toneMapping.peakDetectionEnabled);
+        state.toneMapping = edited;
+        peak->setChecked(!peak->isChecked());
+        QCOMPARE(edits.count(), 1);
+        auto const peakEdited = edits.takeFirst().at(0).value<VideoToneMappingSettings>();
+        QCOMPARE(peakEdited.sdr, edited.sdr);
+        QCOMPARE(peakEdited.hdr, edited.hdr);
+        QCOMPARE(peakEdited.peakDetectionEnabled, !edited.peakDetectionEnabled);
+        state.toneMapping = peakEdited;
+        QPersistentModelIndex const item(curve->model()->index(0, 0));
+        dialog.setPlaybackState(state);
+        QVERIFY(item.isValid());
+        QCOMPARE(edits.count(), 0);
+    }
 }
 
 void SettingsDialogTest::absolutePqAvailabilityPreservesPreference() {

@@ -7,6 +7,23 @@ accepted behavior merely because it is documented here.
 
 ## Graphics and display
 
+### Windows Qt 6.12 validation limits
+
+The 2026-10-24 Qt6.12/tone-control delivery passes 41/42 Windows CTests. The
+fullscreen smoke repeatedly times out at stage6 (fullscreen from maximized),
+waiting on native fullscreen/presentation/other-display readiness. Cursor
+fields in that timeout are diagnostic, not a stage6 cursor assertion. The user
+confirms manual fullscreen and cursor hiding work. Concurrent desktop/focus
+effects are possible, not proven. Keep the test and product behavior unchanged
+until a controlled reproduction isolates the cause; do not add timing retries
+or fallback states to mask it.
+
+Qt6.12 QML lint exits successfully but reports renamed-type warnings in existing
+QML imports. A style/import cleanup is separate work. macOS6.12 execution,
+native monitor-transition acceptance and hosted Qt6.12 packaging remain open.
+See the [delivery evidence](plans/video-rendering/2026-10-24-tone-mapping-controls.md)
+and [video plan](subsystems/video-rendering/PLAN.md).
+
 ### Absolute PQ platform support
 
 Absolute PQ is available only on Windows HDR scRGB with known physical white

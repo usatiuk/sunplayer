@@ -139,7 +139,7 @@ include(cmake/SunPlayerLibass.cmake)
 sunplayer_configure_libass()
 
 if (WIN32)
-    find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS
+    find_package(Qt6 6.12.0 EXACT REQUIRED COMPONENTS
             GuiPrivate
             Widgets
             Quick
@@ -149,7 +149,7 @@ if (WIN32)
     )
     find_package(libplacebo 7.360.1 EXACT CONFIG REQUIRED)
     find_package(cubeb CONFIG REQUIRED)
-    set(sunplayer_qt_minimum_version 6.11.1)
+    set(sunplayer_qt_minimum_version 6.12.0)
 
     function(sunplayer_stage_windows_runtime target)
         add_custom_command(
@@ -235,7 +235,7 @@ elseif (APPLE)
     add_library(libplacebo::libplacebo
             ALIAS PkgConfig::SUNPLAYER_LIBPLACEBO)
 
-    find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS
+    find_package(Qt6 6.12.0 EXACT REQUIRED COMPONENTS
             GuiPrivate
             Widgets
             Quick
@@ -245,7 +245,7 @@ elseif (APPLE)
     )
     find_package(cubeb CONFIG REQUIRED)
     find_package(MoltenVK 1.4.2 EXACT CONFIG REQUIRED)
-    set(sunplayer_qt_minimum_version 6.11.1)
+    set(sunplayer_qt_minimum_version 6.12.0)
 else ()
     message(FATAL_ERROR
             "SunPlayer currently supports Windows, Apple-Silicon macOS, and "
@@ -405,6 +405,7 @@ add_library(sunplayer_video_pipeline STATIC
         src/video/RenderedVideoSource.h
         src/video/VideoTargetInterop.cpp
         src/video/VideoTargetInterop.h
+        src/video/VideoToneMappingSettings.h
         src/video/VideoFailure.h
         src/video/libplacebo/LibplaceboFfmpegInterop.c
         src/video/libplacebo/LibplaceboColorPolicy.cpp
@@ -833,7 +834,7 @@ endif ()
 
 if (BUILD_TESTING)
     if (WIN32 OR APPLE)
-        find_package(Qt6 6.11.1 EXACT REQUIRED COMPONENTS Test)
+        find_package(Qt6 6.12.0 EXACT REQUIRED COMPONENTS Test)
     else ()
         find_package(Qt6 6.10...<6.11 REQUIRED COMPONENTS Test)
     endif ()

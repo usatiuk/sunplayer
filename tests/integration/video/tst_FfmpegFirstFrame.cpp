@@ -166,6 +166,7 @@ RenderedVideoSurfaceState surfaceState(GraphicsDeviceDomain& graphics, std::uint
                         .targetMinimumLuminanceKnown = targetMinimumLuminanceKnown,
                         .targetMinimumLuminanceNits = targetMinimumLuminanceNits,
                         .targetPeakHeadroom = targetPeakHeadroom,
+                        .hdrPresentationActive = targetPeakHeadroom > 1.0f,
                     },
             },
         .graphicsDeviceGeneration = graphics.generation(),
@@ -203,6 +204,7 @@ DecodedFrameCapture captureDecodedFrame(GraphicsDeviceDomain& graphics, std::sha
     GraphicsDeviceExecutionScope execution = graphics.acquireExecutionScope();
     QRhi& rhi = graphics.rhi();
     DecodedVideoSource source(std::move(frame), VideoTargetReadback::Enabled);
+    source.setToneMappingSettings({.peakDetectionEnabled = false});
     source.setPreferHdr10Plus(preferHdr10Plus);
     source.setAbsolutePqEnabled(absolutePqEnabled);
     LibplaceboDecodedVideoProducer producer(graphics, source, VideoTargetReadback::Enabled);
@@ -360,6 +362,37 @@ void verifyNeutralPatchProperties(std::array<FloatPixel, 4> const& patches, floa
     }
 }
 
+bool captureProducer(QRhi& rhi, LibplaceboDecodedVideoProducer& producer, RenderedVideoSurfaceState const& state,
+                     QRhiReadbackResult& readback) {
+    if (producer.ensureSurface(state) != VideoOperationResult::Ready) {
+        return false;
+    }
+    QRhiCommandBuffer* commands = nullptr;
+    if (rhi.beginOffscreenFrame(&commands) != QRhi::FrameOpSuccess || !commands) {
+        return false;
+    }
+    if (producer.render(*commands, state) != VideoOperationResult::Ready ||
+        producer.prepareForComposition(*commands) != VideoOperationResult::Ready) {
+        rhi.endOffscreenFrame(QRhi::SkipPresent);
+        producer.submissionAborted();
+        producer.discardPendingRender();
+        return false;
+    }
+    bool completed = false;
+    readback.completed = [&] { completed = true; };
+    auto* updates = rhi.nextResourceUpdateBatch();
+    updates->readBackTexture(QRhiReadbackDescription(&producer.textureForComposition()), &readback);
+    commands->resourceUpdate(updates);
+    if (rhi.endOffscreenFrame() != QRhi::FrameOpSuccess) {
+        producer.submissionAborted();
+        producer.discardPendingRender();
+        return false;
+    }
+    producer.submissionAccepted();
+    producer.commitPendingRender();
+    return completed;
+}
+
 } // namespace
 
 class FfmpegFirstFrameTest final : public QObject {
@@ -411,6 +444,7 @@ class FfmpegFirstFrameTest final : public QObject {
     void hdrInputAcceptance();
     void hdrReferenceWhiteRerendersRetainedFrame_data();
     void hdrReferenceWhiteRerendersRetainedFrame();
+    void toneMappingSettingsRerenderRetainedFrame();
     void absolutePqPhysicalOutput_data();
     void absolutePqPhysicalOutput();
     void nominalSdrTargetPreservesWcg();
@@ -693,6 +727,98 @@ void FfmpegFirstFrameTest::retainsStreamHdr10PlusAtTheDecodeBoundary() {
     QCOMPARE(unsupportedVersionFrames.front()->dolbyVisionBaseIsHdr10Compatible(), std::optional<bool>());
 }
 
+void FfmpegFirstFrameTest::toneMappingSettingsRerenderRetainedFrame() {
+    auto const decoded = decodeFirstVideoFrame(QStringLiteral(SUNPLAYER_TEST_FIXTURE_DIR "/media/hdr10-pq-hevc.hevc"),
+                                               {.playbackGeneration = 94, .decoderRevision = 1, .frameId = 1});
+    QVERIFY2(decoded.isSuccess(), qPrintable(decoded.error));
+    auto graphics = createDeviceDomain();
+    QVERIFY(graphics);
+    auto execution = graphics->acquireExecutionScope();
+    QRhi& rhi = graphics->rhi();
+    DecodedVideoSource source(decoded.frame, VideoTargetReadback::Enabled);
+    source.setToneMappingSettings({.peakDetectionEnabled = false});
+    auto state = surfaceState(*graphics, source.contentRevision(), 100.0f, decoded.frame->geometry().visibleSize);
+    LibplaceboDecodedVideoProducer producer(*graphics, source, VideoTargetReadback::Enabled);
+    QRhiReadbackResult bt2446a;
+    QVERIFY(captureProducer(rhi, producer, state, bt2446a));
+    auto const imports = producer.inputImportCount();
+    auto const configurationRevision = source.producerConfigurationRevision();
+    QSignalSpy updates(&source, &RenderedVideoSource::updateRequested);
+    auto settings = source.toneMappingSettings();
+    settings.sdr = VideoToneMappingAlgorithm::Spline;
+    source.setToneMappingSettings(settings);
+    QCOMPARE(updates.count(), 1);
+    state.contentRevision = source.contentRevision();
+    QVERIFY(producer.needsRender(state));
+    QRhiReadbackResult spline;
+    QVERIFY(captureProducer(rhi, producer, state, spline));
+    QVERIFY(spline.data != bt2446a.data);
+    settings.sdr = VideoToneMappingAlgorithm::Bt2390;
+    source.setToneMappingSettings(settings);
+    state.contentRevision = source.contentRevision();
+    QRhiReadbackResult bt2390;
+    QVERIFY(captureProducer(rhi, producer, state, bt2390));
+    QVERIFY(bt2390.data != bt2446a.data);
+    // Both outputs have H=1. The actual output intent selects the saved curve.
+    state.description.color.hdrPresentationActive = true;
+    QVERIFY(producer.needsRender(state));
+    QRhiReadbackResult hdrSpline;
+    QVERIFY(captureProducer(rhi, producer, state, hdrSpline));
+    QCOMPARE(hdrSpline.data, spline.data);
+    settings.hdr = VideoToneMappingAlgorithm::Bt2390;
+    settings.peakDetectionEnabled = true;
+    source.setToneMappingSettings(settings);
+    state.contentRevision = source.contentRevision();
+    QRhiReadbackResult detected;
+    QVERIFY(captureProducer(rhi, producer, state, detected));
+    QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("measured peak")));
+    settings.peakDetectionEnabled = false;
+    source.setToneMappingSettings(settings);
+    state.contentRevision = source.contentRevision();
+    QRhiReadbackResult disabled;
+    QVERIFY(captureProducer(rhi, producer, state, disabled));
+    QCOMPARE(disabled.data, bt2390.data);
+    QVERIFY(producer.diagnostics().colorPolicy.contains(QStringLiteral("peak detection off")));
+    QCOMPARE(producer.inputImportCount(), imports);
+    QCOMPARE(source.producerConfigurationRevision(), configurationRevision);
+    QCOMPARE(source.currentFrame(), decoded.frame);
+
+    auto freeFrame = [](AVFrame* frame) { av_frame_free(&frame); };
+    std::unique_ptr<AVFrame, decltype(freeFrame)> dimmer(av_frame_clone(&decoded.frame->ffmpegFrame()), freeFrame);
+    QVERIFY(dimmer);
+    QCOMPARE(dimmer->format, AV_PIX_FMT_YUV420P10LE);
+    QVERIFY(av_frame_make_writable(dimmer.get()) >= 0);
+    // A small PQ change stays below the detector's scene-cut threshold, so
+    // stale smoothing history would differ from a fresh renderer.
+    for (int y = 0; y < dimmer->height; ++y) {
+        auto* row = reinterpret_cast<std::uint16_t*>(dimmer->data[0] + y * dimmer->linesize[0]);
+        for (int x = 0; x < dimmer->width; ++x) {
+            row[x] -= 5;
+        }
+    }
+    settings.hdr = VideoToneMappingAlgorithm::Spline;
+    settings.peakDetectionEnabled = true;
+    source.setToneMappingSettings(settings);
+    for (VideoFrameIdentity const identity : {VideoFrameIdentity{94, 2, 1}, VideoFrameIdentity{95, 1, 1}}) {
+        source.setFrame(decoded.frame);
+        state.contentRevision = source.contentRevision();
+        QRhiReadbackResult warmup;
+        QVERIFY(captureProducer(rhi, producer, state, warmup));
+        QString error;
+        auto changed = DecodedVideoFrame::clone(*dimmer, identity, decoded.frame->timing().timeBase, std::nullopt,
+                                                std::nullopt, &error);
+        QVERIFY2(changed, qPrintable(error));
+        source.setFrame(changed);
+        state.contentRevision = source.contentRevision();
+        QRhiReadbackResult afterDiscontinuity;
+        QVERIFY(captureProducer(rhi, producer, state, afterDiscontinuity));
+        LibplaceboDecodedVideoProducer fresh(*graphics, source, VideoTargetReadback::Enabled);
+        QRhiReadbackResult reference;
+        QVERIFY(captureProducer(rhi, fresh, state, reference));
+        QCOMPARE(afterDiscontinuity.data, reference.data);
+    }
+}
+
 void FfmpegFirstFrameTest::hdrReferenceWhiteRerendersRetainedFrame_data() {
     QTest::addColumn<QString>("fixtureFile");
     QTest::addColumn<bool>("affected");
@@ -714,41 +840,14 @@ void FfmpegFirstFrameTest::hdrReferenceWhiteRerendersRetainedFrame() {
     auto execution = graphics->acquireExecutionScope();
     QRhi& rhi = graphics->rhi();
     DecodedVideoSource source(decoded.frame, VideoTargetReadback::Enabled);
+    source.setToneMappingSettings({.peakDetectionEnabled = false});
     QCOMPARE(source.sourceHdrReferenceWhiteNits(), 100);
     auto const configurationRevision = source.producerConfigurationRevision();
     LibplaceboDecodedVideoProducer producer(*graphics, source, VideoTargetReadback::Enabled);
     QSignalSpy updates(&source, &RenderedVideoSource::updateRequested);
 
     auto capture = [&](LibplaceboDecodedVideoProducer& producer, RenderedVideoSurfaceState const& state,
-                       QRhiReadbackResult& readback) {
-        if (producer.ensureSurface(state) != VideoOperationResult::Ready) {
-            return false;
-        }
-        QRhiCommandBuffer* commands = nullptr;
-        if (rhi.beginOffscreenFrame(&commands) != QRhi::FrameOpSuccess || !commands) {
-            return false;
-        }
-        if (producer.render(*commands, state) != VideoOperationResult::Ready ||
-            producer.prepareForComposition(*commands) != VideoOperationResult::Ready) {
-            rhi.endOffscreenFrame(QRhi::SkipPresent);
-            producer.submissionAborted();
-            producer.discardPendingRender();
-            return false;
-        }
-        bool completed = false;
-        readback.completed = [&] { completed = true; };
-        auto* batch = rhi.nextResourceUpdateBatch();
-        batch->readBackTexture(QRhiReadbackDescription(&producer.textureForComposition()), &readback);
-        commands->resourceUpdate(batch);
-        if (rhi.endOffscreenFrame() != QRhi::FrameOpSuccess) {
-            producer.submissionAborted();
-            producer.discardPendingRender();
-            return false;
-        }
-        producer.submissionAccepted();
-        producer.commitPendingRender();
-        return completed;
-    };
+                       QRhiReadbackResult& readback) { return captureProducer(rhi, producer, state, readback); };
 
     for (float headroom : {1.0f, 4.0f, 20.0f}) {
         QRhiReadbackResult previous;
@@ -1521,6 +1620,7 @@ void FfmpegFirstFrameTest::wcgSdrRetainedFrameTargetChanges() {
     auto execution = graphics->acquireExecutionScope();
     QRhi& rhi = graphics->rhi();
     DecodedVideoSource source(frame, VideoTargetReadback::Enabled);
+    source.setToneMappingSettings({.peakDetectionEnabled = false});
     LibplaceboDecodedVideoProducer producer(*graphics, source, VideoTargetReadback::Enabled);
     auto state = surfaceState(*graphics, source.contentRevision(), 80, {4, 4});
     state.description.color.targetMinimumLuminanceNits = 0;
@@ -1822,6 +1922,7 @@ void FfmpegFirstFrameTest::dualFormatPreferenceRemapsPausedFrame() {
     }
     GraphicsDeviceExecutionScope execution = graphics->acquireExecutionScope();
     DecodedVideoSource source(dualFrame, VideoTargetReadback::Disabled);
+    source.setToneMappingSettings({.peakDetectionEnabled = false});
     QVERIFY(!source.preferHdr10Plus());
     source.setPreferHdr10Plus(true);
     LibplaceboDecodedVideoProducer producer(*graphics, source, VideoTargetReadback::Disabled);
@@ -2133,6 +2234,7 @@ void FfmpegFirstFrameTest::compressedYuvMetadataAndRendering() {
 
     QRhi& rhi = graphics->rhi();
     DecodedVideoSource source(decoded.frame, VideoTargetReadback::Enabled);
+    source.setToneMappingSettings({.peakDetectionEnabled = false});
     LibplaceboDecodedVideoProducer producer(*graphics, source, VideoTargetReadback::Enabled);
     RenderedVideoSurfaceState const state = surfaceState(*graphics, source.contentRevision(), 203.0f, {96, 64});
     QCOMPARE(producer.ensureSurface(state), VideoOperationResult::Ready);

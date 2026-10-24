@@ -4,7 +4,8 @@
 
 The CMake project builds the Windows player, an Apple-Silicon macOS player,
 and a runnable native-Wayland Vulkan player on Ubuntu 26.04. Windows and macOS
-use pinned vcpkg libraries; macOS uses the Qt 6.11.1 Online Installer tree.
+use pinned vcpkg libraries and require Qt 6.12.0. The prior macOS runtime
+validation below used Qt 6.11.1; this host does not establish macOS 6.12 evidence.
 Linux uses only system Qt, FFmpeg, libplacebo, cubeb, libass, Vulkan, Wayland,
 VAAPI, and DRM packages. Embedded subtitle discovery, FFmpeg decoding,
 libass/bitmap rendering, shared subtitle state, Wayland capability inventory,
@@ -31,7 +32,7 @@ The currently validated Windows configuration is:
 | Languages | C11 for the libplacebo/FFmpeg adapter; C++20 elsewhere |
 | Application compiler | MSVC in a Visual Studio developer environment |
 | Windows dependency compiler | Visual Studio clang-cl through a project-local vcpkg triplet |
-| Qt | Exactly 6.11.1 |
+| Qt | Exactly 6.12.0 |
 | libplacebo | Exactly 7.360.1, D3D11 enabled |
 | FFmpeg | Exactly 8.1.2, shared avutil/swresample/avcodec/avformat with zlib |
 | libass | Windows registry baseline package |
@@ -232,7 +233,7 @@ An ordinary macOS development configuration is:
 cmake -S . -B build/macos-debug -G Ninja \
   -DCMAKE_BUILD_TYPE=Debug \
   -DBUILD_TESTING=ON \
-  -DCMAKE_PREFIX_PATH=/path/to/Qt/6.11.1/macos \
+  -DCMAKE_PREFIX_PATH=/path/to/Qt/6.12.0/macos \
   -DCMAKE_TOOLCHAIN_FILE=/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake
 cmake --build build/macos-debug
 ctest --test-dir build/macos-debug --output-on-failure
@@ -255,10 +256,17 @@ The executable currently requires:
 * `Qt6::ShaderTools`.
 * `Qt6::GuiPrivate` for QRhi.
 
-Qt is pinned to exactly 6.11.1 because QRhi is a private API with limited
+Qt is pinned to exactly 6.12.0 because QRhi is a private API with limited
 compatibility guarantees. A Qt upgrade is an explicit maintenance task that
 must rebuild and runtime-test redirected Quick rendering, swapchain HDR state,
 texture and shader resources, surface loss, and device recovery.
+
+The 2026-10-24 Windows Qt6.12 validation builds every target and passes QML lint
+(existing renamed-type warnings). Full CTest passes 41/42; the fullscreen smoke
+stage6 timeout reproduces alone, while manual fullscreen/cursor hiding is
+user-confirmed. See the [delivery plan](../../plans/video-rendering/2026-10-24-tone-mapping-controls.md).
+The macOS pin and Windows CI installation paths are updated; their hosted/native
+execution is not established by this local Windows run.
 
 Windows package generation also requires the matching Qt Sources archives for
 `qtbase`, `qtdeclarative`, `qtimageformats`, and `qtsvg`; their `LICENSES`
@@ -481,8 +489,8 @@ integration evidence, not native-GPU, VAAPI/DRM PRIME import, managed-color,
 HDR, physical-display, physical-audio, route-migration, or acoustic-sync
 evidence.
 
-The Windows job uses `windows-2022`, exact Qt 6.11.1 installed by a pinned
-`aqtinstall` revision with Qt 6.11 repository-layout support, MSVC for SunPlayer,
+The Windows job uses `windows-2022`, exact Qt 6.12.0 installed by a pinned
+`aqtinstall` revision, MSVC for SunPlayer,
 and the root manifest's clang-cl vcpkg triplet for dependencies. It caches only
 the exact Qt tree and vcpkg's ABI-addressed binary archives. The vcpkg cache key
 includes the dependency files, hosted vcpkg revision, and runner image version,

@@ -45,6 +45,8 @@ class LibplaceboRenderContext final {
     LibplaceboRenderContext& operator=(LibplaceboRenderContext const&) = delete;
 
     bool isValid() const;
+    void resetTemporalState();
+    std::optional<pl_hdr_metadata> detectedHdrMetadata() const;
     bool render(pl_frame const& source, pl_tex targetTexture, RenderedVideoSurfaceDescription const& targetDescription,
                 bool toneMappingEnabled, QString* error = nullptr);
     bool renderDecoded(pl_frame const& source, pl_tex targetTexture,
@@ -57,7 +59,7 @@ class LibplaceboRenderContext final {
                           RenderedVideoSurfaceDescription const& targetDescription,
                           LibplaceboToneMappingFunction toneMapping, enum pl_hdr_metadata_type metadata,
                           std::optional<float> effectiveSourceMaximumNits, float sourceHdrReferenceWhiteNits,
-                          bool absolutePqEnabled, QString* error);
+                          bool absolutePqEnabled, bool peakDetectionEnabled, QString* error);
 
     pl_renderer m_renderer = nullptr;
 };

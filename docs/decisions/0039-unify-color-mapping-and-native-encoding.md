@@ -2,6 +2,8 @@
 
 * Status: Accepted
 * Date: 2026-10-22
+* Amended by [ADR 0040](0040-configure-tone-mapping-by-active-output.md) for
+  playback algorithm preferences and conditional peak detection.
 * Supersedes the stable-PQ-on-SDR decision in ADR 0021, source/SDR-mode operator
   selection in ADRs 0023/0027, and unconditional PQ preference in ADR 0032.
 * Amends the normalization and unknown-HDR-black clauses in ADRs

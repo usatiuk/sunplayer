@@ -8,11 +8,13 @@
 
 #include "media/DecodedVideoFrame.h"
 #include "video/RenderedVideoSurface.h"
+#include "video/VideoToneMappingSettings.h"
 
 enum class LibplaceboToneMappingFunction {
     Clip,
     Spline,
     Bt2446a,
+    Bt2390,
     St2094_40,
 };
 
@@ -39,6 +41,7 @@ struct LibplaceboColorPolicyDecision {
     std::optional<float> effectiveSourceMaximumNits;
     std::optional<float> selectedSourceAverageNits;
     QString qualification;
+    bool peakDetectionEnabled = false;
 
     QString description() const;
 };
@@ -53,9 +56,12 @@ class LibplaceboColorPolicy final {
 
     bool shouldMapDolbyVision(DecodedVideoFrame const& frame, bool preferHdr10Plus);
     LibplaceboColorPolicyDecision resolve(DecodedVideoFrame const& frame, pl_frame const& mappedFrame,
-                                          RenderedVideoSurfaceDescription const& targetDescription) const;
+                                          RenderedVideoSurfaceDescription const& targetDescription,
+                                          VideoToneMappingSettings const& settings = {}) const;
 
   private:
+    LibplaceboColorPolicyDecision resolveMetadata(DecodedVideoFrame const& frame, pl_frame const& mappedFrame,
+                                                  LibplaceboToneMappingFunction toneMapping) const;
     std::optional<std::uint64_t> m_playbackGeneration;
     bool m_preferHdr10Plus = false;
     bool m_useHdr10Base = false;

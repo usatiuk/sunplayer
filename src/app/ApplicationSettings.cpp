@@ -19,6 +19,9 @@ constexpr auto volumeKey = "playback/volume";
 constexpr auto preferHdr10PlusKey = "playback/preferHdr10Plus";
 constexpr auto sourceHdrReferenceWhiteKey = "playback/sourceHdrReferenceWhiteNits";
 constexpr auto absolutePqEnabledKey = "playback/absolutePqEnabled";
+constexpr auto sdrToneMappingKey = "playback/sdrToneMapping";
+constexpr auto hdrToneMappingKey = "playback/hdrToneMapping";
+constexpr auto peakDetectionKey = "playback/hdrPeakDetectionEnabled";
 constexpr auto blankOtherDisplaysKey = "fullscreen/blankOtherDisplays";
 constexpr auto subtitleAppearancePrefix = "subtitles/appearance";
 constexpr auto appearanceModeKey = "subtitles/appearance/mode";
@@ -129,6 +132,18 @@ std::optional<T> parseChoice(QVariant const& value, std::initializer_list<std::p
     return std::nullopt;
 }
 
+QString toneMappingToken(VideoToneMappingAlgorithm algorithm) {
+    switch (algorithm) {
+    case VideoToneMappingAlgorithm::Bt2446a:
+        return QStringLiteral("bt2446a");
+    case VideoToneMappingAlgorithm::Spline:
+        return QStringLiteral("spline");
+    case VideoToneMappingAlgorithm::Bt2390:
+        return QStringLiteral("bt2390");
+    }
+    Q_UNREACHABLE();
+}
+
 } // namespace
 
 ApplicationSettings::ApplicationSettings() : m_settings(createSettingsStore()) {}
@@ -169,6 +184,36 @@ ApplicationSettings::Values ApplicationSettings::load() {
         values.absolutePqEnabled = parseBoolean(m_settings->value(QLatin1StringView(absolutePqEnabledKey)));
         if (!values.absolutePqEnabled) {
             reportInvalidValue(QString::fromLatin1(absolutePqEnabledKey));
+        }
+    }
+
+    if (m_settings->contains(QLatin1StringView(sdrToneMappingKey))) {
+        auto const algorithm = parseChoice<VideoToneMappingAlgorithm>(
+            m_settings->value(QLatin1StringView(sdrToneMappingKey)), {{u"bt2446a", VideoToneMappingAlgorithm::Bt2446a},
+                                                                      {u"spline", VideoToneMappingAlgorithm::Spline},
+                                                                      {u"bt2390", VideoToneMappingAlgorithm::Bt2390}});
+        if (algorithm) {
+            values.toneMapping.sdr = *algorithm;
+        } else {
+            reportInvalidValue(QString::fromLatin1(sdrToneMappingKey));
+        }
+    }
+    if (m_settings->contains(QLatin1StringView(hdrToneMappingKey))) {
+        auto const algorithm = parseChoice<VideoToneMappingAlgorithm>(
+            m_settings->value(QLatin1StringView(hdrToneMappingKey)),
+            {{u"spline", VideoToneMappingAlgorithm::Spline}, {u"bt2390", VideoToneMappingAlgorithm::Bt2390}});
+        if (algorithm) {
+            values.toneMapping.hdr = *algorithm;
+        } else {
+            reportInvalidValue(QString::fromLatin1(hdrToneMappingKey));
+        }
+    }
+    if (m_settings->contains(QLatin1StringView(peakDetectionKey))) {
+        auto const enabled = parseBoolean(m_settings->value(QLatin1StringView(peakDetectionKey)));
+        if (enabled) {
+            values.toneMapping.peakDetectionEnabled = *enabled;
+        } else {
+            reportInvalidValue(QString::fromLatin1(peakDetectionKey));
         }
     }
 
@@ -275,6 +320,14 @@ void ApplicationSettings::setPreferHdr10Plus(bool enabled) {
 
 void ApplicationSettings::setAbsolutePqEnabled(bool enabled) {
     m_settings->setValue(QLatin1StringView(absolutePqEnabledKey), enabled);
+    reportStatus();
+}
+
+void ApplicationSettings::setToneMappingSettings(VideoToneMappingSettings const& settings) {
+    Q_ASSERT(settings.isValid());
+    m_settings->setValue(QLatin1StringView(sdrToneMappingKey), toneMappingToken(settings.sdr));
+    m_settings->setValue(QLatin1StringView(hdrToneMappingKey), toneMappingToken(settings.hdr));
+    m_settings->setValue(QLatin1StringView(peakDetectionKey), settings.peakDetectionEnabled);
     reportStatus();
 }
 

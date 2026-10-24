@@ -34,6 +34,8 @@ class SettingsDialog final : public QDialog {
         int sourceHdrReferenceWhiteNits = DecodedVideoSource::defaultSourceHdrReferenceWhiteNits;
         bool absolutePqEnabled = false;
         bool absolutePqAvailable = false;
+        VideoToneMappingSettings toneMapping;
+        bool hdrPresentationActive = false;
     };
 
     void showPage(int page);
@@ -44,6 +46,7 @@ class SettingsDialog final : public QDialog {
     void volumeEdited(qreal volume);
     void preferHdr10PlusEdited(bool enabled);
     void absolutePqEnabledEdited(bool enabled);
+    void toneMappingSettingsEdited(VideoToneMappingSettings const& settings);
     void sourceHdrReferenceWhiteNitsEdited(int nits);
     void blankOtherDisplaysEdited(bool enabled);
 
@@ -61,6 +64,11 @@ class SettingsDialog final : public QDialog {
     QCheckBox* m_blankOtherDisplays = nullptr;
     QCheckBox* m_preferHdr10Plus = nullptr;
     QCheckBox* m_absolutePq = nullptr;
+    QComboBox* m_toneMapping = nullptr;
+    QLabel* m_toneMappingLabel = nullptr;
+    QCheckBox* m_peakDetection = nullptr;
+    VideoToneMappingSettings m_toneMappingSettings;
+    bool m_hdrPresentationActive = false;
     QLabel* m_absolutePqStatus = nullptr;
     QWidget* m_sourceHdrReferenceWhitePresets = nullptr;
     QSlider* m_sourceHdrReferenceWhiteSlider = nullptr;

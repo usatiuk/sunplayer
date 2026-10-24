@@ -94,6 +94,12 @@ VideoOperationResult LibplaceboDecodedVideoProducer::render(QRhiCommandBuffer& c
     VideoFrameImportFailure importFailure = VideoFrameImportFailure::None;
     bool const mapDolbyVision = m_colorPolicy.shouldMapDolbyVision(*frame, m_source.preferHdr10Plus());
     if (!m_mapping || m_mappedSourceFrame != frame || m_mappingMapsDolbyVision != mapDolbyVision) {
+        if (m_mappedSourceFrame &&
+            (m_mappedSourceFrame->identity().playbackGeneration != frame->identity().playbackGeneration ||
+             m_mappedSourceFrame->identity().decoderRevision != frame->identity().decoderRevision ||
+             m_mappingMapsDolbyVision != mapDolbyVision)) {
+            m_renderContext->resetTemporalState();
+        }
         m_mapping.reset();
         m_mappedSourceFrame.reset();
         m_mappingMapsDolbyVision = false;
@@ -110,13 +116,20 @@ VideoOperationResult LibplaceboDecodedVideoProducer::render(QRhiCommandBuffer& c
     bool rendered = false;
     QString renderedColorPolicyDescription;
     if (m_mapping) {
-        LibplaceboColorPolicyDecision const colorPolicy =
-            m_colorPolicy.resolve(*frame, m_mapping->frame(), requestedState.description);
+        LibplaceboColorPolicyDecision const colorPolicy = m_colorPolicy.resolve(
+            *frame, m_mapping->frame(), requestedState.description, m_source.toneMappingSettings());
         float const sourceReferenceWhite = m_source.sourceHdrReferenceWhiteNits();
         rendered = m_renderContext->renderDecoded(m_mapping->frame(), m_target->libplaceboRenderTarget(),
                                                   requestedState.description, colorPolicy, sourceReferenceWhite,
                                                   m_source.absolutePqEnabled(), &renderError);
         renderedColorPolicyDescription = colorPolicy.description();
+        if (rendered && colorPolicy.peakDetectionEnabled) {
+            if (auto const measured = m_renderContext->detectedHdrMetadata()) {
+                renderedColorPolicyDescription +=
+                    QStringLiteral(" · measured peak %1 nits")
+                        .arg(pl_hdr_rescale(PL_HDR_PQ, PL_HDR_NITS, measured->max_pq_y), 0, 'f', 1);
+            }
+        }
         auto const& source = m_mapping->frame();
         if (source.color.transfer == PL_COLOR_TRC_PQ || source.repr.sys == PL_COLOR_SYSTEM_DOLBYVISION) {
             bool const absolutePqActive =

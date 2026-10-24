@@ -13,7 +13,7 @@ PresentationTarget calculatePresentationTarget(DisplayState const& display, Pres
         return target;
     }
 
-    target.hdrPresentationActive = backend.hdrPresentationActive;
+    target.color.hdrPresentationActive = backend.hdrPresentationActive;
 
     bool const colorTargetActive = display.colorMode != DisplayColorMode::StandardDynamicRange;
     bool const displayTargetUsable = display.valid && (colorTargetActive || backend.managedSdrPresentationActive);
@@ -83,7 +83,7 @@ PresentationTarget calculatePresentationTarget(DisplayState const& display, Pres
         target.currentHeadroom = target.potentialHeadroom = target.color.targetPeakHeadroom = 1.0f;
     }
     target.color.absolutePqAvailable =
-        backend.absoluteLuminanceSupported && target.hdrPresentationActive &&
+        backend.absoluteLuminanceSupported && target.color.hdrPresentationActive &&
         (!display.valid || display.colorMode == DisplayColorMode::HighDynamicRange) && target.sceneReferred &&
         target.sdrWhiteKnown && std::isfinite(target.color.referenceWhiteNits) &&
         target.color.referenceWhiteNits > 0.0f && target.color.targetMinimumLuminanceKnown &&

@@ -54,6 +54,7 @@ class RenderedVideoSurfaceTest final : public QObject {
     void descriptionRequiresFiniteLuminance();
     void descriptionRequiresValidTargetPrimaries();
     void absolutePqCapabilityInvalidatesReuse();
+    void outputIntentInvalidatesReuseAtEqualHeadroom();
     void stateRequiresNonzeroIdentities();
     void equalSemanticStateIsReusableAcrossNativeChanges();
     void lifecycleAndContentChangesInvalidate();
@@ -62,6 +63,15 @@ class RenderedVideoSurfaceTest final : public QObject {
     void directTargetDiagnosticsRequireNoCopies();
     void fallbackDiagnosticsRequireObservableCostsAndReason();
 };
+
+void RenderedVideoSurfaceTest::outputIntentInvalidatesReuseAtEqualHeadroom() {
+    auto state = canonicalState();
+    state.description.color.targetPeakHeadroom = 1.0f;
+    auto hdr = state;
+    hdr.description.color.hdrPresentationActive = true;
+    QVERIFY(!state.isReusableFor(hdr));
+    QVERIFY(!hdr.isReusableFor(state));
+}
 
 void RenderedVideoSurfaceTest::canonicalDescriptionIsValid() {
     QVERIFY(canonicalDescription().isValid());

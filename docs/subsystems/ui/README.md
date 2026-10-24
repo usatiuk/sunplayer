@@ -413,6 +413,14 @@ preset buttons, default 100. It adjusts PQ/HDR10+/Dolby Vision video on SDR and
 HDR outputs through shared mapping. SDR input, HLG, UI, and subtitle brightness
 are unchanged. Edits use the existing paused-frame update path.
 
+Playback settings show one tone-mapping editor for the active SDR/HDR output,
+with independent saved choices: BT.2446A/Spline/BT.2390 for SDR (default BT.2446A),
+Spline/BT.2390 for HDR (default Spline). Output changes refresh the editor without
+editing either saved preference; ordinary diagnostic refreshes preserve its
+model. Authored HDR10+ curves keep priority. One shared HDR peak-detection
+checkbox defaults on. Changes persist and rerender paused video through the
+existing source settings boundary.
+
 Absolute PQ is off by default and available only on supported Windows HDR
 output. Enabling it disables the source reference-white controls. On other
 Windows outputs its checkbox is greyed out, its saved preference is retained, and

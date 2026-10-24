@@ -182,9 +182,13 @@ state. Windows can therefore retain raw WCG capability values without making
 that Windows-specific interpretation a rule for future macOS or Wayland gamut
 providers.
 
-One generic operator uses BT.2446A at resolved H=1 and spline at H>1 for SDR,
-PQ/Dolby, HLG and libplacebo HDR Lab. Transport encoding and potential HDR
-capability do not select the operator. Supported one-window HDR10+ OOTFs on
+Decoded HDR playback uses separate persistent SDR/HDR output algorithms:
+SDR defaults to BT.2446A and also offers Spline/BT.2390; HDR defaults to Spline
+and also offers BT.2390. The existing active-HDR fact lives canonically in
+VideoColorTarget and selects the saved output preference, including HDR at H=1.
+Headroom and monitor HDR capability do not stand in for active presentation.
+SDR input and libplacebo HDR Lab retain BT.2446A at H=1/spline above one.
+Supported one-window HDR10+ OOTFs on
 the selected non-Dolby or HDR10-compatible base retain the ST 2094-40 override;
 Lab's explicit mapping-disabled control retains Clip.
 
@@ -212,15 +216,24 @@ Imported curve parameters are validated once, with version-specific
 anchor bounds (15/9) and no custom ascending-control-value restriction. See
 [ADR 0028](../../decisions/0028-prefer-hdr10plus-on-compatible-dual-format-video.md).
 
-Perceptual gamut mapping remains selected for every path. Inverse mapping, peak detection, and
-dithering remain disabled, and the exact decision and fallback provenance are
-published through existing diagnostics. Null peak
-detection means there is no smoothed measured-peak state affecting playback,
-so open and seek do not need a no-op renderer reset. If a later
-evidence-backed quality profile enables temporal peak detection or frame
-mixing, open, seek, track change, and generation replacement must flush that
-source-temporal state without destroying the persistent renderer. A
-target-only rerender is not a source discontinuity.
+Perceptual gamut mapping remains selected; inverse mapping and dithering remain
+disabled. One persistent peak-detection switch defaults on for decoded HDR.
+Ordinary PQ static/fallback range selection uses ANY when detection is enabled.
+HDR10+ authored curves, HDR10+ scene statistics and mapped Dolby metadata retain
+their existing explicit selection. Libplacebo owns measurement eligibility and
+default smoothing. Diagnostics report configured detection and append measured
+peak only when the library exposes one; enabled alone does not prove execution.
+HDR Lab keeps detection disabled.
+
+DecodedVideoSource owns one VideoToneMappingSettings value, persisted through
+ApplicationSettings. Changes use content revision/update to rerender paused
+video without replacing the importer. Actual output changes invalidate surface
+reuse through target equality. Media/seek clearFrame already replaces the
+producer; retained media/decoder/representation discontinuities flush temporal
+state through the existing renderer. Target-only rerenders do not flush it.
+Repeated paused renders can advance library smoothing. See
+[ADR 0040](../../decisions/0040-configure-tone-mapping-by-active-output.md) and the
+[delivery plan](../../plans/video-rendering/2026-10-24-tone-mapping-controls.md).
 
 Static PQ has an analytical target-response oracle. HLG explicitly
 sets its render-local source peak to `203 * H`, extending libplacebo's existing

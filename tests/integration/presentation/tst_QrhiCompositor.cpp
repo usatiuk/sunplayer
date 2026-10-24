@@ -4,6 +4,7 @@
 #include <cstring>
 #include <memory>
 #include <optional>
+#include <vector>
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -212,6 +213,7 @@ class QrhiCompositorTest final : public QObject {
     void realD3d11ProducerAndCompositionReadback();
     void libplaceboD3d11SurfaceAndCompositionReadback();
     void libplaceboTargetGamutBoundary();
+    void libplaceboMeasuresPeakAndResetsHistory();
     void libplaceboAnimatedDiagnosticThroughput();
 };
 
@@ -1123,6 +1125,115 @@ void QrhiCompositorTest::libplaceboD3d11SurfaceAndCompositionReadback() {
     compareNear(switchedComposition.g, switchedSurface.g * parameters.sdrScale, 0.03f);
     compareNear(switchedComposition.b, switchedSurface.b * parameters.sdrScale, 0.03f);
 #endif
+}
+
+void QrhiCompositorTest::libplaceboMeasuresPeakAndResetsHistory() {
+    auto device = GraphicsBackendFactory::createDeviceDomain();
+    QVERIFY(device);
+    auto execution = device->acquireExecutionScope();
+    auto const& graphics = device->libplaceboContext();
+    QRhi& rhi = device->rhi();
+    constexpr int size = 64;
+    auto target = device->createVideoTarget(
+        {.producerApi = VideoProducerApi::Libplacebo, .readback = VideoTargetReadback::Enabled});
+    QVERIFY(target);
+    pl_tex_params textureParams{};
+    textureParams.w = textureParams.h = size;
+    textureParams.format = pl_find_named_fmt(graphics.gpu, "rgba32f");
+    textureParams.sampleable = textureParams.host_writable = true;
+    QVERIFY(textureParams.format);
+    pl_tex texture = pl_tex_create(graphics.gpu, &textureParams);
+    QVERIFY(texture);
+    auto const release = qScopeGuard([&] { pl_tex_destroy(graphics.gpu, &texture); });
+    pl_frame source{};
+    source.num_planes = 1;
+    source.planes[0].texture = texture;
+    source.planes[0].components = 4;
+    for (int i = 0; i < 4; ++i) {
+        source.planes[0].component_mapping[i] = i;
+    }
+    source.repr = pl_color_repr_rgb;
+    source.color = pl_color_space_hdr10;
+    source.color.hdr.min_luma = PL_COLOR_HDR_BLACK;
+    source.color.hdr.max_luma = 1000.0f;
+    source.crop = {0.0f, 0.0f, float(size), float(size)};
+    auto description = surfaceState().description;
+    description.pixelSize = {size, size};
+    description.color.targetPeakHeadroom = 1.0f;
+    description.color.targetMinimumLuminanceKnown = true;
+    description.color.targetMinimumLuminanceNits = 0.0f;
+    QCOMPARE(target->ensureTarget(description), VideoTargetUpdate::Created);
+    std::vector<float> pixels(size * size * 4);
+    auto capture = [&](LibplaceboRenderContext& renderer, float nits, bool detection, QRhiReadbackResult& readback) {
+        float const encoded = linearToPq(nits / PL_COLOR_SDR_WHITE);
+        for (std::size_t i = 0; i < pixels.size(); i += 4) {
+            pixels[i] = pixels[i + 1] = pixels[i + 2] = encoded;
+            pixels[i + 3] = 1.0f;
+        }
+        QRhiCommandBuffer* commands = nullptr;
+        if (rhi.beginOffscreenFrame(&commands) != QRhi::FrameOpSuccess || !commands) {
+            return false;
+        }
+        if (target->beginProducerAccess(*commands) != VideoOperationResult::Ready) {
+            rhi.endOffscreenFrame(QRhi::SkipPresent);
+            target->submissionAborted();
+            return false;
+        }
+        pl_tex_transfer_params upload{};
+        upload.tex = texture;
+        upload.ptr = pixels.data();
+        upload.row_pitch = size * 4 * sizeof(float);
+        LibplaceboColorPolicyDecision policy;
+        policy.peakDetectionEnabled = detection;
+        policy.metadata = detection ? PL_HDR_METADATA_ANY : PL_HDR_METADATA_HDR10;
+        policy.effectiveSourceMaximumNits = 1000.0f;
+        QString error;
+        bool const rendered =
+            pl_tex_upload(graphics.gpu, &upload) && renderer.renderDecoded(source, target->libplaceboRenderTarget(),
+                                                                           description, policy, 100.0f, false, &error);
+        if (target->endProducerAccess(*commands) != VideoOperationResult::Ready || !rendered ||
+            target->prepareForComposition(*commands) != VideoOperationResult::Ready) {
+            rhi.endOffscreenFrame(QRhi::SkipPresent);
+            target->submissionAborted();
+            return false;
+        }
+        bool completed = false;
+        readback.completed = [&] { completed = true; };
+        auto* updates = rhi.nextResourceUpdateBatch();
+        updates->readBackTexture(QRhiReadbackDescription(&target->textureForComposition()), &readback);
+        commands->resourceUpdate(updates);
+        if (rhi.endOffscreenFrame() != QRhi::FrameOpSuccess) {
+            target->submissionAborted();
+            return false;
+        }
+        target->submissionAccepted();
+        return completed;
+    };
+    LibplaceboRenderContext renderer(graphics);
+    QVERIFY(renderer.isValid());
+    QRhiReadbackResult off;
+    QVERIFY(capture(renderer, 100.0f, false, off));
+    QVERIFY(!renderer.detectedHdrMetadata());
+    QRhiReadbackResult on;
+    QVERIFY(capture(renderer, 100.0f, true, on));
+    auto const measured = renderer.detectedHdrMetadata();
+    QVERIFY(measured);
+    compareNear(pl_hdr_rescale(PL_HDR_PQ, PL_HDR_NITS, measured->max_pq_y), 100.0f, 3.0f);
+    QVERIFY(readFloatPixel(on, rhi, 32, 32).r > readFloatPixel(off, rhi, 32, 32).r + 0.2f);
+    QRhiReadbackResult bright;
+    QVERIFY(capture(renderer, 800.0f, true, bright));
+    renderer.resetTemporalState();
+    QVERIFY(!renderer.detectedHdrMetadata());
+    QRhiReadbackResult reset;
+    QVERIFY(capture(renderer, 100.0f, true, reset));
+    LibplaceboRenderContext fresh(graphics);
+    QRhiReadbackResult reference;
+    QVERIFY(capture(fresh, 100.0f, true, reference));
+    QCOMPARE(reset.data, reference.data);
+    QRhiReadbackResult disabled;
+    QVERIFY(capture(renderer, 100.0f, false, disabled));
+    QVERIFY(!renderer.detectedHdrMetadata());
+    QCOMPARE(disabled.data, off.data);
 }
 
 void QrhiCompositorTest::libplaceboTargetGamutBoundary() {

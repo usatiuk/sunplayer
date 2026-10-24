@@ -66,6 +66,17 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 
 ## Current implementation status
 
+Playback has separate SDR/HDR tone-mapping preferences (defaults BT.2446A and
+Spline) and a shared default-enabled peak detector. One settings editor follows
+actual output intent, including HDR at H=1, while authored HDR10+ and mapped
+Dolby guidance retain priority. Windows/macOS Qt pins and Windows CI now use
+6.12.0; Linux retains its system Qt contract. Implementation, review and
+host-validation evidence are tracked in the
+[delivery plan](docs/plans/video-rendering/2026-10-24-tone-mapping-controls.md).
+Windows builds all targets and passes QML lint and 41/42 CTests; fullscreen
+stage6 automation remains open with user-confirmed manual fullscreen/cursor
+behavior. No native macOS/Linux Qt6.12 execution is claimed.
+
 CI and Release now have separate job graphs with shared parallel package
 builds and draft release publication; hosted delivery is tracked in
 [the release workflow plan](docs/plans/cross-cutting/2026-10-17-release-workflows.md).

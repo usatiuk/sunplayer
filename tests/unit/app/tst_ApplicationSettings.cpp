@@ -68,6 +68,7 @@ class ApplicationSettingsTest final : public QObject {
     void rejectsInvalidValues();
     void hdrReferenceWhitePersistence();
     void absolutePqPersistence();
+    void toneMappingPersistence();
     void acceptsPortableBooleanRepresentations();
     void subtitleAppearanceRoundTripAndReset();
     void subtitleAppearanceMaskedWritePreservesNeighbors();
@@ -177,6 +178,46 @@ void ApplicationSettingsTest::absolutePqPersistence() {
     QCOMPARE(loaded.volume, std::optional<qreal>(0.35));
     QCOMPARE(messages.settingsFaultCount(), 1);
     QVERIFY(messages.hasSettingsFault(QStringLiteral("invalid_value")));
+}
+
+void ApplicationSettingsTest::toneMappingPersistence() {
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QString const path = settingsPath(directory);
+    QCOMPARE(ApplicationSettings(path).load().toneMapping, VideoToneMappingSettings{});
+    for (auto sdr :
+         {VideoToneMappingAlgorithm::Bt2446a, VideoToneMappingAlgorithm::Spline, VideoToneMappingAlgorithm::Bt2390}) {
+        for (auto hdr : {VideoToneMappingAlgorithm::Spline, VideoToneMappingAlgorithm::Bt2390}) {
+            for (bool peak : {true, false}) {
+                VideoToneMappingSettings const chosen{.sdr = sdr, .hdr = hdr, .peakDetectionEnabled = peak};
+                ApplicationSettings settings(path);
+                settings.setToneMappingSettings(chosen);
+                settings.sync();
+                QCOMPARE(ApplicationSettings(path).load().toneMapping, chosen);
+            }
+        }
+    }
+    for (auto const& [key, value] : std::initializer_list<std::pair<QString, QVariant>>{
+             {QStringLiteral("playback/sdrToneMapping"), QStringLiteral("unsupported")},
+             {QStringLiteral("playback/hdrToneMapping"), QStringLiteral("bt2446a")},
+             {QStringLiteral("playback/hdrToneMapping"), true},
+             {QStringLiteral("playback/hdrPeakDetectionEnabled"), QStringLiteral("invalid")}}) {
+        ApplicationSettings settings(path);
+        settings.setToneMappingSettings({.sdr = VideoToneMappingAlgorithm::Spline,
+                                         .hdr = VideoToneMappingAlgorithm::Bt2390,
+                                         .peakDetectionEnabled = false});
+        settings.sync();
+        writeValue(path, key, value);
+        MessageCapture messages;
+        auto const loaded = ApplicationSettings(path).load().toneMapping;
+        QVERIFY(loaded.isValid());
+        QCOMPARE(loaded.sdr, key.endsWith(QStringLiteral("sdrToneMapping")) ? VideoToneMappingAlgorithm::Bt2446a
+                                                                            : VideoToneMappingAlgorithm::Spline);
+        QCOMPARE(loaded.hdr, key.endsWith(QStringLiteral("hdrToneMapping")) ? VideoToneMappingAlgorithm::Spline
+                                                                            : VideoToneMappingAlgorithm::Bt2390);
+        QCOMPARE(loaded.peakDetectionEnabled, key.endsWith(QStringLiteral("hdrPeakDetectionEnabled")));
+        QCOMPARE(messages.settingsFaultCount(), 1);
+    }
 }
 
 void ApplicationSettingsTest::hdrReferenceWhitePersistence() {

@@ -884,6 +884,27 @@ accurately.
 
 ## Headroom-selected mapping and retained-frame adaptation
 
+ADR 0040 adds output-specific decoded-HDR choices. Settings tests cover every
+valid algorithm/detector combination and invalid entries with valid neighbors;
+UI tests switch actual output at fixed state, preserve inactive preferences and
+the model during same-output refreshes, and suppress edit signals on refresh.
+Policy tests cover HDR at H=1 and unchanged authored/scene-only dynamic priority.
+Surface tests require output intent to invalidate reuse at equal headroom.
+The decoded GPU regression changes algorithms/detection on one retained frame,
+checks import reuse and real measured-peak diagnostics, and compares retained
+decoder/media-discontinuity output with fresh rendering. The real renderer test
+queries measured metadata for known 100-nit PQ against static 1000-nit metadata,
+checks the visible effect, toggling off, and fresh-state equivalence after reset.
+Older fixed-response fixtures explicitly disable detection and declare output
+intent so their existing mapping oracles remain meaningful.
+
+On 2026-10-24, all targets and QML lint built with Windows Qt6.12.0. The full
+suite passed 41/42; application-fullscreen also failed in isolation at stage6.
+Manual fullscreen/cursor hiding is user-confirmed. Settings UI, compositor and
+the extended retained-frame/discontinuity case pass after review fixes. See
+[delivery evidence](plans/video-rendering/2026-10-24-tone-mapping-controls.md)
+for the explicit native/automation limits.
+
 The decoded HDR fixtures exercise headroom changes through the real producer
 and final compositor with known-zero/unknown black. H=1 selects BT.2446A and
 H>1 selects spline regardless of surface encoding; pixel continuity across

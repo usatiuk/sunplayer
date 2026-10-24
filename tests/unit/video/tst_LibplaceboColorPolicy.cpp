@@ -40,6 +40,7 @@ RenderedVideoSurfaceDescription target(float headroom) {
                 .targetMinimumLuminanceKnown = true,
                 .targetMinimumLuminanceNits = 0.0f,
                 .targetPeakHeadroom = headroom,
+                .hdrPresentationActive = headroom > 1.0f,
             },
     };
 }
@@ -183,6 +184,7 @@ class LibplaceboColorPolicyTest final : public QObject {
     void absolutePqFallsBackAndLeavesRelativeSourcesUnchanged();
     void translatesTargetMinimumLuminance();
     void headroomSelectsOneGenericOperator();
+    void settingsSelectByOutputAndPreserveDynamicGuidance();
     void comparesOrdinarySdrCurves();
     void preservesRelativeSourcesAndBoundsMissingPq();
     void resolvesBaseMetadataInContentSpecificOrder();
@@ -275,6 +277,45 @@ void LibplaceboColorPolicyTest::headroomSelectsOneGenericOperator() {
     }
 }
 
+void LibplaceboColorPolicyTest::settingsSelectByOutputAndPreserveDynamicGuidance() {
+    LibplaceboColorPolicy policy;
+    auto const pq = makeFrame(100, 1, AVCOL_TRC_SMPTE2084);
+    QVERIFY(pq);
+    auto description = target(1.0f);
+    auto mapped = pqMappedFrame();
+    VideoToneMappingSettings settings{.sdr = VideoToneMappingAlgorithm::Bt2390,
+                                      .hdr = VideoToneMappingAlgorithm::Spline};
+    auto decision = policy.resolve(*pq, mapped, description, settings);
+    QCOMPARE(decision.toneMapping, LibplaceboToneMappingFunction::Bt2390);
+    QCOMPARE(decision.metadata, PL_HDR_METADATA_ANY);
+    QVERIFY(decision.peakDetectionEnabled);
+    description.color.hdrPresentationActive = true;
+    decision = policy.resolve(*pq, mapped, description, settings);
+    QCOMPARE(decision.toneMapping, LibplaceboToneMappingFunction::Spline);
+    settings.hdr = VideoToneMappingAlgorithm::Bt2390;
+    settings.peakDetectionEnabled = false;
+    decision = policy.resolve(*pq, mapped, description, settings);
+    QCOMPARE(decision.toneMapping, LibplaceboToneMappingFunction::Bt2390);
+    QCOMPARE(decision.metadata, PL_HDR_METADATA_HDR10);
+    QVERIFY(!decision.peakDetectionEnabled);
+    QVERIFY(decision.description().contains(QStringLiteral("peak detection off")));
+    settings.peakDetectionEnabled = true;
+    auto const dynamic =
+        makeFrame(101, 1, AVCOL_TRC_SMPTE2084, std::nullopt, [](AVFrame& frame) { addHdr10Plus(frame, 1, true, 2); });
+    QVERIFY(dynamic);
+    addMappedHdr10Plus(mapped, 2);
+    decision = policy.resolve(*dynamic, mapped, description, settings);
+    QCOMPARE(decision.toneMapping, LibplaceboToneMappingFunction::St2094_40);
+    QCOMPARE(decision.metadata, PL_HDR_METADATA_HDR10PLUS);
+    mapped.color.hdr.ootf = {};
+    auto const sceneOnly =
+        makeFrame(102, 1, AVCOL_TRC_SMPTE2084, std::nullopt, [](AVFrame& frame) { addHdr10Plus(frame, 1, false, 0); });
+    QVERIFY(sceneOnly);
+    decision = policy.resolve(*sceneOnly, mapped, description, settings);
+    QCOMPARE(decision.metadata, PL_HDR_METADATA_HDR10PLUS);
+    QCOMPARE(decision.toneMapping, LibplaceboToneMappingFunction::Bt2390);
+}
+
 void LibplaceboColorPolicyTest::comparesOrdinarySdrCurves() {
     // Hold every source/target assumption fixed. This characterizes the look
     // difference; brightness alone is not an oracle for choosing a mapper.
@@ -341,7 +382,7 @@ void LibplaceboColorPolicyTest::preservesRelativeSourcesAndBoundsMissingPq() {
     QVERIFY(policy.shouldMapDolbyVision(*pq, true));
     LibplaceboColorPolicyDecision const hdrDecision = policy.resolve(*pq, mapped, target(4.0f));
     QCOMPARE(hdrDecision.toneMapping, LibplaceboToneMappingFunction::Spline);
-    QCOMPARE(hdrDecision.metadata, PL_HDR_METADATA_HDR10);
+    QCOMPARE(hdrDecision.metadata, PL_HDR_METADATA_ANY);
     QCOMPARE(hdrDecision.provenance, LibplaceboSourceMetadataProvenance::PqCompatibilityFallback);
     QCOMPARE(hdrDecision.effectiveSourceMaximumNits,
              std::optional<float>(LibplaceboColorPolicy::pqCompatibilityMaximumNits));
@@ -360,7 +401,7 @@ void LibplaceboColorPolicyTest::resolvesBaseMetadataInContentSpecificOrder() {
     QVERIFY(policy.shouldMapDolbyVision(*maxCll, true));
     LibplaceboColorPolicyDecision decision = policy.resolve(*maxCll, mapped, target(1.0f));
     QCOMPARE(decision.toneMapping, LibplaceboToneMappingFunction::Bt2446a);
-    QCOMPARE(decision.metadata, PL_HDR_METADATA_HDR10);
+    QCOMPARE(decision.metadata, PL_HDR_METADATA_ANY);
     QCOMPARE(decision.provenance, LibplaceboSourceMetadataProvenance::MaxCll);
     QCOMPARE(decision.effectiveSourceMaximumNits, std::optional<float>(600.0f));
     QVERIFY(decision.qualification.contains(QStringLiteral("4000")));
@@ -395,7 +436,7 @@ void LibplaceboColorPolicyTest::resolvesBaseMetadataInContentSpecificOrder() {
 
     LibplaceboColorPolicyDecision const hdrMetadataDecision = policy.resolve(*maxCll, mapped, target(4.0f));
     QCOMPARE(hdrMetadataDecision.toneMapping, LibplaceboToneMappingFunction::Spline);
-    QCOMPARE(hdrMetadataDecision.metadata, PL_HDR_METADATA_HDR10);
+    QCOMPARE(hdrMetadataDecision.metadata, PL_HDR_METADATA_ANY);
     QCOMPARE(hdrMetadataDecision.provenance, LibplaceboSourceMetadataProvenance::MaxCll);
     QCOMPARE(hdrMetadataDecision.effectiveSourceMaximumNits, std::optional<float>(600.0f));
 }

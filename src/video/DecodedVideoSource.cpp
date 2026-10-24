@@ -81,6 +81,20 @@ void DecodedVideoSource::setAbsolutePqEnabled(bool enabled) {
     emit updateRequested();
 }
 
+VideoToneMappingSettings const& DecodedVideoSource::toneMappingSettings() const { return m_toneMappingSettings; }
+
+void DecodedVideoSource::setToneMappingSettings(VideoToneMappingSettings const& settings) {
+    Q_ASSERT(QThread::currentThread() == thread());
+    Q_ASSERT(settings.isValid());
+    if (m_toneMappingSettings == settings) {
+        return;
+    }
+    m_toneMappingSettings = settings;
+    advanceContentRevision();
+    emit toneMappingSettingsChanged();
+    emit updateRequested();
+}
+
 int DecodedVideoSource::sourceHdrReferenceWhiteNits() const { return m_sourceHdrReferenceWhiteNits; }
 
 void DecodedVideoSource::setSourceHdrReferenceWhiteNits(int nits) {

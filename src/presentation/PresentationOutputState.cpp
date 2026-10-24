@@ -78,7 +78,7 @@ QString PresentationOutputState::targetGamut() const {
 bool PresentationOutputState::displayHdrEnabled() const {
     return m_state.valid && m_state.colorMode == DisplayColorMode::HighDynamicRange;
 }
-bool PresentationOutputState::hdrPresentationActive() const { return presentationTarget().hdrPresentationActive; }
+bool PresentationOutputState::hdrPresentationActive() const { return presentationTarget().color.hdrPresentationActive; }
 bool PresentationOutputState::sceneReferred() const { return presentationTarget().sceneReferred; }
 bool PresentationOutputState::sdrWhiteKnown() const { return presentationTarget().sdrWhiteKnown; }
 bool PresentationOutputState::luminanceKnown() const { return presentationTarget().color.targetMinimumLuminanceKnown; }

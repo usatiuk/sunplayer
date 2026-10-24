@@ -40,7 +40,6 @@ struct PresentationTarget {
     bool operator==(PresentationTarget const&) const = default;
 
     VideoColorTarget color;
-    bool hdrPresentationActive = false;
     bool sceneReferred = false;
     bool sdrWhiteKnown = false;
     float maxLuminanceNits = 0.0f;

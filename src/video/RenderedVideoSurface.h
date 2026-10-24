@@ -16,6 +16,8 @@ struct VideoColorTarget {
     bool absolutePqAvailable = false;
     bool targetPrimariesKnown = false;
     ColorPrimaries targetPrimaries;
+    // Actual presentation intent, independent of instantaneous HDR headroom.
+    bool hdrPresentationActive = false;
 
     bool isValid() const;
 };

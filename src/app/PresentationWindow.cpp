@@ -180,6 +180,10 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
     connect(m_mediaSession.get(), &MediaSession::sessionChanged, this,
             [this] { m_playbackPowerInhibitor->reconcile(*m_mediaSession); });
     ApplicationSettings::Values const storedSettings = m_applicationSettings.load();
+    m_mediaSession->videoSource().setToneMappingSettings(storedSettings.toneMapping);
+    connect(&m_mediaSession->videoSource(), &DecodedVideoSource::toneMappingSettingsChanged, this, [this] {
+        m_applicationSettings.setToneMappingSettings(m_mediaSession->videoSource().toneMappingSettings());
+    });
     if (storedSettings.volume) {
         m_mediaSession->setVolume(*storedSettings.volume);
     }
@@ -387,10 +391,15 @@ void PresentationWindow::showSettings(int page) {
             .sourceHdrReferenceWhiteNits = m_mediaSession->videoSource().sourceHdrReferenceWhiteNits(),
             .absolutePqEnabled = m_mediaSession->videoSource().absolutePqEnabled(),
             .absolutePqAvailable = m_outputState->presentationTarget().color.absolutePqAvailable,
+            .toneMapping = m_mediaSession->videoSource().toneMappingSettings(),
+            .hdrPresentationActive = m_outputState->hdrPresentationActive(),
         });
     };
     connect(dialog, &SettingsDialog::absolutePqEnabledEdited, &m_mediaSession->videoSource(),
             &DecodedVideoSource::setAbsolutePqEnabled);
+    connect(dialog, &SettingsDialog::toneMappingSettingsEdited, &m_mediaSession->videoSource(),
+            &DecodedVideoSource::setToneMappingSettings);
+    connect(&m_mediaSession->videoSource(), &DecodedVideoSource::toneMappingSettingsChanged, dialog, refreshPlayback);
     connect(&m_mediaSession->videoSource(), &DecodedVideoSource::absolutePqEnabledChanged, dialog, refreshPlayback);
     connect(m_outputState.get(), &PresentationOutputState::stateChanged, dialog, refreshPlayback);
     connect(dialog, &SettingsDialog::preferHdr10PlusEdited, &m_mediaSession->videoSource(),

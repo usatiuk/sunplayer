@@ -79,6 +79,29 @@ SettingsDialog::SettingsDialog(SubtitleSettings& subtitleSettings) : m_subtitleS
     playbackLayout->addRow(QString(), m_preferHdr10Plus);
     connect(m_preferHdr10Plus, &QCheckBox::toggled, this, &SettingsDialog::preferHdr10PlusEdited);
 
+    m_toneMapping = new QComboBox(playbackPage);
+    m_toneMapping->setObjectName(QStringLiteral("settingsToneMapping"));
+    m_toneMapping->setToolTip(
+        tr("Select tone mapping for the current output. Supported authored HDR10+ curves take priority."));
+    m_toneMappingLabel = new QLabel(playbackPage);
+    m_toneMappingLabel->setObjectName(QStringLiteral("settingsToneMappingLabel"));
+    m_toneMappingLabel->setBuddy(m_toneMapping);
+    playbackLayout->addRow(m_toneMappingLabel, m_toneMapping);
+    connect(m_toneMapping, &QComboBox::currentIndexChanged, this, [this] {
+        auto const algorithm = m_toneMapping->currentData().value<VideoToneMappingAlgorithm>();
+        (m_hdrPresentationActive ? m_toneMappingSettings.hdr : m_toneMappingSettings.sdr) = algorithm;
+        emit toneMappingSettingsEdited(m_toneMappingSettings);
+    });
+    m_peakDetection = new QCheckBox(tr("HDR peak detection"), playbackPage);
+    m_peakDetection->setObjectName(QStringLiteral("settingsPeakDetection"));
+    m_peakDetection->setToolTip(tr("Allow scene brightness measurement for HDR tone mapping when needed. Dynamic "
+                                   "metadata keeps its existing priority."));
+    playbackLayout->addRow(QString(), m_peakDetection);
+    connect(m_peakDetection, &QCheckBox::toggled, this, [this](bool enabled) {
+        m_toneMappingSettings.peakDetectionEnabled = enabled;
+        emit toneMappingSettingsEdited(m_toneMappingSettings);
+    });
+
     m_absolutePq = new QCheckBox(tr("Absolute PQ (Windows HDR)"), playbackPage);
     m_absolutePq->setObjectName(QStringLiteral("settingsAbsolutePq"));
     m_absolutePq->setEnabled(false);
@@ -391,6 +414,7 @@ SettingsDialog::SettingsDialog(SubtitleSettings& subtitleSettings) : m_subtitleS
     connect(&m_subtitleSettings, &SubtitleSettings::settingsChanged, this, &SettingsDialog::refreshSubtitles);
 
     refreshSubtitles();
+    setPlaybackState({});
 }
 
 void SettingsDialog::addPage(QWidget& page, QString const& title) { m_tabs->addTab(&page, title); }
@@ -405,6 +429,24 @@ void SettingsDialog::setPlaybackState(PlaybackState const& state) {
     QSignalBlocker const blankingBlocker(m_blankOtherDisplays);
     QSignalBlocker const hdr10PlusBlocker(m_preferHdr10Plus);
     QSignalBlocker const absolutePqBlocker(m_absolutePq);
+    QSignalBlocker const toneMappingBlocker(m_toneMapping);
+    QSignalBlocker const peakDetectionBlocker(m_peakDetection);
+    m_toneMappingSettings = state.toneMapping;
+    bool const outputChanged = m_hdrPresentationActive != state.hdrPresentationActive;
+    m_hdrPresentationActive = state.hdrPresentationActive;
+    m_toneMappingLabel->setText(state.hdrPresentationActive ? tr("Tone mapping — HDR output:")
+                                                            : tr("Tone mapping — SDR output:"));
+    if (outputChanged || m_toneMapping->count() == 0) {
+        m_toneMapping->clear();
+        if (!state.hdrPresentationActive) {
+            m_toneMapping->addItem(tr("BT.2446A"), QVariant::fromValue(VideoToneMappingAlgorithm::Bt2446a));
+        }
+        m_toneMapping->addItem(tr("Spline"), QVariant::fromValue(VideoToneMappingAlgorithm::Spline));
+        m_toneMapping->addItem(tr("BT.2390"), QVariant::fromValue(VideoToneMappingAlgorithm::Bt2390));
+    }
+    auto const algorithm = state.hdrPresentationActive ? state.toneMapping.hdr : state.toneMapping.sdr;
+    m_toneMapping->setCurrentIndex(m_toneMapping->findData(QVariant::fromValue(algorithm)));
+    m_peakDetection->setChecked(state.toneMapping.peakDetectionEnabled);
     QSignalBlocker const referenceWhiteSliderBlocker(m_sourceHdrReferenceWhiteSlider);
     QSignalBlocker const referenceWhiteSpinBlocker(m_sourceHdrReferenceWhiteSpin);
     m_sourceHdrReferenceWhiteSlider->setValue(state.sourceHdrReferenceWhiteNits);

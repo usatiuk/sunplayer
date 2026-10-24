@@ -13,6 +13,15 @@ actually been validated.
 
 ## Shared color-pipeline simplification: implementation complete, validation ongoing
 
+The [output-specific controls](../../plans/video-rendering/2026-10-24-tone-mapping-controls.md)
+amend the fixed decoded-HDR operator: SDR defaults BT.2446A, HDR defaults Spline,
+with BT.2390 alternatives and one shared default-on detector. HDR Lab and SDR
+input retain their original selector. Reference white remains 100–203/default100.
+Windows Qt6.12 build, QML lint and 41/42 full CTests pass; the isolated fullscreen
+stage6 automation timeout remains documented, with user-confirmed manual
+fullscreen/cursor behavior. Native Linux/macOS output movement is not validated
+by this host. See the delivery plan for exact evidence and deferred limits.
+
 The [consolidated plan](../../plans/video-rendering/2026-10-21-color-pipeline-simplification.md)
 implements one `VideoColorTarget`, a generic BT.2446A-at-H=1/spline-above-one
 operator, affine black/white normalization before composition, and build-generated

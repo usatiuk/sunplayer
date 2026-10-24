@@ -26,7 +26,7 @@ permissions:
 
 jobs:
   windows:
-    name: Windows · Qt 6.11.1
+    name: Windows · Qt 6.12.0
     runs-on: windows-2022
     timeout-minutes: 180
     env:
@@ -70,8 +70,8 @@ jobs:
         id: qt-cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          path: ${{ runner.temp }}\Qt\6.11.1
-          key: windows-2022-qt-6.11.1-msvc2022_64-with-sources-r2
+          path: ${{ runner.temp }}\Qt\6.12.0
+          key: windows-2022-qt-6.12.0-msvc2022_64-with-sources-r2
 
       - name: Install Qt
         if: steps.qt-cache.outputs.cache-hit != 'true'
@@ -80,17 +80,17 @@ jobs:
           python -m pip install "aqtinstall @ https://github.com/miurahr/aqtinstall/archive/8c3695d4a4e1ceabf6a74dc6c79681656dc6b74b.zip"
           python -m aqt install-qt `
             --outputdir "$env:RUNNER_TEMP\Qt" `
-            windows desktop 6.11.1 win64_msvc2022_64 `
+            windows desktop 6.12.0 win64_msvc2022_64 `
             -m qtshadertools
           python -m aqt install-src `
             --outputdir "$env:RUNNER_TEMP\Qt" `
-            windows 6.11.1 `
+            windows 6.12.0 `
             --archives qtbase qtdeclarative qtimageformats qtsvg
 
       - name: Verify Qt and vcpkg
         shell: pwsh
         run: |
-          $qtRoot = "$env:RUNNER_TEMP\Qt\6.11.1\msvc2022_64"
+          $qtRoot = "$env:RUNNER_TEMP\Qt\6.12.0\msvc2022_64"
           $binaryCache = "$env:RUNNER_TEMP\sunplayer-vcpkg-binary-cache"
           $requiredPaths = @(
             "$qtRoot\lib\cmake\Qt6\Qt6Config.cmake",
@@ -136,7 +136,7 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
           set "VCPKG_BINARY_SOURCES=clear;files,%RUNNER_TEMP%\sunplayer-vcpkg-binary-cache,readwrite"
-          cmake -S . -B "%RUNNER_TEMP%\sunplayer-windows-debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DVCPKG_INSTALLED_DIR=%RUNNER_TEMP%\sunplayer-vcpkg-installed" "-DCMAKE_PREFIX_PATH=%RUNNER_TEMP%\Qt\6.11.1\msvc2022_64"
+          cmake -S . -B "%RUNNER_TEMP%\sunplayer-windows-debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DVCPKG_INSTALLED_DIR=%RUNNER_TEMP%\sunplayer-vcpkg-installed" "-DCMAKE_PREFIX_PATH=%RUNNER_TEMP%\Qt\6.12.0\msvc2022_64"
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Build
@@ -172,7 +172,7 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b %errorlevel%
           set "VCPKG_BINARY_SOURCES=clear;files,%RUNNER_TEMP%\sunplayer-vcpkg-binary-cache,readwrite"
-          cmake -S . -B "%RUNNER_TEMP%\sunplayer-windows-release" -G Ninja -DCMAKE_BUILD_TYPE=%SUNPLAYER_PACKAGE_CONFIGURATION% -DBUILD_TESTING=OFF "-DSUNPLAYER_DISPLAY_NAME=%SUNPLAYER_DISPLAY_NAME%" "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DVCPKG_INSTALLED_DIR=%RUNNER_TEMP%\sunplayer-vcpkg-installed" "-DCMAKE_PREFIX_PATH=%RUNNER_TEMP%\Qt\6.11.1\msvc2022_64"
+          cmake -S . -B "%RUNNER_TEMP%\sunplayer-windows-release" -G Ninja -DCMAKE_BUILD_TYPE=%SUNPLAYER_PACKAGE_CONFIGURATION% -DBUILD_TESTING=OFF "-DSUNPLAYER_DISPLAY_NAME=%SUNPLAYER_DISPLAY_NAME%" "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" "-DVCPKG_INSTALLED_DIR=%RUNNER_TEMP%\sunplayer-vcpkg-installed" "-DCMAKE_PREFIX_PATH=%RUNNER_TEMP%\Qt\6.12.0\msvc2022_64"
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Build distribution bundle

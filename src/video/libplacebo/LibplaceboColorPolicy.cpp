@@ -216,15 +216,19 @@ LibplaceboColorPolicyDecision hdr10PlusOotfDecision(pl_frame const& mappedFrame)
 } // namespace
 
 QString LibplaceboColorPolicyDecision::description() const {
+    QString const peakDetection =
+        peakDetectionEnabled ? QStringLiteral("peak detection enabled") : QStringLiteral("peak detection off");
     if (toneMapping == LibplaceboToneMappingFunction::Spline &&
         provenance == LibplaceboSourceMetadataProvenance::ExistingSelection && qualification.isEmpty()) {
         return QStringLiteral("Spline tone map · perceptual gamut map · inverse mapping off · "
-                              "peak detection off · dither off");
+                              "%1 · dither off")
+            .arg(peakDetection);
     }
     if (toneMapping == LibplaceboToneMappingFunction::Clip && provenance == LibplaceboSourceMetadataProvenance::None &&
         qualification.isEmpty()) {
         return QStringLiteral("Clip tone map · perceptual gamut map · inverse mapping off · "
-                              "peak detection off · dither off");
+                              "%1 · dither off")
+            .arg(peakDetection);
     }
 
     QString toneMappingName;
@@ -238,6 +242,9 @@ QString LibplaceboColorPolicyDecision::description() const {
     case LibplaceboToneMappingFunction::Bt2446a:
         toneMappingName = QStringLiteral("BT.2446A EETF");
         break;
+    case LibplaceboToneMappingFunction::Bt2390:
+        toneMappingName = QStringLiteral("BT.2390 EETF");
+        break;
     case LibplaceboToneMappingFunction::St2094_40:
         toneMappingName = QStringLiteral("ST 2094-40 EETF");
         break;
@@ -250,7 +257,7 @@ QString LibplaceboColorPolicyDecision::description() const {
     if (!qualification.isEmpty()) {
         result += QStringLiteral(" · %1").arg(qualification);
     }
-    result += QStringLiteral(" · perceptual gamut map · inverse mapping off · peak detection off · dither off");
+    result += QStringLiteral(" · perceptual gamut map · inverse mapping off · %1 · dither off").arg(peakDetection);
     return result;
 }
 
@@ -270,13 +277,44 @@ bool LibplaceboColorPolicy::shouldMapDolbyVision(DecodedVideoFrame const& frame,
     return !m_useHdr10Base;
 }
 
-LibplaceboColorPolicyDecision
-LibplaceboColorPolicy::resolve(DecodedVideoFrame const& frame, pl_frame const& mappedFrame,
-                               RenderedVideoSurfaceDescription const& targetDescription) const {
+LibplaceboColorPolicyDecision LibplaceboColorPolicy::resolve(DecodedVideoFrame const& frame,
+                                                             pl_frame const& mappedFrame,
+                                                             RenderedVideoSurfaceDescription const& targetDescription,
+                                                             VideoToneMappingSettings const& settings) const {
     Q_ASSERT(targetDescription.isValid());
+    Q_ASSERT(settings.isValid());
+    bool const hdrSource = frame.dynamicRange() != VideoDynamicRange::Sdr;
+    auto toneMapping = libplaceboToneMapping(targetDescription.color.targetPeakHeadroom);
+    if (hdrSource) {
+        auto const algorithm = targetDescription.color.hdrPresentationActive ? settings.hdr : settings.sdr;
+        switch (algorithm) {
+        case VideoToneMappingAlgorithm::Bt2446a:
+            toneMapping = LibplaceboToneMappingFunction::Bt2446a;
+            break;
+        case VideoToneMappingAlgorithm::Spline:
+            toneMapping = LibplaceboToneMappingFunction::Spline;
+            break;
+        case VideoToneMappingAlgorithm::Bt2390:
+            toneMapping = LibplaceboToneMappingFunction::Bt2390;
+            break;
+        }
+    }
+    auto decision = resolveMetadata(frame, mappedFrame, toneMapping);
+    decision.peakDetectionEnabled = hdrSource && settings.peakDetectionEnabled;
+    // Keep explicit dynamic guidance. ANY allows measured luminance to replace
+    // only static HDR10 range assumptions, including the base-PQ fallback.
+    if (decision.peakDetectionEnabled && decision.metadata == PL_HDR_METADATA_HDR10 &&
+        mappedFrame.repr.sys != PL_COLOR_SYSTEM_DOLBYVISION) {
+        decision.metadata = PL_HDR_METADATA_ANY;
+    }
+    return decision;
+}
+
+LibplaceboColorPolicyDecision LibplaceboColorPolicy::resolveMetadata(DecodedVideoFrame const& frame,
+                                                                     pl_frame const& mappedFrame,
+                                                                     LibplaceboToneMappingFunction toneMapping) const {
     AVFrame const& source = frame.ffmpegFrame();
     bool const mappedDolbyVision = mappedFrame.repr.sys == PL_COLOR_SYSTEM_DOLBYVISION && mappedFrame.repr.dovi;
-    LibplaceboToneMappingFunction const toneMapping = libplaceboToneMapping(targetDescription.color.targetPeakHeadroom);
     if (frame.dynamicRange() == VideoDynamicRange::Sdr) {
         return genericDecision(toneMapping, LibplaceboSourceMetadataProvenance::None);
     }

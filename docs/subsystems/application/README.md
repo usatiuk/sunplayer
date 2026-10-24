@@ -260,6 +260,10 @@ native textures, producers, or backends.
 `ApplicationSettings` also persists the default-disabled HDR10+ preference and
 source HDR reference white (100–203 integer nits, default 100), and the
 default-disabled Absolute PQ preference.
+It also persists independent SDR/HDR tone-mapping algorithms and one shared
+peak-detection preference, with defaults BT.2446A/Spline/on. One typed settings
+value is owned by DecodedVideoSource; stored algorithm strings and detector
+values are validated independently so an invalid entry preserves valid neighbors.
 `DecodedVideoSource` owns their live values; the existing content-revision and
 update-request path rerenders paused video when it changes.
 

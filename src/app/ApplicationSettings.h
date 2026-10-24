@@ -6,6 +6,7 @@
 #include <QString>
 
 #include "subtitles/SubtitleAppearance.h"
+#include "video/VideoToneMappingSettings.h"
 
 class ApplicationSettings final {
   public:
@@ -16,6 +17,7 @@ class ApplicationSettings final {
         std::optional<int> sourceHdrReferenceWhiteNits;
         std::optional<bool> blankOtherDisplaysInFullscreen;
         std::optional<SubtitleAppearanceValues> subtitleAppearance;
+        VideoToneMappingSettings toneMapping;
     };
 
     ApplicationSettings();
@@ -27,6 +29,7 @@ class ApplicationSettings final {
     void setVolume(qreal volume);
     void setPreferHdr10Plus(bool enabled);
     void setAbsolutePqEnabled(bool enabled);
+    void setToneMappingSettings(VideoToneMappingSettings const& settings);
     void setSourceHdrReferenceWhiteNits(int nits);
     void setBlankOtherDisplaysInFullscreen(bool enabled);
     void setSubtitleAppearance(SubtitleAppearanceValues const& values, SubtitleAppearanceFields dirtyFields);

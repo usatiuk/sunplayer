@@ -58,3 +58,4 @@ with a new decision when the accepted choice changes materially.
 
 * [0038: Share one settings store with native packaged Windows persistence](0038-share-settings-store-with-native-windows.md)
 * [0039: Unify color mapping and native encoding](0039-unify-color-mapping-and-native-encoding.md)
+* [0040: Configure playback tone mapping by active output](0040-configure-tone-mapping-by-active-output.md)

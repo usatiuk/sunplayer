@@ -140,13 +140,24 @@ LibplaceboRenderContext::~LibplaceboRenderContext() { pl_renderer_destroy(&m_ren
 
 bool LibplaceboRenderContext::isValid() const { return m_renderer; }
 
+void LibplaceboRenderContext::resetTemporalState() {
+    Q_ASSERT(isValid());
+    pl_renderer_flush_cache(m_renderer);
+}
+
+std::optional<pl_hdr_metadata> LibplaceboRenderContext::detectedHdrMetadata() const {
+    Q_ASSERT(isValid());
+    pl_hdr_metadata metadata{};
+    return pl_renderer_get_hdr_metadata(m_renderer, &metadata) ? std::optional(metadata) : std::nullopt;
+}
+
 bool LibplaceboRenderContext::render(pl_frame const& source, pl_tex targetTexture,
                                      RenderedVideoSurfaceDescription const& targetDescription, bool toneMappingEnabled,
                                      QString* error) {
     return renderWithPolicy(source, targetTexture, targetDescription,
                             toneMappingEnabled ? libplaceboToneMapping(targetDescription.color.targetPeakHeadroom)
                                                : LibplaceboToneMappingFunction::Clip,
-                            PL_HDR_METADATA_ANY, std::nullopt, PL_COLOR_SDR_WHITE, false, error);
+                            PL_HDR_METADATA_ANY, std::nullopt, PL_COLOR_SDR_WHITE, false, false, error);
 }
 
 bool LibplaceboRenderContext::renderDecoded(pl_frame const& source, pl_tex targetTexture,
@@ -155,7 +166,7 @@ bool LibplaceboRenderContext::renderDecoded(pl_frame const& source, pl_tex targe
                                             float sourceHdrReferenceWhiteNits, bool absolutePqEnabled, QString* error) {
     return renderWithPolicy(source, targetTexture, targetDescription, colorPolicy.toneMapping, colorPolicy.metadata,
                             colorPolicy.effectiveSourceMaximumNits, sourceHdrReferenceWhiteNits, absolutePqEnabled,
-                            error);
+                            colorPolicy.peakDetectionEnabled, error);
 }
 
 bool LibplaceboRenderContext::renderWithPolicy(pl_frame const& source, pl_tex targetTexture,
@@ -164,7 +175,7 @@ bool LibplaceboRenderContext::renderWithPolicy(pl_frame const& source, pl_tex ta
                                                enum pl_hdr_metadata_type metadata,
                                                std::optional<float> effectiveSourceMaximumNits,
                                                float sourceHdrReferenceWhiteNits, bool absolutePqEnabled,
-                                               QString* error) {
+                                               bool peakDetectionEnabled, QString* error) {
     Q_ASSERT(isValid());
     Q_ASSERT(targetTexture);
     Q_ASSERT(targetDescription.isValid());
@@ -243,6 +254,9 @@ bool LibplaceboRenderContext::renderWithPolicy(pl_frame const& source, pl_tex ta
     case LibplaceboToneMappingFunction::Bt2446a:
         colorMap.tone_mapping_function = &pl_tone_map_bt2446a;
         break;
+    case LibplaceboToneMappingFunction::Bt2390:
+        colorMap.tone_mapping_function = &pl_tone_map_bt2390;
+        break;
     case LibplaceboToneMappingFunction::St2094_40:
         colorMap.tone_mapping_function = &pl_tone_map_st2094_40;
         break;
@@ -252,7 +266,7 @@ bool LibplaceboRenderContext::renderWithPolicy(pl_frame const& source, pl_tex ta
     pl_render_params parameters = pl_render_default_params;
     parameters.color_map_params = &colorMap;
     parameters.dither_params = nullptr;
-    parameters.peak_detect_params = nullptr;
+    parameters.peak_detect_params = peakDetectionEnabled ? &pl_peak_detect_default_params : nullptr;
     // LINEAR retains the target's light-domain black. Convert to the common
     // black-relative working coordinates before blending with UI: (L-B)/(C-B).
     // Use nominal target endpoints, never content peaks inferred by the mapper.
