@@ -180,6 +180,9 @@ void PresentationWindow::initialize(PresentationSurfaceContract surfaceContract,
     connect(m_mediaSession.get(), &MediaSession::sessionChanged, this,
             [this] { m_playbackPowerInhibitor->reconcile(*m_mediaSession); });
     ApplicationSettings::Values const storedSettings = m_applicationSettings.load();
+    m_jellyfinHidden = storedSettings.jellyfinHidden.value_or(false);
+    connect(this, &PresentationWindow::jellyfinHiddenChanged, this,
+            [this] { m_applicationSettings.setJellyfinHidden(m_jellyfinHidden); });
     m_mediaSession->videoSource().setToneMappingSettings(storedSettings.toneMapping);
     connect(&m_mediaSession->videoSource(), &DecodedVideoSource::toneMappingSettingsChanged, this, [this] {
         m_applicationSettings.setToneMappingSettings(m_mediaSession->videoSource().toneMappingSettings());
@@ -377,11 +380,15 @@ void PresentationWindow::showSettings(int page) {
     auto* const dialog = new SettingsDialog(*m_subtitleSettings);
 #ifdef Q_OS_LINUX
     if (m_appImageUpdateUi) {
-        dialog->addPage(*m_appImageUpdateUi->createSettingsPage(), tr("Application"));
+        dialog->addApplicationSection(*m_appImageUpdateUi->createSettingsPage());
     }
 #endif
     m_settingsDialog = dialog;
     dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setJellyfinHidden(m_jellyfinHidden);
+    connect(dialog, &SettingsDialog::jellyfinHiddenEdited, this, &PresentationWindow::setJellyfinHidden);
+    connect(this, &PresentationWindow::jellyfinHiddenChanged, dialog,
+            [this, dialog] { dialog->setJellyfinHidden(m_jellyfinHidden); });
     auto const refreshPlayback = [this, dialog] {
         dialog->setPlaybackState({
             .volume = m_mediaSession->volume(),
@@ -418,6 +425,16 @@ void PresentationWindow::showSettings(int page) {
     dialog->showPage(page);
     parentNativeDialog(*dialog, *this);
     dialog->open();
+}
+
+bool PresentationWindow::jellyfinHidden() const { return m_jellyfinHidden; }
+
+void PresentationWindow::setJellyfinHidden(bool hidden) {
+    if (m_jellyfinHidden == hidden) {
+        return;
+    }
+    m_jellyfinHidden = hidden;
+    emit jellyfinHiddenChanged();
 }
 
 bool PresentationWindow::cursorHidden() const { return m_cursorHidden; }

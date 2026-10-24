@@ -13,6 +13,7 @@ class QSlider;
 class QSpinBox;
 class QTabWidget;
 class QWidget;
+class QVBoxLayout;
 class SubtitleSettings;
 
 class SettingsDialog final : public QDialog {
@@ -22,6 +23,7 @@ class SettingsDialog final : public QDialog {
     enum Page {
         PlaybackPage = 0,
         SubtitlesPage = 1,
+        ApplicationPage = 2,
     };
 
     explicit SettingsDialog(SubtitleSettings& subtitleSettings);
@@ -30,7 +32,7 @@ class SettingsDialog final : public QDialog {
         qreal volume = 1.0;
         bool blankingAvailable = false;
         bool blankingEnabled = false;
-        bool preferHdr10Plus = false;
+        bool preferHdr10Plus = DecodedVideoSource::defaultPreferHdr10Plus;
         int sourceHdrReferenceWhiteNits = DecodedVideoSource::defaultSourceHdrReferenceWhiteNits;
         bool absolutePqEnabled = false;
         bool absolutePqAvailable = false;
@@ -39,7 +41,8 @@ class SettingsDialog final : public QDialog {
     };
 
     void showPage(int page);
-    void addPage(QWidget& page, QString const& title);
+    void addApplicationSection(QWidget& section);
+    void setJellyfinHidden(bool hidden);
     void setPlaybackState(PlaybackState const& state);
 
   signals:
@@ -49,6 +52,7 @@ class SettingsDialog final : public QDialog {
     void toneMappingSettingsEdited(VideoToneMappingSettings const& settings);
     void sourceHdrReferenceWhiteNitsEdited(int nits);
     void blankOtherDisplaysEdited(bool enabled);
+    void jellyfinHiddenEdited(bool hidden);
 
   private:
     void refreshSubtitles();
@@ -59,6 +63,8 @@ class SettingsDialog final : public QDialog {
 
     SubtitleSettings& m_subtitleSettings;
     QTabWidget* m_tabs = nullptr;
+    QVBoxLayout* m_applicationLayout = nullptr;
+    QCheckBox* m_hideJellyfin = nullptr;
     QSlider* m_volumeSlider = nullptr;
     QSpinBox* m_volumeSpin = nullptr;
     QCheckBox* m_blankOtherDisplays = nullptr;

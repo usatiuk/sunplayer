@@ -30,6 +30,7 @@ class DecodedVideoSource final : public RenderedVideoSource {
     static constexpr int minimumSourceHdrReferenceWhiteNits = 100;
     static constexpr int maximumSourceHdrReferenceWhiteNits = 203;
     static constexpr int defaultSourceHdrReferenceWhiteNits = minimumSourceHdrReferenceWhiteNits;
+    static constexpr bool defaultPreferHdr10Plus = true;
 
     explicit DecodedVideoSource(std::shared_ptr<DecodedVideoFrame const> frame, VideoTargetReadback readback,
                                 QObject* parent = nullptr);
@@ -71,7 +72,7 @@ class DecodedVideoSource final : public RenderedVideoSource {
     std::shared_ptr<DecodedVideoFrame const> m_frame;
     DecodedVideoFrameSelector* m_selector = nullptr;
     VideoTargetReadback m_readback;
-    bool m_preferHdr10Plus = false;
+    bool m_preferHdr10Plus = defaultPreferHdr10Plus;
     bool m_absolutePqEnabled = false;
     int m_sourceHdrReferenceWhiteNits = defaultSourceHdrReferenceWhiteNits;
     VideoToneMappingSettings m_toneMappingSettings;

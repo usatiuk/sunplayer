@@ -1923,8 +1923,7 @@ void FfmpegFirstFrameTest::dualFormatPreferenceRemapsPausedFrame() {
     GraphicsDeviceExecutionScope execution = graphics->acquireExecutionScope();
     DecodedVideoSource source(dualFrame, VideoTargetReadback::Disabled);
     source.setToneMappingSettings({.peakDetectionEnabled = false});
-    QVERIFY(!source.preferHdr10Plus());
-    source.setPreferHdr10Plus(true);
+    QVERIFY(source.preferHdr10Plus());
     LibplaceboDecodedVideoProducer producer(*graphics, source, VideoTargetReadback::Disabled);
     QRhi& rhi = graphics->rhi();
 

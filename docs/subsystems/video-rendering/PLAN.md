@@ -140,7 +140,7 @@ surface.
   off, and dithering off for the RGBA16F target. Report the exact operator,
   metadata provenance, unsupported guidance, and fallback in diagnostics.
 * [x] Keep Dolby and HDR10-compatible base metadata coherent. Retain the
-  narrow typed base compatibility fact and one default-disabled HDR10+ preference.
+  narrow typed base compatibility fact and one default-enabled HDR10+ preference.
   Latch a recognized HDR10+ base choice per playback generation/preference,
   independently of the display, and remap paused frames on preference changes.
 * [x] Do not add a no-op source-discontinuity hook while peak detection and

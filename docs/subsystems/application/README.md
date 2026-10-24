@@ -9,7 +9,10 @@ startup, object ownership, native presentation events, redirected Qt Quick
 input, the active video-viewport boundary, and asynchronous continuous local
 audio/video playback with a position/duration seek timeline. Playback volume
 and the supported fullscreen display-blanking option persist across normal
-restarts. Active playback automatically inhibits display idle and idle system
+restarts. The shared Application settings tab persists a default-off Hide Jellyfin
+preference. `PresentationWindow` exposes its live value through WindowCommands;
+AppShell owns visibility/navigation and the Jellyfin backend remains unchanged.
+Linux updater controls reuse this tab. Active playback automatically inhibits display idle and idle system
 sleep. One local file can be opened through the file dialog, a command-line or
 Windows common-video association launch, or a native copy-only file drop. It
 does not yet provide general structured errors or a user-facing support-report
@@ -257,7 +260,7 @@ source-specific state and producer choice out of the presentation engine.
 HDR Lab. QML selects only the semantic Player/Diagnostics route; it never sees
 native textures, producers, or backends.
 
-`ApplicationSettings` also persists the default-disabled HDR10+ preference and
+`ApplicationSettings` also persists the default-enabled HDR10+ preference and
 source HDR reference white (100–203 integer nits, default 100), and the
 default-disabled Absolute PQ preference.
 It also persists independent SDR/HDR tone-mapping algorithms and one shared

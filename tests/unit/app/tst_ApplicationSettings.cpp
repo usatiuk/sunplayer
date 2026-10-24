@@ -68,6 +68,7 @@ class ApplicationSettingsTest final : public QObject {
     void rejectsInvalidValues();
     void hdrReferenceWhitePersistence();
     void absolutePqPersistence();
+    void jellyfinVisibilityPersistence();
     void toneMappingPersistence();
     void acceptsPortableBooleanRepresentations();
     void subtitleAppearanceRoundTripAndReset();
@@ -178,6 +179,26 @@ void ApplicationSettingsTest::absolutePqPersistence() {
     QCOMPARE(loaded.volume, std::optional<qreal>(0.35));
     QCOMPARE(messages.settingsFaultCount(), 1);
     QVERIFY(messages.hasSettingsFault(QStringLiteral("invalid_value")));
+}
+
+void ApplicationSettingsTest::jellyfinVisibilityPersistence() {
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QString const path = settingsPath(directory);
+    QVERIFY(!ApplicationSettings(path).load().jellyfinHidden);
+    for (bool hidden : {true, false}) {
+        ApplicationSettings settings(path);
+        settings.setJellyfinHidden(hidden);
+        settings.sync();
+        QCOMPARE(ApplicationSettings(path).load().jellyfinHidden, std::optional<bool>(hidden));
+    }
+    writeValue(path, QStringLiteral("application/hideJellyfin"), QStringLiteral("invalid"));
+    writeValue(path, QStringLiteral("playback/volume"), 0.35);
+    MessageCapture messages;
+    auto const loaded = ApplicationSettings(path).load();
+    QVERIFY(!loaded.jellyfinHidden);
+    QCOMPARE(loaded.volume, std::optional<qreal>(0.35));
+    QCOMPARE(messages.settingsFaultCount(), 1);
 }
 
 void ApplicationSettingsTest::toneMappingPersistence() {

@@ -115,16 +115,21 @@ integration. Media leaving Empty cancels an active update. The notice offers
 Update and restart and Dismiss; dismissal lasts this launch and is disabled
 while updating.
 
-Only updater-enabled Linux AppImages add an Application settings tab with one
-immediate “Check for updates on startup” checkbox. Linux `AppImageUpdateUi`
-owns that page, the first-use Yes/No question and the `linux/appimage/checkOnStartup`
+The shared Application settings tab is available on every platform. Its saved
+“Hide Jellyfin” checkbox defaults off. Hiding removes Jellyfin entry/history
+navigation and returns an open browser page to Player without stopping playback,
+signing out or destroying the retained browser. Showing restores access.
+
+Updater-enabled Linux AppImages embed the existing immediate “Check for updates
+on startup” checkbox in that same tab. Linux `AppImageUpdateUi`
+owns those controls, the first-use Yes/No question and the `linux/appimage/checkOnStartup`
 key in the existing application settings file. Missing means unanswered; no
 check runs before consent. The question waits for Empty, closes if media opens,
 and a dismissed question waits until next launch. Yes checks immediately and
 once per future launch; No skips automatic checks. Enabling the checkbox checks
 immediately. Checks remain asynchronous during playback; installation always
 requires the empty-screen action. Other platforms and ordinary Linux builds
-have no update preference tab or prompt.
+have no update controls or prompt.
 
 ## Page structure
 
@@ -404,9 +409,15 @@ Extend Qt Quick component coverage as commands gain behavior. Add
 actual-application scenarios for file open, navigation, diagnostics access,
 and shutdown when the private scenario-control boundary exists.
 
-The Playback settings page includes a default-disabled “Prefer HDR10+ over Dolby
-Vision” checkbox. It changes the compatible dual-format representation live,
-including while paused, and persists through the existing application settings.
+The Playback settings page has a collapsed-by-default “Advanced” disclosure for
+HDR10+ preference, tone mapping, peak detection, Absolute PQ and reference white.
+Volume and fullscreen display blanking remain outside it. Expanding/collapsing
+does not change preferences or persist another setting.
+
+The “Prefer HDR10+ over Dolby Vision” checkbox defaults to enabled for users
+without a stored preference; saved values remain respected. It changes the
+compatible dual-format representation live, including while paused, and
+persists through the existing application settings.
 
 HDR reference white uses a 100–203-nit slider and numeric field with 100/203-nit
 preset buttons, default 100. It adjusts PQ/HDR10+/Dolby Vision video on SDR and

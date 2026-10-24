@@ -91,3 +91,20 @@ it remains outside this change.
 The isolated fullscreen automation failure and existing Qt6.12 renamed-type
 lint warnings are tracked in DEFERRED.md. Native output movement and hosted
 Qt6.12 packaging/installation remain unverified here.
+
+## Follow-up: Advanced disclosure and HDR10+ default
+
+At the user's request, Playback now groups HDR10+ preference, algorithm,
+detector, Absolute PQ and reference white behind a native collapsed Advanced
+disclosure. Volume/fullscreen blanking remain visible. No custom widget,
+animation, persisted expansion state or settings behavior was added. HDR10+
+preference defaults on when absent; saved false values remain respected.
+Representation/metadata rules are unchanged.
+
+Windows Qt6.12 app and affected targets build in the same CLion directory.
+application-settings and settings-dialog pass, including collapse/expand with
+no preference edits and explicit saved-state overrides. The real decoded
+dualFormatPreferenceRemapsPausedFrame regression passes both authored-curve
+and zero-average rows starting from the new HDR10+ default. Formatting and
+diff checks pass. This is a scoped follow-up; the earlier full-suite evidence
+and fullscreen automation limitation are not replaced by another full run.

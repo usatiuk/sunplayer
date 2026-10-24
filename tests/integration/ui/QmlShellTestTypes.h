@@ -197,6 +197,7 @@ class ShellTestWindowCommands final : public QWindow {
                    setBlankOtherDisplaysInFullscreen NOTIFY blankOtherDisplaysInFullscreenChanged)
     Q_PROPERTY(QObject* windowChrome READ windowChrome CONSTANT)
     Q_PROPERTY(QObject* applicationUpdate READ applicationUpdate NOTIFY applicationUpdateChanged)
+    Q_PROPERTY(bool jellyfinHidden READ jellyfinHidden WRITE setJellyfinHidden NOTIFY jellyfinHiddenChanged)
 
   public:
     explicit ShellTestWindowCommands(QWindow* parent) : QWindow(parent), m_windowChrome(this) {}
@@ -248,6 +249,14 @@ class ShellTestWindowCommands final : public QWindow {
     }
     QObject* windowChrome() { return &m_windowChrome; }
     QObject* applicationUpdate() { return m_applicationUpdate; }
+    bool jellyfinHidden() const { return m_jellyfinHidden; }
+    void setJellyfinHidden(bool hidden) {
+        if (m_jellyfinHidden == hidden) {
+            return;
+        }
+        m_jellyfinHidden = hidden;
+        emit jellyfinHiddenChanged();
+    }
     void setApplicationUpdate(QObject* updater) {
         m_applicationUpdate = updater;
         emit applicationUpdateChanged();
@@ -255,6 +264,7 @@ class ShellTestWindowCommands final : public QWindow {
 
   signals:
     void applicationUpdateChanged();
+    void jellyfinHiddenChanged();
     void otherDisplayBlankingAvailableChanged();
     void blankOtherDisplaysInFullscreenChanged();
     void relativeSeekRequested(qlonglong milliseconds);
@@ -265,6 +275,7 @@ class ShellTestWindowCommands final : public QWindow {
 
   private:
     QObject* m_applicationUpdate = nullptr;
+    bool m_jellyfinHidden = false;
     ShellTestWindowChromeController m_windowChrome;
     int m_toggleCount = 0;
     int m_openCount = 0;

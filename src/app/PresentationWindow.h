@@ -30,6 +30,7 @@ class PresentationWindow : public QWindow {
                    setBlankOtherDisplaysInFullscreen NOTIFY blankOtherDisplaysInFullscreenChanged)
     Q_PROPERTY(WindowChromeController* windowChrome READ windowChrome CONSTANT)
     Q_PROPERTY(QObject* applicationUpdate READ applicationUpdate CONSTANT)
+    Q_PROPERTY(bool jellyfinHidden READ jellyfinHidden WRITE setJellyfinHidden NOTIFY jellyfinHiddenChanged)
 
   public:
 #ifdef Q_OS_LINUX
@@ -61,10 +62,13 @@ class PresentationWindow : public QWindow {
     void setBlankOtherDisplaysInFullscreen(bool enabled);
     WindowChromeController* windowChrome();
     QObject* applicationUpdate() const;
+    bool jellyfinHidden() const;
+    void setJellyfinHidden(bool hidden);
 
   signals:
     void videoFramePresented(qulonglong contentRevision);
     void blankOtherDisplaysInFullscreenChanged();
+    void jellyfinHiddenChanged();
     void relativeSeekRequested(qlonglong milliseconds);
     void mediaOpenRequested();
     void navigationBackRequested();
@@ -140,6 +144,7 @@ class PresentationWindow : public QWindow {
     bool m_cursorHidden = false;
     bool m_windowShortcutsBlocked = false;
     bool m_blankOtherDisplaysInFullscreen = false;
+    bool m_jellyfinHidden = false;
     PresentationLifecycle m_presentationLifecycle = PresentationLifecycle::Initializing;
 };
 

@@ -19,6 +19,7 @@
 #include <QSpacerItem>
 #include <QSpinBox>
 #include <QTabWidget>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #include "subtitles/SubtitleSettings.h"
@@ -50,7 +51,7 @@ SettingsDialog::SettingsDialog(SubtitleSettings& subtitleSettings) : m_subtitleS
     setWindowTitle(tr("Settings"));
     setWindowIcon(QGuiApplication::windowIcon());
     setWindowModality(Qt::WindowModal);
-    resize(760, 640);
+    resize(760, 680);
 
     auto* const rootLayout = new QVBoxLayout(this);
     m_tabs = new QTabWidget(this);
@@ -73,55 +74,78 @@ SettingsDialog::SettingsDialog(SubtitleSettings& subtitleSettings) : m_subtitleS
     volumeLayout->addWidget(m_volumeSlider, 1);
     volumeLayout->addWidget(m_volumeSpin);
     playbackLayout->addRow(tr("Volume:"), volumeRow);
-    m_preferHdr10Plus = new QCheckBox(tr("Prefer HDR10+ over Dolby Vision"), playbackPage);
+    m_blankOtherDisplays = new QCheckBox(tr("Blank other displays in fullscreen"), playbackPage);
+    m_blankOtherDisplays->setObjectName(QStringLiteral("settingsBlankOtherDisplays"));
+    playbackLayout->addRow(QString(), m_blankOtherDisplays);
+
+    auto* const advancedToggle = new QToolButton(playbackPage);
+    advancedToggle->setObjectName(QStringLiteral("settingsAdvancedToggle"));
+    advancedToggle->setText(tr("Advanced"));
+    advancedToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    advancedToggle->setArrowType(Qt::RightArrow);
+    advancedToggle->setCheckable(true);
+    playbackLayout->addRow(advancedToggle);
+    auto* const advancedControls = new QWidget(playbackPage);
+    advancedControls->setObjectName(QStringLiteral("settingsAdvancedControls"));
+    auto* const advancedLayout = new QFormLayout(advancedControls);
+    advancedLayout->setContentsMargins(0, 0, 0, 0);
+    advancedLayout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    advancedControls->hide();
+    playbackLayout->addRow(advancedControls);
+    connect(advancedToggle, &QToolButton::toggled, advancedControls, [advancedToggle, advancedControls](bool expanded) {
+        advancedToggle->setArrowType(expanded ? Qt::DownArrow : Qt::RightArrow);
+        advancedControls->setVisible(expanded);
+    });
+
+    m_preferHdr10Plus = new QCheckBox(tr("Prefer HDR10+ over Dolby Vision"), advancedControls);
     m_preferHdr10Plus->setObjectName(QStringLiteral("settingsPreferHdr10Plus"));
     m_preferHdr10Plus->setToolTip(tr("When a video contains both formats, use HDR10+ instead of Dolby Vision."));
-    playbackLayout->addRow(QString(), m_preferHdr10Plus);
+    advancedLayout->addRow(QString(), m_preferHdr10Plus);
     connect(m_preferHdr10Plus, &QCheckBox::toggled, this, &SettingsDialog::preferHdr10PlusEdited);
 
-    m_toneMapping = new QComboBox(playbackPage);
+    m_toneMapping = new QComboBox(advancedControls);
     m_toneMapping->setObjectName(QStringLiteral("settingsToneMapping"));
     m_toneMapping->setToolTip(
         tr("Select tone mapping for the current output. Supported authored HDR10+ curves take priority."));
-    m_toneMappingLabel = new QLabel(playbackPage);
+    m_toneMappingLabel = new QLabel(advancedControls);
     m_toneMappingLabel->setObjectName(QStringLiteral("settingsToneMappingLabel"));
     m_toneMappingLabel->setBuddy(m_toneMapping);
-    playbackLayout->addRow(m_toneMappingLabel, m_toneMapping);
+    advancedLayout->addRow(m_toneMappingLabel, m_toneMapping);
     connect(m_toneMapping, &QComboBox::currentIndexChanged, this, [this] {
         auto const algorithm = m_toneMapping->currentData().value<VideoToneMappingAlgorithm>();
         (m_hdrPresentationActive ? m_toneMappingSettings.hdr : m_toneMappingSettings.sdr) = algorithm;
         emit toneMappingSettingsEdited(m_toneMappingSettings);
     });
-    m_peakDetection = new QCheckBox(tr("HDR peak detection"), playbackPage);
+    m_peakDetection = new QCheckBox(tr("HDR peak detection"), advancedControls);
     m_peakDetection->setObjectName(QStringLiteral("settingsPeakDetection"));
     m_peakDetection->setToolTip(tr("Allow scene brightness measurement for HDR tone mapping when needed. Dynamic "
                                    "metadata keeps its existing priority."));
-    playbackLayout->addRow(QString(), m_peakDetection);
+    advancedLayout->addRow(QString(), m_peakDetection);
     connect(m_peakDetection, &QCheckBox::toggled, this, [this](bool enabled) {
         m_toneMappingSettings.peakDetectionEnabled = enabled;
         emit toneMappingSettingsEdited(m_toneMappingSettings);
     });
 
-    m_absolutePq = new QCheckBox(tr("Absolute PQ (Windows HDR)"), playbackPage);
+    m_absolutePq = new QCheckBox(tr("Absolute PQ (Windows HDR)"), advancedControls);
     m_absolutePq->setObjectName(QStringLiteral("settingsAbsolutePq"));
     m_absolutePq->setEnabled(false);
     m_absolutePq->setToolTip(tr("Map PQ, HDR10+ and Dolby Vision to physical display luminance. "
                                 "Tone mapping still applies; SDR and HLG are unchanged."));
-    playbackLayout->addRow(QString(), m_absolutePq);
+    advancedLayout->addRow(QString(), m_absolutePq);
     connect(m_absolutePq, &QCheckBox::toggled, this, &SettingsDialog::absolutePqEnabledEdited);
     m_absolutePqStatus =
-        new QLabel(tr("Absolute PQ is unavailable on this output; adaptive rendering is active."), playbackPage);
+        new QLabel(tr("Absolute PQ is unavailable on this output; adaptive rendering is active."), advancedControls);
     m_absolutePqStatus->setObjectName(QStringLiteral("settingsAbsolutePqStatus"));
     m_absolutePqStatus->setWordWrap(true);
     m_absolutePqStatus->hide();
-    playbackLayout->addRow(QString(), m_absolutePqStatus);
+    advancedLayout->addRow(QString(), m_absolutePqStatus);
 #ifndef Q_OS_WIN
-    playbackLayout->setRowVisible(m_absolutePq, false);
-    playbackLayout->setRowVisible(m_absolutePqStatus, false);
+    advancedLayout->setRowVisible(m_absolutePq, false);
+    advancedLayout->setRowVisible(m_absolutePqStatus, false);
 #endif
 
     auto* const referenceWhiteRow =
-        sliderRow(m_sourceHdrReferenceWhiteSlider, m_sourceHdrReferenceWhiteSpin, playbackPage);
+        sliderRow(m_sourceHdrReferenceWhiteSlider, m_sourceHdrReferenceWhiteSpin, advancedControls);
     m_sourceHdrReferenceWhiteSlider->setObjectName(QStringLiteral("settingsSourceHdrReferenceWhiteSlider"));
     m_sourceHdrReferenceWhiteSlider->setAccessibleName(tr("HDR reference white"));
     m_sourceHdrReferenceWhiteSpin->setObjectName(QStringLiteral("settingsSourceHdrReferenceWhiteSpin"));
@@ -133,8 +157,8 @@ SettingsDialog::SettingsDialog(SubtitleSettings& subtitleSettings) : m_subtitleS
     m_sourceHdrReferenceWhiteSpin->setSuffix(tr(" nits"));
     m_sourceHdrReferenceWhiteSlider->setValue(DecodedVideoSource::defaultSourceHdrReferenceWhiteNits);
     m_sourceHdrReferenceWhiteSpin->setValue(DecodedVideoSource::defaultSourceHdrReferenceWhiteNits);
-    playbackLayout->addRow(tr("HDR reference white:"), referenceWhiteRow);
-    auto* const referenceWhitePresets = new QWidget(playbackPage);
+    advancedLayout->addRow(tr("HDR reference white:"), referenceWhiteRow);
+    auto* const referenceWhitePresets = new QWidget(advancedControls);
     m_sourceHdrReferenceWhitePresets = referenceWhitePresets;
     auto* const referenceWhitePresetsLayout = new QHBoxLayout(referenceWhitePresets);
     referenceWhitePresetsLayout->setContentsMargins(0, 0, 0, 0);
@@ -146,13 +170,13 @@ SettingsDialog::SettingsDialog(SubtitleSettings& subtitleSettings) : m_subtitleS
         connect(preset, &QPushButton::clicked, this, [this, nits] { m_sourceHdrReferenceWhiteSlider->setValue(nits); });
     }
     referenceWhitePresetsLayout->addStretch();
-    playbackLayout->addRow(QString(), referenceWhitePresets);
+    advancedLayout->addRow(QString(), referenceWhitePresets);
     auto* const referenceWhiteHint = new QLabel(tr("Source reference white for PQ, HDR10+ and Dolby Vision. Appearance "
                                                    "depends on tone mapping and HDR metadata. "
                                                    "System brightness still applies; SDR and HLG are unchanged."),
-                                                playbackPage);
+                                                advancedControls);
     referenceWhiteHint->setWordWrap(true);
-    playbackLayout->addRow(QString(), referenceWhiteHint);
+    advancedLayout->addRow(QString(), referenceWhiteHint);
     connect(m_sourceHdrReferenceWhiteSlider, &QSlider::valueChanged, this, [this](int nits) {
         QSignalBlocker const blocker(m_sourceHdrReferenceWhiteSpin);
         m_sourceHdrReferenceWhiteSpin->setValue(nits);
@@ -164,9 +188,6 @@ SettingsDialog::SettingsDialog(SubtitleSettings& subtitleSettings) : m_subtitleS
         emit sourceHdrReferenceWhiteNitsEdited(nits);
     });
 
-    m_blankOtherDisplays = new QCheckBox(tr("Blank other displays in fullscreen"), playbackPage);
-    m_blankOtherDisplays->setObjectName(QStringLiteral("settingsBlankOtherDisplays"));
-    playbackLayout->addRow(QString(), m_blankOtherDisplays);
     playbackLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding));
     auto* const playbackScroll = new QScrollArea(m_tabs);
     playbackScroll->setFrameShape(QFrame::NoFrame);
@@ -346,6 +367,15 @@ SettingsDialog::SettingsDialog(SubtitleSettings& subtitleSettings) : m_subtitleS
     subtitlesScroll->setWidget(subtitlesPage);
     m_tabs->addTab(subtitlesScroll, tr("Subtitles"));
 
+    auto* const applicationPage = new QWidget(m_tabs);
+    m_applicationLayout = new QVBoxLayout(applicationPage);
+    m_hideJellyfin = new QCheckBox(tr("Hide Jellyfin"), applicationPage);
+    m_hideJellyfin->setObjectName(QStringLiteral("settingsHideJellyfin"));
+    m_applicationLayout->addWidget(m_hideJellyfin);
+    m_applicationLayout->addStretch();
+    m_tabs->addTab(applicationPage, tr("Application"));
+    connect(m_hideJellyfin, &QCheckBox::toggled, this, &SettingsDialog::jellyfinHiddenEdited);
+
     auto* const buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     rootLayout->addWidget(buttons);
@@ -417,10 +447,17 @@ SettingsDialog::SettingsDialog(SubtitleSettings& subtitleSettings) : m_subtitleS
     setPlaybackState({});
 }
 
-void SettingsDialog::addPage(QWidget& page, QString const& title) { m_tabs->addTab(&page, title); }
+void SettingsDialog::addApplicationSection(QWidget& section) {
+    m_applicationLayout->insertWidget(m_applicationLayout->count() - 1, &section);
+}
+
+void SettingsDialog::setJellyfinHidden(bool hidden) {
+    QSignalBlocker const blocker(m_hideJellyfin);
+    m_hideJellyfin->setChecked(hidden);
+}
 
 void SettingsDialog::showPage(int page) {
-    m_tabs->setCurrentIndex(page == SubtitlesPage ? SubtitlesPage : PlaybackPage);
+    m_tabs->setCurrentIndex(page == SubtitlesPage || page == ApplicationPage ? page : PlaybackPage);
 }
 
 void SettingsDialog::setPlaybackState(PlaybackState const& state) {

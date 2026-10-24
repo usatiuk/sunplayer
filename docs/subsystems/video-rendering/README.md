@@ -199,7 +199,8 @@ the existing diagnosed 1,000-nit fallback. A mapped Dolby image is never combine
 with HDR10+ or static values from its base representation. ADR 0039 amends the
 operator choice in [ADR 0023](../../decisions/0023-use-metadata-first-hdr-to-sdr-policy.md).
 
-The persistent “Prefer HDR10+ over Dolby Vision” setting defaults to disabled.
+The persistent “Prefer HDR10+ over Dolby Vision” setting defaults to enabled
+when no saved preference exists; previously saved false remains respected.
 A proven HDR10-compatible Dolby base carrying recognized HDR10+ metadata
 selects the base representation, with or without an authored curve. Disabling
 the preference retains Dolby; single-format playback is unaffected. Selection

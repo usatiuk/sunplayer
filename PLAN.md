@@ -76,6 +76,8 @@ host-validation evidence are tracked in the
 Windows builds all targets and passes QML lint and 41/42 CTests; fullscreen
 stage6 automation remains open with user-confirmed manual fullscreen/cursor
 behavior. No native macOS/Linux Qt6.12 execution is claimed.
+HDR rendering controls are grouped in a collapsed Advanced section. HDR10+
+preference defaults on when no saved preference exists; stored choices remain.
 
 CI and Release now have separate job graphs with shared parallel package
 builds and draft release publication; hosted delivery is tracked in
@@ -384,6 +386,8 @@ tooling.
 * [x] Basic application and presentation-window lifecycle for the current
   Windows diagnostic shell
 * [x] Initial player settings and persistence
+* [x] Shared Application settings tab with saved Hide Jellyfin preference and
+  existing Linux AppImage updater controls
 * [x] Local file dialog and optional positional command-line open
 * [x] Single-file native drag-and-drop and Windows common-video file association
 * [ ] Top-level logging and non-media error integration

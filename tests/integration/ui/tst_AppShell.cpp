@@ -1096,6 +1096,30 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_COMPARE(rootItem->property("currentPage").toInt(), 2);
     emit windowCommands.navigationBackRequested();
     QTRY_COMPARE(rootItem->property("currentPage").toInt(), 0);
+
+    // Hiding Jellyfin closes its page, blocks history entry and leaves playback intact.
+    QVERIFY(QMetaObject::invokeMethod(rootItem, "openJellyfin"));
+    QCOMPARE(rootItem->property("currentPage").toInt(), 2);
+    windowCommands.setJellyfinHidden(true);
+    QTRY_COMPARE(rootItem->property("currentPage").toInt(), 0);
+    QTRY_VERIFY(!openJellyfin->isVisible());
+    emit windowCommands.navigationForwardRequested();
+    QVERIFY(QMetaObject::invokeMethod(rootItem, "openJellyfin"));
+    QCOMPARE(rootItem->property("currentPage").toInt(), 0);
+    windowCommands.setJellyfinHidden(false);
+    QTRY_VERIFY(openJellyfin->isVisible());
+    QVERIFY(QMetaObject::invokeMethod(rootItem, "openJellyfin"));
+    emit windowCommands.mediaOpenRequested();
+    mediaSession.setState(ShellTestMediaSession::State::Ready, true);
+    QCOMPARE(rootItem->property("playbackReturnPage").toInt(), 2);
+    windowCommands.setJellyfinHidden(true);
+    QCOMPARE(mediaSession.state(), ShellTestMediaSession::State::Ready);
+    QCOMPARE(rootItem->property("playbackReturnPage").toInt(), 0);
+    QVERIFY(QMetaObject::invokeMethod(playerBack, "clicked", Qt::DirectConnection));
+    QCOMPARE(rootItem->property("currentPage").toInt(), 0);
+    QCOMPARE(mediaSession.state(), ShellTestMediaSession::State::Empty);
+    windowCommands.setJellyfinHidden(false);
+
     emit windowCommands.mediaOpenRequested();
     mediaSession.setState(ShellTestMediaSession::State::Ready, true);
     QVERIFY(QMetaObject::invokeMethod(playerBack, "clicked", Qt::DirectConnection));

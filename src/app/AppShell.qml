@@ -22,8 +22,20 @@ Item {
     property int currentPage: 0
     property int playbackReturnPage: 0
     property bool jellyfinVisited: false
+    readonly property bool jellyfinAvailable: jellyfin !== null && !windowCommands.jellyfinHidden
+
+    onJellyfinAvailableChanged: {
+        if (!jellyfinAvailable) {
+            if (currentPage === 2)
+                currentPage = 0
+            if (playbackReturnPage === 2)
+                playbackReturnPage = 0
+        }
+    }
 
     function openJellyfin() {
+        if (!jellyfinAvailable)
+            return
         jellyfinVisited = true
         currentPage = 2
     }
@@ -53,7 +65,7 @@ Item {
     function goForward() {
         if (currentPage === 2)
             jellyfin.forward()
-        else if (currentPage === 0 && mediaSession.state === MediaSession.Empty && jellyfinVisited)
+        else if (currentPage === 0 && mediaSession.state === MediaSession.Empty && jellyfinVisited && jellyfinAvailable)
             currentPage = 2
     }
 
@@ -154,7 +166,7 @@ Item {
             windowCommands: root.windowCommands
             supportController: root.supportController
             topContentInset: root.chromeTop - pageStack.y
-            jellyfinAvailable: root.jellyfin !== null
+            jellyfinAvailable: root.jellyfinAvailable
             onJellyfinRequested: root.openJellyfin()
         }
 

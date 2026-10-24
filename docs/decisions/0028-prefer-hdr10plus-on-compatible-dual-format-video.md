@@ -8,7 +8,10 @@
 
 ## Decision
 
-One persistent preference, disabled by default, prefers HDR10+ over Dolby Vision.
+One persistent preference prefers HDR10+ over Dolby Vision. As of 2026-10-24 it
+defaults to enabled for users without a saved value; saved preferences remain
+respected. Only the default changes; representation and metadata rules below
+are unchanged.
 It applies only when Dolby metadata and recognized HDR10+ metadata coexist
 on a proven HDR10-compatible base. A supported authored curve is not required
 for format selection. Unknown/incompatible bases retain Dolby reconstruction.

@@ -10,6 +10,7 @@
 #include <QTabWidget>
 #include <QTest>
 #include <QTimer>
+#include <QToolButton>
 
 #include "app/SettingsDialog.h"
 #include "subtitles/SubtitleSettings.h"
@@ -22,6 +23,8 @@ class SettingsDialogTest final : public QObject {
     void selectsRequestedPageAndMirrorsPlayback();
     void editsHdrReferenceWhite();
     void toneMappingFollowsActiveOutput();
+    void advancedControlsCollapseWithoutChangingPreferences();
+    void applicationSettingsShareOnePage();
     void absolutePqAvailabilityPreservesPreference();
     void editsSubtitleSettingsLive();
     void previewsAndRollsBackTextColor();
@@ -50,11 +53,11 @@ void SettingsDialogTest::selectsRequestedPageAndMirrorsPlayback() {
     QVERIFY(hdr10Plus);
     QSignalSpy preferenceEdits(&dialog, &SettingsDialog::preferHdr10PlusEdited);
     dialog.setPlaybackState({.volume = 0.35, .blankingAvailable = true, .blankingEnabled = true});
-    QVERIFY(!hdr10Plus->isChecked());
+    QVERIFY(hdr10Plus->isChecked());
     QCOMPARE(preferenceEdits.count(), 0);
-    hdr10Plus->setChecked(true);
+    hdr10Plus->setChecked(false);
     QCOMPARE(preferenceEdits.count(), 1);
-    QCOMPARE(preferenceEdits.takeFirst().at(0).toBool(), true);
+    QCOMPARE(preferenceEdits.takeFirst().at(0).toBool(), false);
     QCOMPARE(volume->value(), 35);
     QVERIFY(!blanking->isHidden());
     QVERIFY(blanking->isChecked());
@@ -113,6 +116,31 @@ void SettingsDialogTest::editsHdrReferenceWhite() {
     QCOMPARE(settings.brightness(), subtitleBrightness);
 }
 
+void SettingsDialogTest::applicationSettingsShareOnePage() {
+    SubtitleSettings settings;
+    SettingsDialog dialog(settings);
+    auto* const tabs = dialog.findChild<QTabWidget*>(QStringLiteral("settingsTabs"));
+    auto* const hideJellyfin = dialog.findChild<QCheckBox*>(QStringLiteral("settingsHideJellyfin"));
+    QVERIFY(tabs);
+    QVERIFY(hideJellyfin);
+    QCOMPARE(tabs->count(), 3);
+    dialog.showPage(SettingsDialog::ApplicationPage);
+    QCOMPARE(tabs->currentIndex(), SettingsDialog::ApplicationPage);
+    QVERIFY(tabs->currentWidget()->isAncestorOf(hideJellyfin));
+    QVERIFY(!hideJellyfin->isChecked());
+    QSignalSpy edits(&dialog, &SettingsDialog::jellyfinHiddenEdited);
+    dialog.setJellyfinHidden(true);
+    QVERIFY(hideJellyfin->isChecked());
+    QCOMPARE(edits.count(), 0);
+    hideJellyfin->click();
+    QCOMPARE(edits.count(), 1);
+    QCOMPARE(edits.takeFirst().at(0).toBool(), false);
+    auto* const platformSection = new QWidget;
+    dialog.addApplicationSection(*platformSection);
+    QCOMPARE(tabs->count(), 3);
+    QVERIFY(tabs->currentWidget()->isAncestorOf(platformSection));
+}
+
 void SettingsDialogTest::toneMappingFollowsActiveOutput() {
     SubtitleSettings settings;
     SettingsDialog dialog(settings);
@@ -156,6 +184,34 @@ void SettingsDialogTest::toneMappingFollowsActiveOutput() {
         QVERIFY(item.isValid());
         QCOMPARE(edits.count(), 0);
     }
+}
+
+void SettingsDialogTest::advancedControlsCollapseWithoutChangingPreferences() {
+    SubtitleSettings settings;
+    SettingsDialog dialog(settings);
+    auto* const toggle = dialog.findChild<QToolButton*>(QStringLiteral("settingsAdvancedToggle"));
+    auto* const controls = dialog.findChild<QWidget*>(QStringLiteral("settingsAdvancedControls"));
+    QVERIFY(toggle && controls);
+    auto* const preference = controls->findChild<QCheckBox*>(QStringLiteral("settingsPreferHdr10Plus"));
+    QVERIFY(preference);
+    QVERIFY(preference->isChecked());
+    QVERIFY(controls->findChild<QComboBox*>(QStringLiteral("settingsToneMapping")));
+    QVERIFY(controls->findChild<QCheckBox*>(QStringLiteral("settingsPeakDetection")));
+    QVERIFY(controls->findChild<QSlider*>(QStringLiteral("settingsSourceHdrReferenceWhiteSlider")));
+    QSignalSpy mappingEdits(&dialog, &SettingsDialog::toneMappingSettingsEdited);
+    QSignalSpy preferenceEdits(&dialog, &SettingsDialog::preferHdr10PlusEdited);
+    QVERIFY(controls->isHidden());
+    toggle->click();
+    QVERIFY(!controls->isHidden());
+    QCOMPARE(toggle->arrowType(), Qt::DownArrow);
+    dialog.setPlaybackState({.preferHdr10Plus = false, .hdrPresentationActive = true});
+    QVERIFY(!controls->isHidden());
+    QVERIFY(!preference->isChecked());
+    toggle->click();
+    QVERIFY(controls->isHidden());
+    QCOMPARE(toggle->arrowType(), Qt::RightArrow);
+    QCOMPARE(mappingEdits.count(), 0);
+    QCOMPARE(preferenceEdits.count(), 0);
 }
 
 void SettingsDialogTest::absolutePqAvailabilityPreservesPreference() {

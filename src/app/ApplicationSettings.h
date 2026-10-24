@@ -16,6 +16,7 @@ class ApplicationSettings final {
         std::optional<bool> absolutePqEnabled;
         std::optional<int> sourceHdrReferenceWhiteNits;
         std::optional<bool> blankOtherDisplaysInFullscreen;
+        std::optional<bool> jellyfinHidden;
         std::optional<SubtitleAppearanceValues> subtitleAppearance;
         VideoToneMappingSettings toneMapping;
     };
@@ -32,6 +33,7 @@ class ApplicationSettings final {
     void setToneMappingSettings(VideoToneMappingSettings const& settings);
     void setSourceHdrReferenceWhiteNits(int nits);
     void setBlankOtherDisplaysInFullscreen(bool enabled);
+    void setJellyfinHidden(bool hidden);
     void setSubtitleAppearance(SubtitleAppearanceValues const& values, SubtitleAppearanceFields dirtyFields);
     void removeSubtitleAppearance();
     void sync();

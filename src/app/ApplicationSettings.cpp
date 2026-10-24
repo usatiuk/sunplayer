@@ -23,6 +23,7 @@ constexpr auto sdrToneMappingKey = "playback/sdrToneMapping";
 constexpr auto hdrToneMappingKey = "playback/hdrToneMapping";
 constexpr auto peakDetectionKey = "playback/hdrPeakDetectionEnabled";
 constexpr auto blankOtherDisplaysKey = "fullscreen/blankOtherDisplays";
+constexpr auto jellyfinHiddenKey = "application/hideJellyfin";
 constexpr auto subtitleAppearancePrefix = "subtitles/appearance";
 constexpr auto appearanceModeKey = "subtitles/appearance/mode";
 constexpr auto textColorKey = "subtitles/appearance/textColor";
@@ -170,6 +171,13 @@ ApplicationSettings::Values ApplicationSettings::load() {
             parseBoolean(m_settings->value(QLatin1StringView(blankOtherDisplaysKey)));
         if (!values.blankOtherDisplaysInFullscreen) {
             reportInvalidValue(QString::fromLatin1(blankOtherDisplaysKey));
+        }
+    }
+
+    if (m_settings->contains(QLatin1StringView(jellyfinHiddenKey))) {
+        values.jellyfinHidden = parseBoolean(m_settings->value(QLatin1StringView(jellyfinHiddenKey)));
+        if (!values.jellyfinHidden) {
+            reportInvalidValue(QString::fromLatin1(jellyfinHiddenKey));
         }
     }
 
@@ -335,6 +343,11 @@ void ApplicationSettings::setSourceHdrReferenceWhiteNits(int nits) {
     Q_ASSERT(nits >= DecodedVideoSource::minimumSourceHdrReferenceWhiteNits &&
              nits <= DecodedVideoSource::maximumSourceHdrReferenceWhiteNits);
     m_settings->setValue(QLatin1StringView(sourceHdrReferenceWhiteKey), nits);
+    reportStatus();
+}
+
+void ApplicationSettings::setJellyfinHidden(bool hidden) {
+    m_settings->setValue(QLatin1StringView(jellyfinHiddenKey), hidden);
     reportStatus();
 }
 

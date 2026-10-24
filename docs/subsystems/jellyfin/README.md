@@ -1,5 +1,10 @@
 # Jellyfin client
 
+Application settings offers a saved “Hide Jellyfin” checkbox on all platforms,
+default off. This is shell visibility policy: it hides entry/history navigation
+and leaves an open browser page for Player. It preserves the browser, login and
+active playback; Jellyfin services do not own or interpret this preference.
+
 ## Supported slice
 
 One manually entered HTTP(S) server and account, username/password sign-in,

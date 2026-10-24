@@ -888,6 +888,9 @@ ADR 0040 adds output-specific decoded-HDR choices. Settings tests cover every
 valid algorithm/detector combination and invalid entries with valid neighbors;
 UI tests switch actual output at fixed state, preserve inactive preferences and
 the model during same-output refreshes, and suppress edit signals on refresh.
+They also exercise the Advanced disclosure without changing preferences and
+check default-enabled HDR10+ with explicit saved-state overrides. The decoded
+dual-format regression starts from that default and toggles back to Dolby.
 Policy tests cover HDR at H=1 and unchanged authored/scene-only dynamic priority.
 Surface tests require output intent to invalidate reuse at equal headroom.
 The decoded GPU regression changes algorithms/detection on one retained frame,
@@ -1013,7 +1016,11 @@ redirect credential isolation, untrusted-certificate rejection and diagnostic
 redaction. Home cases verify bounded resume/recent queries, shelf command item
 identity, fresh movie details, partial feed failure and auth clearing. QML shell
 tests check CSD-safe control bounds, local/Jellyfin/direct-launch Back behavior,
-and login without a video viewport. Populated Basic/Fusion snapshots cover home
+login without a video viewport, and Hide Jellyfin entry/history/return navigation
+without interrupting playback. `application-settings` covers visibility preference
+round trips and invalid values; `settings-dialog` covers the shared Application
+tab, live editing and platform-section ownership. The inserted-widget test does
+not execute Linux updater policy on Windows. Populated Basic/Fusion snapshots cover home
 at 1280/800 px, movie/show/season galleries at 800 px, and compact season details
 at 640 px, with synthetic artwork served through the real image provider.
 Captures are written under `build/linux-debug/tests/ui-snapshots/`; no QML
