@@ -64,6 +64,8 @@ QVariant JellyfinBrowser::itemValue(JellyfinItem const& item, int role) {
         return item.type;
     case Year:
         return item.year;
+    case SeriesName:
+        return item.seriesName;
     case Subtitle:
         if (item.type == QStringLiteral("CollectionFolder")) {
             return QString{};
@@ -83,18 +85,25 @@ QVariant JellyfinBrowser::itemValue(JellyfinItem const& item, int role) {
     case Backdrop:
         return item.backdropTag.isEmpty()
                    ? QUrl{}
-                   : QUrl(QStringLiteral("image://jellyfin/%1/Backdrop/%2").arg(item.id, item.backdropTag));
+                   : QUrl(QStringLiteral("image://jellyfin/%1/Backdrop/%2").arg(item.backdropItemId, item.backdropTag));
     default:
         return {};
     }
 }
 namespace {
-QHash<int, QByteArray> const itemRoles{{JellyfinBrowser::ItemId, "itemId"},     {JellyfinBrowser::Name, "name"},
-                                       {JellyfinBrowser::Overview, "overview"}, {JellyfinBrowser::Artwork, "artwork"},
-                                       {JellyfinBrowser::Folder, "folder"},     {JellyfinBrowser::Watched, "watched"},
-                                       {JellyfinBrowser::Progress, "progress"}, {JellyfinBrowser::Playable, "playable"},
-                                       {JellyfinBrowser::Kind, "kind"},         {JellyfinBrowser::Year, "year"},
-                                       {JellyfinBrowser::Subtitle, "subtitle"}, {JellyfinBrowser::Backdrop, "backdrop"},
+QHash<int, QByteArray> const itemRoles{{JellyfinBrowser::ItemId, "itemId"},
+                                       {JellyfinBrowser::Name, "name"},
+                                       {JellyfinBrowser::Overview, "overview"},
+                                       {JellyfinBrowser::Artwork, "artwork"},
+                                       {JellyfinBrowser::Folder, "folder"},
+                                       {JellyfinBrowser::Watched, "watched"},
+                                       {JellyfinBrowser::Progress, "progress"},
+                                       {JellyfinBrowser::Playable, "playable"},
+                                       {JellyfinBrowser::Kind, "kind"},
+                                       {JellyfinBrowser::Year, "year"},
+                                       {JellyfinBrowser::Subtitle, "subtitle"},
+                                       {JellyfinBrowser::Backdrop, "backdrop"},
+                                       {JellyfinBrowser::SeriesName, "seriesName"},
                                        {JellyfinBrowser::ItemData, "itemData"}};
 }
 QHash<int, QByteArray> JellyfinBrowser::roleNames() const { return itemRoles; }

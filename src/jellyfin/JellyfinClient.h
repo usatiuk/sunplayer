@@ -17,6 +17,7 @@ struct JellyfinItem {
     QString overview;
     QString type;
     QString imageTag;
+    QString backdropItemId;
     QString backdropTag;
     QString seriesName;
     int year = 0;

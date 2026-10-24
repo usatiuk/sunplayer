@@ -334,9 +334,14 @@ VideoPage {
                     spacing: 16
                     model: root.browser
                     ScrollBar.vertical: AppScrollBar {}
-                    header: JellyfinDetail {
+                    header: Item {
                         width: episodeList.width
-                        item: root.browser.currentItem
+                        height: episodeDetail.implicitHeight + 20
+                        JellyfinDetail {
+                            id: episodeDetail
+                            width: parent.width
+                            item: root.browser.currentItem
+                        }
                     }
                     delegate: Item {
                         id: episodeCell

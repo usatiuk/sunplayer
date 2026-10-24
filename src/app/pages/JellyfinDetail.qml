@@ -49,8 +49,12 @@ Item {
             Layout.fillWidth: true
             spacing: 13
             Label {
-                visible: root.illustrated
-                text: root.item.kind === "Movie" ? qsTr("MOVIE") : root.item.kind === "Series" ? qsTr("TV SHOW") : qsTr("SEASON")
+                objectName: "jellyfinDetailHeading"
+                visible: root.illustrated && text.length > 0
+                text: root.item.kind === "Movie" ? qsTr("MOVIE") : root.item.kind === "Series" ? qsTr("TV SHOW") : root.item.seriesName
+                textFormat: Text.PlainText
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
                 color: "#77cde8"
                 font.pixelSize: 11
                 font.letterSpacing: 2

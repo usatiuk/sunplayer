@@ -491,7 +491,11 @@ The Jellyfin title has horizontal breathing room beside an icon-only Back
 control, and Home/library tabs share that header. The page uses the
 same black background as Open video; illustrated
 headers span the window width with square edges, while text/cards retain
-24 px horizontal insets and 20 px before gallery cards. The toolbar arrow moves
+24 px horizontal insets and 20 px before gallery cards. Episode lists have the
+same 20 px gap below their header. Season episode-page headers also use the show's
+backdrop when the server supplies inherited artwork, with the series name above
+the season title. Episode row styling is unchanged.
+The toolbar arrow moves
 one logical level up (episode list → seasons → TV library → Open video),
 independently of same-level Home/library switches. Thumb buttons and platform
 standard keys follow visit history. Home selections resolve the server-provided

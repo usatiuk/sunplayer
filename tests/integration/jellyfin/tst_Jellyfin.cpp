@@ -170,9 +170,12 @@ void JellyfinTest::homeShelvesAndDetails() {
     QCOMPARE(qvariant_cast<JellyfinItem>(play.back()[0]).id, QStringLiteral("episodeHome"));
     QTRY_VERIFY(!browser.busy());
     QCOMPARE(browser.currentItem().value(QStringLiteral("kind")).toString(), QStringLiteral("Season"));
+    QUrl const showBackdrop(QStringLiteral("image://jellyfin/showHome/Backdrop/backdrop"));
+    QCOMPARE(browser.currentItem().value(QStringLiteral("backdrop")).toUrl(), showBackdrop);
     browser.up();
     QTRY_VERIFY(!browser.busy());
     QCOMPARE(browser.currentItem().value(QStringLiteral("kind")).toString(), QStringLiteral("Series"));
+    QCOMPARE(browser.currentItem().value(QStringLiteral("backdrop")).toUrl(), showBackdrop);
     browser.up();
     QTRY_VERIFY(!browser.busy());
     QCOMPARE(browser.activeLibraryId(), QStringLiteral("showsLibrary"));

@@ -203,6 +203,10 @@ class HttpEdge final : public QTcpServer {
                                              QStringLiteral("Series"), true);
                         auto season = makeItem(QStringLiteral("seasonHome"), QStringLiteral("Season 1"),
                                                QStringLiteral("Season"), true);
+                        season.remove(QStringLiteral("BackdropImageTags"));
+                        season[QStringLiteral("ParentBackdropItemId")] = QStringLiteral("showHome");
+                        season[QStringLiteral("ParentBackdropImageTags")] = QJsonArray{QStringLiteral("backdrop")};
+                        season[QStringLiteral("SeriesName")] = QStringLiteral("Beyond the Ordinary");
                         auto episode = makeItem(QStringLiteral("episodeHome"), QStringLiteral("1. A New Beginning"),
                                                 QStringLiteral("Episode"), false);
                         episode[QStringLiteral("SeriesName")] = QStringLiteral("Beyond the Ordinary");

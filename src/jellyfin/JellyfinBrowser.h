@@ -40,6 +40,7 @@ class JellyfinBrowser final : public QAbstractListModel {
         Year,
         Subtitle,
         Backdrop,
+        SeriesName,
         ItemData
     };
     enum HomeSection { ContinueWatching, RecentMovies, RecentShows };

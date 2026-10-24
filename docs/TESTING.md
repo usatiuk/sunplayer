@@ -1023,6 +1023,10 @@ tab, live editing and platform-section ownership. The inserted-widget test does
 not execute Linux updater policy on Windows. Populated Basic/Fusion snapshots cover home
 at 1280/800 px, movie/show/season galleries at 800 px, and compact season details
 at 640 px, with synthetic artwork served through the real image provider.
+Season fixtures inherit the show's backdrop using the server's parent image
+fields; browser assertions and shell captures cover that path. Episode-page
+headers retain the same 20 px gap before cards as season galleries
+and identify the show above the season title.
 Captures are written under `build/linux-debug/tests/ui-snapshots/`; no QML
 warnings are accepted. Real-server artwork/error presentation and large-library
 acceptance remain manual checks.

@@ -142,3 +142,22 @@ real refused TCP connection behavior pass. Linux screenshots retain readable
 canvas labels and stock button color pairs. Independent palette/network/scope
 reviews found no remaining blocker after replacing toolbar ToolButtons with
 standard Buttons. No Windows/macOS build or package execution ran locally.
+
+## 2026-10-24 episode-header follow-up
+
+Season episode-page headers use server-provided parent backdrop owner/tags when
+the season has no own backdrop. Resolve this once in the existing item parser;
+the image provider and QML header keep their existing image-loading behavior.
+Expose the already parsed series name through the item model so the header shows
+the show name above the season title instead of repeating “Season”. Add a 20 px
+gap below the episode header, matching the existing season-card gallery. Episode
+rows and TV-library spacing are unchanged.
+
+Windows validation used VS Developer PowerShell and CLion's cmake-build-debug:
+the player and both affected test targets build; all_qmllint passes with existing
+renamed-type warnings. All four affected CTests pass (qml-shell, qml-shell-fusion,
+qml-shell-windows and jellyfin; 90.82 seconds). Real browser regressions cover
+inherited artwork, and QML assertions/captures check the series label and header
+gap at normal/compact widths. Screenshots confirm the backdrop and gap; three
+independent final reviews found no actionable issues. The initial app relink was
+blocked by the running executable, then succeeded after it closed. No push.

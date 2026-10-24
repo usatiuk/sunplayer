@@ -58,7 +58,13 @@ std::optional<JellyfinItem> parseItem(QJsonObject const& object) {
     item.overview = object.value(QStringLiteral("Overview")).toString();
     item.folder = object.value(QStringLiteral("IsFolder")).toBool();
     item.imageTag = object.value(QStringLiteral("ImageTags")).toObject().value(QStringLiteral("Primary")).toString();
-    auto const backdrops = object.value(QStringLiteral("BackdropImageTags")).toArray();
+    item.backdropItemId = item.id;
+    auto backdrops = object.value(QStringLiteral("BackdropImageTags")).toArray();
+    auto const parentBackdropId = object.value(QStringLiteral("ParentBackdropItemId")).toString();
+    if (backdrops.isEmpty() && validId(parentBackdropId)) {
+        item.backdropItemId = parentBackdropId;
+        backdrops = object.value(QStringLiteral("ParentBackdropImageTags")).toArray();
+    }
     if (!backdrops.isEmpty()) {
         item.backdropTag = backdrops.first().toString();
     }

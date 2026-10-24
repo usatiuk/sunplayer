@@ -23,6 +23,10 @@ library → movie/show → season → episode navigation,
 lazy artwork, descriptions, watched state, saved progress, Play/Resume, Play from
 start, and explicit watched/unwatched actions. Pages contain 40 items and a
 Load more action. Missing artwork keeps the title/description usable.
+Backdrops use the item's own image when present, otherwise the server-provided
+parent backdrop owner/tags, so season episode-page headers retain show artwork.
+This follows Jellyfin's [backdrop selection](https://github.com/jellyfin/jellyfin-web/blob/master/src/utils/jellyfin-apiclient/backdropImage.ts)
+for own and inherited backdrops without an extra metadata request.
 Jellyfin is authoritative for library and user data; there is no local database.
 
 Original-file Direct Play uses the ordinary player and embedded track controls.
