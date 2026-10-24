@@ -41,6 +41,10 @@ persisted checked action to blank every other display while Player is
 fullscreen. It is hidden and its stored value remains unapplied on other
 platforms for now.
 
+Player menus disable opening/closing transitions and use implicit height, so
+Qt can fit long track lists to the window and enable scrolling. This avoids
+Fluent's height-animation layout hang and explicit-height clipping.
+
 The active and idle overflow menu also opens a window-modal native Qt Widgets
 Settings dialog, matching the existing About/support surface. Its Playback tab
 shares canonical volume and display-blanking owners. Its Subtitles tab exposes

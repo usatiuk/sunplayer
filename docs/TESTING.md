@@ -115,7 +115,11 @@ The same scenario temporarily removes the client's runtime storage, then
 restores it and revisits the failed size after another successful size to
 verify geometry-bounded recovery without terminating the parent window.
 
-The QML shell scenario also protects the full-root application outline's
+The QML shell scenario verifies menu overflow behavior: a long subtitle list
+must have a constrained viewport with scrolling enabled and remaining content.
+Wheel scrolling is manually verified; offscreen wheel animation was inconsistent.
+The same suite covers Basic, Fusion,
+and, on Windows, FluentWinUI3. It also protects the outline's
 media-independent visibility and DPR-derived thickness, suppression while
 maximized/tiled/fullscreen, and restoration when floating. The native shadow
 test also verifies forwarding and clearing of all four applied tiled edges.

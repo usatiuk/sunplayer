@@ -1105,6 +1105,10 @@ VideoPage {
             id: transportMenu
             objectName: "transportMenu"
             popupType: Popup.Item
+            enter: null
+            exit: null
+            // Let Popup fit the viewport instead of Fluent's animated explicit height.
+            height: undefined
 
             MenuItem {
                 text: qsTr("Open another…")
@@ -1134,6 +1138,9 @@ VideoPage {
                 id: videoTrackMenu
                 objectName: "videoTrackMenu"
                 title: qsTr("Video track")
+                enter: null
+                exit: null
+                height: undefined
 
                 Instantiator {
                     id: videoTrackInstantiator
@@ -1169,6 +1176,9 @@ VideoPage {
                 id: audioTrackMenu
                 objectName: "audioTrackMenu"
                 title: qsTr("Audio track")
+                enter: null
+                exit: null
+                height: undefined
 
                 Instantiator {
                     id: audioTrackInstantiator
@@ -1204,6 +1214,9 @@ VideoPage {
                 id: subtitleMenu
                 objectName: "subtitleMenu"
                 title: qsTr("Subtitles")
+                enter: null
+                exit: null
+                height: undefined
 
                 Instantiator {
                     id: subtitleTrackInstantiator

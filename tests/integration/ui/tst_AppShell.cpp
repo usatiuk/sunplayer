@@ -751,6 +751,28 @@ void AppShellTest::publishesActiveViewport() {
     QTRY_VERIFY(!transportMenu->property("visible").toBool());
     QTRY_VERIFY(!windowCommands.windowShortcutsBlocked());
 
+    // An overflowing track menu must resize its viewport and enable scrolling.
+    QQmlComponent extraTrackComponent(&engine);
+    extraTrackComponent.setData("import QtQuick.Controls; MenuItem { text: \"Extra subtitle\" }", QUrl());
+    for (int i = 0; i < 40; ++i) {
+        auto* item = qobject_cast<QQuickItem*>(extraTrackComponent.create());
+        QVERIFY2(item, qPrintable(componentErrorText(extraTrackComponent)));
+        item->setParent(subtitleMenu);
+        QVERIFY(QMetaObject::invokeMethod(subtitleMenu, "addItem", Q_ARG(QQuickItem*, item)));
+    }
+    QVERIFY(QMetaObject::invokeMethod(transportMenu, "open"));
+    QVERIFY(QMetaObject::invokeMethod(subtitleMenu, "open"));
+    QTRY_VERIFY(subtitleMenu->property("opened").toBool());
+    auto* subtitleList = subtitleMenu->property("contentItem").value<QQuickItem*>();
+    QVERIFY(subtitleList);
+    QTRY_VERIFY(subtitleList->height() < subtitleList->property("contentHeight").toDouble());
+    QVERIFY(subtitleList->height() <= quickWindow.height());
+    QTRY_VERIFY(subtitleList->property("interactive").toBool());
+    QTRY_VERIFY(!subtitleList->property("atYEnd").toBool());
+    QVERIFY(QMetaObject::invokeMethod(subtitleMenu, "close"));
+    QVERIFY(QMetaObject::invokeMethod(transportMenu, "close"));
+    QTRY_VERIFY(!windowCommands.windowShortcutsBlocked());
+
     QVERIFY(QMetaObject::invokeMethod(reportBugMenuItem, "clicked", Qt::DirectConnection));
     QCOMPARE(supportController.reportCount(), 2);
     QVERIFY(QMetaObject::invokeMethod(aboutMenuItem, "clicked", Qt::DirectConnection));
