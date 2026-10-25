@@ -23,10 +23,14 @@ VideoPage {
                 Layout.fillWidth: true
                 Button {
                     objectName: "jellyfinBackButton"
-                    text: "←"
-                    font.pixelSize: 22
-                    implicitWidth: 40
-                    implicitHeight: 40
+                    text: qsTr("Up one level")
+                    display: AbstractButton.IconOnly
+                    icon.source: "icons/lucide/arrow-left.svg"
+                    icon.color: palette.buttonText
+                    icon.width: 20
+                    icon.height: 20
+                    implicitWidth: Math.max(40, implicitContentWidth + leftPadding + rightPadding)
+                    implicitHeight: Math.max(40, implicitContentHeight + topPadding + bottomPadding)
                     Accessible.name: qsTr("Up one level")
                     ToolTip.visible: hovered
                     ToolTip.text: qsTr("Up one level")

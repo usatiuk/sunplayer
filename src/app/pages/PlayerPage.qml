@@ -56,7 +56,7 @@ VideoPage {
     readonly property bool cursorShouldHide:
         frameReady && transportIsland.opacity < 0.05
 
-    windowShortcutsBlocked: transportMenu.visible || openDialog.visible
+    windowShortcutsBlocked: transportMenu.visible || idleMenu.visible || openDialog.visible
 
     videoViewportRect:
         Qt.rect(0, 0, root.width, root.height)
@@ -659,7 +659,7 @@ VideoPage {
 
             Button {
                 objectName: "reportMediaErrorButton"
-                text: qsTr("Report a bug…")
+                text: qsTr("Report a bug")
                 onClicked: root.supportController.reportBug()
             }
 
@@ -1127,7 +1127,8 @@ VideoPage {
             MenuItem {
                 objectName: "blankOtherDisplaysMenuItem"
                 visible: root.windowCommands.otherDisplayBlankingAvailable
-                text: qsTr("Blank other displays in fullscreen")
+                    && root.windowCommands.windowChrome.fullscreen
+                text: qsTr("Blank other displays")
                 checkable: true
                 checked: root.windowCommands.blankOtherDisplaysInFullscreen
                 onClicked: root.windowCommands.blankOtherDisplaysInFullscreen =
@@ -1262,7 +1263,7 @@ VideoPage {
 
             MenuItem {
                 objectName: "settingsMenuItem"
-                text: qsTr("Settings…")
+                text: qsTr("Settings")
                 onClicked: root.windowCommands.showSettings(0)
             }
 
@@ -1270,7 +1271,7 @@ VideoPage {
 
             MenuItem {
                 objectName: "reportBugMenuItem"
-                text: qsTr("Report a bug…")
+                text: qsTr("Report a bug")
                 onClicked: root.supportController.reportBug()
             }
 
@@ -1302,14 +1303,42 @@ VideoPage {
         visible: !root.sessionActive
         text: qsTr("More actions")
         display: AbstractButton.IconOnly
-        implicitWidth: implicitHeight
+        implicitWidth: Math.max(40, implicitContentWidth + leftPadding + rightPadding)
+        implicitHeight: Math.max(40, implicitContentHeight + topPadding + bottomPadding)
         icon.source: "icons/lucide/ellipsis.svg"
         icon.color: palette.buttonText
-        icon.width: 18
-        icon.height: 18
-        onClicked: transportMenu.popup(
+        icon.width: 24
+        icon.height: 24
+        ToolTip.visible: hovered
+        ToolTip.text: text
+        onClicked: idleMenu.popup(
             idleMoreButton,
-            Qt.point(idleMoreButton.width - transportMenu.implicitWidth,
+            Qt.point(idleMoreButton.width - idleMenu.implicitWidth,
                      idleMoreButton.height))
+    }
+
+    Menu {
+        id: idleMenu
+        objectName: "idleMenu"
+        popupType: Popup.Item
+        enter: null
+        exit: null
+        height: undefined
+
+        MenuItem {
+            objectName: "idleSettingsMenuItem"
+            text: qsTr("Settings")
+            onClicked: root.windowCommands.showSettings(0)
+        }
+        MenuItem {
+            objectName: "idleReportBugMenuItem"
+            text: qsTr("Report a bug")
+            onClicked: root.supportController.reportBug()
+        }
+        MenuItem {
+            objectName: "idleAboutMenuItem"
+            text: qsTr("About %1").arg(root.applicationDisplayName)
+            onClicked: root.supportController.showAbout()
+        }
     }
 }

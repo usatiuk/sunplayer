@@ -645,6 +645,9 @@ set_source_files_properties(src/app/icons/lucide/volume-x.svg PROPERTIES
 set_source_files_properties(src/app/icons/lucide/ellipsis.svg PROPERTIES
         QT_RESOURCE_ALIAS icons/lucide/ellipsis.svg
 )
+set_source_files_properties(src/app/icons/lucide/arrow-left.svg PROPERTIES
+        QT_RESOURCE_ALIAS icons/lucide/arrow-left.svg
+)
 set_source_files_properties(src/app/icons/lucide/x.svg PROPERTIES
         QT_RESOURCE_ALIAS icons/lucide/x.svg
 )
@@ -690,6 +693,7 @@ qt_add_qml_module(sunplayer
         src/app/icons/lucide/volume-2.svg
         src/app/icons/lucide/volume-x.svg
         src/app/icons/lucide/ellipsis.svg
+        src/app/icons/lucide/arrow-left.svg
         src/app/icons/lucide/x.svg
         src/app/icons/lucide/minus.svg
         src/app/icons/lucide/square.svg

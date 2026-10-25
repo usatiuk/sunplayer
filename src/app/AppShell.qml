@@ -200,7 +200,16 @@ Item {
         z: 30
         visible: root.currentPage === 0 && root.mediaSession.state !== MediaSession.Empty
             && (!playerPage.sessionActive || playerPage.controlsShouldShow)
-        text: qsTr("← Back")
+        text: qsTr("Back")
+        display: AbstractButton.IconOnly
+        implicitWidth: Math.max(40, implicitContentWidth + leftPadding + rightPadding)
+        implicitHeight: Math.max(40, implicitContentHeight + topPadding + bottomPadding)
+        icon.source: "icons/lucide/arrow-left.svg"
+        icon.color: palette.buttonText
+        icon.width: 20
+        icon.height: 20
+        ToolTip.visible: hovered
+        ToolTip.text: text
         onClicked: root.goBack()
     }
 
@@ -235,7 +244,16 @@ Item {
         }
         z: 30
         visible: root.currentPage === 1
-        text: qsTr("← Player")
+        text: qsTr("Return to player")
+        display: AbstractButton.IconOnly
+        implicitWidth: Math.max(40, implicitContentWidth + leftPadding + rightPadding)
+        implicitHeight: Math.max(40, implicitContentHeight + topPadding + bottomPadding)
+        icon.source: "icons/lucide/arrow-left.svg"
+        icon.color: palette.buttonText
+        icon.width: 20
+        icon.height: 20
+        ToolTip.visible: hovered
+        ToolTip.text: text
         onClicked: root.currentPage = 0
     }
 }

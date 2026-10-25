@@ -16,9 +16,15 @@ keeps the timeline above its controls, and fades during uninterrupted playback.
 The transport uses a small vendored Lucide 1.28.0 SVG subset inside fully
 custom rounded buttons, avoiding font-dependent glyphs and platform-style
 pressed backgrounds. The player and compositor background is pure black.
-The idle overflow action is a square, icon-only standard `Button`: its
+The idle overflow action is a compact, icon-only standard `Button`: its
 background remains present and its icon follows `palette.buttonText`, keeping
 idle, pressed and keyboard-focused states readable in light and dark styles.
+Standalone navigation buttons use a vendored Lucide arrow rather than text
+glyphs. They and the idle overflow button keep platform button styling with
+at least 40 logical pixels per dimension, growing to fit the icon and native
+padding; the idle ellipsis uses a 24-pixel icon. Navigation
+icons follow `palette.buttonText`, including when a platform ignores the dark
+appearance request. Tooltips retain each action's name.
 Custom transport and titlebar buttons expose `visualFocus` through their
 existing hover highlight. HDR Lab's four switches set both `palette.text`
 and `palette.windowText` for their intentionally dark surface; Fusion uses
@@ -38,8 +44,9 @@ the audio-output boundary. The overflow menu exposes checked video, audio, and
 subtitle track lists backed by the session's observable selection state;
 unsupported embedded streams are disabled. On Windows, the same menu has a
 persisted checked action to blank every other display while Player is
-fullscreen. It is hidden and its stored value remains unapplied on other
-platforms for now.
+fullscreen. The menu labels this action **Blank other displays** and shows it
+only while fullscreen is active. It is hidden and its stored value remains
+unapplied on other platforms for now.
 
 Player menus disable opening/closing transitions and use implicit height, so
 Qt can fit long track lists to the window and enable scrolling. This avoids
@@ -259,10 +266,17 @@ than QML-owned playback state.
 
 ## Help, diagnostics, and error actions
 
-`PlayerPage` keeps **Report a bug…** and **About SunPlayer** as direct items in
-the existing overflow menu. A platform-styled `ToolButton` exposes the same
-menu while no media is active, so support and packaged notices do not depend
-on successful playback.
+`PlayerPage` keeps **Report a bug** and **About SunPlayer** as direct items in
+the playback overflow menu. While playback is inactive, a platform-styled
+icon-only `Button` opens a separate menu containing only **Settings**,
+**Report a bug**, and **About SunPlayer**. Both menus block window shortcuts
+while open, so support and packaged notices do not depend on successful playback.
+
+Shell integration coverage checks the three idle entries and their commands,
+menu shortcut blocking, ellipsis loading/size/centering, light-palette contrast,
+and fullscreen-only display-blanking visibility. The Windows application build,
+QML lint, and Basic/Fusion/FluentWinUI3 shell tests pass on 2026-10-25. Native
+macOS and Wayland visual acceptance of the icon-button sizing remains pending.
 
 About is a separate Qt Widgets dialog rather than an in-scene Quick dialog. It
 therefore follows the active platform widget style and remains independent of
@@ -278,7 +292,7 @@ explicit allowlist of stable identifiers, booleans, numbers, and counters.
 Reports exclude media names, paths and URLs, user/host identifiers, raw logs,
 and arbitrary library errors. Structured backend fields preserve their real
 Unicode and punctuation while rejecting accidental path/URL/control-shaped
-values. **Report a bug…** copies the detailed summary, then asks the system
+values. **Report a bug** copies the detailed summary, then asks the system
 browser to open a bounded prefilled GitHub issue; it never uploads or submits
 anything.
 

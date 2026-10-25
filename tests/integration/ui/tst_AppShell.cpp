@@ -239,6 +239,10 @@ void AppShellTest::publishesActiveViewport() {
     QObject* const settingsMenuItem = rootItem->findChild<QObject*>(QStringLiteral("settingsMenuItem"));
     QObject* const subtitleSettingsMenuItem = rootItem->findChild<QObject*>(QStringLiteral("subtitleSettingsMenuItem"));
     QObject* const idleMoreButton = rootItem->findChild<QObject*>(QStringLiteral("idleMoreButton"));
+    QObject* const idleMenu = rootItem->findChild<QObject*>(QStringLiteral("idleMenu"));
+    QObject* const idleSettingsMenuItem = rootItem->findChild<QObject*>(QStringLiteral("idleSettingsMenuItem"));
+    QObject* const idleReportBugMenuItem = rootItem->findChild<QObject*>(QStringLiteral("idleReportBugMenuItem"));
+    QObject* const idleAboutMenuItem = rootItem->findChild<QObject*>(QStringLiteral("idleAboutMenuItem"));
     QObject* const restartMediaErrorButton = rootItem->findChild<QObject*>(QStringLiteral("restartMediaErrorButton"));
     QObject* const reportMediaErrorButton = rootItem->findChild<QObject*>(QStringLiteral("reportMediaErrorButton"));
     QObject* const quitMediaErrorButton = rootItem->findChild<QObject*>(QStringLiteral("quitMediaErrorButton"));
@@ -313,6 +317,14 @@ void AppShellTest::publishesActiveViewport() {
     QCOMPARE(clientSideApplicationTitle->property("text").toString(), QStringLiteral("SunPlayer (Test)"));
     QCOMPARE(aboutMenuItem->property("text").toString(), QStringLiteral("About SunPlayer (Test)"));
     QVERIFY(idleMoreButton);
+    QVERIFY(idleMenu);
+    QVERIFY(idleSettingsMenuItem);
+    QVERIFY(idleReportBugMenuItem);
+    QVERIFY(idleAboutMenuItem);
+    QCOMPARE(idleMenu->property("count").toInt(), 3);
+    QCOMPARE(idleSettingsMenuItem->property("text").toString(), QStringLiteral("Settings"));
+    QCOMPARE(idleReportBugMenuItem->property("text").toString(), QStringLiteral("Report a bug"));
+    QCOMPARE(idleAboutMenuItem->property("text").toString(), QStringLiteral("About SunPlayer (Test)"));
     QVERIFY(restartMediaErrorButton);
     QVERIFY(reportMediaErrorButton);
     QVERIFY(quitMediaErrorButton);
@@ -398,6 +410,13 @@ void AppShellTest::publishesActiveViewport() {
     // idle icon and the keyboard-focused button readable.
     auto* const idleButtonItem = qobject_cast<QQuickItem*>(idleMoreButton);
     QVERIFY(idleButtonItem);
+    auto* const idleIcon = idleButtonItem->findChild<QQuickItem*>(QStringLiteral("image"));
+    QVERIFY(idleIcon);
+    QTRY_COMPARE(idleIcon->property("status").toInt(), 1); // Image.Ready
+    QTRY_VERIFY(idleIcon->width() >= 24 && idleIcon->height() >= 24);
+    QPointF const idleIconCenter = idleIcon->mapToItem(idleButtonItem, idleIcon->boundingRect().center());
+    QVERIFY(qAbs(idleIconCenter.x() - idleButtonItem->width() / 2) <= 1);
+    QVERIFY(qAbs(idleIconCenter.y() - idleButtonItem->height() / 2) <= 1);
     QVERIFY(QQmlProperty(idleMoreButton, QStringLiteral("palette.button")).write(QColor(Qt::white)));
     QVERIFY(QQmlProperty(idleMoreButton, QStringLiteral("palette.buttonText")).write(QColor(Qt::black)));
     QCOMPARE(QQmlProperty(idleMoreButton, QStringLiteral("icon.color")).read().value<QColor>(), QColor(Qt::black));
@@ -415,16 +434,17 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(supportController.setProperty("windowsAppIsolationWarningVisible", false));
     QTRY_VERIFY(!windowsAppIsolationWarning->property("visible").toBool());
     QVERIFY(QMetaObject::invokeMethod(idleMoreButton, "clicked", Qt::DirectConnection));
-    QTRY_VERIFY(transportMenu->property("visible").toBool());
-    QVERIFY(QMetaObject::invokeMethod(reportBugMenuItem, "clicked", Qt::DirectConnection));
+    QTRY_VERIFY(idleMenu->property("visible").toBool());
+    QVERIFY(!transportMenu->property("visible").toBool());
+    QTRY_VERIFY(windowCommands.windowShortcutsBlocked());
+    QVERIFY(QMetaObject::invokeMethod(idleReportBugMenuItem, "clicked", Qt::DirectConnection));
     QCOMPARE(supportController.reportCount(), 1);
-    QVERIFY(QMetaObject::invokeMethod(aboutMenuItem, "clicked", Qt::DirectConnection));
+    QVERIFY(QMetaObject::invokeMethod(idleAboutMenuItem, "clicked", Qt::DirectConnection));
     QCOMPARE(supportController.aboutCount(), 1);
-    QVERIFY(QMetaObject::invokeMethod(settingsMenuItem, "clicked", Qt::DirectConnection));
+    QVERIFY(QMetaObject::invokeMethod(idleSettingsMenuItem, "clicked", Qt::DirectConnection));
     QCOMPARE(windowCommands.settingsPage(), 0);
-    QVERIFY(QMetaObject::invokeMethod(subtitleSettingsMenuItem, "clicked", Qt::DirectConnection));
-    QCOMPARE(windowCommands.settingsPage(), 1);
-    QVERIFY(QMetaObject::invokeMethod(transportMenu, "close", Qt::DirectConnection));
+    QVERIFY(QMetaObject::invokeMethod(idleMenu, "close", Qt::DirectConnection));
+    QTRY_VERIFY(!windowCommands.windowShortcutsBlocked());
     QCOMPARE(clientSideWindowChrome->property("contentTop").toReal(), 0.0);
     QVERIFY(!clientSideWindowOutline->isVisible());
 
@@ -715,7 +735,10 @@ void AppShellTest::publishesActiveViewport() {
     windowCommands.setOtherDisplayBlankingAvailable(false);
     QTRY_VERIFY(!blankOtherDisplaysMenuItem->property("visible").toBool());
     windowCommands.setOtherDisplayBlankingAvailable(true);
+    QTRY_VERIFY(!blankOtherDisplaysMenuItem->property("visible").toBool());
+    windowCommands.windowChromeController().setState(false, true, false);
     QTRY_VERIFY(blankOtherDisplaysMenuItem->property("visible").toBool());
+    QCOMPARE(blankOtherDisplaysMenuItem->property("text").toString(), QStringLiteral("Blank other displays"));
     QVERIFY(!blankOtherDisplaysMenuItem->property("checked").toBool());
     QVERIFY(!windowCommands.blankOtherDisplaysInFullscreen());
     windowCommands.setBlankOtherDisplaysInFullscreen(true);
@@ -728,6 +751,12 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(QMetaObject::invokeMethod(blankOtherDisplaysMenuItem, "clicked", Qt::DirectConnection));
     QVERIFY(!windowCommands.blankOtherDisplaysInFullscreen());
     QTRY_VERIFY(!blankOtherDisplaysMenuItem->property("checked").toBool());
+    windowCommands.windowChromeController().setState(false, false, false);
+    QTRY_VERIFY(!blankOtherDisplaysMenuItem->property("visible").toBool());
+    QVERIFY(QMetaObject::invokeMethod(settingsMenuItem, "clicked", Qt::DirectConnection));
+    QCOMPARE(windowCommands.settingsPage(), 0);
+    QVERIFY(QMetaObject::invokeMethod(subtitleSettingsMenuItem, "clicked", Qt::DirectConnection));
+    QCOMPARE(windowCommands.settingsPage(), 1);
     QCOMPARE(mediaSession.selectedVideoStreamIndex(), 2);
     QVERIFY(QMetaObject::invokeMethod(videoDarkItem, "triggered", Qt::DirectConnection));
     QTRY_COMPARE(mediaSession.selectedVideoStreamIndex(), 0);
