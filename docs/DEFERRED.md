@@ -102,13 +102,19 @@ parallel source parser, decoder, or color pipeline.
 
 Windows Advanced Color propagates validated native display primaries to
 libplacebo separately from the extended-linear BT.709 coordinate basis. macOS
-propagates Display P3 only when the active `NSScreen` reports that capability,
-otherwise BT.709 when representable; this is a conservative lower bound rather
-than exact ICC-derived native xy. Managed Wayland propagates explicit preferred
+propagates the active display profile's native RGB matrix primaries and white
+through LittleCMS. LUT-only and otherwise unrepresentable display profiles use
+the shared unknown-gamut fallback; no named-gamut approximation is retained.
+On the DELL U2725QE, the active macOS HDR profile exposes exact BT.2020 while
+Windows reports narrower primaries. The profile can describe an encoding
+envelope; it is not a verified physical-gamut authority. Resolving the physical
+mapping target remains open; see the
+[native profile evidence](research/2026-10-25-macos-display-profile-gamut.md#external-hdr-profile-can-describe-an-encoding-envelope).
+Managed Wayland propagates explicit preferred
 target primaries with a preferred-primary-volume fallback. A real D3D11
 renderer-boundary capture proves the shared fallback/P3 math before OS
-presentation. Exact macOS profile chromaticities, Wayland compositor/display
-behavior, and physical gamut verification remain deferred, so the project does
+presentation. External macOS display/profile-change acceptance, Wayland
+compositor/display behavior, and physical gamut verification remain deferred, so the project does
 not yet make a measured cross-platform wide-gamut-output claim.
 
 Managed Wayland declares the post-mapping composition volume when the optional

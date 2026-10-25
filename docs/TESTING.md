@@ -764,9 +764,14 @@ light.
 
 On the current macOS host, AppKit observation and the EDR-capable swapchain
 selection path run against a real `NSScreen`, while pure tests cover relative
-headroom mapping, conservative P3 target propagation, and equal-state
-reconciliation. The new `canRepresentDisplayGamut:` observation and color-space
-notification require a fresh native run. A user-confirmed
+headroom mapping and equal-state reconciliation. The macOS-only
+`mac-display-gamut` CTest covers native sRGB/P3 profiles, serialized v2/v4 custom
+RGB profiles with D60 white, shared-target propagation, and rejected empty,
+truncated, malformed and grayscale profiles. It uses real LittleCMS and no
+physical display. Active-display profile querying is a separate native probe;
+live profile changes and external displays remain manual checks. See the
+[delivery evidence](plans/video-rendering/2026-10-25-macos-profile-gamut.md).
+A user-confirmed
 multi-display move and return preserve video, UI color, and EDR mapping after
 the Metal surface refresh. This physical event is not synthesized in CTest:
 the current public boundary cannot select a second physical `NSScreen` or make

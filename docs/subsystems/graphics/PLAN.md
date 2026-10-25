@@ -322,6 +322,12 @@ See the [delivery plan](../../plans/graphics/2026-10-17-wayland-wcg-sdr.md).
 
 ## October 2026: unified color mapping and native encoding
 
+* [x] Replace macOS P3/BT.709 guessing with active RGB matrix profile
+  characterization through LittleCMS, retaining ColorSync calibration ownership.
+* [ ] Validate live profile changes and external-display gamut behavior physically.
+
+See the [profile-gamut delivery plan](../../plans/video-rendering/2026-10-25-macos-profile-gamut.md).
+
 [ADR 0039](../../decisions/0039-unify-color-mapping-and-native-encoding.md)
 supersedes the earlier stable-PQ-on-SDR and scale-only normalization policies.
 One shared target drives mapping; signed linear composition precedes the final

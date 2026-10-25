@@ -5,6 +5,18 @@ qt_add_executable(sunplayer_presentation_target_tests
         ../src/platform/DisplayState.h
 )
 
+if (APPLE)
+    qt_add_executable(sunplayer_mac_display_gamut_tests
+            integration/platform/tst_MacDisplayGamut.mm
+            ../src/platform/macos/MacDisplayGamut.cpp
+            ../src/presentation/PresentationTarget.cpp)
+    target_include_directories(sunplayer_mac_display_gamut_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../src")
+    target_compile_options(sunplayer_mac_display_gamut_tests PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
+    target_link_libraries(sunplayer_mac_display_gamut_tests PRIVATE Qt6::Test lcms2::lcms2 "-framework AppKit")
+    add_test(NAME mac-display-gamut COMMAND sunplayer_mac_display_gamut_tests)
+    set_tests_properties(mac-display-gamut PROPERTIES LABELS "color;platform;integration;macos")
+endif ()
+
 qt_add_executable(sunplayer_application_log_tests
         unit/diagnostics/tst_ApplicationLog.cpp
 )

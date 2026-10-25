@@ -66,6 +66,12 @@ Detailed technical context is recorded in `docs/ARCHITECTURE_NOTES.md`.
 
 ## Current implementation status
 
+macOS target gamut now comes from the active display's RGB matrix ICC profile
+through LittleCMS, replacing fixed P3/BT.709 guesses without changing EDR or
+ColorSync presentation. The macOS triplet also configures upstream libass's
+native font provider without a copied port. Validation and research are tracked
+in the [delivery plan](docs/plans/video-rendering/2026-10-25-macos-profile-gamut.md).
+
 Playback has separate SDR/HDR tone-mapping preferences (defaults BT.2446A and
 Spline) and a shared default-enabled peak detector. One settings editor follows
 actual output intent, including HDR at H=1, while authored HDR10+ and mapped
@@ -75,7 +81,8 @@ host-validation evidence are tracked in the
 [delivery plan](docs/plans/video-rendering/2026-10-24-tone-mapping-controls.md).
 Windows builds all targets and passes QML lint and 41/42 CTests; fullscreen
 stage6 automation remains open with user-confirmed manual fullscreen/cursor
-behavior. No native macOS/Linux Qt6.12 execution is claimed.
+behavior. Native macOS/Linux execution of those tone-control acceptance
+scenarios remains pending.
 HDR rendering controls are grouped in a collapsed Advanced section. HDR10+
 preference defaults on when no saved preference exists; stored choices remain.
 
@@ -369,10 +376,10 @@ also drains bounded video queues when the window or active page does not
 request rendering. Broader whole-application command/error scenarios, SDR/HDR
 range and profile coverage, P010/P012/P016 capture, cross-platform hardware
 import, and physical-output validation do not yet exist. Windows Advanced
-Color native primaries, macOS's AppKit-confirmed P3/BT.709 lower bound, and
+Color native primaries, macOS's active profile-derived RGB gamut, and
 managed-Wayland preferred target primaries are propagated. The renderer's
-target-gamut boundary is capture-tested before OS presentation; exact macOS
-ICC chromaticities, Wayland compositor/display behavior, and measured gamut
+target-gamut boundary is capture-tested before OS presentation; Wayland
+compositor/display behavior and measured gamut
 remain unclaimed.
 
 Playback exposes normalized position/duration and seeking through a
@@ -537,10 +544,9 @@ Documentation: `docs/subsystems/graphics/`
 * [x] Linux refactor GPU acceptance, complete Debug suite, Release build and QML lint
 * [ ] Complete engine native-transition and Windows/macOS acceptance
 * [x] Real FFmpeg-decoded static-PQ fixture and retained-metadata validation
-* [x] Bounded display-gamut propagation from Windows Advanced Color, AppKit
-  P3/sRGB representability, and managed-Wayland preferred target primaries
-* [ ] Exact macOS profile chromaticities and physical cross-platform gamut
-  verification
+* [x] Display-gamut propagation from Windows Advanced Color, macOS RGB matrix
+  display profiles, and managed-Wayland preferred target primaries
+* [ ] Physical cross-platform gamut verification
 * [x] HLG target-response validation through the shared FFmpeg/libplacebo
   path, without a SunPlayer-authored HLG pipeline
 * [x] Production FFmpeg/libplacebo mapping acceptance, validation, and

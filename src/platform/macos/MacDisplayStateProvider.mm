@@ -12,22 +12,9 @@
 
 #include "diagnostics/LogCategories.h"
 #include "platform/DisplayStateProvider.h"
+#include "platform/macos/MacDisplayGamut.h"
 
 namespace {
-constexpr ColorPrimaries bt709Primaries{
-    .red = {0.640f, 0.330f},
-    .green = {0.300f, 0.600f},
-    .blue = {0.150f, 0.060f},
-    .white = {0.3127f, 0.3290f},
-};
-
-constexpr ColorPrimaries displayP3Primaries{
-    .red = {0.680f, 0.320f},
-    .green = {0.265f, 0.690f},
-    .blue = {0.150f, 0.060f},
-    .white = {0.3127f, 0.3290f},
-};
-
 float headroomOrOne(CGFloat value, char const* name) {
     float const headroom = static_cast<float>(value);
     if (std::isfinite(headroom) && headroom >= 1.0f) {
@@ -101,12 +88,13 @@ class MacDisplayStateProvider final : public DisplayStateProvider {
         state.colorMode = state.potentialHeadroom > 1.0f ? DisplayColorMode::HighDynamicRange
                                                          : DisplayColorMode::StandardDynamicRange;
         state.luminanceBehavior = DisplayLuminanceBehavior::DisplayReferred;
-        if ([screen canRepresentDisplayGamut:NSDisplayGamutP3]) {
+        NSColorSpace* const colorSpace = screen.colorSpace;
+        if (auto const primaries = macDisplayGamut(QByteArray::fromNSData(colorSpace.ICCProfileData))) {
             state.targetPrimariesKnown = true;
-            state.targetPrimaries = displayP3Primaries;
-        } else if ([screen canRepresentDisplayGamut:NSDisplayGamutSRGB]) {
-            state.targetPrimariesKnown = true;
-            state.targetPrimaries = bt709Primaries;
+            state.targetPrimaries = *primaries;
+        } else {
+            qCWarning(sunplayerLogPlatform,
+                      "macOS display profile has no usable RGB matrix gamut; using unknown target");
         }
         emit stateChanged(state);
     }

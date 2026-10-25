@@ -36,6 +36,11 @@
     },
     "libass",
     {
+      "name": "lcms",
+      "default-features": false,
+      "platform": "osx"
+    },
+    {
       "name": "pkgconf",
       "host": true,
       "platform": "windows"

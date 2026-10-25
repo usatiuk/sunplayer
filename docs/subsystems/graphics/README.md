@@ -392,7 +392,7 @@ the swapchain was rebuilt.
   SDR white, minimum luminance, and maximum luminance.
 * macOS `NSScreen` current and potential extended-dynamic-range component
   values, expressed relative to current SDR white, plus an AppKit-confirmed
-  Display-P3 or BT.709 conservative target gamut.
+  profile-derived RGB target gamut and white point.
 * Managed-Wayland preferred reference white, target luminance/headroom, and
   explicit target primaries with a preferred-primary-volume fallback.
 
@@ -613,11 +613,17 @@ and [the video-rendering subsystem](../video-rendering/README.md).
 
 The texture's BT.709 primaries define its extended-linear RGB coordinate basis,
 not necessarily the usable target gamut. Windows Advanced Color supplies
-validated native target primaries. macOS supplies an AppKit-confirmed P3 or
-BT.709 lower bound without parsing the display ICC profile. Managed Wayland
+validated native target primaries. macOS reads the active `NSScreen.colorSpace`
+ICC data and uses LittleCMS to characterize native RGB/white with an unadapted
+absolute-colorimetric XYZ transform. Only RGB matrix profiles are represented
+by the shared triangle contract. Invalid or unsupported profiles publish an
+unknown target; there is no P3/BT.709 capability guess. Existing screen/profile
+notifications refresh the provider and semantic target changes invalidate video.
+LittleCMS is used only for characterization, not pixel calibration. Managed Wayland
 supplies explicit preferred target primaries or its primary color volume.
-Unknown targets fall back to BT.709. Exact macOS profile chromaticities,
-Wayland compositor/display behavior, and physical validation remain open.
+Unknown targets fall back to BT.709. The native macOS implementation and evidence
+are recorded in the [delivery plan](../../plans/video-rendering/2026-10-25-macos-profile-gamut.md).
+Wayland compositor/display behavior and physical validation remain open.
 
 Target gamut mapping is separate from monitor calibration. The Windows
 Advanced Color path relies on the OS to apply the active display profile once

@@ -245,6 +245,7 @@ elseif (APPLE)
     )
     find_package(cubeb CONFIG REQUIRED)
     find_package(MoltenVK 1.4.2 EXACT CONFIG REQUIRED)
+    find_package(lcms2 CONFIG REQUIRED)
     set(sunplayer_qt_minimum_version 6.12.0)
 else ()
     message(FATAL_ERROR
@@ -563,10 +564,12 @@ qt_add_executable(sunplayer
 )
 
 if (APPLE)
-    target_link_libraries(sunplayer PRIVATE "-framework MediaPlayer")
+    target_link_libraries(sunplayer PRIVATE "-framework MediaPlayer" lcms2::lcms2)
     target_sources(sunplayer PRIVATE
             src/platform/macos/MacDisplayStateProvider.h
             src/platform/macos/MacDisplayStateProvider.mm
+            src/platform/macos/MacDisplayGamut.h
+            src/platform/macos/MacDisplayGamut.cpp
             src/platform/macos/MacPlaybackPowerInhibitor.mm
             src/platform/macos/MacNativeMediaControls.mm
     )

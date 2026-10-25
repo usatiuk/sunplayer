@@ -51,9 +51,15 @@ packages. These are test dependencies, not player runtime dependencies.
 
 The validated macOS development configuration uses Apple Clang 16, ordinary
 CMake/Ninja, Qt 6.11.1 from the Online Installer, the project `arm64-osx`
-triplet (stock platform/linkage plus the existing Qt prefix for QtKeychain), FFmpeg 8.1.2 with VideoToolbox, libplacebo 7.360.1 with Vulkan,
+triplet (stock platform/linkage, QtKeychain prefix, and libass-only Meson
+options), FFmpeg 8.1.2 with VideoToolbox, libplacebo 7.360.1 with Vulkan,
 MoltenVK 1.4.2, the pinned cubeb AudioUnit backend, and libass. It is a host
 validation claim, not yet a distributable macOS 13 compatibility claim.
+
+The 2026-10-25 focused macOS build uses Qt 6.12.0 and LittleCMS 2.19.1; the
+player link, profile-gamut/presentation/libass tests, active-profile probe and
+upstream-libass triplet replacement pass. See the
+[delivery evidence](../../plans/video-rendering/2026-10-25-macos-profile-gamut.md).
 
 The Visual Studio C++ Clang tools component is required for Windows dependency
 builds. The application and installed Qt package remain MSVC-built; clang-cl
@@ -110,6 +116,11 @@ Windows and macOS use vcpkg manifest mode. The repository owns:
 * `vcpkg-ports/cubeb`, because the registry port is older than the reviewed
   audio timing and recovery behavior. The overlay also corrects upstream's
   installed CMake target so consumers receive its public include directory.
+* `cmake/vcpkg/triplets/arm64-osx.cmake`, which retains the qtkeychain Qt-prefix
+  passthrough and sets libass-only Meson options for CoreText, disabling
+  fontconfig and libunibreak. This uses the upstream libass port without
+  auto-detecting undeclared Homebrew dependencies. Windows retains its registry
+  port; Linux uses the distribution's libass and fontconfig.
 * `cmake/vcpkg/triplets/x64-windows-clangcl.cmake` and its chainloaded
   toolchain, so compiler identity participates in vcpkg's package ABI and
   binary-cache key.
@@ -117,8 +128,11 @@ Windows and macOS use vcpkg manifest mode. The repository owns:
   introduce its case-variant finder and wraps component import libraries and
   DLLs in configuration-aware imported targets.
 * `cmake/SunPlayerLibass.cmake`, which exposes vcpkg's pkg-config package on
-  Windows and the system pkg-config package on Linux through one project-local
-  target without duplicating libass's dependency graph.
+  Windows/macOS and the system pkg-config package on Linux through one
+  project-local target without duplicating libass's dependency graph.
+* macOS-only registry `lcms` without optional features, linked statically as
+  `lcms2::lcms2` for display-profile gamut characterization. No JPEG/TIFF tools
+  or libplacebo ICC-rendering feature is enabled.
 * the manifest's Windows-only `pkgconf` host dependency and explicit
   `x64-windows` host triplet, which let CMake discover vcpkg's libass metadata
   through vcpkg's standard host-tool path.
@@ -239,10 +253,23 @@ cmake --build build/macos-debug
 ctest --test-dir build/macos-debug --output-on-failure
 ```
 
-The project defaults Apple-Silicon dependency builds to vcpkg's stock
-`arm64-osx` triplet. No custom triplet, wrapper CMake, or Homebrew-installed
-project library is required. The Qt Online Installer tree and vcpkg checkout
+The project defaults Apple-Silicon dependency builds to its `arm64-osx`
+triplet, retaining stock platform/linkage with the QtKeychain prefix and
+libass-only Meson options. No wrapper CMake or Homebrew-installed project
+library is required. The Qt Online Installer tree and vcpkg checkout
 remain developer-supplied; this command does not define the later package.
+
+The libass-specific triplet options fix a macOS configuration failure where the
+registry port's Meson auto-detection found Homebrew fontconfig and libunibreak
+while building, but the later vcpkg pkgconf lookup could not resolve them.
+There is no copied libass port, source patch, Homebrew search-path workaround,
+or edit to generated `.pc` files.
+
+Current validation of the triplet-only replacement is recorded in the
+[macOS gamut/build delivery plan](../../plans/video-rendering/2026-10-25-macos-profile-gamut.md).
+Windows was not rebuilt for this change. The link still warns that dependency
+archives target macOS 27 while the application targets macOS 13; the deployment
+floor remains an open packaging gate.
 
 ## Qt dependency
 
