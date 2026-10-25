@@ -243,6 +243,7 @@ void AppShellTest::publishesActiveViewport() {
     QObject* const idleSettingsMenuItem = rootItem->findChild<QObject*>(QStringLiteral("idleSettingsMenuItem"));
     QObject* const idleReportBugMenuItem = rootItem->findChild<QObject*>(QStringLiteral("idleReportBugMenuItem"));
     QObject* const idleAboutMenuItem = rootItem->findChild<QObject*>(QStringLiteral("idleAboutMenuItem"));
+    QObject* const idleHdrLabMenuItem = rootItem->findChild<QObject*>(QStringLiteral("idleHdrLabMenuItem"));
     QObject* const restartMediaErrorButton = rootItem->findChild<QObject*>(QStringLiteral("restartMediaErrorButton"));
     QObject* const reportMediaErrorButton = rootItem->findChild<QObject*>(QStringLiteral("reportMediaErrorButton"));
     QObject* const quitMediaErrorButton = rootItem->findChild<QObject*>(QStringLiteral("quitMediaErrorButton"));
@@ -321,10 +322,12 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(idleSettingsMenuItem);
     QVERIFY(idleReportBugMenuItem);
     QVERIFY(idleAboutMenuItem);
-    QCOMPARE(idleMenu->property("count").toInt(), 3);
+    QVERIFY(idleHdrLabMenuItem);
+    QCOMPARE(idleMenu->property("count").toInt(), 4);
     QCOMPARE(idleSettingsMenuItem->property("text").toString(), QStringLiteral("Settings"));
     QCOMPARE(idleReportBugMenuItem->property("text").toString(), QStringLiteral("Report a bug"));
     QCOMPARE(idleAboutMenuItem->property("text").toString(), QStringLiteral("About SunPlayer (Test)"));
+    QCOMPARE(idleHdrLabMenuItem->property("text").toString(), QStringLiteral("HDR Lab"));
     QVERIFY(restartMediaErrorButton);
     QVERIFY(reportMediaErrorButton);
     QVERIFY(quitMediaErrorButton);
@@ -509,7 +512,7 @@ void AppShellTest::publishesActiveViewport() {
     QVERIFY(!openingState->property("visible").toBool());
     QVERIFY(!errorState->property("visible").toBool());
     QVERIFY(!seekSlider->property("visible").toBool());
-    supportController.requestHdrLab();
+    QVERIFY(QMetaObject::invokeMethod(idleHdrLabMenuItem, "triggered", Qt::DirectConnection));
     QTRY_VERIFY(!updateButton->isVisible());
     QTRY_COMPARE(activeVideoSource.route(), ShellTestActiveVideoSource::Route::Diagnostics);
     rootItem->setSize({760.0, 560.0});

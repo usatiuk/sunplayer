@@ -168,6 +168,7 @@ Item {
             topContentInset: root.chromeTop - pageStack.y
             jellyfinAvailable: root.jellyfinAvailable
             onJellyfinRequested: root.openJellyfin()
+            onHdrLabRequested: root.currentPage = 1
         }
 
         HdrLabPage {

@@ -18,6 +18,7 @@ VideoPage {
     property real topContentInset: 0
     property bool jellyfinAvailable: false
     signal jellyfinRequested()
+    signal hdrLabRequested()
     readonly property var applicationUpdate: windowCommands.applicationUpdate
 
     readonly property bool sessionReady:
@@ -285,9 +286,8 @@ VideoPage {
                 width: control.prominent ? 17 : 15
                 height: width
                 source: control.iconSource
-                sourceSize: Qt.size(64, 64)
+                sourceSize: Qt.size(width, height)
                 fillMode: Image.PreserveAspectFit
-                mipmap: true
                 opacity: control.enabled ? 1 : 0.38
             }
         }
@@ -1339,6 +1339,11 @@ VideoPage {
             objectName: "idleAboutMenuItem"
             text: qsTr("About %1").arg(root.applicationDisplayName)
             onClicked: root.supportController.showAbout()
+        }
+        MenuItem {
+            objectName: "idleHdrLabMenuItem"
+            text: qsTr("HDR Lab")
+            onTriggered: root.hdrLabRequested()
         }
     }
 }

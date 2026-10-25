@@ -138,7 +138,7 @@ playback:
   RGBA16F texture with the matching depth/stencil attachment required by its
   default depth-assisted 2D ordering.
 * A thin QML application shell defaults to a video-first Player page and keeps
-  the retained HDR Lab reachable only through About.
+  the retained HDR Lab reachable through About and the idle overflow menu.
   Player publishes a full-page video viewport with a transient transport island
   and optional grouped playback-details panel. The panel separates selected
   source tracks and conservative SDR/HDR classification from presentation mode

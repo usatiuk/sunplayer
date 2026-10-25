@@ -5,7 +5,7 @@
 The QML scene has a thin `AppShell` with a default `PlayerPage` and retained
 `HdrLabPage`, rendered offscreen through `QQuickRenderControl`. The shell and
 viewport boundary are production structure; HDR Lab remains developer tooling
-and is opened deliberately from About rather than occupying playback chrome.
+and is opened deliberately from About or the idle overflow menu.
 
 Player opens a local file and presents the movie across the full page. Windows
 uses D3D11/D3D11VA, macOS uses Metal/MoltenVK/VideoToolbox, and Linux uses the
@@ -15,7 +15,9 @@ island appears on pointer activity,
 keeps the timeline above its controls, and fades during uninterrupted playback.
 The transport uses a small vendored Lucide 1.28.0 SVG subset inside fully
 custom rounded buttons, avoiding font-dependent glyphs and platform-style
-pressed backgrounds. The player and compositor background is pure black.
+pressed backgrounds. Their SVG raster size follows the displayed 15/17-pixel
+icon size, with Qt handling display DPR; no oversized raster or mipmap
+downsampling is requested. The player and compositor background is pure black.
 The idle overflow action is a compact, icon-only standard `Button`: its
 background remains present and its icon follows `palette.buttonText`, keeping
 idle, pressed and keyboard-focused states readable in light and dark styles.
@@ -268,11 +270,12 @@ than QML-owned playback state.
 
 `PlayerPage` keeps **Report a bug** and **About SunPlayer** as direct items in
 the playback overflow menu. While playback is inactive, a platform-styled
-icon-only `Button` opens a separate menu containing only **Settings**,
-**Report a bug**, and **About SunPlayer**. Both menus block window shortcuts
-while open, so support and packaged notices do not depend on successful playback.
+icon-only `Button` opens a separate menu containing **Settings**,
+**Report a bug**, **About SunPlayer**, and **HDR Lab**. Both menus block window
+shortcuts while open, so support and packaged notices do not depend on
+successful playback.
 
-Shell integration coverage checks the three idle entries and their commands,
+Shell integration coverage checks the four idle entries and their commands,
 menu shortcut blocking, ellipsis loading/size/centering, light-palette contrast,
 and fullscreen-only display-blanking visibility. The Windows application build,
 QML lint, and Basic/Fusion/FluentWinUI3 shell tests pass on 2026-10-25. Native
@@ -282,9 +285,9 @@ About is a separate Qt Widgets dialog rather than an in-scene Quick dialog. It
 therefore follows the active platform widget style and remains independent of
 the redirected QRhi composition path. It shows the application version/build
 ID, source action, generated third-party notices, packaged privacy policy, and
-Copy diagnostic information. Its **Open HDR Lab** action is the sole entry to
-developer presentation controls. It does not introduce a second custom dialog
-style beside the player scene.
+Copy diagnostic information. Its **Open HDR Lab** action and the idle menu's
+**HDR Lab** action open the same developer presentation controls. It does not
+introduce a second custom dialog style beside the player scene.
 
 `SupportController` receives the current application-owned session and output
 state but does not own playback or recovery. It builds diagnostics from an
@@ -333,7 +336,7 @@ direct D3D11 and Metal targets report zero output copies or CPU transfers.
 Hardware-frame imports remain separately diagnosed rather than making every
 path look “zero-copy.”
 
-Player is the default page and HDR Lab is reachable only through About.
+Player is the default page and HDR Lab is reachable through About and the idle menu.
 Reusable read-only source, presentation, and pipeline diagnostics appear in
 the optional Player details panel, but HDR Lab controls do not become ordinary
 player preferences or production presentation state.
@@ -353,8 +356,8 @@ and renderability. A non-presenting Qt Quick component test creates the real
 QML shell through the same initial-property contract, resizes it, and verifies
 that active-page geometry and visibility reach `VideoViewportState`. It also
 verifies Empty/Opening/Ready/Error visibility, cancel/retry/close and
-play/pause command wiring, About-only Player/HDR-Lab routing and viewport selection, the
-optional details panel with selected video/audio/subtitle, source signal,
+play/pause command wiring, About and idle-menu Player/HDR-Lab routing and
+viewport selection, the optional details panel with selected video/audio/subtitle, source signal,
 presentation, and performance text, plus the diagnostic renderer switch's
 default and source binding. Source/router coverage verifies that the diagnostic route
 retains its 16:9 input geometry, and the component test verifies the HDR Lab's
